@@ -23,6 +23,9 @@ jobs:
       - name: Installera beroenden
         run: pip install -r requirements.txt
 
+      - name: Återskapa holdings
+        run: echo "${{ secrets.HOLDINGS_CSV }}" > holdings.csv
+
       - name: Kör vecko-scan
         env:
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
