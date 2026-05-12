@@ -136,10 +136,12 @@ def _send_email(subject: str, body_html: str, body_text: str = None):
         print("    Lägg till EMAIL_SENDER och EMAIL_PASSWORD i config.py")
         return False
 
+    recipients = [r.strip() for r in to.split(",") if r.strip()]
+
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"]    = f"MarketScan <{sender}>"
-    msg["To"]      = to
+    msg["To"]      = ", ".join(recipients)
 
     # HTML-del med styling
     html_body = f"""
@@ -164,8 +166,8 @@ def _send_email(subject: str, body_html: str, body_text: str = None):
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(sender, password)
-            server.sendmail(sender, to, msg.as_string())
-        print(f"  ✉ Email skickat till {to}")
+            server.sendmail(sender, recipients, msg.as_string())
+        print(f"  ✉ Email skickat till {', '.join(recipients)}")
         return True
     except smtplib.SMTPAuthenticationError:
         print("  ❌ Email-autentisering misslyckades")
