@@ -1,0 +1,121 @@
+name: 📊 Veckovis Full Scan (Söndag)
+
+on:
+  schedule:
+    # Kör varje söndag kl 19:00 CET (18:00 UTC)
+    - cron: "0 18 * * 0"
+
+  # Tillåt manuell körning från GitHub-gränssnittet
+  workflow_dispatch:
+    inputs:
+      tickers:
+        description: "Specifika tickers att scanna (lämna tomt för hela universumet)"
+        required: false
+        default: ""
+      send_email:
+        description: "Skicka email-rapport"
+        type: boolean
+        default: true
+
+jobs:
+  full-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      # ── Steg 1: Hämta koden ──────────────────────────────────
+      - name: 📥 Hämta kod
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Full historik för delta-tracking
+
+      # ── Steg 2: Konfigurera Python ────────────────────────────
+      - name: 🐍 Konfigurera Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ── Steg 3: Installera beroenden ─────────────────────────
+      - name: 📦 Installera beroenden
+        run: pip install -r requirements.txt
+
+      # ── Steg 4: Återställ cache och historik ─────────────────
+      - name: 📂 Återställ cache från förra körningen
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/cache
+            data/history
+            data/paper_trades.json
+            data/paper_portfolio.json
+            data/transactions.csv
+            data/blacklist.json
+            data/strike_list.json
+            data/ticker_map.json
+            data/scan_log.json
+          key: scanner-data-${{ runner.os }}-${{ github.run_number }}
+          restore-keys: |
+            scanner-data-${{ runner.os }}-
+
+      # ── Steg 5: Skapa mappar ──────────────────────────────────
+      - name: 📁 Skapa nödvändiga mappar
+        run: mkdir -p data/cache data/history data/optimizer reports
+
+      # ── Steg 6: Kör full scan ────────────────────────────────
+      - name: 🔍 Kör veckovis scan
+        env:
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          EMAIL_SENDER:    ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:  ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO:        ${{ secrets.EMAIL_TO }}
+          FMP_API_KEY:     ${{ secrets.FMP_API_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.tickers }}" ]; then
+            python scan.py --tickers "${{ github.event.inputs.tickers }}"
+          else
+            python scan.py
+          fi
+
+      # ── Steg 7: Kontrollera om scan lyckades ─────────────────
+      - name: ✅ Verifiera output
+        run: |
+          if ls reports/weekly_report_*.md 1> /dev/null 2>&1; then
+            echo "✓ Veckorapport genererad"
+            ls -la reports/weekly_report_*.md | tail -1
+          else
+            echo "❌ Ingen rapport hittades"
+            exit 1
+          fi
+
+      # ── Steg 8: Ladda upp rapport som artefakt ────────────────
+      - name: 📤 Spara rapport
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: weekly-report-${{ github.run_number }}
+          path: |
+            reports/weekly_report_*.md
+            reports/scored_universe_*.csv
+          retention-days: 90
+
+      # ── Steg 9: Spara log även vid fel ───────────────────────
+      - name: 💾 Spara scan-logg
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scan-log-${{ github.run_number }}
+          path: data/scan_log.json
+          retention-days: 30
+
+      # ── Steg 10: Commit tillbaka data-filer till repo ─────────
+      - name: 🔄 Commit snapshot och paper trades
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "MarketScan Bot"
+          git add data/history/ data/paper_trades.json data/paper_portfolio.json \
+                  data/scan_log.json data/blacklist.json data/strike_list.json || true
+          git diff --staged --quiet || git commit -m "🤖 Auto: Veckovis scan $(date +%Y-%m-%d)"
+          git push || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,501 @@
+"""
+avanza_import.py
+================
+Importerar dina innehav direkt från Avanza-exportfilen.
+
+Hur du exporterar från Avanza:
+  1. Logga in på Avanza
+  2. Gå till: Konto → Depå/ISK → fliken "Innehav"
+  3. Klicka "Exportera" (längst ner till höger)
+  4. Spara CSV-filen
+  5. Kör: python avanza_import.py avanza_export.csv
+
+Vad scriptet gör:
+  - Läser Avanzas CSV (hanterar semikolon-separering och svenska siffror)
+  - Mappar svenska namn → Yahoo Finance-tickers automatiskt
+  - Okända bolag visas för manuell mappning och sparas till ticker_map.json
+  - Uppdaterar holdings.csv direkt
+
+Avanza CSV-format (typiskt):
+  Värdepapper;Antal;Kurs;Aktuellt värde;Köpkurs;Resultat;Resultat (%)
+  Ericsson B;200;78,50;15 700,00;75,30;640,00;4,3
+"""
+
+import json
+import sys
+import re
+import argparse
+from pathlib import Path
+
+import pandas as pd
+import yfinance as yf
+
+TICKER_MAP_FILE = Path("data/ticker_map.json")
+HOLDINGS_FILE   = Path("holdings.csv")
+
+# ── Inbyggd mappning (de vanligaste svenska + nordiska aktierna) ──────────────
+BUILTIN_MAP = {
+    # Stockholmsbörsen (vanligaste namnen som Avanza visar)
+    "ericsson b":           "ERIC-B.ST",
+    "ericsson a":           "ERIC-A.ST",
+    "volvo b":              "VOLV-B.ST",
+    "volvo a":              "VOLV-A.ST",
+    "h&m b":                "HM-B.ST",
+    "hennes & mauritz b":   "HM-B.ST",
+    "investor b":           "INVE-B.ST",
+    "investor a":           "INVE-A.ST",
+    "industrivärden c":     "INDU-C.ST",
+    "industrivärden a":     "INDU-A.ST",
+    "atlas copco a":        "ATCO-A.ST",
+    "atlas copco b":        "ATCO-B.ST",
+    "assa abloy b":         "ASSA-B.ST",
+    "seb a":                "SEB-A.ST",
+    "handelsbanken a":      "SHB-A.ST",
+    "swedbank a":           "SWED-A.ST",
+    "nordea bank":          "NDA-SE.ST",
+    "telia":                "TELIA.ST",
+    "telia company":        "TELIA.ST",
+    "abb":                  "ABB.ST",
+    "sandvik":              "SAND.ST",
+    "skf b":                "SKF-B.ST",
+    "alfa laval":           "ALFA.ST",
+    "boliden":              "BOL.ST",
+    "ssab b":               "SSAB-B.ST",
+    "ssab a":               "SSAB-A.ST",
+    "sca b":                "SCA-B.ST",
+    "nibe industrier b":    "NIBE-B.ST",
+    "essity b":             "ESSITY-B.ST",
+    "getinge b":            "GETI-B.ST",
+    "astrazeneca":          "AZN.ST",
+    "evolution":            "EVO.ST",
+    "embracer group b":     "EMBRAC-B.ST",
+    "eqt":                  "EQT.ST",
+    "latour b":             "LATO-B.ST",
+    "lifco b":              "LIFCO-B.ST",
+    "castellum":            "CAST.ST",
+    "wihlborgs":            "WIHL.ST",
+    "fabege":               "FABG.ST",
+    "sagax b":              "SAGA-B.ST",
+    "balder b":             "BALD-B.ST",
+    "lundin energy":        "LUNE.ST",
+    "mips":                 "MIPS.ST",
+    "invisio":              "INVISIO.ST",
+    "ncab group":           "NCAB.ST",
+    "vitrolife":            "VITROLIFE.ST",
+    "sinch":                "SINCH.ST",
+    "tele2 b":              "TEL2-B.ST",
+    "kinnevik b":           "KINV-B.ST",
+    "trelleborg b":         "TRELLEBORG-B.ST",
+    "hexagon b":            "HEXA-B.ST",
+    "peab b":               "PEAB-B.ST",
+    "ncc b":                "NCC-B.ST",
+    "jm":                   "JM.ST",
+    "bure equity":          "BURE.ST",
+    "indutrade":            "INDT.ST",
+    "bufab":                "BUFAB.ST",
+    "troax":                "TROAX.ST",
+
+    # USA (Avanza visar ofta bara företagsnamn utan ticker)
+    "apple":                "AAPL",
+    "microsoft":            "MSFT",
+    "alphabet a":           "GOOGL",
+    "alphabet c":           "GOOG",
+    "amazon":               "AMZN",
+    "meta platforms":       "META",
+    "meta":                 "META",
+    "nvidia":               "NVDA",
+    "tesla":                "TSLA",
+    "broadcom":             "AVGO",
+    "oracle":               "ORCL",
+    "salesforce":           "CRM",
+    "adobe":                "ADBE",
+    "amd":                  "AMD",
+    "advanced micro devices":"AMD",
+    "intel":                "INTC",
+    "cisco":                "CSCO",
+    "qualcomm":             "QCOM",
+    "texas instruments":    "TXN",
+    "palantir":             "PLTR",
+    "snowflake":            "SNOW",
+    "jp morgan":            "JPM",
+    "jpmorgan":             "JPM",
+    "bank of america":      "BAC",
+    "goldman sachs":        "GS",
+    "morgan stanley":       "MS",
+    "blackrock":            "BLK",
+    "visa":                 "V",
+    "mastercard":           "MA",
+    "berkshire hathaway b": "BRK-B",
+    "paypal":               "PYPL",
+    "johnson & johnson":    "JNJ",
+    "unitedhealth":         "UNH",
+    "eli lilly":            "LLY",
+    "pfizer":               "PFE",
+    "abbvie":               "ABBV",
+    "merck":                "MRK",
+    "abbvie":               "ABBV",
+    "bristol-myers squibb": "BMY",
+    "gilead":               "GILD",
+    "walmart":              "WMT",
+    "costco":               "COST",
+    "coca-cola":            "KO",
+    "pepsico":              "PEP",
+    "mcdonald's":           "MCD",
+    "nike":                 "NKE",
+    "starbucks":            "SBUX",
+    "home depot":           "HD",
+    "netflix":              "NFLX",
+    "disney":               "DIS",
+    "exxon mobil":          "XOM",
+    "chevron":              "CVX",
+
+    # Europa
+    "asml":                 "ASML.AS",
+    "asml holding":         "ASML.AS",
+    "sap":                  "SAP.DE",
+    "siemens":              "SIE.DE",
+    "allianz":              "ALV.DE",
+    "basf":                 "BAS.DE",
+    "bayer":                "BAYN.DE",
+    "volkswagen":           "VOW3.DE",
+    "bmw":                  "BMW.DE",
+    "mercedes-benz":        "MBG.DE",
+    "lvmh":                 "MC.PA",
+    "totalenergies":        "TTE.PA",
+    "sanofi":               "SAN.PA",
+    "bnp paribas":          "BNP.PA",
+    "shell":                "SHEL.L",
+    "astrazeneca":          "AZN.L",
+    "hsbc":                 "HSBA.L",
+    "unilever":             "ULVR.L",
+    "bp":                   "BP.L",
+    "rio tinto":            "RIO.L",
+    "nestle":               "NESN.SW",
+    "novartis":             "NOVN.SW",
+    "roche":                "ROG.SW",
+    "novo nordisk b":       "NOVO-B.CO",
+    "novo nordisk":         "NOVO-B.CO",
+    "equinor":              "EQNR.OL",
+    "nokia":                "NOKIA.HE",
+}
+
+
+# ── Ladda/spara anpassad mappning ──────────────────────────────────────────────
+
+def load_custom_map() -> dict:
+    """Läser sparade manuella mappningar från data/ticker_map.json."""
+    if not TICKER_MAP_FILE.exists():
+        return {}
+    try:
+        return json.loads(TICKER_MAP_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def save_custom_map(mapping: dict):
+    """Sparar manuella mappningar till data/ticker_map.json."""
+    TICKER_MAP_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TICKER_MAP_FILE.write_text(
+        json.dumps(mapping, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+# ── Namnmatchning ──────────────────────────────────────────────────────────────
+
+def normalize_name(name: str) -> str:
+    """Normaliserar bolagsnamn för matchning."""
+    return (
+        name.lower()
+        .strip()
+        .replace(",", "")
+        .replace(".", "")
+        .replace("  ", " ")
+    )
+
+
+def find_ticker(name: str, custom_map: dict) -> str | None:
+    """
+    Försöker hitta Yahoo Finance-ticker för ett Avanza-bolagsnamn.
+    Söker i: 1) custom_map, 2) BUILTIN_MAP, 3) yfinance Search
+    """
+    norm = normalize_name(name)
+
+    # 1. Kolla anpassad mappning
+    if norm in custom_map:
+        return custom_map[norm]
+
+    # 2. Kolla inbyggd mappning
+    if norm in BUILTIN_MAP:
+        return BUILTIN_MAP[norm]
+
+    # 3. Prova yfinance-sökning
+    try:
+        results = yf.Search(name, max_results=3).quotes
+        for r in results:
+            if r.get("quoteType") in ("EQUITY", "ETF"):
+                ticker = r.get("symbol", "")
+                if ticker:
+                    return ticker
+    except Exception:
+        pass
+
+    return None
+
+
+# ── Avanza CSV-parser ──────────────────────────────────────────────────────────
+
+def parse_avanza_csv(filepath: str) -> pd.DataFrame:
+    """
+    Läser och tolkar en Avanza-exportfil.
+
+    Avanza varianter:
+    - Semikolon-separerad
+    - Svenska decimaler (komma) och tusentalsavgränsare (mellanslag)
+    - Kolumnnamn kan variera något mellan kontotyper
+    """
+    path = Path(filepath)
+    if not path.exists():
+        raise FileNotFoundError(f"Filen hittades inte: {filepath}")
+
+    # Läs råfilen för att detektera format
+    raw = path.read_bytes()
+    encoding = "utf-8-sig" if raw[:3] == b"\xef\xbb\xbf" else "utf-8"
+    try:
+        text = raw.decode(encoding)
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+
+    # Detektera separator
+    first_line = text.split("\n")[0]
+    sep = ";" if ";" in first_line else ","
+
+    # Läs CSV
+    import io
+    df = pd.read_csv(io.StringIO(text), sep=sep, encoding=None)
+
+    # Normalisera kolumnnamn
+    col_map = {}
+    for col in df.columns:
+        c = col.lower().strip()
+        if "värdepapper" in c or "namn" in c or "security" in c:
+            col_map[col] = "name"
+        elif "antal" in c or "quantity" in c:
+            col_map[col] = "shares"
+        elif "köpkurs" in c or "genomsnittlig" in c or "purchase" in c:
+            col_map[col] = "cost_basis"
+        elif "kurs" in c and "köp" not in c:
+            col_map[col] = "current_price"
+
+    df = df.rename(columns=col_map)
+
+    # Kontrollera obligatoriska kolumner
+    if "name" not in df.columns:
+        raise ValueError(
+            "Kunde inte hitta kolumn för värdepappersnamn. "
+            "Förväntade: 'Värdepapper', 'Namn' eller liknande."
+        )
+
+    # Konvertera siffror (svenska format: "1 234,56" → 1234.56)
+    def parse_swedish_number(s) -> float | None:
+        if pd.isna(s):
+            return None
+        s = str(s).strip().replace("\xa0", "").replace(" ", "").replace(",", ".")
+        try:
+            return float(s)
+        except ValueError:
+            return None
+
+    for col in ["shares", "cost_basis", "current_price"]:
+        if col in df.columns:
+            df[col] = df[col].apply(parse_swedish_number)
+
+    # Rensa tomma rader
+    df = df.dropna(subset=["name"])
+    df = df[df["name"].astype(str).str.strip() != ""]
+
+    return df
+
+
+# ── Huvud-importfunktion ────────────────────────────────────────────────────────
+
+def import_from_avanza(
+    filepath:     str,
+    interactive:  bool = True,
+    update_holdings: bool = True,
+) -> pd.DataFrame:
+    """
+    Importerar innehav från Avanza-exportfil.
+
+    interactive: Fråga användaren om okända bolag (True = interaktivt läge)
+    update_holdings: Skriv till holdings.csv när klar
+
+    Returnerar DataFrame med matchade innehav.
+    """
+    print(f"\n📂 Läser Avanza-export: {filepath}")
+
+    # Läs CSV
+    df = parse_avanza_csv(filepath)
+    print(f"   Hittade {len(df)} rader")
+
+    # Ladda anpassade mappningar
+    custom_map = load_custom_map()
+
+    # Mappa namn → tickers
+    results   = []
+    unknown   = []
+
+    for _, row in df.iterrows():
+        name    = str(row["name"]).strip()
+        shares  = row.get("shares")
+        cost    = row.get("cost_basis")
+
+        if not shares or shares <= 0:
+            continue
+
+        ticker = find_ticker(name, custom_map)
+
+        if ticker:
+            results.append({
+                "ticker":     ticker,
+                "name":       name,
+                "shares":     round(float(shares), 4),
+                "cost_basis": round(float(cost), 2) if cost else None,
+                "mapped":     True,
+            })
+            print(f"   ✓ {name:<35} → {ticker}")
+        else:
+            unknown.append({
+                "name":       name,
+                "shares":     shares,
+                "cost_basis": cost,
+            })
+            print(f"   ? {name:<35} → EJ HITTAD")
+
+    # Hantera okända bolag
+    if unknown:
+        print(f"\n⚠  {len(unknown)} bolag kunde inte matchas automatiskt:")
+
+        if interactive:
+            for item in unknown:
+                print(f"\n   Bolag: {item['name']}")
+                print(f"   Antal: {item['shares']}")
+                ticker = input("   Ange ticker (t.ex. ERIC-B.ST), eller Enter för att hoppa över: ").strip().upper()
+
+                if ticker:
+                    # Validera tickern
+                    try:
+                        info = yf.Ticker(ticker).fast_info
+                        if info.last_price:
+                            print(f"   ✓ {ticker} verifierad (pris: {info.last_price:.2f})")
+                        else:
+                            print(f"   ⚠ Kunde inte verifiera {ticker} – läggs till ändå")
+                    except Exception:
+                        pass
+
+                    # Spara mappningen
+                    norm = normalize_name(item["name"])
+                    custom_map[norm] = ticker
+                    save_custom_map(custom_map)
+                    print(f"   💾 Mappning sparad: '{item['name']}' → {ticker}")
+
+                    results.append({
+                        "ticker":     ticker,
+                        "name":       item["name"],
+                        "shares":     item["shares"],
+                        "cost_basis": item["cost_basis"],
+                        "mapped":     True,
+                    })
+        else:
+            print("   Kör med --interactive för att mappa dem manuellt")
+            print("   Eller lägg till i data/ticker_map.json manuellt:")
+            for item in unknown:
+                print(f'     "{normalize_name(item["name"])}": "TICKER"')
+
+    # Bygg resultat-DataFrame
+    result_df = pd.DataFrame(results)
+
+    if result_df.empty:
+        print("\n❌ Inga innehav importerades")
+        return pd.DataFrame()
+
+    print(f"\n✓ {len(result_df)} av {len(df)} innehav mappade")
+
+    # Uppdatera holdings.csv
+    if update_holdings and not result_df.empty:
+        holdings_df = result_df[["ticker", "shares", "cost_basis"]].copy()
+        holdings_df.to_csv(HOLDINGS_FILE, index=False)
+        print(f"✅ holdings.csv uppdaterad med {len(holdings_df)} positioner")
+
+        # Om positions.py används – visa info
+        print(f"\n💡 Tips: Registrera dina ursprungliga köp i transaktionsloggen för full P&L:")
+        print(f"   python positions.py add-buy TICKER ANTAL KÖPKURS")
+
+    return result_df
+
+
+# ── Visa mappningstatus ────────────────────────────────────────────────────────
+
+def show_mapping_status():
+    """Visar alla sparade anpassade mappningar."""
+    custom = load_custom_map()
+    if not custom:
+        print("Inga anpassade mappningar sparade ännu.")
+        return
+
+    print(f"\n📋 Sparade mappningar ({len(custom)} st):")
+    for name, ticker in sorted(custom.items()):
+        print(f"   '{name}' → {ticker}")
+
+
+def add_manual_mapping(avanza_name: str, ticker: str):
+    """Lägger till en mappning manuellt."""
+    custom = load_custom_map()
+    norm   = normalize_name(avanza_name)
+    custom[norm] = ticker.upper()
+    save_custom_map(custom)
+    print(f"✓ Mappning tillagd: '{avanza_name}' → {ticker.upper()}")
+
+
+# ── MAIN ────────────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Importera innehav från Avanza CSV-export")
+    sub = parser.add_subparsers(dest="cmd")
+
+    # import
+    p_import = sub.add_parser("import", help="Importera från Avanza-fil")
+    p_import.add_argument("file", help="Sökväg till CSV-filen från Avanza")
+    p_import.add_argument("--no-interactive", action="store_true",
+                          help="Fråga inte om okända bolag")
+    p_import.add_argument("--dry-run", action="store_true",
+                          help="Visa vad som skulle importeras utan att spara")
+
+    # map
+    p_map = sub.add_parser("map", help="Lägg till en manuell mappning")
+    p_map.add_argument("name",   help="Bolagsnamn som det visas i Avanza (inom citattecken)")
+    p_map.add_argument("ticker", help="Yahoo Finance-ticker (t.ex. ERIC-B.ST)")
+
+    # list
+    sub.add_parser("list", help="Visa alla sparade mappningar")
+
+    args = parser.parse_args()
+
+    if args.cmd == "import":
+        import_from_avanza(
+            args.file,
+            interactive  = not args.no_interactive,
+            update_holdings = not args.dry_run,
+        )
+
+    elif args.cmd == "map":
+        add_manual_mapping(args.name, args.ticker)
+
+    elif args.cmd == "list":
+        show_mapping_status()
+
+    else:
+        parser.print_help()
+        print("\nExempel:")
+        print("  python avanza_import.py import ~/Downloads/avanza_export.csv")
+        print("  python avanza_import.py map 'Kinnevik B' KINV-B.ST")
+        print("  python avanza_import.py list")

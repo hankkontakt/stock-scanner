@@ -1,0 +1,78 @@
+name: 📈 Daglig Portföljkoll (Vardag 18:00)
+
+on:
+  schedule:
+    # Kör mån–fre kl 18:00 CET (17:00 UTC, nov–mar) / 16:00 UTC (apr–okt)
+    # Vi kör 17:00 UTC som kompromiss
+    - cron: "0 17 * * 1-5"
+
+  # Manuell körning
+  workflow_dispatch:
+    inputs:
+      send_email:
+        description: "Skicka email-uppdatering"
+        type: boolean
+        default: true
+
+jobs:
+  daily-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Hämta kod
+        uses: actions/checkout@v4
+
+      - name: 🐍 Konfigurera Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 📦 Installera beroenden
+        run: pip install -r requirements.txt
+
+      # Återställ senaste data-filer
+      - name: 📂 Återställ data
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/cache
+            data/history
+            data/paper_trades.json
+            data/scan_log.json
+          key: scanner-data-${{ runner.os }}-${{ github.run_number }}
+          restore-keys: |
+            scanner-data-${{ runner.os }}-
+
+      - name: 📁 Skapa mappar
+        run: mkdir -p data/cache data/history reports
+
+      # Kör daglig scan
+      - name: 📈 Kör daglig portföljkoll
+        env:
+          EMAIL_SENDER:    ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:  ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO:        ${{ secrets.EMAIL_TO }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+        run: python daily_scan.py
+
+      # Spara daglig rapport
+      - name: 📤 Spara daglig rapport
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: daily-report-${{ github.run_number }}
+          path: reports/daily_*.md
+          retention-days: 14
+
+      # Commit log tillbaka
+      - name: 🔄 Uppdatera logg
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "MarketScan Bot"
+          git add data/scan_log.json data/paper_trades.json || true
+          git diff --staged --quiet || git commit -m "🤖 Auto: Daglig koll $(date +%Y-%m-%d)"
+          git push || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
