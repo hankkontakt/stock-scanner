@@ -93,6 +93,77 @@
     color: var(--accent); letter-spacing: 1.5px;
   }
 
+  /* ── AVANZA IMPORT ── */
+  .import-zone {
+    margin-top: 14px;
+    border: 1px dashed var(--border2);
+    border-radius: 3px;
+    padding: 18px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: transparent;
+  }
+  .import-zone:hover, .import-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(0,212,170,.04);
+  }
+  .import-zone-text {
+    font-size: 11px; color: var(--dim); letter-spacing: 1px;
+  }
+  .import-zone-text span { color: var(--accent); }
+
+  /* Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 500;
+    background: rgba(0,0,0,.75); backdrop-filter: blur(3px);
+    align-items: flex-start; justify-content: center;
+    padding: 40px 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg2); border: 1px solid var(--border2);
+    border-radius: 4px; width: 100%; max-width: 780px;
+    max-height: 80vh; display: flex; flex-direction: column;
+    box-shadow: 0 24px 80px rgba(0,0,0,.7);
+  }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 20px; border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .modal-title { font-size: 13px; font-weight: 600; color: var(--accent); letter-spacing: 2px; }
+  .modal-sub   { font-size: 10px; color: var(--dim); margin-top: 3px; }
+  .modal-body  { overflow-y: auto; padding: 16px 20px; flex: 1; }
+  .modal-foot  {
+    padding: 14px 20px; border-top: 1px solid var(--border);
+    display: flex; gap: 10px; justify-content: flex-end; flex-shrink: 0;
+  }
+
+  .import-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .import-table th {
+    font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--dim); padding: 8px 10px; text-align: left;
+    border-bottom: 1px solid var(--border); font-weight: 400;
+  }
+  .import-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  .import-table tr:last-child td { border-bottom: none; }
+  .import-avanza-name { color: var(--dim); font-size: 11px; }
+  .ticker-input {
+    background: var(--bg); border: 1px solid var(--border2);
+    border-radius: 2px; color: var(--accent); font-family: inherit;
+    font-size: 13px; font-weight: 600; padding: 5px 8px;
+    width: 120px; outline: none; text-transform: uppercase;
+    transition: border-color .15s;
+  }
+  .ticker-input:focus { border-color: var(--accent); }
+  .ticker-input.no-match { border-color: var(--yellow); color: var(--yellow); }
+
+  .loading-spinner {
+    text-align: center; padding: 40px; color: var(--dim); font-size: 12px;
+    letter-spacing: 2px;
+  }
+
   /* ── SEARCH ── */
   .search-section { margin-bottom: 40px; }
 
@@ -454,6 +525,34 @@
         <button class="btn btn-secondary" onclick="closeForm()">Avbryt</button>
       </div>
     </div>
+
+    <!-- Avanza import drop zone -->
+    <div class="import-zone" id="importZone" onclick="document.getElementById('avanzaFileInput').click()">
+      <div class="import-zone-text">
+        ↑ Dra och släpp Avanza-export här &nbsp;·&nbsp; eller <span>klicka för att välja fil</span>
+      </div>
+    </div>
+    <input type="file" id="avanzaFileInput" accept=".csv" style="display:none">
+  </div>
+
+  <!-- Avanza import modal -->
+  <div class="modal-overlay" id="importModal">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title">IMPORTERA FRÅN AVANZA</div>
+          <div class="modal-sub" id="importModalSub">Kontrollera och justera tickers innan du importerar</div>
+        </div>
+        <button class="form-close" onclick="closeImportModal()">✕</button>
+      </div>
+      <div class="modal-body" id="importModalBody">
+        <div class="loading-spinner">SÖKER TICKERS...</div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" onclick="closeImportModal()">Avbryt</button>
+        <button class="btn btn-primary" id="importConfirmBtn" onclick="confirmImport()" style="display:none">Importera</button>
+      </div>
+    </div>
   </div>
 
   <!-- SUMMARY BAR -->
@@ -744,6 +843,108 @@
     t.className   = `toast ${type} show`;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  // ── Avanza import ─────────────────────────────────────────────────────
+  let importRows = [];
+
+  // File input change
+  document.getElementById('avanzaFileInput').addEventListener('change', e => {
+    if (e.target.files[0]) handleImportFile(e.target.files[0]);
+    e.target.value = '';
+  });
+
+  // Drag and drop
+  const importZone = document.getElementById('importZone');
+  importZone.addEventListener('dragover', e => { e.preventDefault(); importZone.classList.add('drag-over'); });
+  importZone.addEventListener('dragleave', () => importZone.classList.remove('drag-over'));
+  importZone.addEventListener('drop', e => {
+    e.preventDefault();
+    importZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) handleImportFile(file);
+  });
+
+  async function handleImportFile(file) {
+    if (!file.name.endsWith('.csv')) { showToast('Välj en CSV-fil från Avanza', 'error'); return; }
+    openImportModal();
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res  = await fetch('/api/import/avanza', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.error) { showToast(data.error, 'error'); closeImportModal(); return; }
+      renderImportPreview(data);
+    } catch (err) {
+      showToast('Serverfel – körs app.py?', 'error');
+      closeImportModal();
+    }
+  }
+
+  function openImportModal() {
+    importRows = [];
+    document.getElementById('importModalBody').innerHTML = '<div class="loading-spinner">SÖKER TICKERS...</div>';
+    document.getElementById('importConfirmBtn').style.display = 'none';
+    document.getElementById('importModal').classList.add('open');
+  }
+
+  function closeImportModal() {
+    document.getElementById('importModal').classList.remove('open');
+  }
+
+  function renderImportPreview(rows) {
+    importRows = rows;
+    const tbody = rows.map((r, i) => {
+      const noMatch = !r.ticker;
+      return `<tr>
+        <td><span class="import-avanza-name">${escHtml(r.avanza_name)}</span></td>
+        <td>${r.shares?.toLocaleString('sv-SE', {maximumFractionDigits:2})}</td>
+        <td>${r.cost_basis ? r.cost_basis.toLocaleString('sv-SE', {minimumFractionDigits:2,maximumFractionDigits:2}) : '—'}</td>
+        <td>
+          <input class="ticker-input${noMatch ? ' no-match' : ''}" id="ticker_${i}"
+            value="${escHtml(r.ticker)}" placeholder="t.ex. VOLV-B.ST"
+            oninput="this.className='ticker-input'; importRows[${i}].ticker=this.value.toUpperCase(); this.value=this.value.toUpperCase()">
+        </td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('importModalBody').innerHTML = `
+      <table class="import-table">
+        <thead><tr>
+          <th>Avanza-namn</th><th>Antal</th><th>Köpkurs (snitt)</th><th>Ticker (redigera vid behov)</th>
+        </tr></thead>
+        <tbody>${tbody}</tbody>
+      </table>`;
+
+    const n = rows.filter(r => r.ticker).length;
+    document.getElementById('importModalSub').textContent =
+      `${rows.length} innehav hittade · ${n} tickers matchade · gula fält behöver fyllas i`;
+    document.getElementById('importConfirmBtn').textContent = `Importera ${rows.length} innehav`;
+    document.getElementById('importConfirmBtn').style.display = '';
+  }
+
+  async function confirmImport() {
+    const toSave = importRows.map((r, i) => ({
+      ticker:     document.getElementById(`ticker_${i}`)?.value?.trim().toUpperCase() || r.ticker,
+      shares:     r.shares,
+      cost_basis: r.cost_basis,
+    })).filter(r => r.ticker && r.shares > 0);
+
+    if (!toSave.length) { showToast('Inga giltiga rader att importera', 'error'); return; }
+
+    try {
+      const res  = await fetch('/api/import/avanza/confirm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(toSave),
+      });
+      const data = await res.json();
+      if (data.error) { showToast(data.error, 'error'); return; }
+      showToast(`✓ ${data.added} tillagda, ${data.updated} uppdaterade`, 'success');
+      closeImportModal();
+      loadHoldings();
+    } catch (err) {
+      showToast('Serverfel', 'error');
+    }
   }
 
   // ── Init ───────────────────────────────────────────────────────────────

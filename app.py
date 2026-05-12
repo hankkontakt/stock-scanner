@@ -14,6 +14,7 @@ Funktioner:
 """
 
 import csv
+import io
 import os
 import threading
 import webbrowser
@@ -66,6 +67,41 @@ def save_holdings(holdings: list):
                 })
     except Exception as e:
         print(f"Fel vid sparning av holdings: {e}")
+
+
+def parse_avanza_csv(content: str) -> list:
+    """Parse Avanza portfolio export (semicolon-separated, Swedish decimals)."""
+    content = content.lstrip('﻿').strip()
+    reader = csv.DictReader(io.StringIO(content), delimiter=';')
+
+    def sv_float(s):
+        if not s: return None
+        s = str(s).strip().replace('\xa0', '').replace(' ', '').replace('%', '')
+        s = s.replace('.', '').replace(',', '.')
+        try: return float(s)
+        except: return None
+
+    rows = []
+    for row in reader:
+        name = (row.get('Beteckning') or row.get('Namn') or row.get('Värdepapper') or '').strip()
+        if not name:
+            continue
+        typ = (row.get('Typ') or row.get('Typ av värdepapper') or '').strip().lower()
+        if typ and typ not in ('aktie', 'etf', 'fond', ''):
+            continue
+        antal = sv_float(row.get('Antal') or row.get('Antal aktier') or '')
+        if not antal or antal <= 0:
+            continue
+        avg = sv_float(row.get('Genomsnittligt anskaffningsvärde') or '')
+        tot = sv_float(row.get('Anskaffningsvärde') or '')
+        if avg and avg > 0:
+            cost = round(avg, 2)
+        elif tot and tot > 0:
+            cost = round(tot / antal, 2)
+        else:
+            cost = None
+        rows.append({'name': name, 'shares': antal, 'cost_basis': cost})
+    return rows
 
 
 def get_live_price(ticker: str) -> dict:
@@ -198,6 +234,73 @@ def remove_holding(ticker: str):
 
     save_holdings(holdings)
     return jsonify({"status": "removed", "ticker": ticker})
+
+
+@app.route("/api/import/avanza", methods=["POST"])
+def import_avanza_preview():
+    """Parse Avanza CSV and return rows with suggested ticker matches."""
+    if 'file' not in request.files:
+        return jsonify({"error": "Ingen fil"}), 400
+    content = request.files['file'].read().decode('utf-8-sig')
+    rows = parse_avanza_csv(content)
+    if not rows:
+        return jsonify({"error": "Kunde inte läsa filen – kontrollera att det är en Avanza-export"}), 400
+
+    results = []
+    for row in rows:
+        ticker = ''
+        suggestions = []
+        try:
+            hits = yf.Search(row['name'], max_results=5).quotes
+            for r in hits:
+                if r.get('quoteType') in ('EQUITY', 'ETF', 'MUTUALFUND'):
+                    suggestions.append({
+                        'ticker': r.get('symbol', ''),
+                        'name':   r.get('shortname') or r.get('longname') or '',
+                    })
+            if suggestions:
+                ticker = suggestions[0]['ticker']
+        except Exception:
+            pass
+        results.append({
+            'avanza_name': row['name'],
+            'shares':      row['shares'],
+            'cost_basis':  row['cost_basis'],
+            'ticker':      ticker,
+            'suggestions': suggestions[:3],
+        })
+    return jsonify(results)
+
+
+@app.route("/api/import/avanza/confirm", methods=["POST"])
+def import_avanza_confirm():
+    """Save confirmed import rows to holdings.csv."""
+    rows = request.get_json() or []
+    if not rows:
+        return jsonify({"error": "Inga rader"}), 400
+
+    holdings = load_holdings()
+    n_added = n_updated = 0
+    for row in rows:
+        ticker = row.get('ticker', '').strip().upper()
+        shares = float(row.get('shares', 0))
+        cost   = row.get('cost_basis')
+        if not ticker or shares <= 0:
+            continue
+        found = False
+        for h in holdings:
+            if h['ticker'] == ticker:
+                h['shares'] = shares
+                h['cost_basis'] = cost
+                n_updated += 1
+                found = True
+                break
+        if not found:
+            holdings.append({'ticker': ticker, 'shares': shares, 'cost_basis': cost})
+            n_added += 1
+
+    save_holdings(holdings)
+    return jsonify({"status": "ok", "added": n_added, "updated": n_updated})
 
 
 # ── Start ───────────────────────────────────────────────────────────────────
