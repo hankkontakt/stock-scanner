@@ -216,71 +216,76 @@ def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df,
         "\n---\n",
     ]
 
+    def _try(label, fn):
+        try:
+            result = fn()
+            if result:
+                parts.append(result)
+        except Exception as e:
+            import traceback
+            print(f"  ⚠ Sektion '{label}' misslyckades: {e}")
+            traceback.print_exc()
+
     # 1. Marknadsregim
     if regime_info:
-        parts.append(macro_regime.build_regime_section(regime_info))
+        _try("Marknadsregim", lambda: macro_regime.build_regime_section(regime_info))
 
-    # Benchmark-jämförelse (OMXS30 / SPY)
+    # Benchmark
     if bm:
-        bm_lines = ["\n## 📊 Benchmark\n"]
-        bm_lines.append("| Index | Idag | 1 månad | YTD |")
-        bm_lines.append("|-------|------|---------|-----|")
-        for name, data in bm.items():
-            d1  = data.get("change_1d",  0)
-            m1  = data.get("change_1m",  0)
-            ytd = data.get("change_ytd", 0)
-            s1 = "+" if d1 >= 0 else ""; sm = "+" if m1 >= 0 else ""; sy = "+" if ytd >= 0 else ""
-            bm_lines.append(f"| **{name}** | {s1}{d1:.1f}% | {sm}{m1:.1f}% | {sy}{ytd:.1f}% |")
-        parts.append("\n".join(bm_lines))
+        def _bm():
+            bm_lines = ["\n## 📊 Benchmark\n",
+                        "| Index | Idag | 1 månad | YTD |",
+                        "|-------|------|---------|-----|"]
+            for name, data in bm.items():
+                d1  = data.get("change_1d",  0)
+                m1  = data.get("change_1m",  0)
+                ytd = data.get("change_ytd", 0)
+                s1 = "+" if d1 >= 0 else ""; sm = "+" if m1 >= 0 else ""; sy = "+" if ytd >= 0 else ""
+                bm_lines.append(f"| **{name}** | {s1}{d1:.1f}% | {sm}{m1:.1f}% | {sy}{ytd:.1f}% |")
+            return "\n".join(bm_lines)
+        _try("Benchmark", _bm)
 
-    # 2. Topp-N tabell (med sektortak)
-    parts.append(_section_top_n(scored, config.TOP_N_RECOMMENDATIONS))
+    # 2. Topp-N
+    _try("Topp-N", lambda: _section_top_n(scored, config.TOP_N_RECOMMENDATIONS))
 
-    # 2.5. Piotroski F-Score-sektion
-    pio_sec = piotroski.build_piotroski_section(scored)
-    if pio_sec: parts.append(pio_sec)
+    # 2.5. Piotroski
+    _try("Piotroski", lambda: piotroski.build_piotroski_section(scored))
 
-    # 3. Risk Parity-viktning för topp 10
-    rp = portfolio_analysis._section_risk_parity(scored)
-    if rp: parts.append(rp)
+    # 3. Risk Parity
+    _try("Risk Parity", lambda: portfolio_analysis._section_risk_parity(scored))
 
     # 3.5. Sektor-ETF momentum
     if sector_mom:
-        sm_sec = sector_momentum.build_sector_momentum_section(sector_mom)
-        if sm_sec: parts.append(sm_sec)
+        _try("Sektor-momentum", lambda: sector_momentum.build_sector_momentum_section(sector_mom))
 
-    # 4. Sektorer (kort sammanfattning)
-    s = _section_sectors(sector_df)
-    if s: parts.append(s)
+    # 4. Sektorer
+    _try("Sektorer", lambda: _section_sectors(sector_df))
 
-    # 5. Delta – förändringar sedan förra veckan
-    d = delta_tracker.build_delta_report_section(scored)
-    if d: parts.append(d)
+    # 5. Delta
+    _try("Delta", lambda: delta_tracker.build_delta_report_section(scored))
 
-    # 6. Earnings-kalender
-    portfolio_cal = earnings_df.get("portfolio", pd.DataFrame()) if isinstance(earnings_df, dict) else earnings_df
-    top_cal = earnings_df.get("top", pd.DataFrame()) if isinstance(earnings_df, dict) else pd.DataFrame()
-    e = earnings_calendar.build_earnings_section(portfolio_cal, top_cal)
-    if e: parts.append(e)
+    # 6. Earnings
+    def _earn():
+        pc = earnings_df.get("portfolio", pd.DataFrame()) if isinstance(earnings_df, dict) else earnings_df
+        tc = earnings_df.get("top", pd.DataFrame()) if isinstance(earnings_df, dict) else pd.DataFrame()
+        return earnings_calendar.build_earnings_section(pc, tc)
+    _try("Earnings", _earn)
 
-    # 7. Portföljrekommendationer (köp/håll/sälj)
+    # 7. Portfölj
     if not analysis.empty:
-        parts.append(_section_portfolio(analysis, summary))
-        # 7b. Avancerad portföljanalys (korrelation, koncentration, diversifiering)
-        pa = portfolio_analysis.build_portfolio_analysis_section(analysis, scored)
-        if pa: parts.append(pa)
-    
+        _try("Portfölj", lambda: _section_portfolio(analysis, summary))
+        _try("Portföljanalys", lambda: portfolio_analysis.build_portfolio_analysis_section(analysis, scored))
+
     # 8. Sektoranalys Topp 5
-    parts.append(_section_sectors_top5(scored, sector_df))
+    _try("Sektoranalys Topp5", lambda: _section_sectors_top5(scored, sector_df))
 
-    # 9. Systemunderhåll (Flyttad hit upp så den syns tydligt)
-    parts.append(_section_cleanup(warnings, removed))
+    # 9. Systemunderhåll
+    _try("Systemunderhåll", lambda: _section_cleanup(warnings, removed))
 
-    # 9.5. Paper trading track record
-    pt_sec = paper_trading.build_paper_trading_section()
-    if pt_sec: parts.append(pt_sec)
+    # 9.5. Paper trading
+    _try("Paper trading", lambda: paper_trading.build_paper_trading_section())
 
-    # 10. Claude-prompt och avslutning
+    # 10. Avslutning
     parts.append(_section_claude_prompt())
     parts.append("\n---\n*⚠ Inte finansiell rådgivning.*")
     
@@ -464,19 +469,25 @@ def main():
     # 12. Rapport
     print("\n📝 Genererar rapport...")
 
-    report = build_report(
-        scored       = scored,
-        analysis     = analysis,
-        summary      = summary,
-        sector_df    = sector_summary,
-        regime_info  = regime_info,
-        earnings_df  = earn_df,
-        holdings     = holdings,
-        benchmarks   = benchmarks,
-        sector_mom   = sector_mom,
-        warnings     = warnings,
-        removed      = removed,
-    )
+    try:
+        report = build_report(
+            scored       = scored,
+            analysis     = analysis,
+            summary      = summary,
+            sector_df    = sector_summary,
+            regime_info  = regime_info,
+            earnings_df  = earn_df,
+            holdings     = holdings,
+            benchmarks   = benchmarks,
+            sector_mom   = sector_mom,
+            warnings     = warnings,
+            removed      = removed,
+        )
+    except Exception as e:
+        import traceback
+        print(f"\n❌ CRASH i build_report: {e}")
+        traceback.print_exc()
+        raise
 
     # --- VIKTIGT: Spara rapporten till fil ---
     Path(config.REPORT_DIR).mkdir(parents=True, exist_ok=True)

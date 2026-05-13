@@ -24,23 +24,21 @@ import numpy as np
 
 import config
 
-# Sätt global socket-timeout som fallback för alla nätverksanrop som inte
-# har explicit timeout. Förhindrar att yfinance hänger på GitHub Actions (Linux).
 import requests
 import requests.sessions
 
-# -------------------------------------------------------------------------
-# PATCH: Tvinga fram en global timeout för requests och yfinance
-# -------------------------------------------------------------------------
-# yfinance skickar sällan med explicit timeout. Detta förhindrar att 
-# urllib3's connection pool fylls upp med hängande daemon-trådar, 
-# vilket annars fryser GitHub Actions.
+# ── Lager 1: socket.setdefaulttimeout ────────────────────────────────────
+# Sätts INNAN yfinance importeras. Påverkar alla nya sockets på OS-nivå,
+# inklusive SSL-handskakningar i OpenSSL (C-kod) som varken signal.alarm
+# eller requests-patchen kan nå. Det enda som stoppar ett äkta C-hang.
+socket.setdefaulttimeout(20)
 
+# ── Lager 2: requests.Session.send-patch ─────────────────────────────────
+# Sätter explicit (connect, read)-timeout på alla requests-anrop som
+# yfinance gör utan att ange timeout själv.
 _original_session_send = requests.sessions.Session.send
 
 def _timeout_session_send(self, request, **kwargs):
-    # Sätt en global timeout om ingen explicit har angetts.
-    # (10 sekunder för connect, 15 sekunder för read)
     if kwargs.get("timeout") is None:
         kwargs["timeout"] = (10, 15)
     return _original_session_send(self, request, **kwargs)
