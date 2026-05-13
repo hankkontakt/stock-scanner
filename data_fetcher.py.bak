@@ -37,7 +37,7 @@ _HAS_ALARM = hasattr(_signal, 'SIGALRM')
 # Sätts INNAN yfinance importeras. Påverkar alla nya sockets på OS-nivå,
 # inklusive SSL-handskakningar i OpenSSL (C-kod) som varken signal.alarm
 # eller requests-patchen kan nå. Det enda som stoppar ett äkta C-hang.
-socket.setdefaulttimeout(20)
+socket.setdefaulttimeout(7)
 
 # ── Lager 2: requests.Session.send-patch ─────────────────────────────────
 # Sätter explicit (connect, read)-timeout på alla requests-anrop som
@@ -46,7 +46,8 @@ _original_session_send = requests.sessions.Session.send
 
 def _timeout_session_send(self, request, **kwargs):
     if kwargs.get("timeout") is None:
-        kwargs["timeout"] = (10, 15)
+        # (3 sekunder connect, 5 sekunder read)
+        kwargs["timeout"] = (3, 5)
     return _original_session_send(self, request, **kwargs)
 
 requests.sessions.Session.send = _timeout_session_send
@@ -509,7 +510,7 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
     for i, ticker in enumerate(tickers, 1):
         if verbose:
             print(f"  [{i}/{total}] {ticker}...", end=" ", flush=True)
-
+    
         # Outer hard timeout per ticker (Linux/GitHub Actions only).
         # Fires even when t.join() is stuck inside C-level code (curl_cffi, OpenSSL).
         # Inner _with_timeout handles most cases; this is the safety net.
@@ -518,7 +519,7 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
                 raise TimeoutError(f"Hard outer timeout for {_t}")
             _signal.signal(_signal.SIGALRM, _alarm_handler)
             _signal.alarm(90)
-
+        
         try:
             info = fetch_stock_info(ticker)
 
@@ -550,7 +551,7 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
         finally:
             if _HAS_ALARM:
                 _signal.alarm(0)  # Always cancel the per-ticker alarm
-
+      print("DEBUG: Huvudloopen är helt klar! Kollar efter trasiga aktier...", flush=True)
     df = pd.DataFrame(rows)
 
     if failed and verbose:

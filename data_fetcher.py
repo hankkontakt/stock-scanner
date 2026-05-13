@@ -510,16 +510,15 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
     for i, ticker in enumerate(tickers, 1):
         if verbose:
             print(f"  [{i}/{total}] {ticker}...", end=" ", flush=True)
-
+        
         # Outer hard timeout per ticker (Linux/GitHub Actions only).
-        # Fires even when t.join() is stuck inside C-level code (curl_cffi, OpenSSL).
-        # Inner _with_timeout handles most cases; this is the safety net.
+        # SÄNKT TILL 8 SEKUNDER för att spara upp till en timmes dödtid!
         if _HAS_ALARM:
             def _alarm_handler(sig, frm, _t=ticker):
                 raise TimeoutError(f"Hard outer timeout for {_t}")
             _signal.signal(_signal.SIGALRM, _alarm_handler)
-            _signal.alarm(90)
-
+            _signal.alarm(8) 
+        
         try:
             info = fetch_stock_info(ticker)
 
@@ -551,12 +550,18 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
         finally:
             if _HAS_ALARM:
                 _signal.alarm(0)  # Always cancel the per-ticker alarm
-
+                
+    # ------------------------------------------------------------------------
+    # FIX: Debug-printarna måste ligga helt UTANFÖR for-loopen
+    # ------------------------------------------------------------------------
+    print("\nDEBUG: Huvudloopen är helt klar! Skapar DataFrame...", flush=True)
+    
     df = pd.DataFrame(rows)
 
     if failed and verbose:
-        print(f"\n  ⚠ Failed to fetch {len(failed)} tickers: {', '.join(failed[:5])}{'...' if len(failed) > 5 else ''}")
+        print(f"  ⚠ Failed to fetch {len(failed)} tickers: {', '.join(failed[:5])}{'...' if len(failed) > 5 else ''}")
 
+    print("DEBUG: fetch_universe_data är klar och returnerar datan!", flush=True)
     return df
 
 
