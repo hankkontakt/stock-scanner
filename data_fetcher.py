@@ -3,7 +3,7 @@ data_fetcher.py
 ===============
 Handles all data fetching from yfinance with:
 - Local file caching (avoids re-fetching same data)
-- Retry logic on failures (with session timeouts instead of threading)
+- Retry logic on failures (clean iteration, no threading needed)
 - Rate limiting (delay between requests)
 - Optional FMP fallback for fundamental data
 - Data quality validation
@@ -20,28 +20,8 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 import config
-
-# --- SÄKER SESSION FÖR YFINANCE ---
-class TimeoutRequestsSession(requests.Session):
-    def request(self, *args, **kwargs):
-        # Tvinga stenhård timeout på alla anrop (socket-nivå)
-        kwargs.setdefault('timeout', 10)
-        return super().request(*args, **kwargs)
-
-yf_session = TimeoutRequestsSession()
-retry_strategy = Retry(
-    total=3,
-    backoff_factor=1,
-    status_forcelist=[429, 500, 502, 503, 504],
-)
-adapter = HTTPAdapter(max_retries=retry_strategy)
-yf_session.mount("https://", adapter)
-yf_session.mount("http://", adapter)
-# ----------------------------------
 
 _FX_CACHE = {}
 # Ensure cache directory exists
@@ -80,7 +60,7 @@ def _retry(fn):
     last_err = None
     for attempt in range(config.MAX_RETRIES):
         try:
-            return fn()  # Timeout hanteras nu nativt av yf_session!
+            return fn()  
         except Exception as e:
             last_err = e
             if attempt < config.MAX_RETRIES - 1:
@@ -106,7 +86,8 @@ def fetch_stock_info(ticker: str) -> dict:
 
     try:
         time.sleep(config.REQUEST_DELAY_SEC)
-        stock = yf.Ticker(ticker, session=yf_session)
+        # Låter YF hantera sessionen nativt med sin nya curl_cffi-motor
+        stock = yf.Ticker(ticker)
         info = _retry(lambda: stock.info)
 
         # yfinance sometimes returns very thin info dicts; check quality
@@ -130,7 +111,7 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
 
     try:
         time.sleep(config.REQUEST_DELAY_SEC)
-        stock = yf.Ticker(ticker, session=yf_session)
+        stock = yf.Ticker(ticker)
         hist = _retry(lambda: stock.history(period=period, auto_adjust=True))
 
         if hist.empty:
@@ -151,7 +132,7 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
                     break
 
             if fx_ticker not in _FX_CACHE:
-                fx_stock = yf.Ticker(fx_ticker, session=yf_session)
+                fx_stock = yf.Ticker(fx_ticker)
                 fx_hist = _retry(lambda: fx_stock.history(period=period, auto_adjust=True))
                 
                 if not fx_hist.empty and "Close" in fx_hist.columns:
