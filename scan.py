@@ -13,9 +13,7 @@ import sentiment as sentiment_module
 import piotroski
 import sector_momentum
 import paper_trading
-import logger
 import alerts as alerts_module
-import report_builder
 
 
 def fmt_pct(x, d=1):
@@ -200,9 +198,9 @@ def _section_cleanup(warnings, removed):
     
     return "\n".join(lines) + "\n"
 
-def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df, holdings, warnings=None, removed=None, sector_mom=None, benchmarks=None, **kwargs):
-    fw         = config.FACTOR_WEIGHTS
-    kwargs["benchmarks"] = benchmarks or {}
+def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df, holdings, warnings=None, removed=None, sector_mom=None, benchmarks=None):
+    fw   = config.FACTOR_WEIGHTS
+    bm   = benchmarks or {}
     date = datetime.now().strftime("%Y-%m-%d %H:%M")
     stark  = (scored.get("entry_signal",pd.Series())=="STARK").sum() if "entry_signal" in scored.columns else 0
     high_c = (scored.get("confidence_label",pd.Series())=="HÖG").sum() if "confidence_label" in scored.columns else 0
@@ -223,7 +221,6 @@ def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df,
         parts.append(macro_regime.build_regime_section(regime_info))
 
     # Benchmark-jämförelse (OMXS30 / SPY)
-    bm = kwargs.get("benchmarks", {})
     if bm:
         bm_lines = ["\n## 📊 Benchmark\n"]
         bm_lines.append("| Index | Idag | 1 månad | YTD |")
@@ -321,7 +318,6 @@ def main():
         from daily_scan import fetch_benchmark_performance
         benchmarks = fetch_benchmark_performance()
         omx = benchmarks.get("OMXS30", {})
-        spy = benchmarks.get("SPY", {})
         if omx:
             print(f"   OMXS30: {omx.get('change_1d',0):+.1f}% idag, {omx.get('change_ytd',0):+.1f}% YTD")
     except Exception:
@@ -467,9 +463,8 @@ def main():
 
     # 12. Rapport
     print("\n📝 Genererar rapport...")
-    
-    # Anropa build_report med de nya variablerna för städning
-    report = report_builder.build_report(
+
+    report = build_report(
         scored       = scored,
         analysis     = analysis,
         summary      = summary,
@@ -479,8 +474,8 @@ def main():
         holdings     = holdings,
         benchmarks   = benchmarks,
         sector_mom   = sector_mom,
-        warnings     = warnings if "warnings" in dir() else [],
-        removed      = removed  if "removed"  in dir() else [],
+        warnings     = warnings,
+        removed      = removed,
     )
 
     # --- VIKTIGT: Spara rapporten till fil ---
@@ -488,12 +483,9 @@ def main():
     date_str    = datetime.now().strftime("%Y-%m-%d")
     report_path = Path(config.REPORT_DIR) / config.REPORT_FILENAME_PATTERN.format(date=date_str)
     csv_path    = Path(config.REPORT_DIR) / f"scored_universe_{date_str}.csv"
-    
+
     report_path.write_text(report, encoding="utf-8")
     scored.to_csv(csv_path, index=False)
-    log["n_scored"]      = len(scored)
-    log["report_path"]   = str(report_path)
-    log["n_alerts_found"] = len(found_alerts) if found_alerts else 0
 
     # Skicka veckorapport via email
     if not args.quiet and alerts_module.email_configured():
