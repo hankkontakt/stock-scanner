@@ -21,6 +21,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 
+
 import config
 
 # Sätt global socket-timeout som fallback för alla nätverksanrop som inte

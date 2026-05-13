@@ -95,31 +95,70 @@ def _write_cache(key: str, data):
         print(f"  ⚠ Cache write failed: {e}")
 
 
+import sys
+import threading
+
+# Endast tillgängligt på Unix/Linux (GitHub Actions)
+if sys.platform != "win32":
+    import signal
+
+    class HardTimeoutException(Exception):
+        """Kastas när operativsystemet tvingar fram ett avbrott."""
+        pass
+
+    def _timeout_handler(signum, frame):
+        raise HardTimeoutException("Hard timeout triggered by OS")
+
+
 def _with_timeout(fn, timeout_sec=12):
     """
-    Kör fn() i en separat tråd med tidsgräns.
-    Kastar TimeoutError om den hänger (vanligt med yfinance .info på
-    asiatiska/obscura tickers i version 1.3+).
+    Kör fn() med en tidsgräns.
+    På Linux (GitHub Actions) används operativsystemets signal.alarm för 
+    att brutalt och säkert avbryta hängande yfinance-anrop.
+    På Windows faller funktionen tillbaka på trådar (eftersom alarm inte finns där).
     """
-    import threading
-    result = [None]
-    error  = [None]
-
-    def worker():
+    if sys.platform != "win32":
+        # ---------------------------------------------------------
+        # LINUX / GITHUB ACTIONS LÖSNING ("Kärnvapnet")
+        # ---------------------------------------------------------
+        # Spara undan eventuell tidigare signalhanterare
+        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+        
+        # Starta klockan
+        signal.alarm(timeout_sec)
+        
         try:
-            result[0] = fn()
-        except Exception as e:
-            error[0] = e
+            return fn()
+        except HardTimeoutException:
+            raise TimeoutError(f"OS-nivå avbrott: Anrop hängde i yfinance efter {timeout_sec}s")
+        finally:
+            # VIKTIGT: Stäng av larmet OAVSETT hur det gick!
+            signal.alarm(0)
+            # Återställ tidigare hanterare för att inte störa andra processer
+            signal.signal(signal.SIGALRM, old_handler)
+            
+    else:
+        # ---------------------------------------------------------
+        # WINDOWS LÖSNING (Din ursprungliga kod)
+        # ---------------------------------------------------------
+        result = [None]
+        error  = [None]
 
-    t = threading.Thread(target=worker, daemon=True)
-    t.start()
-    t.join(timeout_sec)
+        def worker():
+            try:
+                result[0] = fn()
+            except Exception as e:
+                error[0] = e
 
-    if t.is_alive():
-        raise TimeoutError(f"Anrop hängde efter {timeout_sec}s")
-    if error[0] is not None:
-        raise error[0]
-    return result[0]
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        t.join(timeout_sec)
+
+        if t.is_alive():
+            raise TimeoutError(f"Anrop hängde efter {timeout_sec}s")
+        if error[0] is not None:
+            raise error[0]
+        return result[0]
 
 
 def _retry(fn, *args, timeout_sec=12, **kwargs):
