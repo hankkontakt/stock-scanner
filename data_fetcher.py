@@ -22,7 +22,27 @@ import numpy as np
 import requests
 
 import config
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
+# --- SÄKER SESSION FÖR YFINANCE ---
+class TimeoutRequestsSession(requests.Session):
+    def request(self, *args, **kwargs):
+        # Tvinga stenhård timeout på alla anrop (socket-nivå)
+        kwargs.setdefault('timeout', 10)
+        return super().request(*args, **kwargs)
+
+yf_session = TimeoutRequestsSession()
+retry_strategy = Retry(
+    total=3,
+    backoff_factor=1,
+    status_forcelist=[429, 500, 502, 503, 504],
+)
+adapter = HTTPAdapter(max_retries=retry_strategy)
+yf_session.mount("https://", adapter)
+yf_session.mount("http://", adapter)
+# ----------------------------------
 _FX_CACHE = {}
 # Ensure cache directory exists
 Path(config.CACHE_DIR).mkdir(parents=True, exist_ok=True)
@@ -59,31 +79,18 @@ def _write_cache(key: str, data):
         print(f"  ⚠ Cache write failed: {e}")
 
 
-def _with_timeout(fn, timeout_sec=12):
-    """
-    Kör fn() i en separat tråd med tidsgräns.
-    Kastar TimeoutError om den hänger (vanligt med yfinance .info på
-    asiatiska/obscura tickers i version 1.3+).
-    """
-    import threading
-    result = [None]
-    error  = [None]
-
-    def worker():
+def _retry(fn):
+    """Run a function with retry logic on failure."""
+    last_err = None
+    for attempt in range(config.MAX_RETRIES):
         try:
-            result[0] = fn()
+            return fn()  # Timeout hanteras nu nativt av yf_session!
         except Exception as e:
-            error[0] = e
-
-    t = threading.Thread(target=worker, daemon=True)
-    t.start()
-    t.join(timeout_sec)
-
-    if t.is_alive():
-        raise TimeoutError(f"Anrop hängde efter {timeout_sec}s")
-    if error[0] is not None:
-        raise error[0]
-    return result[0]
+            last_err = e
+            if attempt < config.MAX_RETRIES - 1:
+                wait = config.RETRY_BACKOFF_SEC * (attempt + 1)
+                time.sleep(wait)
+    raise last_err
 
 
 def _retry(fn, *args, timeout_sec=12, **kwargs):
@@ -91,16 +98,19 @@ def _retry(fn, *args, timeout_sec=12, **kwargs):
     last_err = None
     for attempt in range(config.MAX_RETRIES):
         try:
-            return _with_timeout(fn, timeout_sec=timeout_sec)
-        except TimeoutError as e:
-            last_err = e
-            # Timeout = direkt bail, ingen poäng att försöka igen snabbt
-            time.sleep(1)
-        except Exception as e:
-            last_err = e
-            if attempt < config.MAX_RETRIES - 1:
-                wait = config.RETRY_BACKOFF_SEC * (attempt + 1)
-                time.sleep(wait)
+        time.sleep(config.REQUEST_DELAY_SEC)
+        # LÄGG TILL SESSION HÄR:
+        stock = yf.Ticker(ticker, session=yf_session)
+        info = _retry(lambda: stock.info)
+
+        if not info or len(info) < 5:
+            return {}
+
+        _write_cache(cache_key, info)
+        return info
+    except Exception as e:
+        print(f"  ⚠ Failed to fetch info for {ticker}: {e}")
+        return {}
     raise last_err
 
 
@@ -146,47 +156,45 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
     if cached is not None:
         return cached
 
+    def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
+    # ... (behåll din cache-logik överst) ...
     try:
         time.sleep(config.REQUEST_DELAY_SEC)
-        stock = yf.Ticker(ticker)
-        
-        # 1. Aktivera auto_adjust=True för att inkludera utdelningar i priset
+        # LÄGG TILL SESSION HÄR:
+        stock = yf.Ticker(ticker, session=yf_session)
         hist = _retry(lambda: stock.history(period=period, auto_adjust=True))
 
         if hist.empty:
             return pd.DataFrame()
 
-        # 2. Valutakonvertering till SEK om det inte är en svensk aktie
         if not ticker.endswith(".ST"):
-            # Identifiera rätt valutapar FÖRST
-            fx_map = {
-                ".L": "GBPSEK=X", ".OL": "NOKSEK=X", ".CO": "DKKSEK=X",
-                ".DE": "EURSEK=X", ".PA": "EURSEK=X", ".AS": "EURSEK=X",
-                ".MI": "EURSEK=X", ".MC": "EURSEK=X", ".HE": "EURSEK=X"
-            }
-            
-            # Bestäm vilken växelkurs vi behöver
-            fx_ticker = "USDSEK=X" # Default
-            for suffix, pair in fx_map.items():
-                if ticker.endswith(suffix):
-                    fx_ticker = pair
-                    break
-            
-            # Hämta växelkursen (använd minnet/cachen om vi redan hämtat den denna körning)
+            # ... (behåll din fx_map logik) ...
+
+            # LAGA VALUTAHÄMTNINGEN (Timeout & Session):
             if fx_ticker not in _FX_CACHE:
-                fx_stock = yf.Ticker(fx_ticker)
-                # Vi hämtar samma period som aktien för att datumen ska matcha
-                _FX_CACHE[fx_ticker] = fx_stock.history(period=period, auto_adjust=True)["Close"]
-            
+                fx_stock = yf.Ticker(fx_ticker, session=yf_session)
+                fx_hist = _retry(lambda: fx_stock.history(period=period, auto_adjust=True))
+                
+                if not fx_hist.empty and "Close" in fx_hist.columns:
+                    _FX_CACHE[fx_ticker] = fx_hist["Close"]
+                else:
+                    _FX_CACHE[fx_ticker] = pd.Series(dtype=float) # Tom fallback
+
             fx_hist = _FX_CACHE[fx_ticker]
             
-            # Synka datumen (hanterar helgdagar i olika länder)
-            fx_aligned = fx_hist.reindex(hist.index).ffill().bfill()
-            
-            # Multiplicera alla priskolumner med växelkursen
-            for col in ["Open", "High", "Low", "Close"]:
-                if col in hist.columns:
-                    hist[col] = hist[col] * fx_aligned
+            # Skydda mot tomma valutakurser
+            if not fx_hist.empty:
+                fx_aligned = fx_hist.reindex(hist.index).ffill().bfill()
+                for col in ["Open", "High", "Low", "Close"]:
+                    if col in hist.columns:
+                        hist[col] = hist[col] * fx_aligned
+
+        _write_cache(cache_key, hist)
+        return hist
+
+    except Exception as e:
+        print(f"  ⚠ Failed to fetch prices for {ticker}: {e}")
+        return pd.DataFrame()
 
         _write_cache(cache_key, hist)
         return hist

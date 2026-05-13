@@ -22,7 +22,27 @@ import numpy as np
 import requests
 
 import config
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
+# --- SÄKER SESSION FÖR YFINANCE ---
+class TimeoutRequestsSession(requests.Session):
+    def request(self, *args, **kwargs):
+        # Tvinga stenhård timeout på alla anrop (socket-nivå)
+        kwargs.setdefault('timeout', 10)
+        return super().request(*args, **kwargs)
+
+yf_session = TimeoutRequestsSession()
+retry_strategy = Retry(
+    total=3,
+    backoff_factor=1,
+    status_forcelist=[429, 500, 502, 503, 504],
+)
+adapter = HTTPAdapter(max_retries=retry_strategy)
+yf_session.mount("https://", adapter)
+yf_session.mount("http://", adapter)
+# ----------------------------------
 _FX_CACHE = {}
 # Ensure cache directory exists
 Path(config.CACHE_DIR).mkdir(parents=True, exist_ok=True)
@@ -59,17 +79,38 @@ def _write_cache(key: str, data):
         print(f"  ⚠ Cache write failed: {e}")
 
 
-def _retry(fn, *args, **kwargs):
+def _retry(fn):
     """Run a function with retry logic on failure."""
     last_err = None
     for attempt in range(config.MAX_RETRIES):
         try:
-            return fn(*args, **kwargs)
+            return fn()  # Timeout hanteras nu nativt av yf_session!
         except Exception as e:
             last_err = e
             if attempt < config.MAX_RETRIES - 1:
                 wait = config.RETRY_BACKOFF_SEC * (attempt + 1)
                 time.sleep(wait)
+    raise last_err
+
+
+def _retry(fn, *args, timeout_sec=12, **kwargs):
+    """Run a function with retry logic on failure, with per-attempt timeout."""
+    last_err = None
+    for attempt in range(config.MAX_RETRIES):
+        try:
+        time.sleep(config.REQUEST_DELAY_SEC)
+        # LÄGG TILL SESSION HÄR:
+        stock = yf.Ticker(ticker, session=yf_session)
+        info = _retry(lambda: stock.info)
+
+        if not info or len(info) < 5:
+            return {}
+
+        _write_cache(cache_key, info)
+        return info
+    except Exception as e:
+        print(f"  ⚠ Failed to fetch info for {ticker}: {e}")
+        return {}
     raise last_err
 
 
@@ -81,7 +122,14 @@ def fetch_stock_info(ticker: str) -> dict:
     cache_key = f"info:{ticker}"
     cached = _read_cache(cache_key, config.CACHE_HOURS)
     if cached is not None:
-        return cached
+        # Validera att priset inte är högre än 52v-high (indikerar korrupt cache)
+        cp  = cached.get("currentPrice") or cached.get("regularMarketPrice") or 0
+        h52 = cached.get("fiftyTwoWeekHigh") or 0
+        if cp and h52 and float(cp) > float(h52) * 1.02:  # 2% marginal för intradag
+            import os
+            _cache_path(cache_key).unlink(missing_ok=True)  # rensa korrupt cache
+        else:
+            return cached
 
     try:
         time.sleep(config.REQUEST_DELAY_SEC)
@@ -119,36 +167,33 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
             return pd.DataFrame()
 
         # 2. Valutakonvertering till SEK om det inte är en svensk aktie
-       if fx_ticker not in _FX_CACHE:
-                fx_stock = yf.Ticker(fx_ticker)
-                _FX_CACHE[fx_ticker] = fx_stock.history(period=period, auto_adjust=True)["Close"]
-            
-            fx_hist = _FX_CACHE[fx_ticker]
-            
-            # Synka datumen och multiplicera
-            fx_aligned = fx_hist.reindex(hist.index).ffill().bfill()
-            # Identifiera rätt valutapar
+        if not ticker.endswith(".ST"):
+            # Identifiera rätt valutapar FÖRST
             fx_map = {
                 ".L": "GBPSEK=X", ".OL": "NOKSEK=X", ".CO": "DKKSEK=X",
                 ".DE": "EURSEK=X", ".PA": "EURSEK=X", ".AS": "EURSEK=X",
                 ".MI": "EURSEK=X", ".MC": "EURSEK=X", ".HE": "EURSEK=X"
             }
             
-            # Default till USD om inget annat matchar (USA/Asien ADRs)
-            fx_ticker = "USDSEK=X"
+            # Bestäm vilken växelkurs vi behöver
+            fx_ticker = "USDSEK=X" # Default
             for suffix, pair in fx_map.items():
                 if ticker.endswith(suffix):
                     fx_ticker = pair
                     break
             
-            # Hämta växelkursen för samma period
-            fx_stock = yf.Ticker(fx_ticker)
-            fx_hist = fx_stock.history(period=period, auto_adjust=True)["Close"]
+            # Hämta växelkursen (använd minnet/cachen om vi redan hämtat den denna körning)
+            if fx_ticker not in _FX_CACHE:
+                fx_stock = yf.Ticker(fx_ticker)
+                # Vi hämtar samma period som aktien för att datumen ska matcha
+                _FX_CACHE[fx_ticker] = fx_stock.history(period=period, auto_adjust=True)["Close"]
             
-            # Synka datumen och multiplicera alla priskolumner (Open, High, Low, Close)
-            # Vi använder ffill() för att hantera helgdagar som skiljer sig mellan länder
+            fx_hist = _FX_CACHE[fx_ticker]
+            
+            # Synka datumen (hanterar helgdagar i olika länder)
             fx_aligned = fx_hist.reindex(hist.index).ffill().bfill()
             
+            # Multiplicera alla priskolumner med växelkursen
             for col in ["Open", "High", "Low", "Close"]:
                 if col in hist.columns:
                     hist[col] = hist[col] * fx_aligned
