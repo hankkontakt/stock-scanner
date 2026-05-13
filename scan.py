@@ -1,6 +1,9 @@
 """
 scan.py – Huvudscript. Kör varje söndag: python scan.py
 """
+import warnings
+warnings.filterwarnings("ignore")  # <--- MÅSTE LIGGA HÄR UPPE!
+
 import argparse, sys, os, time, threading
 from datetime import datetime
 from pathlib import Path
