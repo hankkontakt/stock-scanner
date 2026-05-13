@@ -59,12 +59,43 @@ def _write_cache(key: str, data):
         print(f"  ⚠ Cache write failed: {e}")
 
 
-def _retry(fn, *args, **kwargs):
-    """Run a function with retry logic on failure."""
+def _with_timeout(fn, timeout_sec=12):
+    """
+    Kör fn() i en separat tråd med tidsgräns.
+    Kastar TimeoutError om den hänger (vanligt med yfinance .info på
+    asiatiska/obscura tickers i version 1.3+).
+    """
+    import threading
+    result = [None]
+    error  = [None]
+
+    def worker():
+        try:
+            result[0] = fn()
+        except Exception as e:
+            error[0] = e
+
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+    t.join(timeout_sec)
+
+    if t.is_alive():
+        raise TimeoutError(f"Anrop hängde efter {timeout_sec}s")
+    if error[0] is not None:
+        raise error[0]
+    return result[0]
+
+
+def _retry(fn, *args, timeout_sec=12, **kwargs):
+    """Run a function with retry logic on failure, with per-attempt timeout."""
     last_err = None
     for attempt in range(config.MAX_RETRIES):
         try:
-            return fn(*args, **kwargs)
+            return _with_timeout(fn, timeout_sec=timeout_sec)
+        except TimeoutError as e:
+            last_err = e
+            # Timeout = direkt bail, ingen poäng att försöka igen snabbt
+            time.sleep(1)
         except Exception as e:
             last_err = e
             if attempt < config.MAX_RETRIES - 1:
@@ -81,7 +112,14 @@ def fetch_stock_info(ticker: str) -> dict:
     cache_key = f"info:{ticker}"
     cached = _read_cache(cache_key, config.CACHE_HOURS)
     if cached is not None:
-        return cached
+        # Validera att priset inte är högre än 52v-high (indikerar korrupt cache)
+        cp  = cached.get("currentPrice") or cached.get("regularMarketPrice") or 0
+        h52 = cached.get("fiftyTwoWeekHigh") or 0
+        if cp and h52 and float(cp) > float(h52) * 1.02:  # 2% marginal för intradag
+            import os
+            _cache_path(cache_key).unlink(missing_ok=True)  # rensa korrupt cache
+        else:
+            return cached
 
     try:
         time.sleep(config.REQUEST_DELAY_SEC)

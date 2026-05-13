@@ -28,9 +28,22 @@ import pandas as pd
 
 
 def _fmt_pct(x, plus=True):
+    """Formaterar ett DECIMAL-värde (0.075) som procent (+7.5%)."""
     if x is None or (hasattr(x, '__float__') and pd.isna(float(x))): return "—"
     sign = "+" if (plus and float(x) >= 0) else ""
     return f"{sign}{float(x)*100:.1f}%"
+
+def _fmt_pct_raw(x, plus=True):
+    """Formaterar ett REDAN-PROCENT-värde (7.5) som procent (+7.5%).
+    Används för benchmark-data från daily_scan som lagrar t.ex. 7.59 för 7.59%."""
+    if x is None or (hasattr(x, '__float__') and pd.isna(float(x))): return "—"
+    sign = "+" if (plus and float(x) >= 0) else ""
+    return f"{sign}{float(x):.1f}%"
+
+def _color_pct_raw(x):
+    """Emoji baserat på ett redan-procent-värde (positivt/negativt)."""
+    if x is None or (hasattr(x, '__float__') and pd.isna(float(x))): return "⚪"
+    return "🟢" if float(x) >= 0 else "🔴"
 
 def _fmt_score(x):
     if x is None or pd.isna(x): return "—"
@@ -85,9 +98,9 @@ def section_regime(regime_info: dict, benchmarks: dict = None) -> str:
             d1  = data.get("change_1d")
             m1  = data.get("change_1m")
             ytd = data.get("change_ytd")
-            icon_d = _color_pct(d1)
+            icon_d = _color_pct_raw(d1)
             lines.append(
-                f"| **{name}** | {icon_d} {_fmt_pct(d1)} | {_fmt_pct(m1)} | {_fmt_pct(ytd)} |"
+                f"| **{name}** | {icon_d} {_fmt_pct_raw(d1)} | {_fmt_pct_raw(m1)} | {_fmt_pct_raw(ytd)} |"
             )
         lines.append("")
 
@@ -283,7 +296,7 @@ def section_sectors(sector_df: pd.DataFrame, sector_mom: dict = None) -> str:
         for s, data in sorted_sectors[:8]:
             sig  = data.get("signal","NEUTRAL")
             r3m  = data.get("return_3m")
-            r3ms = f" {_fmt_pct(r3m)}" if r3m else ""
+            r3ms = f" {_fmt_pct(r3m)}" if r3m else ""  # return_3m är decimal
             lines.append(f"- {icons.get(sig,'⚪')} **{s}**{r3ms}")
         lines.append("")
 

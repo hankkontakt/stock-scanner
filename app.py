@@ -13,12 +13,16 @@ Funktioner:
 - Sparar automatiskt till holdings.csv
 """
 
+import base64
 import csv
 import io
 import os
 import threading
 import webbrowser
 from pathlib import Path
+
+import requests
+from nacl import encoding, public
 
 import yfinance as yf
 from flask import Flask, jsonify, render_template, request
@@ -67,6 +71,50 @@ def save_holdings(holdings: list):
                 })
     except Exception as e:
         print(f"Fel vid sparning av holdings: {e}")
+
+
+def _encrypt_secret(public_key_b64: str, value: str) -> str:
+    """Encrypt a secret value with the repo's public key (GitHub requirement)."""
+    key = public.PublicKey(public_key_b64.encode(), encoding.Base64Encoder)
+    box = public.SealedBox(key)
+    return base64.b64encode(box.encrypt(value.encode())).decode()
+
+
+def sync_holdings_to_github():
+    """Push holdings.csv content to GitHub Actions secret HOLDINGS_CSV."""
+    token = os.getenv("GITHUB_TOKEN")
+    owner = os.getenv("GITHUB_OWNER")
+    repo  = os.getenv("GITHUB_REPO")
+    if not all([token, owner, repo]):
+        return False, "GITHUB_TOKEN/OWNER/REPO saknas i .env"
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    base = f"https://api.github.com/repos/{owner}/{repo}"
+
+    # 1. Hämta repots publika nyckel
+    r = requests.get(f"{base}/actions/secrets/public-key", headers=headers, timeout=10)
+    if r.status_code != 200:
+        return False, f"Kunde inte hämta publik nyckel: {r.status_code}"
+    pk_data = r.json()
+
+    # 2. Läs och kryptera holdings.csv
+    csv_content = Path(HOLDINGS_FILE).read_text(encoding="utf-8")
+    encrypted   = _encrypt_secret(pk_data["key"], csv_content)
+
+    # 3. Uppdatera secreten
+    r = requests.put(
+        f"{base}/actions/secrets/HOLDINGS_CSV",
+        headers=headers,
+        json={"encrypted_value": encrypted, "key_id": pk_data["key_id"]},
+        timeout=10,
+    )
+    if r.status_code in (201, 204):
+        return True, "OK"
+    return False, f"GitHub API svarade {r.status_code}: {r.text}"
 
 
 def parse_avanza_csv(content: str) -> list:
@@ -214,10 +262,12 @@ def add_holding():
             h["shares"]     = shares
             h["cost_basis"] = cost_basis
             save_holdings(holdings)
+            sync_holdings_to_github()
             return jsonify({"status": "updated", "ticker": ticker})
 
     holdings.append({"ticker": ticker, "shares": shares, "cost_basis": cost_basis})
     save_holdings(holdings)
+    sync_holdings_to_github()
     return jsonify({"status": "added", "ticker": ticker})
 
 
@@ -233,6 +283,7 @@ def remove_holding(ticker: str):
         return jsonify({"error": "Ticker ej hittad"}), 404
 
     save_holdings(holdings)
+    sync_holdings_to_github()
     return jsonify({"status": "removed", "ticker": ticker})
 
 
@@ -300,7 +351,9 @@ def import_avanza_confirm():
             n_added += 1
 
     save_holdings(holdings)
-    return jsonify({"status": "ok", "added": n_added, "updated": n_updated})
+
+    ok, msg = sync_holdings_to_github()
+    return jsonify({"status": "ok", "added": n_added, "updated": n_updated, "github_sync": ok, "github_msg": msg})
 
 
 # ── Start ───────────────────────────────────────────────────────────────────

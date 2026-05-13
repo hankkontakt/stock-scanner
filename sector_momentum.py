@@ -37,21 +37,19 @@ Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
 
 # Sektor → ETF-mappning (US-baserade, men representativa globalt)
 SECTOR_ETFS = {
-    "Technology":             "XLK",
-    "Healthcare":             "XLV",
-    "Financial Services":     "XLF",
-    "Consumer Cyclical":      "XLY",
-    "Consumer Defensive":     "XLP",
-    "Energy":                 "XLE",
-    "Industrials":            "XLI",
-    "Communication Services": "XLC",
-    "Basic Materials":        "XLB",
-    "Real Estate":            "XLRE",
-    "Utilities":              "XLU",
-    # Kompletterande för nordiska/europeiska sektorer
-    "Financial Services":     "XLF",
-    "Technology":             "QQQ",
+    "Technology":             "XLK",   # Technology Select Sector SPDR
+    "Healthcare":             "XLV",   # Health Care Select Sector SPDR
+    "Financial Services":     "XLF",   # Financial Select Sector SPDR
+    "Consumer Cyclical":      "XLY",   # Consumer Discretionary SPDR
+    "Consumer Defensive":     "XLP",   # Consumer Staples SPDR
+    "Energy":                 "XLE",   # Energy Select Sector SPDR
+    "Industrials":            "XLI",   # Industrial Select Sector SPDR
+    "Communication Services": "XLC",   # Communication Services SPDR
+    "Basic Materials":        "XLB",   # Materials Select Sector SPDR
+    "Real Estate":            "XLRE",  # Real Estate Select Sector SPDR
+    "Utilities":              "XLU",   # Utilities Select Sector SPDR
 }
+# Notering: inga dubletter – Python dict skriver tyst över dublettnycklar
 
 # Justering av score baserat på sektormomtentum
 SECTOR_SCORE_ADJUSTMENT = {
@@ -159,19 +157,34 @@ def fetch_sector_momentum(verbose: bool = True) -> dict:
 
 
 def _classify_signal(above_ma50, above_ma200, ret_3m) -> str:
-    """Klassificerar sektorsignalen baserat på tekniska indikatorer."""
+    """
+    Klassificerar sektorsignalen baserat på MA-position OCH 3m-momentum.
+
+    Kombinerar strukturell trend (MA) med faktisk momentum (3m-avkastning)
+    för att undvika att visa 🟢 för sektorer med negativ avkastning.
+    """
     if above_ma200 is None:
         return "NEUTRAL"
 
+    r3 = ret_3m if ret_3m is not None else 0.0
+
     if above_ma50 and above_ma200:
-        if ret_3m is not None and ret_3m > 0.05:
-            return "STARK UPPTREND"
-        return "UPPTREND"
+        if r3 > 0.05:
+            return "STARK UPPTREND"   # Över båda MA + positiv 3m-momentum
+        elif r3 >= -0.02:
+            return "UPPTREND"          # Över båda MA men svagt eller flat momentum
+        else:
+            return "NEUTRAL"           # Strukturellt upp men 3m-momentum negativ → degradera
     elif not above_ma50 and not above_ma200:
-        if ret_3m is not None and ret_3m < -0.05:
-            return "STARK NEDTREND"
+        if r3 < -0.05:
+            return "STARK NEDTREND"   # Under båda MA + negativ momentum
         return "NEDTREND"
     else:
+        # En MA uppfylld, en inte
+        if r3 < -0.03:
+            return "NEDTREND"          # Blandad MA men tydlig nedgång
+        elif r3 > 0.03:
+            return "UPPTREND"          # Blandad MA men tydlig uppgång
         return "NEUTRAL"
 
 

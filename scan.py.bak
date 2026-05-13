@@ -10,7 +10,13 @@ import config, data_fetcher, scoring, filters, sectors
 import portfolio, portfolio_analysis, extra_data
 import delta_tracker, macro_regime, earnings_calendar
 import sentiment as sentiment_module
-
+import piotroski
+import sector_momentum
+import paper_trading
+import logger
+import alerts as alerts_module
+import report_builder
+log = {}
 
 def fmt_pct(x, d=1):
     if x is None or pd.isna(x): return "—"
@@ -76,32 +82,7 @@ def _section_sectors_top5(scored: pd.DataFrame, sector_summary: pd.DataFrame) ->
 
     return "\n".join(lines)
     
-def _section_cleanup(warnings, removed):
-    """Skapar markdown-sektionen för automatiskt systemunderhåll."""
-    if not warnings and not removed:
-        return ""
-    
-    lines = ["\n## 🧹 Systemunderhåll (Självläkning)\n"]
-    lines.append("_Systemet rensar automatiskt bort aktier som saknar data efter 3 misslyckade försök._\n")
-    
-    if removed:
-        lines.append("### ❌ Raderade från universumet (Blacklist)")
-        lines.append("| Ticker | AI Diagnos / Orsak |")
-        lines.append("|--------|--------------------|")
-        for item in removed:
-            # item är en dict som vi skapade i filters.update_ticker_health
-            ticker = item.get('ticker', 'Unknown')
-            reason = item.get('reason', 'Ingen data tillgänglig')
-            lines.append(f"| `{ticker}` | {reason} |")
-        lines.append("") # Tom rad
-    
-    if warnings:
-        lines.append("### ⚠️ Varning: På väg att raderas (2 strikes)")
-        lines.append("Dessa aktier saknar data och raderas vid nästa misslyckade scan:")
-        lines.append(", ".join([f"`{w}`" for w in warnings]))
-        lines.append("")
-    
-    return "\n".join(lines) + "\n"
+
     
 def _section_top_n(scored, n):
     # --- NY SEKTORTAK-LOGIK ---
@@ -190,10 +171,38 @@ def _section_claude_prompt():
             "3. Varningssignaler jag missat\n"
             "4. Är jag för exponerad mot en sektor?\n"
             "5. Vad säger makrobilden just nu?\n```")
+            
+            
+def _section_cleanup(warnings, removed):
+    """Skapar markdown-sektionen för automatiskt systemunderhåll."""
+    if not warnings and not removed:
+        return ""
+    
+    lines = ["\n## 🧹 Systemunderhåll (Självläkning)\n"]
+    lines.append("_Systemet rensar automatiskt bort aktier som saknar data efter 3 misslyckade försök._\n")
+    
+    if removed:
+        lines.append("### ❌ Raderade från universumet (Blacklist)")
+        lines.append("| Ticker | AI Diagnos / Orsak |")
+        lines.append("|--------|--------------------|")
+        for item in removed:
+            # item är en dict som vi skapade i filters.update_ticker_health
+            ticker = item.get('ticker', 'Unknown')
+            reason = item.get('reason', 'Ingen data tillgänglig')
+            lines.append(f"| `{ticker}` | {reason} |")
+        lines.append("") # Tom rad
+    
+    if warnings:
+        lines.append("### ⚠️ Varning: På väg att raderas (2 strikes)")
+        lines.append("Dessa aktier saknar data och raderas vid nästa misslyckade scan:")
+        lines.append(", ".join([f"`{w}`" for w in warnings]))
+        lines.append("")
+    
+    return "\n".join(lines) + "\n"
 
-
-def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df, holdings, warnings=None, removed=None):
-    fw   = config.FACTOR_WEIGHTS
+def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df, holdings, warnings=None, removed=None, sector_mom=None, benchmarks=None, **kwargs):
+    fw         = config.FACTOR_WEIGHTS
+    kwargs["benchmarks"] = benchmarks or {}
     date = datetime.now().strftime("%Y-%m-%d %H:%M")
     stark  = (scored.get("entry_signal",pd.Series())=="STARK").sum() if "entry_signal" in scored.columns else 0
     high_c = (scored.get("confidence_label",pd.Series())=="HÖG").sum() if "confidence_label" in scored.columns else 0
@@ -213,30 +222,54 @@ def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df,
     if regime_info:
         parts.append(macro_regime.build_regime_section(regime_info))
 
-    # 2. Topp-N
-    parts.append(portfolio_analysis._section_risk_parity(scored))
+    # Benchmark-jämförelse (OMXS30 / SPY)
+    bm = kwargs.get("benchmarks", {})
+    if bm:
+        bm_lines = ["\n## 📊 Benchmark\n"]
+        bm_lines.append("| Index | Idag | 1 månad | YTD |")
+        bm_lines.append("|-------|------|---------|-----|")
+        for name, data in bm.items():
+            d1  = data.get("change_1d",  0)
+            m1  = data.get("change_1m",  0)
+            ytd = data.get("change_ytd", 0)
+            s1 = "+" if d1 >= 0 else ""; sm = "+" if m1 >= 0 else ""; sy = "+" if ytd >= 0 else ""
+            bm_lines.append(f"| **{name}** | {s1}{d1:.1f}% | {sm}{m1:.1f}% | {sy}{ytd:.1f}% |")
+        parts.append("\n".join(bm_lines))
 
-    # 3. Sektorer
+    # 2. Topp-N tabell (med sektortak)
+    parts.append(_section_top_n(scored, config.TOP_N_RECOMMENDATIONS))
+
+    # 2.5. Piotroski F-Score-sektion
+    pio_sec = piotroski.build_piotroski_section(scored)
+    if pio_sec: parts.append(pio_sec)
+
+    # 3. Risk Parity-viktning för topp 10
+    rp = portfolio_analysis._section_risk_parity(scored)
+    if rp: parts.append(rp)
+
+    # 3.5. Sektor-ETF momentum
+    if sector_mom:
+        sm_sec = sector_momentum.build_sector_momentum_section(sector_mom)
+        if sm_sec: parts.append(sm_sec)
+
+    # 4. Sektorer (kort sammanfattning)
     s = _section_sectors(sector_df)
     if s: parts.append(s)
 
-    # 4. Delta
+    # 5. Delta – förändringar sedan förra veckan
     d = delta_tracker.build_delta_report_section(scored)
     if d: parts.append(d)
 
-    # 5. Earnings
-    top_t = list(scored.head(config.TOP_N_RECOMMENDATIONS)["ticker"])
+    # 6. Earnings-kalender
     portfolio_cal = earnings_df.get("portfolio", pd.DataFrame()) if isinstance(earnings_df, dict) else earnings_df
     top_cal = earnings_df.get("top", pd.DataFrame()) if isinstance(earnings_df, dict) else pd.DataFrame()
     e = earnings_calendar.build_earnings_section(portfolio_cal, top_cal)
     if e: parts.append(e)
 
-    # 6. Portfölj
+    # 7. Portföljrekommendationer (köp/håll/sälj)
     if not analysis.empty:
         parts.append(_section_portfolio(analysis, summary))
-    # 7. Avancerad portföljanalys
-    if not analysis.empty:
-        parts.append(_section_portfolio(analysis, summary))
+        # 7b. Avancerad portföljanalys (korrelation, koncentration, diversifiering)
         pa = portfolio_analysis.build_portfolio_analysis_section(analysis, scored)
         if pa: parts.append(pa)
     
@@ -245,6 +278,10 @@ def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df,
 
     # 9. Systemunderhåll (Flyttad hit upp så den syns tydligt)
     parts.append(_section_cleanup(warnings, removed))
+
+    # 9.5. Paper trading track record
+    pt_sec = paper_trading.build_paper_trading_section()
+    if pt_sec: parts.append(pt_sec)
 
     # 10. Claude-prompt och avslutning
     parts.append(_section_claude_prompt())
@@ -278,6 +315,18 @@ def main():
         print(f"   → {r} ({c:.0f}% konfidens)")
         if r == "BJÖRN": print("   ⚠  Björnmarknad aktiv")
 
+    # 1.6. Benchmark-data (OMXS30 + SPY)
+    print("📊 Hämtar benchmark...")
+    try:
+        from daily_scan import fetch_benchmark_performance
+        benchmarks = fetch_benchmark_performance()
+        omx = benchmarks.get("OMXS30", {})
+        spy = benchmarks.get("SPY", {})
+        if omx:
+            print(f"   OMXS30: {omx.get('change_1d',0):+.1f}% idag, {omx.get('change_ytd',0):+.1f}% YTD")
+    except Exception:
+        benchmarks = {}
+
     # 2. Datahämtning
     print("\n📥 Hämtar data...")
     df = data_fetcher.fetch_universe_data(tickers, verbose=v)
@@ -294,7 +343,7 @@ def main():
     else:
         print("\nℹ  Ingen Finnhub-nyckel → sentiment neutralt")
 
-# 4. Scoring
+    # 4. Scoring
     print("\n🧮 Faktorscores...")
     
     # Hämta ut det faktiska regim-ordet (t.ex. "TJUR") från Steg 1-datan
@@ -334,6 +383,15 @@ def main():
         print(f"   ❌ {len(removed)} aktier flyttades till svarta listan")
         
     print(f"   ✓ {len(scored)} aktier godkända för analys")
+    # 4.5. Sektor-ETF momentum (justera scores baserat på sektortrend)
+    print("\n📈 Sektormomtentum...")
+    sector_mom = sector_momentum.fetch_sector_momentum(verbose=v)
+    scored = sector_momentum.apply_sector_momentum(scored, sector_mom, verbose=v)
+
+    # 4.6. Piotroski F-Score (finansiell hälsa)
+    print("🏥 Piotroski F-Score...")
+    scored = piotroski.add_piotroski_to_universe(scored, verbose=v)
+
     # 5. Extra data
     if not args.quick:
         print("\n🔬 Extra data...")
@@ -358,7 +416,7 @@ def main():
             scored.loc[mask, "entry_signal"] = "OK"
             if v and mask.sum(): print(f"   Björn: {mask.sum()} STARK→OK (score<{min_s})")
 
-# 7. Sektorrelativ ranking
+    # 7. Sektorrelativ ranking
     print("\n🏭 Sektorrelativ ranking...")
     if "score_total" in scored.columns:
         scored = scored.dropna(subset=["score_total"])
@@ -411,9 +469,19 @@ def main():
     print("\n📝 Genererar rapport...")
     
     # Anropa build_report med de nya variablerna för städning
-    report = build_report(scored, analysis, summary, sector_summary,
-                          regime_info, earn_df, holdings, 
-                          warnings=warnings, removed=removed)
+    report = report_builder.build_report(
+        scored       = scored,
+        analysis     = analysis,
+        summary      = summary,
+        sector_df    = sector_summary,
+        regime_info  = regime_info,
+        earnings_df  = earn_df,
+        holdings     = holdings,
+        benchmarks   = benchmarks,
+        sector_mom   = sector_mom,
+        warnings     = warnings if "warnings" in dir() else [],
+        removed      = removed  if "removed"  in dir() else [],
+    )
 
     # --- VIKTIGT: Spara rapporten till fil ---
     Path(config.REPORT_DIR).mkdir(parents=True, exist_ok=True)
@@ -423,12 +491,31 @@ def main():
     
     report_path.write_text(report, encoding="utf-8")
     scored.to_csv(csv_path, index=False)
+    log["n_scored"]      = len(scored)
+    log["report_path"]   = str(report_path)
+    log["n_alerts_found"] = len(found_alerts) if found_alerts else 0
+
+    # Skicka veckorapport via email
+    if not args.quiet and alerts_module.email_configured():
+        print("\n✉ Skickar veckorapport via email...")
+        alerts_module.send_weekly_report(
+            report_md  = report,
+            n_scanned  = len(scored),
+            n_top      = config.TOP_N_RECOMMENDATIONS,
+        )
+    elif not args.quiet:
+        print("\nℹ Email ej konfigurerat – lägg till EMAIL_SENDER/EMAIL_PASSWORD i config.py")
 
     print(f"\n{'='*50}")
     print(f"✅ KLART!")
     print(f"   Rapport: {report_path}")
     print(f"   Data:    {csv_path}")
     print(f"\n👉 Öppna rapporten och klistra in i Claude Pro\n")
+
+    # 12.5 Paper trading – registrera veckans rekommendationer
+    print("\n📄 Paper trading...")
+    paper_trading.record_weekly_picks(scored, top_n=10, verbose=v)
+    paper_trading.update_prices(close_after_weeks=4, verbose=False)
 
     # 13. Topp 10 i terminalen (Snyggt avslut)
     print("🏆 TOPP 10:"); print("-" * 65)

@@ -939,7 +939,8 @@
       });
       const data = await res.json();
       if (data.error) { showToast(data.error, 'error'); return; }
-      showToast(`✓ ${data.added} tillagda, ${data.updated} uppdaterade`, 'success');
+      const sync = data.github_sync ? ' · GitHub ✓' : ' · GitHub ✗';
+      showToast(`✓ ${data.added} tillagda, ${data.updated} uppdaterade${sync}`, data.github_sync ? 'success' : 'error');
       closeImportModal();
       loadHoldings();
     } catch (err) {

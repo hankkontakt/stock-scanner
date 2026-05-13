@@ -1,0 +1,527 @@
+"""
+evening_scan.py
+===============
+Vardaglig kvällsrapport kl 17:30 CET.
+
+Alltid ett email. Kompakt och beslutscentrerat.
+
+Innehåll:
+  1. Dagens marknadsrörelser  – OMXS30, SPY, din portfölj
+  2. Portfölj-dashboard       – varje innehav: dagens rörelse, total P&L, signal
+  3. Håll/Sälj-analys         – baserat på söndagens score + daglig prisrörelse
+  4. Vecko-P&L-trend          – hur har portföljen gått denna vecka?
+  5. Kommande rapporter        – earnings inom 14 dagar
+  6. Paper trading-update      – senaste stängningspriser inlagda
+
+Kör manuellt: python evening_scan.py
+GitHub Actions: evening_scan.yml (vardag 16:30 UTC = 17:30 CET vinter)
+"""
+
+import sys
+import time
+import argparse
+from datetime import date, datetime, timedelta
+from pathlib import Path
+
+import pandas as pd
+import numpy as np
+import yfinance as yf
+
+import config
+import alerts
+import logger
+import portfolio
+import paper_trading
+import earnings_calendar as ec
+
+OMXS30_PROXY = "XACTOMXS3.ST"
+SPY_TICKER   = "SPY"
+
+# Trösklar för Hold/Sälj
+SELL_SCORE_THRESH    = 40    # Score under detta → SÄLJ-signal
+REDUCE_SCORE_THRESH  = 50    # Score under detta → MINSKA
+STRONG_HOLD_THRESH   = 70    # Score över detta → BEHÅLL starkt
+WEEKLY_LOSS_WARN     = -5.0  # Veckotapp % → varning
+
+
+# ══════════════════════════════════════════════════════════════
+# DATAHÄMTNING
+# ══════════════════════════════════════════════════════════════
+
+def fetch_closing_prices(tickers: list) -> dict:
+    """
+    Hämtar slutkurser + rörelsedata för en lista tickers.
+    Returnerar {ticker: {price, change_1d_pct, change_1w_pct, volume_ratio}}
+    """
+    result = {}
+    for ticker in tickers:
+        try:
+            time.sleep(0.25)
+            hist = yf.Ticker(ticker).history(period="10d", auto_adjust=True)
+            if hist.empty or len(hist) < 2:
+                continue
+
+            close   = hist["Close"]
+            curr    = float(close.iloc[-1])
+            prev    = float(close.iloc[-2])
+            chg_1d  = (curr / prev - 1) * 100
+
+            # 1-veckors rörelse (~5 handelsdagar)
+            week_idx  = max(0, len(close) - 6)
+            week_start = float(close.iloc[week_idx])
+            chg_1w    = (curr / week_start - 1) * 100 if week_start > 0 else None
+
+            # Volym-ratio
+            vol_ratio = None
+            if "Volume" in hist.columns and len(hist) >= 6:
+                vol_today = float(hist["Volume"].iloc[-1])
+                vol_avg   = float(hist["Volume"].iloc[-6:-1].mean())
+                if vol_avg > 0:
+                    vol_ratio = round(vol_today / vol_avg, 2)
+
+            result[ticker] = {
+                "price":      round(curr, 2),
+                "change_1d":  round(chg_1d, 2),
+                "change_1w":  round(chg_1w, 2) if chg_1w is not None else None,
+                "vol_ratio":  vol_ratio,
+            }
+        except Exception:
+            pass
+    return result
+
+
+def fetch_market_summary() -> dict:
+    """Hämtar dagens rörelse för OMXS30 och SPY."""
+    summary = {}
+    for name, ticker in [("OMXS30", OMXS30_PROXY), ("SPY", SPY_TICKER)]:
+        try:
+            time.sleep(0.3)
+            hist = yf.Ticker(ticker).history(period="10d", auto_adjust=True)
+            if hist.empty or len(hist) < 2:
+                continue
+            close     = hist["Close"]
+            curr      = float(close.iloc[-1])
+            prev      = float(close.iloc[-2])
+            chg_1d    = (curr / prev - 1) * 100
+            week_idx  = max(0, len(close) - 6)
+            chg_1w    = (curr / float(close.iloc[week_idx]) - 1) * 100
+
+            # YTD: sista handelsdagen föregående år
+            prev_year = hist[hist.index.year == (date.today().year - 1)]
+            ytd_start = float(prev_year["Close"].iloc[-1]) if not prev_year.empty else curr
+            chg_ytd   = (curr / ytd_start - 1) * 100
+
+            summary[name] = {
+                "ticker":    ticker,
+                "price":     round(curr, 2),
+                "change_1d": round(chg_1d, 2),
+                "change_1w": round(chg_1w, 2),
+                "change_ytd":round(chg_ytd, 2),
+            }
+        except Exception:
+            pass
+    return summary
+
+
+# ══════════════════════════════════════════════════════════════
+# LADDA SÖNDAGENS SCORES
+# ══════════════════════════════════════════════════════════════
+
+def load_scores_for_holdings(holding_tickers: list) -> dict:
+    """
+    Hämtar senaste scores från söndagens scan för dina innehav.
+    Returnerar {ticker: {score_total, rank, entry_signal, confidence_label, ...}}
+    """
+    csvs = sorted(
+        Path(config.REPORT_DIR).glob("scored_universe_*.csv"),
+        reverse=True
+    )
+    if not csvs:
+        return {}
+
+    try:
+        df = pd.read_csv(csvs[0])
+        df["ticker"] = df["ticker"].str.upper()
+        filtered = df[df["ticker"].isin([t.upper() for t in holding_tickers])]
+        return filtered.set_index("ticker").to_dict("index")
+    except Exception:
+        return {}
+
+
+# ══════════════════════════════════════════════════════════════
+# HOLD/SÄLJ-ANALYS
+# ══════════════════════════════════════════════════════════════
+
+def analyze_hold_sell(
+    holdings:    pd.DataFrame,
+    prices:      dict,
+    scores:      dict,
+    universe_size: int = 200,
+) -> list:
+    """
+    Kombinerar söndagens score med daglig prisrörelse för varje innehav.
+
+    Returnerar lista av dicts med:
+      ticker, price, change_1d, change_1w, total_pnl_pct,
+      score, rank, recommendation, reason, urgency (1=hög, 3=låg)
+    """
+    results = []
+
+    for _, row in holdings.iterrows():
+        ticker = str(row["ticker"]).upper()
+        cost   = row.get("cost_basis")
+        shares = row.get("shares", 0)
+        price_data  = prices.get(ticker, {})
+        score_data  = scores.get(ticker, {})
+
+        price   = price_data.get("price")
+        chg_1d  = price_data.get("change_1d")
+        chg_1w  = price_data.get("change_1w")
+        score   = score_data.get("score_total")
+        rank    = score_data.get("rank")
+        entry   = score_data.get("entry_signal", "—")
+        conf    = score_data.get("confidence_label", "—")
+        ma200   = score_data.get("price_vs_ma200")
+
+        # P&L
+        total_pnl_pct = ((price / float(cost)) - 1) * 100 if (price and cost and float(cost) > 0) else None
+        market_value  = price * float(shares) if price else None
+        pnl_today_sek = market_value * (chg_1d / 100) if (market_value and chg_1d) else None
+
+        # Recommendation logic
+        rec, reason, urgency = _build_evening_rec(
+            ticker, score, rank, chg_1d, chg_1w,
+            total_pnl_pct, ma200, universe_size
+        )
+
+        results.append({
+            "ticker":        ticker,
+            "name":          score_data.get("name", ticker)[:25],
+            "price":         price,
+            "change_1d":     chg_1d,
+            "change_1w":     chg_1w,
+            "total_pnl_pct": total_pnl_pct,
+            "pnl_today_sek": pnl_today_sek,
+            "market_value":  market_value,
+            "score":         score,
+            "rank":          rank,
+            "entry_signal":  entry,
+            "confidence":    conf,
+            "recommendation":rec,
+            "reason":        reason,
+            "urgency":       urgency,
+        })
+
+    # Sortera: urgency 1 (hög) → 3 (låg), sedan total P&L fallande
+    return sorted(results, key=lambda x: (x["urgency"], -(x.get("total_pnl_pct") or 0)))
+
+
+def _build_evening_rec(
+    ticker, score, rank, chg_1d, chg_1w,
+    total_pnl_pct, ma200, universe_size
+) -> tuple[str, str, int]:
+    """Bestämmer kvällsrekommendation. Returnerar (rec, reason, urgency 1-3)."""
+
+    if score is None:
+        return "OKÄND", "Ingen score från senaste scan", 3
+
+    percentile = 100 * (1 - (rank - 1) / max(universe_size, 1)) if rank else 50
+    top_pct    = 100 - percentile
+
+    # === SÄLJ-signaler (urgency 1) ===
+    if chg_1d is not None and chg_1d <= -6:
+        return "SÄLJ/MINSKA", f"Ned {chg_1d:.1f}% idag – kräver åtgärd", 1
+
+    if score < SELL_SCORE_THRESH:
+        return "SÄLJ", f"Score {score:.0f} – kraftigt försämrade fundamenta", 1
+
+    if ma200 is not None and ma200 < -0.05:
+        return "SÄLJ/MINSKA", f"Under MA200 ({ma200*100:.0f}%) – trendbrott", 1
+
+    if total_pnl_pct is not None and total_pnl_pct <= -20:
+        return "SÄLJ", f"Ner {total_pnl_pct:.0f}% sedan köp – stopploss-nivå", 1
+
+    # === Minska (urgency 2) ===
+    if chg_1d is not None and chg_1d <= -3:
+        return "BEVAKA", f"Ned {chg_1d:.1f}% idag – håll ett öga", 2
+
+    if chg_1w is not None and chg_1w <= -5:
+        return "MINSKA", f"Ned {chg_1w:.1f}% denna vecka", 2
+
+    if score < REDUCE_SCORE_THRESH:
+        return "MINSKA", f"Score {score:.0f} – under medel (topp {top_pct:.0f}%)", 2
+
+    # === Ta hem vinst (urgency 2) ===
+    if total_pnl_pct is not None and total_pnl_pct >= 100:
+        return "TA HEM HALVA", f"Upp {total_pnl_pct:.0f}% sedan köp", 2
+
+    # === Behåll / Köp mer (urgency 3) ===
+    if score >= STRONG_HOLD_THRESH and percentile >= 70:
+        return "BEHÅLL STARKT", f"Score {score:.0f}, topp {top_pct:.0f}%", 3
+
+    if percentile >= config.BUY_MORE_PERCENTILE:
+        return "KÖP MER", f"Topp {top_pct:.0f}% av universumet", 3
+
+    if percentile >= config.HOLD_PERCENTILE:
+        return "BEHÅLL", f"Topp {top_pct:.0f}%", 3
+
+    return "MINSKA", f"Under medel – topp {top_pct:.0f}%", 2
+
+
+# ══════════════════════════════════════════════════════════════
+# RAPPORT-BYGGARE
+# ══════════════════════════════════════════════════════════════
+
+def build_evening_report(
+    analysis:      list,
+    market:        dict,
+    earnings_soon: pd.DataFrame,
+) -> str:
+    """Bygger kvällsrapporten."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # Beräkna portfölj-totaler
+    total_value    = sum(a.get("market_value") or 0 for a in analysis)
+    pnl_today_sek  = sum(a.get("pnl_today_sek") or 0 for a in analysis)
+    pnl_today_pct  = (pnl_today_sek / (total_value - pnl_today_sek)) * 100 \
+                     if total_value > 0 else 0
+
+    n_sell    = sum(1 for a in analysis if "SÄLJ" in a["recommendation"].upper())
+    n_reduce  = sum(1 for a in analysis if "MINSKA" in a["recommendation"].upper())
+    n_hold    = sum(1 for a in analysis if "BEHÅLL" in a["recommendation"].upper())
+    n_buymore = sum(1 for a in analysis if "KÖP MER" in a["recommendation"].upper())
+
+    lines = [f"# 🌆 Kvällsrapport – {now}\n", "---\n"]
+
+    # ── Marknadsöversikt ──────────────────────────────────────
+    if market:
+        lines.append("## 🌍 Marknaden idag\n")
+        lines.append("| Index | Idag | Vecka | YTD |")
+        lines.append("|-------|------|-------|-----|")
+        for name, d in market.items():
+            d1  = d.get("change_1d", 0)
+            w1  = d.get("change_1w", 0)
+            ytd = d.get("change_ytd", 0)
+            i1  = "🟢" if d1 >= 0 else "🔴"
+            lines.append(
+                f"| **{name}** | {i1} {d1:+.1f}% | {w1:+.1f}% | {ytd:+.1f}% |"
+            )
+        lines.append("")
+
+    # ── Portfölj-dashboard ────────────────────────────────────
+    lines.append("## 💼 Portfölj-dashboard\n")
+
+    port_icon = "🟢" if pnl_today_pct >= 0 else "🔴"
+    lines.append(
+        f"**Idag: {port_icon} {pnl_today_pct:+.1f}%** "
+        f"({'+'if pnl_today_sek>=0 else ''}{pnl_today_sek:,.0f} SEK)\n"
+    )
+
+    if analysis:
+        lines.append(f"Reker: 🔴 {n_sell} SÄLJ · 🟡 {n_reduce} MINSKA · "
+                     f"🔵 {n_hold} BEHÅLL · 🟢 {n_buymore} KÖP MER\n")
+        lines.append("| | Ticker | Idag | Vecka | Totalt | Score | Rек. |")
+        lines.append("|---|--------|------|-------|--------|-------|------|")
+
+        for a in analysis:
+            rec_icon = {
+                "SÄLJ": "🔴", "SÄLJ/MINSKA": "🔴",
+                "TA HEM HALVA": "🟠",
+                "MINSKA": "🟡", "BEVAKA": "🟡",
+                "BEHÅLL": "🔵", "BEHÅLL STARKT": "🔵",
+                "KÖP MER": "🟢",
+            }.get(a["recommendation"], "⚪")
+
+            d1_s   = f"{a['change_1d']:+.1f}%" if a.get("change_1d") is not None else "—"
+            w1_s   = f"{a['change_1w']:+.1f}%" if a.get("change_1w") is not None else "—"
+            tot_s  = f"{a['total_pnl_pct']:+.1f}%" if a.get("total_pnl_pct") is not None else "—"
+            sc_s   = f"{a['score']:.0f}" if a.get("score") is not None else "—"
+            d1_col = "🟢" if (a.get("change_1d") or 0) >= 0 else "🔴"
+
+            lines.append(
+                f"| {rec_icon} | **`{a['ticker']}`** {a.get('name','')[:18]} | "
+                f"{d1_col} {d1_s} | {w1_s} | {tot_s} | {sc_s} | "
+                f"**{a['recommendation']}** |"
+            )
+        lines.append("")
+
+    # ── Åtgärder (urgency 1 och 2) ────────────────────────────
+    urgent = [a for a in analysis if a["urgency"] <= 2 and
+              any(k in a["recommendation"].upper()
+                  for k in ["SÄLJ", "MINSKA", "TA HEM"])]
+
+    if urgent:
+        lines.append("## ⚡ Rekommenderade åtgärder\n")
+        for a in urgent:
+            urgency_icon = "🚨" if a["urgency"] == 1 else "⚠️"
+            lines.append(
+                f"{urgency_icon} **`{a['ticker']}`** → **{a['recommendation']}**  \n"
+                f"_{a['reason']}_\n"
+            )
+    else:
+        lines.append("## ✅ Åtgärder\n\nInga akuta åtgärder rekommenderas idag.\n")
+
+    # ── Earnings-påminnelse ───────────────────────────────────
+    if earnings_soon is not None and not earnings_soon.empty:
+        lines.append("## 📅 Kommande rapporter (14 dagar)\n")
+        for _, row in earnings_soon.iterrows():
+            days   = row.get("days_until", "?")
+            ticker = row.get("ticker", "")
+            d      = str(row.get("date", ""))[:10]
+            est    = row.get("eps_estimate")
+            est_s  = f" · EPS-estimat: {est:.2f}" if pd.notna(est or float('nan')) else ""
+            lines.append(f"- **`{ticker}`** – {d} (om {days} dagar){est_s}")
+        lines.append("")
+
+    lines.append("---\n*⚠ Inte finansiell rådgivning. MarketScan kvällsrapport.*")
+    return "\n".join(lines)
+
+
+def build_email_subject(analysis: list, market: dict) -> str:
+    port_change = None
+    for name, d in market.items():
+        if name == "OMXS30":
+            pass
+
+    # Beräkna portfölj-rörelse
+    mv   = sum(a.get("market_value") or 0 for a in analysis)
+    pnl  = sum(a.get("pnl_today_sek") or 0 for a in analysis)
+    pct  = (pnl / (mv - pnl)) * 100 if mv > 0 else 0
+
+    n_sell = sum(1 for a in analysis if "SÄLJ" in a["recommendation"].upper())
+    omx    = market.get("OMXS30", {}).get("change_1d", 0)
+
+    if n_sell > 0:
+        tickers = ", ".join(a["ticker"] for a in analysis
+                            if "SÄLJ" in a["recommendation"].upper())
+        return f"🚨 Sälj-signal: {tickers} – {date.today().strftime('%d %b')}"
+
+    sign = "+" if pct >= 0 else ""
+    return (
+        f"📊 {date.today().strftime('%d %b')} – "
+        f"Portfölj {sign}{pct:.1f}% · OMXS30 {omx:+.1f}%"
+    )
+
+
+# ══════════════════════════════════════════════════════════════
+# MAIN
+# ══════════════════════════════════════════════════════════════
+
+def main():
+    parser = argparse.ArgumentParser(description="Kvällsrapport – portföljstatus och hold/sälj")
+    parser.add_argument("--quiet",    action="store_true")
+    parser.add_argument("--no-email", action="store_true")
+    args = parser.parse_args()
+    v = not args.quiet
+
+    print("🌆 KVÄLLSRAPPORT")
+    print("=" * 40)
+
+    with logger.scan_logger("evening", verbose=v) as log:
+
+        # 1. Ladda portfölj
+        holdings = portfolio.load_holdings()
+        if holdings.empty:
+            print("ℹ Inga innehav i holdings.csv")
+            return
+        log["n_holdings"] = len(holdings)
+        if v: print(f"  {len(holdings)} innehav")
+
+        # 2. Hämta slutkurser
+        print("\n📥 Hämtar slutkurser...")
+        tickers = list(holdings["ticker"].str.upper())
+        prices  = fetch_closing_prices(tickers)
+        log["n_prices"] = len(prices)
+        if v: print(f"  ✓ {len(prices)} priser hämtade")
+
+        # 3. Hämta marknad
+        print("🌍 Hämtar marknadsstatus...")
+        market = fetch_market_summary()
+
+        # 4. Hämta scores från söndagens scan
+        scores = load_scores_for_holdings(tickers)
+        universe_size = 200  # Approximation om vi inte vet exakt
+        try:
+            csvs = sorted(Path(config.REPORT_DIR).glob("scored_universe_*.csv"), reverse=True)
+            if csvs:
+                universe_size = len(pd.read_csv(csvs[0]))
+        except Exception:
+            pass
+
+        # 5. Analysera hold/sälj
+        analysis = analyze_hold_sell(holdings, prices, scores, universe_size)
+        log["n_sell_signals"] = sum(1 for a in analysis if "SÄLJ" in a["recommendation"].upper())
+
+        # 6. Earnings
+        earnings_soon = pd.DataFrame()
+        try:
+            scored_df = pd.DataFrame(list(scores.values()))
+            if "ticker" not in scored_df.columns:
+                scored_df["ticker"] = list(scores.keys())
+            earnings_soon = ec.upcoming_in_portfolio(holdings, scored_df, days_ahead=14)
+        except Exception:
+            pass
+
+        # 7. Uppdatera paper trading med stängningspriser
+        try:
+            paper_trading.update_prices(close_after_weeks=4, verbose=False)
+        except Exception:
+            pass
+
+        # 8. Bygg rapport
+        report  = build_evening_report(analysis, market, earnings_soon)
+        subject = build_email_subject(analysis, market)
+
+        # Spara
+        Path(config.REPORT_DIR).mkdir(exist_ok=True)
+        report_path = Path(config.REPORT_DIR) / f"evening_{date.today()}.md"
+        report_path.write_text(report, encoding="utf-8")
+        log["report_path"] = str(report_path)
+        if v: print(f"\n  Rapport: {report_path}")
+
+        # 9. Skicka email (alltid)
+        if not args.no_email and alerts.email_configured():
+            print(f"✉ Skickar: {subject}")
+            try:
+                import smtplib
+                from email.mime.multipart import MIMEMultipart
+                from email.mime.text import MIMEText
+
+                sender, password, to = alerts._get_email_config()
+                if sender and password:
+                    msg = MIMEMultipart("alternative")
+                    msg["Subject"] = subject
+                    msg["From"]    = f"MarketScan <{sender}>"
+                    msg["To"]      = to
+                    msg.attach(MIMEText(report, "plain", "utf-8"))
+                    html_body = alerts._markdown_to_html(report)
+                    full_html = (
+                        f"<html><body style='font-family:sans-serif;"
+                        f"max-width:680px;margin:0 auto;padding:20px'>"
+                        f"{html_body}"
+                        f"<div style='margin-top:24px;font-size:11px;color:#999'>"
+                        f"Automatisk rapport från MarketScan. Inte finansiell rådgivning."
+                        f"</div></body></html>"
+                    )
+                    msg.attach(MIMEText(full_html, "html", "utf-8"))
+                    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+                        s.login(sender, password)
+                        s.sendmail(sender, to, msg.as_string())
+                    print(f"  ✉ Email skickat till {to}")
+            except Exception as e:
+                print(f"  ⚠ Email-fel: {e}")
+        elif not alerts.email_configured():
+            print("  ℹ Email ej konfigurerat")
+
+        # Terminal-sammanfattning
+        print(f"\n{'─'*40}")
+        n_sell   = sum(1 for a in analysis if "SÄLJ" in a["recommendation"].upper())
+        n_reduce = sum(1 for a in analysis if "MINSKA" in a["recommendation"].upper())
+        n_hold   = sum(1 for a in analysis if "BEHÅLL" in a["recommendation"].upper())
+        print(f"  SÄLJ:    {n_sell}")
+        print(f"  MINSKA:  {n_reduce}")
+        print(f"  BEHÅLL:  {n_hold}")
+
+
+if __name__ == "__main__":
+    main()

@@ -517,6 +517,12 @@ def main():
     paper_trading.record_weekly_picks(scored, top_n=10, verbose=v)
     paper_trading.update_prices(close_after_weeks=4, verbose=False)
 
+    # 12.9 Re-sortera scored efter alla score-justeringar
+    # (sector_momentum, piotroski, extra_data ändrar alla score_total)
+    if "score_total" in scored.columns:
+        scored = scored.sort_values("score_total", ascending=False).reset_index(drop=True)
+        scored["rank"] = range(1, len(scored) + 1)
+
     # 13. Topp 10 i terminalen (Snyggt avslut)
     print("🏆 TOPP 10:"); print("-" * 65)
     cols = [c for c in ["rank", "ticker", "name", "score_total", "entry_signal", "rs_label"] if c in scored.columns]
