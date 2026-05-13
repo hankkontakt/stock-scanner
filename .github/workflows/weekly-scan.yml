@@ -9,36 +9,43 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # ~65-70 min för 1000+ aktier, 120 ger god marginal
+    timeout-minutes: 120
 
     steps:
-      - name: Checka ut kod
+      - name: 📥 Checka ut kod
         uses: actions/checkout@v4
+        with:
+          # Krävs för att kunna pusha tillbaka ändringar
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sätt upp Python
+      - name: 🐍 Sätt upp Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11" # Matchar morning/evening_scan.yml
           cache: "pip"
 
-      - name: Installera beroenden
+      - name: 📦 Installera beroenden
         run: pip install -r requirements.txt
 
       - name: 💾 Återställ data-cache
         uses: actions/cache@v4
         with:
-          path: data/cache
-          key: weekly-scan-cache-${{ runner.os }}-${{ github.run_number }}
+          path: |
+            data/cache
+            data/history
+            data/paper_trades.json
+            data/scan_log.json
+          key: scanner-data-${{ runner.os }}-${{ github.run_number }}
           restore-keys: |
-            weekly-scan-cache-${{ runner.os }}-
+            scanner-data-${{ runner.os }}-
 
-      - name: Återskapa holdings
+      - name: 🔑 Återskapa holdings
         run: echo "${{ secrets.HOLDINGS_CSV }}" > holdings.csv
 
       - name: 📁 Skapa mappar
-        run: mkdir -p data/cache reports
+        run: mkdir -p data/cache data/history reports
 
-      - name: Kör vecko-scan
+      - name: 🚀 Kör vecko-scan
         env:
           FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
@@ -47,10 +54,18 @@ jobs:
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
         run: python scan.py
 
-      - name: Ladda upp rapport
+      - name: 📤 Ladda upp rapport (Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: weekly-report-${{ github.run_id }}
           path: reports/
-          if-no-files-found: warn
           retention-days: 90
+
+      - name: 💾 Commit och Pusha resultat
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "MarketScan Bot"
+          # Lägg till de nya rapporterna och uppdaterad pappershandel
+          git add reports/*.csv data/paper_trades.json data/scan_log.json
+          # Commit endast om det faktiskt finns ändringar att spara
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Veckouppdatering: Scannat universum och paper trades" && git push)

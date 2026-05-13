@@ -20,14 +20,31 @@ from pathlib import Path
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import requests
-import requests.sessions
 
 import config
 
 # Sätt global socket-timeout som fallback för alla nätverksanrop som inte
 # har explicit timeout. Förhindrar att yfinance hänger på GitHub Actions (Linux).
-socket.setdefaulttimeout(30)
+import requests
+import requests.sessions
+
+# -------------------------------------------------------------------------
+# PATCH: Tvinga fram en global timeout för requests och yfinance
+# -------------------------------------------------------------------------
+# yfinance skickar sällan med explicit timeout. Detta förhindrar att 
+# urllib3's connection pool fylls upp med hängande daemon-trådar, 
+# vilket annars fryser GitHub Actions.
+
+_original_session_send = requests.sessions.Session.send
+
+def _timeout_session_send(self, request, **kwargs):
+    # Sätt en global timeout om ingen explicit har angetts.
+    # (10 sekunder för connect, 15 sekunder för read)
+    if kwargs.get("timeout") is None:
+        kwargs["timeout"] = (10, 15)
+    return _original_session_send(self, request, **kwargs)
+
+requests.sessions.Session.send = _timeout_session_send
 
 _FX_CACHE = {}
 Path(config.CACHE_DIR).mkdir(parents=True, exist_ok=True)
