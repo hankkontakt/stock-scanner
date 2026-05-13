@@ -76,9 +76,10 @@ def fetch_insider_signal(ticker: str) -> float:
         return cached
 
     try:
+        from data_fetcher import _with_timeout
         time.sleep(0.4)
         stock  = yf.Ticker(ticker)
-        trades = stock.insider_transactions
+        trades = _with_timeout(lambda: stock.insider_transactions, timeout_sec=15)
 
         if trades is None or (hasattr(trades, 'empty') and trades.empty):
             _wc(f"insider:{ticker}", 0.5)
@@ -163,9 +164,10 @@ def fetch_earnings_surprise_signal(ticker: str) -> float:
         return cached
 
     try:
+        from data_fetcher import _with_timeout
         time.sleep(0.4)
         stock = yf.Ticker(ticker)
-        hist  = stock.earnings_history
+        hist  = _with_timeout(lambda: stock.earnings_history, timeout_sec=15)
 
         if hist is None or (hasattr(hist, 'empty') and hist.empty):
             _wc(f"earnings:{ticker}", 0.5)
@@ -279,9 +281,11 @@ def fetch_analyst_revision_signal(ticker: str, finnhub_key: str = None) -> float
 
     # yfinance fallback
     try:
+        from data_fetcher import _with_timeout
         time.sleep(0.3)
         stock    = yf.Ticker(ticker)
-        rec_mean = stock.info.get("recommendationMean")
+        info     = _with_timeout(lambda: stock.info, timeout_sec=15)
+        rec_mean = info.get("recommendationMean") if info else None
 
         if rec_mean is not None:
             # 1=Strong Buy→1.0, 3=Hold→0.5, 5=Strong Sell→0.0

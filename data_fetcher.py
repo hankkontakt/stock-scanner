@@ -96,67 +96,38 @@ def _write_cache(key: str, data):
 import sys
 import threading
 
-# Endast tillgängligt på Unix/Linux (GitHub Actions)
-if sys.platform != "win32":
-    import signal
-
-    class HardTimeoutException(Exception):
-        """Kastas när operativsystemet tvingar fram ett avbrott."""
-        pass
-
-    def _timeout_handler(signum, frame):
-        raise HardTimeoutException("Hard timeout triggered by OS")
-
 
 def _with_timeout(fn, timeout_sec=12):
     """
-    Kör fn() med en tidsgräns.
-    På Linux (GitHub Actions) används operativsystemets signal.alarm för 
-    att brutalt och säkert avbryta hängande yfinance-anrop.
-    På Windows faller funktionen tillbaka på trådar (eftersom alarm inte finns där).
+    Kör fn() i en daemon-tråd med en hård tidsgräns.
+    Fungerar lika på Linux (GitHub Actions) och Windows.
+
+    socket.setdefaulttimeout(20) ovan garanterar att hängande bakgrundstrådar
+    städas upp av OS:et inom 20 sekunder – ingen explicit trådavstängning krävs.
+
+    Varför inte signal.alarm?
+    signal.alarm levereras bara mellan Python-bytekod-instruktioner och kan
+    inte avbryta C-kod (t.ex. OpenSSL-handskakningar i yfinance). Trådar
+    kombinerat med socket-timeout är mer tillförlitligt på GitHub Actions.
     """
-    if sys.platform != "win32":
-        # ---------------------------------------------------------
-        # LINUX / GITHUB ACTIONS LÖSNING ("Kärnvapnet")
-        # ---------------------------------------------------------
-        # Spara undan eventuell tidigare signalhanterare
-        old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-        
-        # Starta klockan
-        signal.alarm(timeout_sec)
-        
+    result = [None]
+    error  = [None]
+
+    def worker():
         try:
-            return fn()
-        except HardTimeoutException:
-            raise TimeoutError(f"OS-nivå avbrott: Anrop hängde i yfinance efter {timeout_sec}s")
-        finally:
-            # VIKTIGT: Stäng av larmet OAVSETT hur det gick!
-            signal.alarm(0)
-            # Återställ tidigare hanterare för att inte störa andra processer
-            signal.signal(signal.SIGALRM, old_handler)
-            
-    else:
-        # ---------------------------------------------------------
-        # WINDOWS LÖSNING (Din ursprungliga kod)
-        # ---------------------------------------------------------
-        result = [None]
-        error  = [None]
+            result[0] = fn()
+        except Exception as e:
+            error[0] = e
 
-        def worker():
-            try:
-                result[0] = fn()
-            except Exception as e:
-                error[0] = e
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+    t.join(timeout_sec)
 
-        t = threading.Thread(target=worker, daemon=True)
-        t.start()
-        t.join(timeout_sec)
-
-        if t.is_alive():
-            raise TimeoutError(f"Anrop hängde efter {timeout_sec}s")
-        if error[0] is not None:
-            raise error[0]
-        return result[0]
+    if t.is_alive():
+        raise TimeoutError(f"Anrop hängde efter {timeout_sec}s")
+    if error[0] is not None:
+        raise error[0]
+    return result[0]
 
 
 def _retry(fn, *args, timeout_sec=12, **kwargs):
@@ -522,28 +493,34 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
         if verbose:
             print(f"  [{i}/{total}] {ticker}...", end=" ", flush=True)
 
-        info = fetch_stock_info(ticker)
+        try:
+            info = fetch_stock_info(ticker)
 
-        # Try FMP fallback if yfinance returned nothing useful
-        if not info or len(info) < 10:
-            fmp_data = fetch_fmp_fallback(ticker)
-            if fmp_data:
-                info = fmp_data
+            # Try FMP fallback if yfinance returned nothing useful
+            if not info or len(info) < 10:
+                fmp_data = fetch_fmp_fallback(ticker)
+                if fmp_data:
+                    info = fmp_data
 
-        history = fetch_price_history(ticker, period="1y")
+            history = fetch_price_history(ticker, period="1y")
 
-        if not info and history.empty:
+            if not info and history.empty:
+                failed.append(ticker)
+                if verbose:
+                    print("FAILED")
+                continue
+
+            metrics = extract_metrics(ticker, info, history)
+            rows.append(metrics)
+
+            if verbose:
+                quality = sum(1 for v in metrics.values() if v is not None) / len(metrics)
+                print(f"OK ({quality:.0%} data)")
+
+        except Exception as e:
             failed.append(ticker)
             if verbose:
-                print("FAILED")
-            continue
-
-        metrics = extract_metrics(ticker, info, history)
-        rows.append(metrics)
-
-        if verbose:
-            quality = sum(1 for v in metrics.values() if v is not None) / len(metrics)
-            print(f"OK ({quality:.0%} data)")
+                print(f"ERROR: {e}")
 
     df = pd.DataFrame(rows)
 
