@@ -252,9 +252,10 @@ FINNHUB_API_KEY  = os.getenv("FINNHUB_API_KEY", "")
 
 # ════════════════ DATA-INSTÄLLNINGAR ════════════════
 CACHE_DIR             = "data/cache"
-CACHE_HOURS           = 24
-PRICE_CACHE_HOURS     = 24
-REQUEST_DELAY_SEC     = 0.6  # Uppdaterad pga större universum
+CACHE_HOURS           = 720  # Statisk fundamental data – cachas 30 dagar (ändras bara vid kvartalsrapport)
+DYNAMIC_CACHE_HOURS   = 170  # Dynamisk data – cachas 7 dagar (P/E, analytikermål, blankning, beta)
+PRICE_CACHE_HOURS     = 24   # Prishistorik – alltid färsk (RSI, MACD, marknadsvärde)
+REQUEST_DELAY_SEC     = 0.8  # 1000+ aktier kräver längre paus för att undvika Yahoo rate limit
 MAX_RETRIES           = 3
 RETRY_BACKOFF_SEC     = 5
 FINNHUB_NEWS_DAYS     = 7

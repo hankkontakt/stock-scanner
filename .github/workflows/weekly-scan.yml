@@ -9,7 +9,7 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # Förhindrar evig hängning – full scan med 600+ tickers bör ta max 2h
+    timeout-minutes: 120  # ~65-70 min för 1000+ aktier, 120 ger god marginal
 
     steps:
       - name: Checka ut kod
@@ -24,8 +24,19 @@ jobs:
       - name: Installera beroenden
         run: pip install -r requirements.txt
 
+      - name: 💾 Återställ data-cache
+        uses: actions/cache@v4
+        with:
+          path: data/cache
+          key: weekly-scan-cache-${{ runner.os }}-${{ github.run_number }}
+          restore-keys: |
+            weekly-scan-cache-${{ runner.os }}-
+
       - name: Återskapa holdings
         run: echo "${{ secrets.HOLDINGS_CSV }}" > holdings.csv
+
+      - name: 📁 Skapa mappar
+        run: mkdir -p data/cache reports
 
       - name: Kör vecko-scan
         env:

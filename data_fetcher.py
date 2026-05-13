@@ -20,17 +20,47 @@ from pathlib import Path
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import requests
 
 import config
 
 # Sätt global socket-timeout som fallback för alla nätverksanrop som inte
 # har explicit timeout. Förhindrar att yfinance hänger på GitHub Actions (Linux).
-socket.setdefaulttimeout(30)
+import requests
+import requests.sessions
+
+# -------------------------------------------------------------------------
+# PATCH: Tvinga fram en global timeout för requests och yfinance
+# -------------------------------------------------------------------------
+# yfinance skickar sällan med explicit timeout. Detta förhindrar att 
+# urllib3's connection pool fylls upp med hängande daemon-trådar, 
+# vilket annars fryser GitHub Actions.
+
+_original_session_send = requests.sessions.Session.send
+
+def _timeout_session_send(self, request, **kwargs):
+    # Sätt en global timeout om ingen explicit har angetts.
+    # (10 sekunder för connect, 15 sekunder för read)
+    if kwargs.get("timeout") is None:
+        kwargs["timeout"] = (10, 15)
+    return _original_session_send(self, request, **kwargs)
+
+requests.sessions.Session.send = _timeout_session_send
 
 _FX_CACHE = {}
-# Ensure cache directory exists
 Path(config.CACHE_DIR).mkdir(parents=True, exist_ok=True)
+
+# Fundamentala fält som bara ändras vid kvartalsrapporter → 30 dagars cache
+_STATIC_FIELDS = frozenset({
+    "longName", "shortName", "sector", "industry", "country", "currency",
+    "sharesOutstanding", "floatShares",
+    "returnOnEquity", "returnOnAssets",
+    "profitMargins", "operatingMargins", "grossMargins",
+    "revenueGrowth", "earningsGrowth", "earningsQuarterlyGrowth",
+    "debtToEquity", "currentRatio", "quickRatio",
+    "freeCashflow", "totalCash", "totalDebt", "totalRevenue",
+    "heldPercentInsiders", "heldPercentInstitutions",
+    "payoutRatio",
+})
 
 
 def _cache_path(key: str) -> Path:
@@ -112,34 +142,56 @@ def _retry(fn, *args, timeout_sec=12, **kwargs):
 def fetch_stock_info(ticker: str) -> dict:
     """
     Fetch fundamental info for a single stock.
-    Returns a dict with all relevant fields, or empty dict on failure.
+
+    Tvådelad cache:
+      info_static:{ticker}  – CACHE_HOURS (720h/30 dagar)
+        Fält som bara ändras vid kvartalsrapporter: marginaler, tillväxt,
+        skuldsättning, ägande, bolagsnamn/sektor.
+
+      info_dynamic:{ticker} – DYNAMIC_CACHE_HOURS (170h/7 dagar)
+        Fält som kan ändras av nyheter varje vecka: P/E, analytikermål,
+        blankning, beta, volymsnitt, utdelning.
+
+    Om båda cacharna är giltiga returneras de utan något nätverksanrop.
+    Om endera har löpt ut hämtas all data på nytt och båda uppdateras.
     """
-    cache_key = f"info:{ticker}"
-    cached = _read_cache(cache_key, config.CACHE_HOURS)
-    if cached is not None:
-        # Validera att priset inte är högre än 52v-high (indikerar korrupt cache)
-        cp  = cached.get("currentPrice") or cached.get("regularMarketPrice") or 0
-        h52 = cached.get("fiftyTwoWeekHigh") or 0
-        if cp and h52 and float(cp) > float(h52) * 1.02:  # 2% marginal för intradag
-            import os
-            _cache_path(cache_key).unlink(missing_ok=True)  # rensa korrupt cache
-        else:
-            return cached
+    static_key  = f"info_static:{ticker}"
+    dynamic_key = f"info_dynamic:{ticker}"
+
+    static_cached  = _read_cache(static_key,  config.CACHE_HOURS)
+    dynamic_cached = _read_cache(dynamic_key, config.DYNAMIC_CACHE_HOURS)
+
+    # Sanitetskoll på dynamisk cache: pris > 52v-high = korrupt
+    if dynamic_cached is not None:
+        cp  = dynamic_cached.get("currentPrice") or dynamic_cached.get("regularMarketPrice") or 0
+        h52 = dynamic_cached.get("fiftyTwoWeekHigh") or 0
+        if cp and h52 and float(cp) > float(h52) * 1.02:
+            _cache_path(dynamic_key).unlink(missing_ok=True)
+            dynamic_cached = None
+
+    if static_cached is not None and dynamic_cached is not None:
+        return {**static_cached, **dynamic_cached}
 
     try:
         time.sleep(config.REQUEST_DELAY_SEC)
         stock = yf.Ticker(ticker)
         info = _retry(lambda: stock.info)
 
-        # yfinance sometimes returns very thin info dicts; check quality
         if not info or len(info) < 5:
-            return {}
+            # Returnera vad vi har i cache om hämtningen gav för lite
+            return {**(static_cached or {}), **(dynamic_cached or {})}
 
-        _write_cache(cache_key, info)
+        static_data  = {k: v for k, v in info.items() if k     in _STATIC_FIELDS}
+        dynamic_data = {k: v for k, v in info.items() if k not in _STATIC_FIELDS}
+
+        _write_cache(static_key,  static_data)
+        _write_cache(dynamic_key, dynamic_data)
         return info
+
     except Exception as e:
         print(f"  ⚠ Failed to fetch info for {ticker}: {e}")
-        return {}
+        merged = {**(static_cached or {}), **(dynamic_cached or {})}
+        return merged if merged else {}
 
 
 def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
@@ -252,7 +304,8 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         "industry": info.get("industry", "Unknown"),
         "country": info.get("country", "Unknown"),
         "currency": info.get("currency", "USD"),
-        "market_cap": info.get("marketCap"),
+        "market_cap": info.get("marketCap"),  # Skrivs över nedan med färsk data om prishistorik finns
+
 
         # Valuation metrics
         "pe_trailing": info.get("trailingPE"),
@@ -315,11 +368,27 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         "volume_ratio":     None,  # Beräknas nedan från prishistorik
     }
 
-    # Add momentum/technical metrics from price history
+    # Prishistorik är alltid färsk (PRICE_CACHE_HOURS=24h) – använd den för
+    # marknadskänsliga värden som annars kan vara 7 dagar gamla i info-cachen.
     if not history.empty and len(history) > 20:
         close  = history["Close"]
         volume = history.get("Volume")
-        current = close.iloc[-1]
+        current = float(close.iloc[-1])
+
+        # Aktuellt pris – alltid från färsk prishistorik
+        metrics["current_price"] = current
+
+        # 52-veckors high/low – beräkna från prishistorik (max 252 börsdagar)
+        tail = close.tail(252)
+        high_series = history["High"].tail(252) if "High" in history.columns else tail
+        low_series  = history["Low"].tail(252)  if "Low"  in history.columns else tail
+        metrics["52_week_high"] = float(high_series.max())
+        metrics["52_week_low"]  = float(low_series.min())
+
+        # Marknadsvärde: antal aktier (kvartalsdata, OK att cacha) × färskt pris
+        shares = info.get("sharesOutstanding")
+        if shares and shares > 0:
+            metrics["market_cap"] = float(shares) * current
 
         # Returns over different periods
         metrics["return_1m"]  = _safe_return(close, 21)
