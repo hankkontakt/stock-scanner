@@ -9,6 +9,7 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 120  # Förhindrar evig hängning – full scan med 600+ tickers bör ta max 2h
 
     steps:
       - name: Checka ut kod

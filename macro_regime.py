@@ -3,10 +3,16 @@ macro_regime.py
 ===============
 Detekterar marknadsregim (tjur/björn/osäker) och anpassar systemet därefter.
 
-Logik:
-  TJUR:    SPY > MA200 + VIX < 22 + 3m return > 0
-  OSÄKER:  Blandade signaler
-  BJÖRN:   SPY < MA200 + VIX > 28 ELLER 3m return < -8%
+Logik (kontinuerlig scoring, 0.0 = extremt björn, 1.0 = extremt tjur):
+  SPY vs MA200  (vikt 35%): -10% → 0.0, 0% → 0.5, +10% → 1.0
+  VIX           (vikt 25%): 30+ → 0.0, 22.5 → 0.5, 15 → 1.0
+  3m-momentum   (vikt 20%): -8% → 0.0, 0% → 0.5, +8% → 1.0
+  Marknadsbredd (vikt 10%): RSP/SPY-kvot vs 60-dagars snitt (bred vs smal uppgång)
+  Yieldkurva    (vikt 10%): 10y−3m Treasury-spread (inverterad = varning)
+
+  composite >= 0.62 → TJUR
+  composite <= 0.38 → BJÖRN
+  annars           → OSÄKER
 
 I björnmarknad: höj kraven för KÖP-signal, ge mindre vikt till momentum.
 """
@@ -46,66 +52,120 @@ def _wc(key, data):
 
 
 def detect_regime() -> dict:
-    """Hämtar SPY + VIX och bestämmer marknadsregim."""
+    """
+    Hämtar SPY, VIX, RSP (marknadsbredd) och räntor.
+    Klassificerar regim med kontinuerlig scoring istället för binära trösklar.
+    """
     cached = _rc("regime", REGIME_CACHE)
     if cached is not None:
         return cached
 
     result = {
-        "regime":         "OSÄKER",
-        "spy_vs_ma200":   None,
-        "vix_level":      None,
-        "spy_3m_return":  None,
-        "confidence":     0.5,
-        "as_of":          datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "notes":          [],
+        "regime":        "OSÄKER",
+        "spy_vs_ma200":  None,
+        "vix_level":     None,
+        "spy_3m_return": None,
+        "breadth_delta": None,   # RSP/SPY-kvot vs 60-dagars snitt
+        "yield_spread":  None,   # 10y - 3m Treasury (positiv = normal kurva)
+        "composite":     None,   # Viktad sammanvägning 0.0–1.0
+        "confidence":    0.5,
+        "as_of":         datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "notes":         [],
     }
 
     try:
+        # --- SPY: trend och momentum ---
         time.sleep(0.3)
         spy = yf.Ticker("SPY").history(period="1y")
         if spy.empty or len(spy) < 200:
             return result
 
-        spy_close = spy["Close"]
-        current   = spy_close.iloc[-1]
-        ma200     = spy_close.rolling(200).mean().iloc[-1]
-        spy_3m    = (current / spy_close.iloc[-63] - 1) if len(spy_close) >= 63 else 0
+        spy_close    = spy["Close"]
+        current      = spy_close.iloc[-1]
+        ma200        = spy_close.rolling(200).mean().iloc[-1]
+        spy_vs_ma200 = float((current / ma200) - 1)
+        spy_3m       = float((current / spy_close.iloc[-63] - 1) if len(spy_close) >= 63 else 0)
 
-        result["spy_vs_ma200"]  = float((current / ma200) - 1)
-        result["spy_3m_return"] = float(spy_3m)
+        result["spy_vs_ma200"]  = spy_vs_ma200
+        result["spy_3m_return"] = spy_3m
 
+        # --- VIX ---
         time.sleep(0.3)
         vix       = yf.Ticker("^VIX").history(period="3mo")
         vix_level = float(vix["Close"].iloc[-1]) if not vix.empty else 20.0
         result["vix_level"] = vix_level
 
-        signals = {
-            "spy_well_above":   result["spy_vs_ma200"] > 0.05,
-            "spy_well_below":   result["spy_vs_ma200"] < -0.05,
-            "vix_calm":         vix_level < 18,
-            "vix_elevated":     vix_level > 25,
-            "vix_panic":        vix_level > 32,
-            "momentum_positive":spy_3m > 0.02,
-            "momentum_negative":spy_3m < -0.05,
-        }
+        # --- Marknadsbredd: RSP/SPY-kvot (equal-weight vs cap-weight) ---
+        # Stiger RSP mer än SPY = bred uppgång (bra); faller RSP relativt = smal/megabolags-driven uppgång
+        breadth_component = 0.5
+        try:
+            time.sleep(0.3)
+            rsp = yf.Ticker("RSP").history(period="6mo")
+            if not rsp.empty:
+                rsp_close   = rsp["Close"]
+                spy_aligned = spy_close.reindex(rsp_close.index).ffill()
+                ratio       = rsp_close / spy_aligned
+                ratio_ma60  = ratio.rolling(60).mean().iloc[-1]
+                ratio_now   = ratio.iloc[-1]
+                breadth_delta = float((ratio_now / ratio_ma60) - 1)
+                result["breadth_delta"] = breadth_delta
+                breadth_component = float(np.clip(0.5 + breadth_delta * 5, 0.0, 1.0))
+        except Exception:
+            pass
 
-        bull_pts = sum([signals["spy_well_above"], signals["vix_calm"], signals["momentum_positive"]])
-        bear_pts = sum([signals["spy_well_below"], signals["vix_elevated"], signals["momentum_negative"], signals["vix_panic"]])
+        # --- Yieldkurva: 10-årig minus 3-månaders Treasury ---
+        # ^TNX = 10-år, ^IRX = 13-veckor; båda i procent (t.ex. 4.3)
+        yield_component = 0.5
+        try:
+            time.sleep(0.3)
+            t10 = yf.Ticker("^TNX").history(period="1mo")
+            t3m = yf.Ticker("^IRX").history(period="1mo")
+            if not t10.empty and not t3m.empty:
+                spread = float(t10["Close"].iloc[-1]) - float(t3m["Close"].iloc[-1])
+                result["yield_spread"] = spread
+                # +2% → 1.0 (normal), 0% → 0.5, -2% → 0.0 (kraftigt inverterad)
+                yield_component = float(np.clip(0.5 + spread / 4, 0.0, 1.0))
+        except Exception:
+            pass
 
-        if bull_pts >= 2 and bear_pts == 0:
+        # --- Kontinuerlig scoring per signal (0.0–1.0) ---
+        spy_component = float(np.clip(0.5 + spy_vs_ma200 * 5,  0.0, 1.0))  # ±10% → ±0.5
+        vix_component = float(np.clip(1 - (vix_level - 15) / 15, 0.0, 1.0)) # 15→1.0, 30→0.0
+        mom_component = float(np.clip(0.5 + spy_3m * 6.25,    0.0, 1.0))  # ±8% → ±0.5
+
+        composite = (
+            spy_component     * 0.35 +
+            vix_component     * 0.25 +
+            mom_component     * 0.20 +
+            breadth_component * 0.10 +
+            yield_component   * 0.10
+        )
+        result["composite"] = float(composite)
+
+        # --- Klassificering ---
+        if composite >= 0.62:
             result["regime"]     = "TJUR"
-            result["confidence"] = min(1.0, bull_pts / 3)
-            result["notes"].append(f"SPY +{result['spy_vs_ma200']*100:.1f}% över MA200, VIX {vix_level:.1f}")
-        elif bear_pts >= 2:
+            result["confidence"] = min(0.85, composite)
+        elif composite <= 0.38:
             result["regime"]     = "BJÖRN"
-            result["confidence"] = min(1.0, bear_pts / 4)
-            result["notes"].append(f"SPY {result['spy_vs_ma200']*100:.1f}% under MA200, VIX {vix_level:.1f}")
-            if signals["vix_panic"]:
-                result["notes"].append("⚠ VIX > 32 – panik-nivå")
+            result["confidence"] = min(0.85, 1 - composite)
         else:
-            result["regime"] = "OSÄKER"
-            result["notes"].append(f"Blandade signaler – VIX {vix_level:.1f}")
+            result["regime"]     = "OSÄKER"
+            result["confidence"] = 0.5
+
+        # --- Anteckningar ---
+        result["notes"].append(
+            f"SPY {spy_vs_ma200*100:+.1f}% vs MA200 | VIX {vix_level:.1f} | 3m {spy_3m*100:+.1f}%"
+        )
+        if result["breadth_delta"] is not None:
+            label = "bred uppgång" if result["breadth_delta"] > 0.02 else \
+                    "koncentrerad (megabolag)" if result["breadth_delta"] < -0.02 else "neutral bredd"
+            result["notes"].append(f"Marknadsbredd (RSP/SPY): {result['breadth_delta']*100:+.1f}% → {label}")
+        if result["yield_spread"] is not None:
+            inv = " ⚠ INVERTERAD" if result["yield_spread"] < 0 else ""
+            result["notes"].append(f"Yieldkurva (10y−3m): {result['yield_spread']:+.2f}%{inv}")
+        if vix_level > 32:
+            result["notes"].append("⚠ VIX > 32 – panik-nivå")
 
         _wc("regime", result)
         return result
@@ -193,6 +253,13 @@ def build_regime_section(regime_info: dict, macro: dict = None) -> str:
         lines.append(f"| VIX | {regime_info['vix_level']:.1f} |")
     if regime_info.get("spy_3m_return") is not None:
         lines.append(f"| SPY 3-mån | {regime_info['spy_3m_return']*100:+.1f}% |")
+    if regime_info.get("breadth_delta") is not None:
+        lines.append(f"| Marknadsbredd (RSP/SPY) | {regime_info['breadth_delta']*100:+.1f}% |")
+    if regime_info.get("yield_spread") is not None:
+        inv = " ⚠" if regime_info["yield_spread"] < 0 else ""
+        lines.append(f"| Yieldkurva (10y−3m) | {regime_info['yield_spread']:+.2f}%{inv} |")
+    if regime_info.get("composite") is not None:
+        lines.append(f"| Sammansatt signal | {regime_info['composite']:.2f} / 1.00 |")
 
     if regime_info.get("notes"):
         lines.append("\n**Anmärkningar:**")
