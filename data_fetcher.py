@@ -37,7 +37,7 @@ _HAS_ALARM = hasattr(_signal, 'SIGALRM')
 # Sätts INNAN yfinance importeras. Påverkar alla nya sockets på OS-nivå,
 # inklusive SSL-handskakningar i OpenSSL (C-kod) som varken signal.alarm
 # eller requests-patchen kan nå. Det enda som stoppar ett äkta C-hang.
-socket.setdefaulttimeout(20)
+socket.setdefaulttimeout(7)
 
 # ── Lager 2: requests.Session.send-patch ─────────────────────────────────
 # Sätter explicit (connect, read)-timeout på alla requests-anrop som
@@ -46,7 +46,8 @@ _original_session_send = requests.sessions.Session.send
 
 def _timeout_session_send(self, request, **kwargs):
     if kwargs.get("timeout") is None:
-        kwargs["timeout"] = (10, 15)
+        # (3 sekunder connect, 5 sekunder read)
+        kwargs["timeout"] = (3, 5)
     return _original_session_send(self, request, **kwargs)
 
 requests.sessions.Session.send = _timeout_session_send

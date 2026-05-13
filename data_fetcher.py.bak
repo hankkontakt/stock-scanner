@@ -10,10 +10,13 @@ Handles all data fetching from yfinance with:
 """
 
 import os
+import sys
 import time
+import signal as _signal
 import socket
 import pickle
 import hashlib
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -24,28 +27,44 @@ import numpy as np
 
 import config
 
-# Sätt global socket-timeout som fallback för alla nätverksanrop som inte
-# har explicit timeout. Förhindrar att yfinance hänger på GitHub Actions (Linux).
 import requests
 import requests.sessions
 
-# -------------------------------------------------------------------------
-# PATCH: Tvinga fram en global timeout för requests och yfinance
-# -------------------------------------------------------------------------
-# yfinance skickar sällan med explicit timeout. Detta förhindrar att 
-# urllib3's connection pool fylls upp med hängande daemon-trådar, 
-# vilket annars fryser GitHub Actions.
+# True on Linux/macOS (GitHub Actions), False on Windows
+_HAS_ALARM = hasattr(_signal, 'SIGALRM')
 
+# ── Lager 1: socket.setdefaulttimeout ────────────────────────────────────
+# Sätts INNAN yfinance importeras. Påverkar alla nya sockets på OS-nivå,
+# inklusive SSL-handskakningar i OpenSSL (C-kod) som varken signal.alarm
+# eller requests-patchen kan nå. Det enda som stoppar ett äkta C-hang.
+socket.setdefaulttimeout(20)
+
+# ── Lager 2: requests.Session.send-patch ─────────────────────────────────
+# Sätter explicit (connect, read)-timeout på alla requests-anrop som
+# yfinance gör utan att ange timeout själv.
 _original_session_send = requests.sessions.Session.send
 
 def _timeout_session_send(self, request, **kwargs):
-    # Sätt en global timeout om ingen explicit har angetts.
-    # (10 sekunder för connect, 15 sekunder för read)
     if kwargs.get("timeout") is None:
         kwargs["timeout"] = (10, 15)
     return _original_session_send(self, request, **kwargs)
 
 requests.sessions.Session.send = _timeout_session_send
+
+# ── curl_cffi timeout-patch ──────────────────────────────────────────────
+# yfinance 0.2.37+ använder curl_cffi som HTTP-backend. Den kringgår
+# socket.setdefaulttimeout() och requests.Session-patchen ovan.
+# Patch: sätt hård (connect=10s, read=20s) timeout på alla curl_cffi-anrop.
+try:
+    import curl_cffi.requests as _cf_req
+    _original_cf_request = _cf_req.Session.request
+    def _patched_cf_request(self, method, url, *args, **kwargs):
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = (10, 20)
+        return _original_cf_request(self, method, url, *args, **kwargs)
+    _cf_req.Session.request = _patched_cf_request
+except Exception:
+    pass  # curl_cffi saknas – inget att patcha
 
 _FX_CACHE = {}
 Path(config.CACHE_DIR).mkdir(parents=True, exist_ok=True)
@@ -97,25 +116,31 @@ def _write_cache(key: str, data):
 
 def _with_timeout(fn, timeout_sec=12):
     """
-    Kör fn() i en separat tråd med tidsgräns.
-    Kastar TimeoutError om den hänger (vanligt med yfinance .info på
-    asiatiska/obscura tickers i version 1.3+).
+    Kör fn() i en daemon-tråd med hård tidsgräns.
+
+    Använder threading.Event istället för t.join():
+    - Event.wait(timeout) är mer pålitlig på GitHub Actions (Linux)
+    - done.set() i finally garanterar att vi vaknar vid exception
+    - curl_cffi-patchen (connect=10s, read=20s) stänger sockets inom 20s
     """
-    import threading
-    result = [None]
-    error  = [None]
+    result    = [None]
+    error     = [None]
+    done      = threading.Event()
 
     def worker():
         try:
             result[0] = fn()
         except Exception as e:
             error[0] = e
+        finally:
+            done.set()
 
     t = threading.Thread(target=worker, daemon=True)
     t.start()
-    t.join(timeout_sec)
 
-    if t.is_alive():
+    completed = done.wait(timeout=timeout_sec)
+
+    if not completed:
         raise TimeoutError(f"Anrop hängde efter {timeout_sec}s")
     if error[0] is not None:
         raise error[0]
@@ -175,7 +200,7 @@ def fetch_stock_info(ticker: str) -> dict:
 
     try:
         time.sleep(config.REQUEST_DELAY_SEC)
-        stock = yf.Ticker(ticker)
+        stock = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=10)
         info = _retry(lambda: stock.info)
 
         if not info or len(info) < 5:
@@ -206,8 +231,8 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
 
     try:
         time.sleep(config.REQUEST_DELAY_SEC)
-        stock = yf.Ticker(ticker)
-        
+        stock = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=10)
+
         # 1. Aktivera auto_adjust=True för att inkludera utdelningar i priset
         hist = _retry(lambda: stock.history(period=period, auto_adjust=True))
 
@@ -485,28 +510,46 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
         if verbose:
             print(f"  [{i}/{total}] {ticker}...", end=" ", flush=True)
 
-        info = fetch_stock_info(ticker)
+        # Outer hard timeout per ticker (Linux/GitHub Actions only).
+        # Fires even when t.join() is stuck inside C-level code (curl_cffi, OpenSSL).
+        # Inner _with_timeout handles most cases; this is the safety net.
+        if _HAS_ALARM:
+            def _alarm_handler(sig, frm, _t=ticker):
+                raise TimeoutError(f"Hard outer timeout for {_t}")
+            _signal.signal(_signal.SIGALRM, _alarm_handler)
+            _signal.alarm(90)
 
-        # Try FMP fallback if yfinance returned nothing useful
-        if not info or len(info) < 10:
-            fmp_data = fetch_fmp_fallback(ticker)
-            if fmp_data:
-                info = fmp_data
+        try:
+            info = fetch_stock_info(ticker)
 
-        history = fetch_price_history(ticker, period="1y")
+            # Try FMP fallback if yfinance returned nothing useful
+            if not info or len(info) < 10:
+                fmp_data = fetch_fmp_fallback(ticker)
+                if fmp_data:
+                    info = fmp_data
 
-        if not info and history.empty:
+            history = fetch_price_history(ticker, period="1y")
+
+            if not info and history.empty:
+                failed.append(ticker)
+                if verbose:
+                    print("FAILED")
+                continue
+
+            metrics = extract_metrics(ticker, info, history)
+            rows.append(metrics)
+
+            if verbose:
+                quality = sum(1 for v in metrics.values() if v is not None) / len(metrics)
+                print(f"OK ({quality:.0%} data)")
+
+        except Exception as e:
             failed.append(ticker)
             if verbose:
-                print("FAILED")
-            continue
-
-        metrics = extract_metrics(ticker, info, history)
-        rows.append(metrics)
-
-        if verbose:
-            quality = sum(1 for v in metrics.values() if v is not None) / len(metrics)
-            print(f"OK ({quality:.0%} data)")
+                print(f"ERROR: {e}")
+        finally:
+            if _HAS_ALARM:
+                _signal.alarm(0)  # Always cancel the per-ticker alarm
 
     df = pd.DataFrame(rows)
 

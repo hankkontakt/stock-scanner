@@ -68,16 +68,14 @@ jobs:
         run: mkdir -p data/cache data/history data/optimizer reports
 
       # ── Steg 6: Kör full scan ────────────────────────────────
-      - name: 🚀 Kör vecko-scan
+      - name: 🔍 Kör veckovis scan
         env:
-          PYTHONWARNINGS: "ignore"     # <--- LÄGG TILL DENNA RAD! Tystar alla pandas/yfinance-varningar
-          FMP_API_KEY: ${{ secrets.FMP_API_KEY }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
-          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
-          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_SENDER:    ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:  ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO:        ${{ secrets.EMAIL_TO }}
+          FMP_API_KEY:     ${{ secrets.FMP_API_KEY }}
         run: |
-          ulimit -n 65535
           if [ -n "${{ github.event.inputs.tickers }}" ]; then
             python scan.py --tickers "${{ github.event.inputs.tickers }}"
           else
