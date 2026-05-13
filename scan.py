@@ -1,7 +1,7 @@
 """
 scan.py – Huvudscript. Kör varje söndag: python scan.py
 """
-import argparse, sys
+import argparse, sys, os, time, threading
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
@@ -295,6 +295,14 @@ def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df,
 # ── Huvudpipeline ──────────────────────────────────────────────────────────────
 
 def main():
+    # Watchdog: force-exit if the entire scan hangs past 100 minutes.
+    # Daemon thread dies with the process on normal exit; only fires on true hangs.
+    def _watchdog():
+        time.sleep(100 * 60)
+        print("\n⏰ WATCHDOG: Scan exceeded 100 min — force-exiting to prevent GitHub hang.")
+        os._exit(1)
+    threading.Thread(target=_watchdog, daemon=True, name="ScanWatchdog").start()
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--tickers", help="Komma-separerade tickers")
     parser.add_argument("--quick",   action="store_true", help="Hoppa över extra data")

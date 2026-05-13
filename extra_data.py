@@ -78,7 +78,7 @@ def fetch_insider_signal(ticker: str) -> float:
     try:
         from data_fetcher import _with_timeout
         time.sleep(0.4)
-        stock  = yf.Ticker(ticker)
+        stock  = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=8)
         trades = _with_timeout(lambda: stock.insider_transactions, timeout_sec=15)
 
         if trades is None or (hasattr(trades, 'empty') and trades.empty):
@@ -166,7 +166,7 @@ def fetch_earnings_surprise_signal(ticker: str) -> float:
     try:
         from data_fetcher import _with_timeout
         time.sleep(0.4)
-        stock = yf.Ticker(ticker)
+        stock = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=8)
         hist  = _with_timeout(lambda: stock.earnings_history, timeout_sec=15)
 
         if hist is None or (hasattr(hist, 'empty') and hist.empty):
@@ -283,7 +283,7 @@ def fetch_analyst_revision_signal(ticker: str, finnhub_key: str = None) -> float
     try:
         from data_fetcher import _with_timeout
         time.sleep(0.3)
-        stock    = yf.Ticker(ticker)
+        stock    = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=8)
         info     = _with_timeout(lambda: stock.info, timeout_sec=15)
         rec_mean = info.get("recommendationMean") if info else None
 
@@ -294,7 +294,7 @@ def fetch_analyst_revision_signal(ticker: str, finnhub_key: str = None) -> float
 
             # Försök hitta trend via recommendations DataFrame
             try:
-                recs = stock.recommendations
+                recs = _with_timeout(lambda: stock.recommendations, timeout_sec=10)
                 if recs is not None and not recs.empty and len(recs) >= 4:
                     recs = recs.tail(8).copy()
                     # Räkna buy/strong buy vs sell/strong sell

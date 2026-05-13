@@ -10,10 +10,13 @@ Handles all data fetching from yfinance with:
 """
 
 import os
+import sys
 import time
+import signal as _signal
 import socket
 import pickle
 import hashlib
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -26,6 +29,9 @@ import config
 
 import requests
 import requests.sessions
+
+# True on Linux/macOS (GitHub Actions), False on Windows
+_HAS_ALARM = hasattr(_signal, 'SIGALRM')
 
 # ── Lager 1: socket.setdefaulttimeout ────────────────────────────────────
 # Sätts INNAN yfinance importeras. Påverkar alla nya sockets på OS-nivå,
@@ -91,10 +97,6 @@ def _write_cache(key: str, data):
             pickle.dump(data, f)
     except Exception as e:
         print(f"  ⚠ Cache write failed: {e}")
-
-
-import sys
-import threading
 
 
 def _with_timeout(fn, timeout_sec=12):
@@ -493,6 +495,15 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
         if verbose:
             print(f"  [{i}/{total}] {ticker}...", end=" ", flush=True)
 
+        # Outer hard timeout per ticker (Linux/GitHub Actions only).
+        # Fires even when t.join() is stuck inside C-level code (curl_cffi, OpenSSL).
+        # Inner _with_timeout handles most cases; this is the safety net.
+        if _HAS_ALARM:
+            def _alarm_handler(sig, frm, _t=ticker):
+                raise TimeoutError(f"Hard outer timeout for {_t}")
+            _signal.signal(_signal.SIGALRM, _alarm_handler)
+            _signal.alarm(90)
+
         try:
             info = fetch_stock_info(ticker)
 
@@ -521,6 +532,9 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
             failed.append(ticker)
             if verbose:
                 print(f"ERROR: {e}")
+        finally:
+            if _HAS_ALARM:
+                _signal.alarm(0)  # Always cancel the per-ticker alarm
 
     df = pd.DataFrame(rows)
 
