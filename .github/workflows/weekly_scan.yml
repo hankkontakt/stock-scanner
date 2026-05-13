@@ -34,17 +34,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          # cache: "pip" är avsiktligt borttaget
+          # pip-cache kan innehålla gamla körningar utan curl_cffi
 
       # ── Steg 3: Installera beroenden ─────────────────────────
       - name: 📦 Installera beroenden
         run: |
+          pip install --upgrade pip
+          pip install curl_cffi
           pip install -r requirements.txt
-          # VIKTIGT: Ta bort curl_cffi om det installerats som transitivt beroende
-          # curl_cffi orsakar deadlock i data_fetcher.py på GitHub Actions
-          pip uninstall -y curl_cffi 2>/dev/null || true
-          echo "Installerade paket (curl_cffi ska INTE finnas):"
-          pip show curl_cffi 2>&1 | grep -q "not found" && echo "✓ curl_cffi är borta" || echo "⚠ curl_cffi hittades fortfarande"
+          python -c "import curl_cffi; import yfinance; print('✓ curl_cffi:', curl_cffi.__version__); print('✓ yfinance OK')"
 
       # ── Steg 4: Återställ cache och historik ─────────────────
       - name: 📂 Återställ cache från förra körningen
