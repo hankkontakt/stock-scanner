@@ -52,9 +52,7 @@ jobs:
           EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
-        run: |
-          ulimit -n 65535
-          python scan.py
+        run: python scan.py
 
       - name: 📤 Ladda upp rapport (Artifact)
         uses: actions/upload-artifact@v4

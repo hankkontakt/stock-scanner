@@ -183,7 +183,7 @@ def fetch_stock_info(ticker: str) -> dict:
 
     try:
         time.sleep(config.REQUEST_DELAY_SEC)
-        stock = yf.Ticker(ticker)
+        stock = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=10)
         info = _retry(lambda: stock.info)
 
         if not info or len(info) < 5:
@@ -214,8 +214,8 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
 
     try:
         time.sleep(config.REQUEST_DELAY_SEC)
-        stock = yf.Ticker(ticker)
-        
+        stock = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=10)
+
         # 1. Aktivera auto_adjust=True för att inkludera utdelningar i priset
         hist = _retry(lambda: stock.history(period=period, auto_adjust=True))
 

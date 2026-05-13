@@ -224,8 +224,7 @@ CANADA = [
 # ════════════════ EMERGING / LATINAMERIKA ════════════════
 EMERGING = [
     "VALE", "ITUB", "BBD", "MELI", "NU", "GLOB", "ARCO", "SE", "GRAB",
-    "AMX", "FMX", "PETR4.SA", "ABEV3.SA", "BBAS3.SA", "BRFS", "NTCO", 
-    "LREN3.SA", "WEGE3.SA", "RENT3.SA", "RADL3.SA"
+    "AMX", "FMX",
 ]
 
 # ════════════════ KOMBINERA ════════════════
