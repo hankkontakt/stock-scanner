@@ -30,6 +30,19 @@ import config
 import requests
 import requests.sessions
 
+# ── Blockera curl_cffi explicit ───────────────────────────────────────────
+# yfinance 1.3+ försöker använda curl_cffi som HTTP-backend om det finns
+# installerat. curl_cffi har en intern event-loop som INTE städas upp när
+# en daemon-tråd avbryts av _with_timeout. Efter ~100 avbrutna trådar
+# uppstår deadlock på GitHub Actions.
+# 
+# Lösning: tvinga yfinance att använda requests-backend istället.
+import sys as _sys
+# Blockera curl_cffi import om det av misstag är installerat
+if 'curl_cffi' not in _sys.modules:
+    _sys.modules['curl_cffi'] = None          # type: ignore[assignment]
+    _sys.modules['curl_cffi.requests'] = None  # type: ignore[assignment]
+
 # True on Linux/macOS (GitHub Actions), False on Windows
 _HAS_ALARM = hasattr(_signal, 'SIGALRM')
 
@@ -99,33 +112,45 @@ def _write_cache(key: str, data):
         print(f"  ⚠ Cache write failed: {e}")
 
 
+# Räknar aktiva zombie-trådar för diagnostik
+_zombie_thread_count = 0
+
 def _with_timeout(fn, timeout_sec=12):
     """
     Kör fn() i en daemon-tråd med en hård tidsgräns.
-    Fungerar lika på Linux (GitHub Actions) och Windows.
 
-    socket.setdefaulttimeout(20) ovan garanterar att hängande bakgrundstrådar
-    städas upp av OS:et inom 20 sekunder – ingen explicit trådavstängning krävs.
+    VIKTIGT: curl_cffi blockeras (se ovan) för att förhindra deadlock.
+    Med requests-backend fungerar socket.setdefaulttimeout(20) och
+    requests.Session.send-patchen korrekt.
 
-    Varför inte signal.alarm?
-    signal.alarm levereras bara mellan Python-bytekod-instruktioner och kan
-    inte avbryta C-kod (t.ex. OpenSSL-handskakningar i yfinance). Trådar
-    kombinerat med socket-timeout är mer tillförlitligt på GitHub Actions.
+    Om tråden inte avslutas inom timeout_sec returnerar vi ändå –
+    tråden lever vidare som daemon men OS:et stänger alla sockets
+    via setdefaulttimeout(20) inom ytterligare 20 sekunder max.
     """
+    global _zombie_thread_count
     result = [None]
     error  = [None]
+    done   = threading.Event()
 
     def worker():
         try:
             result[0] = fn()
         except Exception as e:
             error[0] = e
+        finally:
+            done.set()
 
     t = threading.Thread(target=worker, daemon=True)
     t.start()
-    t.join(timeout_sec)
 
-    if t.is_alive():
+    # done.wait() är mer pålitlig än t.join() på GitHub Actions:
+    # - Använder OS-level condition variable (futex på Linux)
+    # - Påverkas inte av SIGALRM på samma sätt som t.join()
+    # - done.set() i finally garanterar att Event sätts även vid exception
+    completed = done.wait(timeout=timeout_sec)
+
+    if not completed:
+        _zombie_thread_count += 1
         raise TimeoutError(f"Anrop hängde efter {timeout_sec}s")
     if error[0] is not None:
         raise error[0]
