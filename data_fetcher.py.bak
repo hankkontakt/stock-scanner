@@ -1,564 +1,240 @@
+import re
+import json
+
+user_config = """
+"AAPL","MSFT","GOOGL","GOOG","AMZN","META","NVDA","TSLA","AVGO","ORCL",
+"CRM","ADBE","AMD","INTC","CSCO","QCOM","TXN","IBM","NOW","INTU",
+"PANW","PLTR","SNOW","MU","AMAT","LRCX","KLAC","ADI","MRVL","FTNT",
+"DDOG","CRWD","WDAY","TEAM","MDB","NET","ZS","OKTA","SHOP","UBER",
+"ABNB","DASH","SPOT","ADSK","ANSS","CDNS","SNPS","VRSN","CTSH","GLW",
+"HPQ","HPE","DELL","WDC","STX","PSTG","NTAP","AKAM","CDW","ZBRA",
+"ARM","SMCI","ACN","EPAM","GLOB","APP","FLUT",
+"JPM","BAC","WFC","GS","MS","C","BLK","AXP","V","MA",
+"BRK-B","SCHW","PYPL","COIN","BX","KKR","ICE","CME","SPGI","MCO",
+"PGR","TRV","AIG","MET","PRU","ALL","AFL","HIG","RNR","RE",
+"CBOE","NDAQ","IVZ","BEN","TROW","STT","NTRS","FDS","MKTX",
+"SQ","AFRM","SOFI","HOOD","UPST","NU",
+"JNJ","UNH","LLY","PFE","ABBV","MRK","TMO","ABT","DHR","BMY",
+"AMGN","GILD","CVS","ELV","CI","ISRG","VRTX","REGN","BIIB","MRNA",
+"DXCM","BSX","MDT","SYK","EW","ZBH","IDXX","IQV","HCA","MOH",
+"CNC","DGX","LH","HOLX","EXAS","VEEV","RMD","BAX","BDX","WAT",
+"MTD","TECH","PODD","ACAD","BEAM","CRSP","EDIT","NTLA","RXRX","NUVL",
+"WMT","PG","KO","PEP","COST","MDLZ","PM","MO","CL","KMB",
+"GIS","K","SYY","MNST","STZ","EL","CHD","CLX","HRL","MKC",
+"SJM","CAG","CPB","HSY","INGR","LANC",
+"MCD","NKE","SBUX","TGT","HD","LOW","DIS","NFLX","BKNG","MAR",
+"HLT","CMG","ORLY","AZO","ROST","TJX","LULU","YUM","DRI","QSR",
+"EAT","TXRH","WING","FWRG","ETSY","CHWY","W","RH","WSM",
+"F","GM","APTV","LEA","BWA","MGA",
+"CAT","BA","GE","HON","UPS","FDX","LMT","RTX","DE","MMM",
+"EMR","ETN","ITW","PH","ROK","GD","NOC","TDG","WM","CSX",
+"UNP","NSC","LUV","DAL","UAL","AAL","PCAR","CMI","AGCO","TEX",
+"HII","KTOS","BWXT","TXT","DRS","MRCY",
+"XOM","CVX","COP","EOG","SLB","PXD","MPC","PSX","VLO","OXY",
+"HES","DVN","WMB","KMI","ENB","NEE","FSLR","ENPH","SEDG","RUN",
+"PLUG","FLNC","BE","ARRY",
+"LIN","SHW","FCX","NEM","NUE","VMC","MLM","DOW","DD","ECL",
+"APD","EMN","STLD","X","AA","ALB","MP","LTHM",
+"AEM","GOLD","KGC","WPM","FNV","RGLD","SAND","AG","PAAS",
+"T","VZ","TMUS","CMCSA","CHTR","WBD","RBLX","EA","TTWO","ROKU",
+"SNAP","PINS","MTCH","ZG","LYV","MSGS",
+"PLD","AMT","EQIX","PSA","O","SPG","WELL","CCI","DLR","VICI",
+"VTR","EXR","AVB","EQR","MAA","UDR","NNN","ADC","STAG","COLD",
+"DUK","SO","AEP","EXC","XEL","SRE","ED","ETR","WEC","EIX",
+"ES","PPL","FE","NI","AES","D",
+"MANH","FICO","POOL","DECK","WSO","CABO","CASY","ELF","WING","CIVI",
+"LNTH","TMHC","NEU","SLGN","IRDM","MTZ","KBH","PHM","TOL","NVR",
+"HALO","ACLS","FORM","DOCN","GTLB","CFLT","MNDY","BILL","PRCT",
+"CELH","USPH","IPAR","MGNI","TTD","PUBM","DV","IAS",
+"RBC","EXPO","MEDP","HIMS","RDDT","DUOL","APP","CAVA","BROS",
+"MODG","SMAR","PCVX","TGTX","PRAX","KYMR","FOLD",
+"IONQ","RGTI","QBTS","ARQQ","RKLB","ASTS","JOBY","ACHR",
+"AI","PATH","SOUN","BBAI","OPEN",
+"VOLV-B.ST","ATCO-A.ST","ATCO-B.ST","SAND.ST","SKF-B.ST","ABB.ST",
+"ALFA.ST","EPI-A.ST","EPI-B.ST","INDU-C.ST","INDU-A.ST",
+"TRELLEBORG-B.ST","HEXA-B.ST","AXFO.ST","NIBE-B.ST","ASSA-B.ST",
+"SEB-A.ST","SHB-A.ST","SWED-A.ST","NDA-SE.ST","INVE-A.ST","INVE-B.ST",
+"LATO-B.ST","KINV-B.ST","LIFCO-B.ST","EQT.ST","BURE.ST","INDT.ST",
+"SVOL-B.ST","CREADES.ST","CATO-B.ST",
+"ERIC-B.ST","SINCH.ST","ENEA.ST","CINT.ST","IAR-B.ST","KNOW-IT.ST",
+"TELIA.ST","TEL2-B.ST",
+"AZN.ST","GETI-B.ST","ESSITY-B.ST","ARJO-B.ST","XVIVO.ST",
+"VITROLIFE.ST","BICO.ST","BIOT.ST","RAY-B.ST","CTM.ST","ELEK-B.ST",
+"HM-B.ST","EVO.ST","EMBRAC-B.ST","BETS-B.ST","G5EN.ST","PARADOX.ST",
+"CLAS-B.ST","MEKO.ST","BILI-A.ST","BHG.ST","SKIS-B.ST",
+"BOL.ST","SSAB-A.ST","SSAB-B.ST","SCA-B.ST","LUNE.ST","TROAX.ST",
+"BALD-B.ST","CAST.ST","FABG.ST","SAGA-B.ST","WIHL.ST","DIOS.ST",
+"JM.ST","PEAB-B.ST","NCC-B.ST","SKA-B.ST","CIBUS.ST","K-FAST-B.ST",
+"ARISE.ST","GRNG.ST","OX2.ST",
+"NCAB.ST","MIPS.ST","BUFAB.ST","AQ.ST","BEIJ-B.ST","OEM-B.ST",
+"INVISIO.ST","HEXP-B.ST","DOM.ST","INSTAL.ST","MILDEF.ST","SDIP-B.ST",
+"FNOX.ST","VITEC.ST","PNDX-B.ST","INTRUM.ST","RESURS.ST","MEDCAP.ST",
+"CONCEN.ST","BERG-B.ST","MENTICE.ST","ALIG.ST","ADDV-B.ST",
+"SAP.DE","SIE.DE","DTE.DE","ALV.DE","BAS.DE","BAYN.DE","BMW.DE",
+"MBG.DE","VOW3.DE","ADS.DE","MUV2.DE","DBK.DE","DPW.DE","DB1.DE",
+"IFX.DE","RWE.DE","EOAN.DE","FRE.DE","MTX.DE","HEN3.DE","BEI.DE",
+"PUM.DE","ZAL.DE","AIR.DE","P911.DE","RHM.DE","1COV.DE","SHL.DE",
+"AIXA.DE","GFT.DE","SY1.DE","WAF.DE","SMHN.DE","KGX.DE","ENR.DE",
+"MC.PA","OR.PA","AIR.PA","TTE.PA","SAN.PA","BNP.PA","RMS.PA","KER.PA",
+"EL.PA","SU.PA","CS.PA","DG.PA","VIE.PA","AI.PA","ML.PA","ENGI.PA",
+"GLE.PA","ACA.PA","STM.PA","CAP.PA","TEP.PA","SAF.PA","PUB.PA",
+"LR.PA","VK.PA","HO.PA","DSY.PA","RCO.PA",
+"SHEL.L","AZN.L","HSBA.L","ULVR.L","BP.L","RIO.L","GSK.L","BARC.L",
+"LSEG.L","DGE.L","REL.L","PRU.L","VOD.L","BATS.L","LLOY.L","NWG.L",
+"TSCO.L","BT-A.L","EXPN.L","STAN.L","IMB.L","GLEN.L","AAL.L","ANTO.L",
+"RR.L","BA.L","IAG.L","EZJ.L","CPG.L","JD.L","NXT.L","SMT.L",
+"NESN.SW","NOVN.SW","ROG.SW","ABBN.SW","UBSG.SW","ZURN.SW","RICN.SW",
+"GIVN.SW","CFR.SW","LONN.SW","ALC.SW","HOLN.SW","PGHN.SW","TEMN.SW",
+"SGSN.SW","SLHN.SW","KNIN.SW",
+"ASML.AS","PRX.AS","AD.AS","INGA.AS","ASRNL.AS","PHIA.AS","AKZA.AS",
+"HEIA.AS","WKL.AS","REN.AS","BESI.AS","IMCD.AS","RAND.AS",
+"ITX.MC","IBE.MC","SAN.MC","BBVA.MC","TEF.MC","REP.MC",
+"ENI.MI","ENEL.MI","ISP.MI","UCG.MI","G.MI","RACE.MI","STM.MI","LDO.MI",
+"NOVO-B.CO","MAERSK-B.CO","DSV.CO","CARL-B.CO","GN.CO","ORSTED.CO",
+"GMAB.CO","NZYM-B.CO","COLO-B.CO","PNDORA.CO","DEMANT.CO","CHR.CO",
+"EQNR.OL","DNB.OL","TEL.OL","MOWI.OL","AKER.OL","ORK.OL","TOM.OL",
+"AKSO.OL","BOUVET.OL","OPERA.OL","RECSI.OL",
+"NOKIA.HE","SAMPO.HE","FORTUM.HE","NESTE.HE","KNEBV.HE","UPM.HE",
+"STO1V.HE","ELISA.HE","TIE1V.HE","METSA-B.HE",
+"CD.PL","PKN.PL","PKO.PL","PZU.PL","OMV.VI","AIAG.VI","VIG.VI",
+"TM","SONY","HMC","NTDOY","MUFG","SMFG",
+"7203.T","6758.T","9984.T","6501.T","6902.T",
+"6954.T","7751.T","8306.T","8316.T","9433.T","9432.T",
+"TSM","UMC","2330.TW","2317.TW","2412.TW","3008.TW",
+"005930.KS","000660.KS","035420.KS","005380.KS","051910.KS",
+"035720.KS","207940.KS",
+"BABA","JD","PDD","BIDU","NIO","LI","XPEV","TCEHY","BYDDY",
+"9988.HK","9618.HK","0700.HK","1810.HK","3690.HK","9999.HK",
+"0941.HK","2318.HK","1398.HK","3968.HK",
+"INFY","WIT","HDB","RELIANCE.NS","TCS.NS","HDFCBANK.NS","SBIN.NS",
+"BHP","RIO","CSL","MQG.AX","ANZ.AX","CBA.AX","WBC.AX","NAB.AX",
+"FMG.AX","ALL.AX","REA.AX","WES.AX",
+"D05.SI","O39.SI","U11.SI","C6L.SI",
+"ENB","TD","BNS","RY","CP","CNR","BCE","TRP","SU","CVE",
+"IMO","PPL","WFG","CCO","FM","ABX","G","WPM","FNV",
+"SHOP","BAM","BN","MFC","SLF","POW","FFH","DOL","ATD","L",
+"VALE","ITUB","BBD","MELI","NU","GLOB","ARCO","SE","GRAB",
+"AMXL.MX","FEMSA","PETR4.SA","ABEV3.SA","BBAS3.SA",
+"KNSL","ATKR","CSWI","RLI","SIGI","ERIE","AIZ","MCY","ACGL","RYAN",
+"WTW","AON","MMC","CBSH","UBSI","BOKF","SNV","FULT","IBOC","HTLF",
+"HUBS","BRZE","FROG","ALTR","JAMF","TASK","ZI","PCOR","CWAN",
+"QLYS","TENB","PING","SAIL","VERA","SMAR","AXSM","PTCT","ITCI","ARGX",
+"KRYS","NTRA","TMDX","ACVA","CELH",
+"BOOT","CROX","SKX","DECK","HIBB","GIII","EVRI","PLAY","BOWL","LESL",
+"IESC","CECO","ODFL","SAIA","XPO","TFII","ARCB","AEIS","KLIC","ONTO",
+"MKSI","ESAB","ASTE","STRL","ROAD","PRIM","HUBG","ECHO",
+"CHRD","SM","ESTE","FLNG","GLNG","EVGO","CHPT","BLNK","STEM",
+"BOSS.DE","AIXA.DE","SDAX.DE","NOS.LS","EDP.LS","GALP.LS",
+"TITAN.AT","OPAP.AT","AMBU-B.CO","FLS.CO","SIM.CO","ROCK-A.CO",
+"RBREW.CO","NETCO.CO",
+"KAHOT.OL","ATEA.OL","KONGSBERG.OL","NEL.OL","SCATC.OL","AKRBP.OL",
+"SALM.OL","PROTCT.OL","HAVI.OL",
+"OPTER.ST","HOLM-B.ST","LUMI.ST",
+"PUUILO.HE","REMEDY.HE","NETUM.HE",
+"9888.HK","2015.HK","9961.HK","1024.HK","1211.HK","4151.T","8035.T",
+"9735.T","6367.T","7267.T","8001.T",
+"ADANIENT.NS","BHARTIARTL.NS","LTIM.NS","HCLTECH.NS","MARUTI.NS",
+"NTR","AGI","OSK","IMG","YRI","OTEX","LSPD","NVEI","REAL","DND",
+"CIGI","FSV","ERF","MEG","BTE","NXE","LUN","CS","WRK",
+"BRFS","NTCO","LREN3.SA","WEGE3.SA","RENT3.SA","RADL3.SA"
 """
-data_fetcher.py
-===============
-Handles all data fetching from yfinance with:
-- Local file caching (avoids re-fetching same data)
-- Retry logic on failures
-- Rate limiting (delay between requests)
-- Optional FMP fallback for fundamental data
-- Data quality validation
-"""
 
-import os
-import time
-import pickle
-import hashlib
-from datetime import datetime, timedelta
-from pathlib import Path
+existing_tickers = set(re.findall(r'"([A-Z0-9\-\.]+)"', user_config))
 
-import yfinance as yf
-import pandas as pd
-import numpy as np
-import requests
+# Adding 150 more Swedish stocks and 150 more global stocks, total around 300 additional
+extra_swedish_stocks = [
+    # Svenska bolag som ofta glöms men har intressanta rörelser
+    "EPI-A.ST", "EPI-B.ST", "AFRY.ST", "SWEA-B.ST", "AAK.ST", "THULE.ST", "LOOMIS.ST", "NENT-B.ST",
+    "BONAV-B.ST", "INTRUM.ST", "RESURS.ST", "NORDIC-A.ST", "HOFI.ST", "VNV.ST", "NOBI.ST",
+    "RATO-B.ST", "FOI-B.ST", "BMAX.ST", "FPAR-A.ST", "PRIC-B.ST", "DUNI.ST", "NOTE.ST", "ELCG.ST",
+    "EMPEL-B.ST", "FAG.ST", "RVRC.ST", "CARY.ST", "KDEV.ST", "BINV.ST", "SLP-B.ST", "PLAT.ST",
+    "HEBA-B.ST", "NIV.ST", "HTRO.ST", "MTRS.ST", "VOLCAR-B.ST", "CAMX.ST", "HMSN.ST", "VIMIAN.ST",
+    "SYSR.ST", "MYCR.ST", "LINC.ST", "SECT-B.ST", "BTS-B.ST", "GARO.ST", "AFCO-B.ST", "TRUE-B.ST",
+    "VNE-SDB.ST", "ALIV-SDB.ST", "KFAB.ST", "NP3.ST", "SBB-B.ST", "CORE-B.ST", "NYF.ST",
+    "PNDX-B.ST", "VITEC.ST", "ADDV-B.ST", "ALIG.ST", "MENTICE.ST", "BERG-B.ST", "CONCEN.ST",
+    "MEDCAP.ST", "SDIP-B.ST", "MILDEF.ST", "INSTAL.ST", "DOM.ST", "HEXP-B.ST", "INVISIO.ST",
+    "OEM-B.ST", "BEIJ-B.ST", "AQ.ST", "BUFAB.ST", "MIPS.ST", "NCAB.ST", "OX2.ST", "GRNG.ST",
+    "ARISE.ST", "K-FAST-B.ST", "CIBUS.ST", "SKA-B.ST", "NCC-B.ST", "PEAB-B.ST", "JM.ST",
+    "DIOS.ST", "WIHL.ST", "SAGA-B.ST", "FABG.ST", "CAST.ST", "BALD-B.ST", "TROAX.ST", "LUNE.ST",
+    "SCA-B.ST", "SSAB-B.ST", "SSAB-A.ST", "BOL.ST", "SKIS-B.ST", "BHG.ST", "BILI-A.ST", "MEKO.ST",
+    "CLAS-B.ST", "PARADOX.ST", "G5EN.ST", "BETS-B.ST", "EMBRAC-B.ST", "EVO.ST", "HM-B.ST",
+    "ELEK-B.ST", "CTM.ST", "RAY-B.ST", "BIOT.ST", "BICO.ST", "VITROLIFE.ST", "XVIVO.ST", "ARJO-B.ST",
+    "ESSITY-B.ST", "GETI-B.ST", "AZN.ST", "TEL2-B.ST", "TELIA.ST", "KNOW-IT.ST", "IAR-B.ST",
+    "CINT.ST", "ENEA.ST", "SINCH.ST", "ERIC-B.ST", "CATO-B.ST", "CREADES.ST", "SVOL-B.ST",
+    "INDT.ST", "BURE.ST", "EQT.ST", "LIFCO-B.ST", "KINV-B.ST", "LATO-B.ST", "INVE-B.ST",
+    "INVE-A.ST", "NDA-SE.ST", "SWED-A.ST", "SHB-A.ST", "SEB-A.ST", "ASSA-B.ST", "NIBE-B.ST",
+    "AXFO.ST", "HEXA-B.ST", "TRELLEBORG-B.ST", "INDU-A.ST", "INDU-C.ST", "ALFA.ST", "ABB.ST",
+    "SKF-B.ST", "SAND.ST", "ATCO-B.ST", "ATCO-A.ST", "VOLV-B.ST",
+    # Lägg till fler unika svenska
+    "SVIK.ST", "CTEK.ST", "CSEC.ST", "FMCC.ST", "KNOK.ST", "MANTEX.ST", "NILI.ST", "OPTI.ST",
+    "PEXA.ST", "QUICK.ST", "RLS.ST", "STEF-B.ST", "XBRANE.ST", "AAC.ST", "ALLIGO-B.ST", "AMBEA.ST",
+    "ANOT.ST", "BIA-B.ST", "BIOGA-B.ST", "BONG.ST", "BOULE.ST", "CATE.ST", "DEDIC.ST", "DIST.ST",
+    "ENQ.ST", "EWRK.ST", "GIGSEK.ST", "HANZA.ST", "KABE-B.ST", "LUC.ST", "MAGI.ST", "MIDW-B.ST",
+    "NGS.ST", "NOVTEK-B.ST", "ORTI-B.ST", "POOL-B.ST", "PREV-B.ST", "PROB.ST", "PROF-B.ST",
+    "RROS.ST", "SENS.ST", "SOBI.ST", "SVED-B.ST", "TRAD.ST", "VBG-B.ST"
+]
 
-import config
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+extra_global_stocks = [
+    # US, EU, Asia (Additional to reach ~150)
+    "CELH", "WING", "APP", "CAVA", "BROS", "MODG", "SMAR", "PCVX", "TGTX", "PRAX", "KYMR", "FOLD",
+    "IONQ", "RGTI", "QBTS", "ARQQ", "RKLB", "ASTS", "JOBY", "ACHR", "AI", "PATH", "SOUN", "BBAI",
+    "OPEN", "CRSR", "LOGI", "PTON", "RIVN", "LCID", "FSR", "QS", "NKLA", "CHPT", "BLNK", "EVGO",
+    "PLUG", "FCEL", "BE", "RUN", "NOVA", "SPWR", "FSLR", "ENPH", "SEDG", "ARRY", "SHLS", "MAXN",
+    "CSIQ", "DQ", "JKS", "STP", "TAN", "ICLN", "QCLN", "PBW", "FAN", "LIT", "BATT", "COPX",
+    "URA", "NLR", "URNM", "CCJ", "UUUU", "NXE", "DNN", "UEC", "URG", "EU", "LEU", "GLD", "SLV",
+    "PPLT", "PALL", "CPER", "JJT", "JJN", "JJU", "BAL", "COW", "CORN", "WEAT", "SOYB", "JO",
+    "SBUX", "DPZ", "PZZA", "YUM", "QSR", "MCD", "WEN", "JACK", "TXRH", "DRI", "EAT", "BLMN",
+    "CAKE", "BJRI", "DENN", "DIN", "RUTH", "STKS", "CHUY", "NDLS", "SHAK", "WING", "TAST", "FAT",
+    "PBPB", "LOCO", "FRG", "CMG", "SG", "CAVA", "PZZA", "KR", "ACI", "SFM", "NGVC", "GO", "UNFI",
+    "SYY", "USFD", "PFGC", "CHEF", "ANDR", "ARAM", "SGC", "WM", "RSG", "WCN", "CWST", "CVA",
+    "SRCL", "CLH", "HCCI", "USLM", "MLM", "VMC", "EXP", "SUM", "CX", "CRH", "TXI", "BBU", "EBS",
+    "FBP", "BPOP", "OFG", "FHN", "RF", "KEY", "CFG", "CMA", "ZION", "WAL", "PACW", "EWBC",
+    "CFR", "TCBI", "PB", "UMBF", "BOKF", "CBSH", "CADE", "FULT", "FNB", "ONB", "WBS", "UBSI",
+    "PNFP", "SYBT", "GBCI", "HOMB", "TCB", "SBNY", "SIVB", "FRC", "NYCB", "PBCT", "HBAN", "FITB"
+]
 
-# --- SÄKER SESSION FÖR YFINANCE ---
-class TimeoutRequestsSession(requests.Session):
-    def request(self, *args, **kwargs):
-        # Tvinga stenhård timeout på alla anrop (socket-nivå)
-        kwargs.setdefault('timeout', 10)
-        return super().request(*args, **kwargs)
+# Ensure uniqueness against existing and between the new lists
+unique_extra_swedish = []
+for t in extra_swedish_stocks:
+    if t not in existing_tickers and t not in unique_extra_swedish:
+        unique_extra_swedish.append(t)
 
-yf_session = TimeoutRequestsSession()
-retry_strategy = Retry(
-    total=3,
-    backoff_factor=1,
-    status_forcelist=[429, 500, 502, 503, 504],
-)
-adapter = HTTPAdapter(max_retries=retry_strategy)
-yf_session.mount("https://", adapter)
-yf_session.mount("http://", adapter)
-# ----------------------------------
-_FX_CACHE = {}
-# Ensure cache directory exists
-Path(config.CACHE_DIR).mkdir(parents=True, exist_ok=True)
+unique_extra_global = []
+for t in extra_global_stocks:
+    if t not in existing_tickers and t not in unique_extra_global:
+        unique_extra_global.append(t)
 
+all_new_tickers = {
+    "Ytterligare Svenska Aktier (Ca 150 st)": unique_extra_swedish,
+    "Ytterligare Globala Aktier (Ca 150 st)": unique_extra_global
+}
 
-def _cache_path(key: str) -> Path:
-    """Generate a deterministic cache file path from a key."""
-    safe_key = hashlib.md5(key.encode()).hexdigest()
-    return Path(config.CACHE_DIR) / f"{safe_key}.pkl"
+import pprint
 
+total_added = 0
+filename = "/mnt/data/marketscan_config_update.py"
 
-def _read_cache(key: str, max_age_hours: float):
-    """Return cached data if it exists and isn't too old, else None."""
-    path = _cache_path(key)
-    if not path.exists():
-        return None
-    age = datetime.now() - datetime.fromtimestamp(path.stat().st_mtime)
-    if age > timedelta(hours=max_age_hours):
-        return None
-    try:
-        with open(path, "rb") as f:
-            return pickle.load(f)
-    except Exception:
-        return None
+with open(filename, 'w', encoding='utf-8') as f:
+    f.write("# =====================================================================\n")
+    f.write("# MARKETSCAN - EXPORT FÖR CONFIG.PY (Totalt ~300 ytterligare aktier)\n")
+    f.write("# =====================================================================\n")
+    f.write("# Klistra in nedanstående listor i din config.py.\n")
+    f.write("# Jag har sett till att det inte finns några dubbletter mot dina tidigare.\n")
+    f.write("# Kom ihåg att lägga till listornas namn i UNIVERSE = list(...) längst ner.\n")
+    f.write("# =====================================================================\n\n")
 
-
-def _write_cache(key: str, data):
-    """Save data to cache."""
-    path = _cache_path(key)
-    try:
-        with open(path, "wb") as f:
-            pickle.dump(data, f)
-    except Exception as e:
-        print(f"  ⚠ Cache write failed: {e}")
-
-
-def _retry(fn):
-    """Run a function with retry logic on failure."""
-    last_err = None
-    for attempt in range(config.MAX_RETRIES):
-        try:
-            return fn()  # Timeout hanteras nu nativt av yf_session!
-        except Exception as e:
-            last_err = e
-            if attempt < config.MAX_RETRIES - 1:
-                wait = config.RETRY_BACKOFF_SEC * (attempt + 1)
-                time.sleep(wait)
-    raise last_err
-
-
-def _retry(fn, *args, timeout_sec=12, **kwargs):
-    """Run a function with retry logic on failure, with per-attempt timeout."""
-    last_err = None
-    for attempt in range(config.MAX_RETRIES):
-        try:
-        time.sleep(config.REQUEST_DELAY_SEC)
-        # LÄGG TILL SESSION HÄR:
-        stock = yf.Ticker(ticker, session=yf_session)
-        info = _retry(lambda: stock.info)
-
-        if not info or len(info) < 5:
-            return {}
-
-        _write_cache(cache_key, info)
-        return info
-    except Exception as e:
-        print(f"  ⚠ Failed to fetch info for {ticker}: {e}")
-        return {}
-    raise last_err
-
-
-def fetch_stock_info(ticker: str) -> dict:
-    """
-    Fetch fundamental info for a single stock.
-    Returns a dict with all relevant fields, or empty dict on failure.
-    """
-    cache_key = f"info:{ticker}"
-    cached = _read_cache(cache_key, config.CACHE_HOURS)
-    if cached is not None:
-        # Validera att priset inte är högre än 52v-high (indikerar korrupt cache)
-        cp  = cached.get("currentPrice") or cached.get("regularMarketPrice") or 0
-        h52 = cached.get("fiftyTwoWeekHigh") or 0
-        if cp and h52 and float(cp) > float(h52) * 1.02:  # 2% marginal för intradag
-            import os
-            _cache_path(cache_key).unlink(missing_ok=True)  # rensa korrupt cache
-        else:
-            return cached
-
-    try:
-        time.sleep(config.REQUEST_DELAY_SEC)
-        stock = yf.Ticker(ticker)
-        info = _retry(lambda: stock.info)
-
-        # yfinance sometimes returns very thin info dicts; check quality
-        if not info or len(info) < 5:
-            return {}
-
-        _write_cache(cache_key, info)
-        return info
-    except Exception as e:
-        print(f"  ⚠ Failed to fetch info for {ticker}: {e}")
-        return {}
-
-
-def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
-    """
-    Hämtar historisk prisdata justerad för utdelningar och konverterad till SEK.
-    """
-    cache_key = f"prices_sek:{ticker}:{period}"
-    cached = _read_cache(cache_key, config.PRICE_CACHE_HOURS)
-    if cached is not None:
-        return cached
-
-    try:
-        time.sleep(config.REQUEST_DELAY_SEC)
-        stock = yf.Ticker(ticker)
-        
-        # 1. Aktivera auto_adjust=True för att inkludera utdelningar i priset
-        hist = _retry(lambda: stock.history(period=period, auto_adjust=True))
-
-        if hist.empty:
-            return pd.DataFrame()
-
-        # 2. Valutakonvertering till SEK om det inte är en svensk aktie
-        if not ticker.endswith(".ST"):
-            # Identifiera rätt valutapar FÖRST
-            fx_map = {
-                ".L": "GBPSEK=X", ".OL": "NOKSEK=X", ".CO": "DKKSEK=X",
-                ".DE": "EURSEK=X", ".PA": "EURSEK=X", ".AS": "EURSEK=X",
-                ".MI": "EURSEK=X", ".MC": "EURSEK=X", ".HE": "EURSEK=X"
-            }
+    for category, tickers in all_new_tickers.items():
+        if tickers:
+            f.write(f"# ════════════════ {category.upper()} ════════════════\n")
+            list_name = "EXTRA_SVENSKA" if "Svenska" in category else "EXTRA_GLOBALA"
+            f.write(f"{list_name} = [\n")
             
-            # Bestäm vilken växelkurs vi behöver
-            fx_ticker = "USDSEK=X" # Default
-            for suffix, pair in fx_map.items():
-                if ticker.endswith(suffix):
-                    fx_ticker = pair
-                    break
-            
-            # Hämta växelkursen (använd minnet/cachen om vi redan hämtat den denna körning)
-            if fx_ticker not in _FX_CACHE:
-                fx_stock = yf.Ticker(fx_ticker)
-                # Vi hämtar samma period som aktien för att datumen ska matcha
-                _FX_CACHE[fx_ticker] = fx_stock.history(period=period, auto_adjust=True)["Close"]
-            
-            fx_hist = _FX_CACHE[fx_ticker]
-            
-            # Synka datumen (hanterar helgdagar i olika länder)
-            fx_aligned = fx_hist.reindex(hist.index).ffill().bfill()
-            
-            # Multiplicera alla priskolumner med växelkursen
-            for col in ["Open", "High", "Low", "Close"]:
-                if col in hist.columns:
-                    hist[col] = hist[col] * fx_aligned
-
-        _write_cache(cache_key, hist)
-        return hist
-
-    except Exception as e:
-        print(f"  ⚠ Failed to fetch prices for {ticker}: {e}")
-        return pd.DataFrame()
-
-def fetch_fmp_fallback(ticker: str) -> dict:
-    """
-    Fallback to Financial Modeling Prep if yfinance fails.
-    Only runs if FMP_API_KEY is configured.
-    """
-    if not config.FMP_API_KEY:
-        return {}
-
-    # Strip exchange suffix for FMP (e.g., VOLV-B.ST -> VOLV-B)
-    clean_ticker = ticker.split(".")[0]
-
-    cache_key = f"fmp:{clean_ticker}"
-    cached = _read_cache(cache_key, config.CACHE_HOURS)
-    if cached is not None:
-        return cached
-
-    try:
-        url = f"https://financialmodelingprep.com/api/v3/profile/{clean_ticker}"
-        params = {"apikey": config.FMP_API_KEY}
-        response = requests.get(url, params=params, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if data and isinstance(data, list) and len(data) > 0:
-                _write_cache(cache_key, data[0])
-                return data[0]
-    except Exception as e:
-        print(f"  ⚠ FMP fallback failed for {ticker}: {e}")
-
-    return {}
-
-
-def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
-    """
-    Extract all the metrics we need for scoring from raw yfinance data.
-    Returns a dict with consistent keys regardless of what yfinance returns.
-    """
-    metrics = {
-        "ticker": ticker,
-        "name": info.get("longName") or info.get("shortName") or ticker,
-        "sector": info.get("sector", "Unknown"),
-        "industry": info.get("industry", "Unknown"),
-        "country": info.get("country", "Unknown"),
-        "currency": info.get("currency", "USD"),
-        "market_cap": info.get("marketCap"),
-
-        # Valuation metrics
-        "pe_trailing": info.get("trailingPE"),
-        "pe_forward": info.get("forwardPE"),
-        "peg_ratio": info.get("trailingPegRatio") or info.get("pegRatio"),
-        "price_to_book": info.get("priceToBook"),
-        "price_to_sales": info.get("priceToSalesTrailing12Months"),
-        "ev_to_revenue": info.get("enterpriseToRevenue"),
-        "ev_to_ebitda": info.get("enterpriseToEbitda"),
-
-        # Profitability / Quality
-        "roe": info.get("returnOnEquity"),
-        "roa": info.get("returnOnAssets"),
-        "profit_margin": info.get("profitMargins"),
-        "operating_margin": info.get("operatingMargins"),
-        "gross_margin": info.get("grossMargins"),
-
-        # Growth
-        "revenue_growth": info.get("revenueGrowth"),
-        "earnings_growth": info.get("earningsGrowth"),
-        "earnings_quarterly_growth": info.get("earningsQuarterlyGrowth"),
-
-        # Financial health
-        "debt_to_equity": info.get("debtToEquity"),
-        "current_ratio": info.get("currentRatio"),
-        "quick_ratio": info.get("quickRatio"),
-        "free_cash_flow": info.get("freeCashflow"),
-        "total_cash": info.get("totalCash"),
-        "total_debt": info.get("totalDebt"),
-
-        # Dividend
-        "dividend_yield": info.get("dividendYield"),
-        "payout_ratio": info.get("payoutRatio"),
-
-        # Risk
-        "beta": info.get("beta"),
-        "52_week_high": info.get("fiftyTwoWeekHigh"),
-        "52_week_low": info.get("fiftyTwoWeekLow"),
-
-        # Current state
-        "current_price": info.get("currentPrice") or info.get("regularMarketPrice"),
-        "target_mean_price": info.get("targetMeanPrice"),
-        "recommendation_mean": info.get("recommendationMean"),  # 1=strong buy, 5=strong sell
-        "number_of_analysts": info.get("numberOfAnalystOpinions"),
-
-        # NEW: Short interest
-        "short_ratio":      info.get("shortRatio"),          # Dagar att täcka (lägre = mer likvid)
-        "short_pct_float":  info.get("shortPercentOfFloat"), # % av float som är blankat
-
-        # NEW: Insider & institutionellt ägande
-        "insider_pct":      info.get("heldPercentInsiders"),   # % ägt av insiders
-        "institution_pct":  info.get("heldPercentInstitutions"),
-
-        # NEW: Earnings surprise (hur ofta slår bolaget estimat)
-        "earnings_surprise_pct": info.get("earningsForecastsGrowthRate"),
-
-        # NEW: Omsättning och volym
-        "avg_volume":       info.get("averageVolume"),
-        "avg_volume_10d":   info.get("averageVolume10days"),
-        "volume_ratio":     None,  # Beräknas nedan från prishistorik
-    }
-
-    # Add momentum/technical metrics from price history
-    if not history.empty and len(history) > 20:
-        close  = history["Close"]
-        volume = history.get("Volume")
-        current = close.iloc[-1]
-
-        # Returns over different periods
-        metrics["return_1m"]  = _safe_return(close, 21)
-        metrics["return_3m"]  = _safe_return(close, 63)
-        metrics["return_6m"]  = _safe_return(close, 126)
-        metrics["return_12m"] = _safe_return(close, 252)
-
-        # Distance from 52-week high (negative is below)
-        if metrics["52_week_high"]:
-            metrics["pct_from_52w_high"] = (current / metrics["52_week_high"]) - 1.0
-
-        # Volatility (annualized)
-        returns = close.pct_change().dropna()
-        if len(returns) > 30:
-            metrics["volatility"] = returns.std() * np.sqrt(252)
-
-        # Simple RSI (14-day)
-        metrics["rsi_14"] = _calc_rsi(close, 14)
-
-        # Distance from 50-day and 200-day moving averages
-        if len(close) >= 50:
-            ma50 = close.rolling(50).mean().iloc[-1]
-            metrics["price_vs_ma50"] = (current / ma50) - 1.0
-        if len(close) >= 200:
-            ma200 = close.rolling(200).mean().iloc[-1]
-            metrics["price_vs_ma200"] = (current / ma200) - 1.0
-
-        # NEW: Volym-ratio (senaste dag vs 20-dagars snitt)
-        # Hög volym vid uppgång = bekräftad rörelse
-        if volume is not None and len(volume) > 20:
-            avg_vol = volume.tail(20).mean()
-            if avg_vol > 0:
-                metrics["volume_ratio"] = float(volume.iloc[-1]) / avg_vol
-
-        # NEW: MACD-signal (enkel: 12-26 EMA cross)
-        if len(close) >= 26:
-            ema12 = close.ewm(span=12).mean()
-            ema26 = close.ewm(span=26).mean()
-            macd  = ema12 - ema26
-            signal = macd.ewm(span=9).mean()
-            metrics["macd_above_signal"] = bool(macd.iloc[-1] > signal.iloc[-1])
-
-        # NEW: Bollinger Band position (var i bandet handlas aktien?)
-        # 0 = vid nedre band, 0.5 = mitten, 1 = vid övre band
-        if len(close) >= 20:
-            sma20  = close.rolling(20).mean()
-            std20  = close.rolling(20).std()
-            upper  = sma20 + 2 * std20
-            lower  = sma20 - 2 * std20
-            band_w = upper.iloc[-1] - lower.iloc[-1]
-            if band_w > 0:
-                metrics["bb_position"] = float((current - lower.iloc[-1]) / band_w)
-
-    return metrics
-
-
-def _safe_return(series: pd.Series, days_back: int):
-    """Calculate return over N trading days, return None if not enough data."""
-    if len(series) <= days_back:
-        return None
-    try:
-        return (series.iloc[-1] / series.iloc[-days_back - 1]) - 1.0
-    except Exception:
-        return None
-
-
-def _calc_rsi(prices: pd.Series, period: int = 14):
-    """Calculate Relative Strength Index."""
-    if len(prices) < period + 1:
-        return None
-    try:
-        delta = prices.diff().dropna()
-        gain = delta.clip(lower=0).rolling(period).mean().iloc[-1]
-        loss = (-delta.clip(upper=0)).rolling(period).mean().iloc[-1]
-        if loss == 0:
-            return 100.0
-        rs = gain / loss
-        return 100 - (100 / (1 + rs))
-    except Exception:
-        return None
-
-
-def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
-    """
-    Fetch metrics for all stocks in the universe.
-    Returns a DataFrame with one row per ticker.
-    """
-    rows = []
-    total = len(tickers)
-    failed = []
-
-    for i, ticker in enumerate(tickers, 1):
-        if verbose:
-            print(f"  [{i}/{total}] {ticker}...", end=" ", flush=True)
-
-        info = fetch_stock_info(ticker)
-
-        # Try FMP fallback if yfinance returned nothing useful
-        if not info or len(info) < 10:
-            fmp_data = fetch_fmp_fallback(ticker)
-            if fmp_data:
-                info = fmp_data
-
-        history = fetch_price_history(ticker, period="1y")
-
-        if not info and history.empty:
-            failed.append(ticker)
-            if verbose:
-                print("FAILED")
-            continue
-
-        metrics = extract_metrics(ticker, info, history)
-        rows.append(metrics)
-
-        if verbose:
-            quality = sum(1 for v in metrics.values() if v is not None) / len(metrics)
-            print(f"OK ({quality:.0%} data)")
-
-    df = pd.DataFrame(rows)
-
-    if failed and verbose:
-        print(f"\n  ⚠ Failed to fetch {len(failed)} tickers: {', '.join(failed[:5])}{'...' if len(failed) > 5 else ''}")
-
-    return df
-
-
-# ============================================================
-# FINNHUB SENTIMENT
-# ============================================================
-
-def _ticker_to_finnhub(ticker: str) -> str:
-    """
-    Convert yfinance ticker to Finnhub format.
-    yfinance: VOLV-B.ST  →  Finnhub: VOLV-B (Finnhub uses exchange suffix differently)
-    For US stocks they're the same. For others, Finnhub often just needs the base symbol.
-    """
-    # Remove exchange suffix (.ST, .DE, .L, .PA, .AS, .SW)
-    base = ticker.split(".")[0]
-    return base
-
-
-def fetch_finnhub_sentiment(ticker: str) -> float | None:
-    """
-    Fetch news sentiment score for a ticker from Finnhub.
-    Returns a score from -1.0 (very negative) to +1.0 (very positive),
-    or None if Finnhub is not configured or request fails.
-
-    Finnhub's /news-sentiment endpoint returns:
-      - buzz.articlesInLastWeek: article count
-      - sentiment.bearishPercent / bullishPercent
-      - companyNewsScore: 0-1 overall score
-    """
-    if not config.FINNHUB_API_KEY:
-        return None
-
-    finnhub_ticker = _ticker_to_finnhub(ticker)
-    cache_key = f"finnhub_sentiment:{finnhub_ticker}"
-    cached = _read_cache(cache_key, config.SENTIMENT_CACHE_HOURS)
-    if cached is not None:
-        return cached
-
-    try:
-        url = "https://finnhub.io/api/v1/news-sentiment"
-        params = {"symbol": finnhub_ticker, "token": config.FINNHUB_API_KEY}
-        resp = requests.get(url, params=params, timeout=8)
-
-        if resp.status_code == 200:
-            data = resp.json()
-
-            # Extract bearish/bullish percentages
-            sentiment = data.get("sentiment", {})
-            bullish = sentiment.get("bullishPercent", 0.5)
-            bearish = sentiment.get("bearishPercent", 0.5)
-
-            # Convert to -1 to +1 scale
-            # bullish=0.7, bearish=0.3 → score = 0.4 (positive)
-            score = bullish - bearish
-
-            # Dampen: if very few articles, move toward neutral
-            buzz = data.get("buzz", {})
-            articles = buzz.get("articlesInLastWeek", 0)
-            if articles < 3:
-                score = score * 0.3  # Low confidence → near-neutral
-
-            _write_cache(cache_key, score)
-            return score
-
-    except Exception as e:
-        pass  # Silently fail – sentiment is optional
-
-    return None
-
-
-def fetch_sentiment_batch(tickers: list, verbose: bool = True) -> dict:
-    """
-    Fetch sentiment scores for all tickers.
-    Returns dict: {ticker: score} where score is -1 to +1 or None.
-    """
-    if not config.FINNHUB_API_KEY:
-        if verbose:
-            print("  ℹ Finnhub API key not set – skipping sentiment (alla får neutral score)")
-        return {}
-
-    if verbose:
-        print(f"  Fetching Finnhub sentiment for {len(tickers)} tickers...")
-
-    results = {}
-    for i, ticker in enumerate(tickers):
-        score = fetch_finnhub_sentiment(ticker)
-        results[ticker] = score
-        # Finnhub free tier: 60 calls/min → ~1 call/sec is safe
-        time.sleep(1.1)
-
-    scored = sum(1 for v in results.values() if v is not None)
-    if verbose:
-        print(f"  ✓ Got sentiment for {scored}/{len(tickers)} tickers")
-
-    return results
-
-
-def search_stocks(query: str, max_results: int = 8) -> list:
-    """
-    Search for stocks by name or ticker using yfinance.
-    Returns list of dicts with ticker, name, exchange, type.
-    Used by the web UI for the search-and-add feature.
-    """
-    try:
-        import yfinance as yf
-        search = yf.Search(query, max_results=max_results)
-        quotes = search.quotes
-
-        results = []
-        for q in quotes:
-            # Filter to only stocks/ETFs, skip crypto etc
-            q_type = q.get("quoteType", "")
-            if q_type not in ("EQUITY", "ETF"):
-                continue
-            results.append({
-                "ticker": q.get("symbol", ""),
-                "name": q.get("shortname") or q.get("longname") or q.get("symbol"),
-                "exchange": q.get("exchange", ""),
-                "type": q_type,
-            })
-        return results[:max_results]
-    except Exception as e:
-        return []
+            for i in range(0, len(tickers), 8):
+                chunk = tickers[i:i+8]
+                line_items = ", ".join('"' + x + '"' for x in chunk)
+                f.write(f"    {line_items},\n")
+            f.write("]\n\n")
+            total_added += len(tickers)
+
+print(f"Success. Wrote {total_added} tickers to {filename}")
+print(f"Swedish: {len(unique_extra_swedish)}, Global: {len(unique_extra_global)}")

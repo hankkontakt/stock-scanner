@@ -3,7 +3,7 @@ data_fetcher.py
 ===============
 Handles all data fetching from yfinance with:
 - Local file caching (avoids re-fetching same data)
-- Retry logic on failures
+- Retry logic on failures (with session timeouts instead of threading)
 - Rate limiting (delay between requests)
 - Optional FMP fallback for fundamental data
 - Data quality validation
@@ -20,11 +20,10 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import requests
-
-import config
-import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+import config
 
 # --- SÄKER SESSION FÖR YFINANCE ---
 class TimeoutRequestsSession(requests.Session):
@@ -43,16 +42,15 @@ adapter = HTTPAdapter(max_retries=retry_strategy)
 yf_session.mount("https://", adapter)
 yf_session.mount("http://", adapter)
 # ----------------------------------
+
 _FX_CACHE = {}
 # Ensure cache directory exists
 Path(config.CACHE_DIR).mkdir(parents=True, exist_ok=True)
-
 
 def _cache_path(key: str) -> Path:
     """Generate a deterministic cache file path from a key."""
     safe_key = hashlib.md5(key.encode()).hexdigest()
     return Path(config.CACHE_DIR) / f"{safe_key}.pkl"
-
 
 def _read_cache(key: str, max_age_hours: float):
     """Return cached data if it exists and isn't too old, else None."""
@@ -68,7 +66,6 @@ def _read_cache(key: str, max_age_hours: float):
     except Exception:
         return None
 
-
 def _write_cache(key: str, data):
     """Save data to cache."""
     path = _cache_path(key)
@@ -77,7 +74,6 @@ def _write_cache(key: str, data):
             pickle.dump(data, f)
     except Exception as e:
         print(f"  ⚠ Cache write failed: {e}")
-
 
 def _retry(fn):
     """Run a function with retry logic on failure."""
@@ -92,28 +88,6 @@ def _retry(fn):
                 time.sleep(wait)
     raise last_err
 
-
-def _retry(fn, *args, timeout_sec=12, **kwargs):
-    """Run a function with retry logic on failure, with per-attempt timeout."""
-    last_err = None
-    for attempt in range(config.MAX_RETRIES):
-        try:
-        time.sleep(config.REQUEST_DELAY_SEC)
-        # LÄGG TILL SESSION HÄR:
-        stock = yf.Ticker(ticker, session=yf_session)
-        info = _retry(lambda: stock.info)
-
-        if not info or len(info) < 5:
-            return {}
-
-        _write_cache(cache_key, info)
-        return info
-    except Exception as e:
-        print(f"  ⚠ Failed to fetch info for {ticker}: {e}")
-        return {}
-    raise last_err
-
-
 def fetch_stock_info(ticker: str) -> dict:
     """
     Fetch fundamental info for a single stock.
@@ -126,14 +100,13 @@ def fetch_stock_info(ticker: str) -> dict:
         cp  = cached.get("currentPrice") or cached.get("regularMarketPrice") or 0
         h52 = cached.get("fiftyTwoWeekHigh") or 0
         if cp and h52 and float(cp) > float(h52) * 1.02:  # 2% marginal för intradag
-            import os
             _cache_path(cache_key).unlink(missing_ok=True)  # rensa korrupt cache
         else:
             return cached
 
     try:
         time.sleep(config.REQUEST_DELAY_SEC)
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=yf_session)
         info = _retry(lambda: stock.info)
 
         # yfinance sometimes returns very thin info dicts; check quality
@@ -146,7 +119,6 @@ def fetch_stock_info(ticker: str) -> dict:
         print(f"  ⚠ Failed to fetch info for {ticker}: {e}")
         return {}
 
-
 def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
     """
     Hämtar historisk prisdata justerad för utdelningar och konverterad till SEK.
@@ -156,21 +128,28 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
     if cached is not None:
         return cached
 
-    def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
-    # ... (behåll din cache-logik överst) ...
     try:
         time.sleep(config.REQUEST_DELAY_SEC)
-        # LÄGG TILL SESSION HÄR:
         stock = yf.Ticker(ticker, session=yf_session)
         hist = _retry(lambda: stock.history(period=period, auto_adjust=True))
 
         if hist.empty:
             return pd.DataFrame()
 
+        # Valutakonvertering till SEK om det inte är en svensk aktie
         if not ticker.endswith(".ST"):
-            # ... (behåll din fx_map logik) ...
+            fx_map = {
+                ".L": "GBPSEK=X", ".OL": "NOKSEK=X", ".CO": "DKKSEK=X",
+                ".DE": "EURSEK=X", ".PA": "EURSEK=X", ".AS": "EURSEK=X",
+                ".MI": "EURSEK=X", ".MC": "EURSEK=X", ".HE": "EURSEK=X"
+            }
 
-            # LAGA VALUTAHÄMTNINGEN (Timeout & Session):
+            fx_ticker = "USDSEK=X" # Default
+            for suffix, pair in fx_map.items():
+                if ticker.endswith(suffix):
+                    fx_ticker = pair
+                    break
+
             if fx_ticker not in _FX_CACHE:
                 fx_stock = yf.Ticker(fx_ticker, session=yf_session)
                 fx_hist = _retry(lambda: fx_stock.history(period=period, auto_adjust=True))
@@ -178,11 +157,10 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
                 if not fx_hist.empty and "Close" in fx_hist.columns:
                     _FX_CACHE[fx_ticker] = fx_hist["Close"]
                 else:
-                    _FX_CACHE[fx_ticker] = pd.Series(dtype=float) # Tom fallback
+                    _FX_CACHE[fx_ticker] = pd.Series(dtype=float)
 
             fx_hist = _FX_CACHE[fx_ticker]
-            
-            # Skydda mot tomma valutakurser
+
             if not fx_hist.empty:
                 fx_aligned = fx_hist.reindex(hist.index).ffill().bfill()
                 for col in ["Open", "High", "Low", "Close"]:
@@ -196,24 +174,12 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
         print(f"  ⚠ Failed to fetch prices for {ticker}: {e}")
         return pd.DataFrame()
 
-        _write_cache(cache_key, hist)
-        return hist
-
-    except Exception as e:
-        print(f"  ⚠ Failed to fetch prices for {ticker}: {e}")
-        return pd.DataFrame()
-
 def fetch_fmp_fallback(ticker: str) -> dict:
-    """
-    Fallback to Financial Modeling Prep if yfinance fails.
-    Only runs if FMP_API_KEY is configured.
-    """
+    """Fallback to Financial Modeling Prep if yfinance fails."""
     if not config.FMP_API_KEY:
         return {}
 
-    # Strip exchange suffix for FMP (e.g., VOLV-B.ST -> VOLV-B)
     clean_ticker = ticker.split(".")[0]
-
     cache_key = f"fmp:{clean_ticker}"
     cached = _read_cache(cache_key, config.CACHE_HOURS)
     if cached is not None:
@@ -233,12 +199,8 @@ def fetch_fmp_fallback(ticker: str) -> dict:
 
     return {}
 
-
 def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
-    """
-    Extract all the metrics we need for scoring from raw yfinance data.
-    Returns a dict with consistent keys regardless of what yfinance returns.
-    """
+    """Extract all the metrics we need for scoring from raw yfinance data."""
     metrics = {
         "ticker": ticker,
         "name": info.get("longName") or info.get("shortName") or ticker,
@@ -248,7 +210,6 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         "currency": info.get("currency", "USD"),
         "market_cap": info.get("marketCap"),
 
-        # Valuation metrics
         "pe_trailing": info.get("trailingPE"),
         "pe_forward": info.get("forwardPE"),
         "peg_ratio": info.get("trailingPegRatio") or info.get("pegRatio"),
@@ -257,150 +218,69 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         "ev_to_revenue": info.get("enterpriseToRevenue"),
         "ev_to_ebitda": info.get("enterpriseToEbitda"),
 
-        # Profitability / Quality
-        "roe": info.get("returnOnEquity"),
-        "roa": info.get("returnOnAssets"),
         "profit_margin": info.get("profitMargins"),
         "operating_margin": info.get("operatingMargins"),
-        "gross_margin": info.get("grossMargins"),
+        "roe": info.get("returnOnEquity"),
+        "roa": info.get("returnOnAssets"),
 
-        # Growth
-        "revenue_growth": info.get("revenueGrowth"),
-        "earnings_growth": info.get("earningsGrowth"),
-        "earnings_quarterly_growth": info.get("earningsQuarterlyGrowth"),
-
-        # Financial health
         "debt_to_equity": info.get("debtToEquity"),
         "current_ratio": info.get("currentRatio"),
         "quick_ratio": info.get("quickRatio"),
-        "free_cash_flow": info.get("freeCashflow"),
-        "total_cash": info.get("totalCash"),
-        "total_debt": info.get("totalDebt"),
 
-        # Dividend
+        "revenue_growth": info.get("revenueGrowth"),
+        "earnings_growth": info.get("earningsGrowth"),
+
         "dividend_yield": info.get("dividendYield"),
-        "payout_ratio": info.get("payoutRatio"),
-
-        # Risk
         "beta": info.get("beta"),
         "52_week_high": info.get("fiftyTwoWeekHigh"),
         "52_week_low": info.get("fiftyTwoWeekLow"),
 
-        # Current state
         "current_price": info.get("currentPrice") or info.get("regularMarketPrice"),
-        "target_mean_price": info.get("targetMeanPrice"),
-        "recommendation_mean": info.get("recommendationMean"),  # 1=strong buy, 5=strong sell
-        "number_of_analysts": info.get("numberOfAnalystOpinions"),
-
-        # NEW: Short interest
-        "short_ratio":      info.get("shortRatio"),          # Dagar att täcka (lägre = mer likvid)
-        "short_pct_float":  info.get("shortPercentOfFloat"), # % av float som är blankat
-
-        # NEW: Insider & institutionellt ägande
-        "insider_pct":      info.get("heldPercentInsiders"),   # % ägt av insiders
-        "institution_pct":  info.get("heldPercentInstitutions"),
-
-        # NEW: Earnings surprise (hur ofta slår bolaget estimat)
-        "earnings_surprise_pct": info.get("earningsForecastsGrowthRate"),
-
-        # NEW: Omsättning och volym
-        "avg_volume":       info.get("averageVolume"),
-        "avg_volume_10d":   info.get("averageVolume10days"),
-        "volume_ratio":     None,  # Beräknas nedan från prishistorik
+        "target_price": info.get("targetMeanPrice"),
     }
 
-    # Add momentum/technical metrics from price history
-    if not history.empty and len(history) > 20:
-        close  = history["Close"]
-        volume = history.get("Volume")
-        current = close.iloc[-1]
+    if not history.empty and "Close" in history.columns:
+        closes = history["Close"]
+        current_price = closes.iloc[-1]
+        metrics["current_price"] = metrics["current_price"] or current_price
+        
+        if len(closes) > 21:
+            metrics["return_1m"] = (current_price / closes.iloc[-21]) - 1
+        if len(closes) > 63:
+            metrics["return_3m"] = (current_price / closes.iloc[-63]) - 1
+        if len(closes) > 126:
+            metrics["return_6m"] = (current_price / closes.iloc[-126]) - 1
+        if len(closes) > 252:
+            metrics["return_1y"] = (current_price / closes.iloc[-252]) - 1
+            
+        if len(closes) > 21:
+            daily_returns = closes.pct_change().dropna()
+            metrics["volatility_1y"] = daily_returns.std() * np.sqrt(252)
 
-        # Returns over different periods
-        metrics["return_1m"]  = _safe_return(close, 21)
-        metrics["return_3m"]  = _safe_return(close, 63)
-        metrics["return_6m"]  = _safe_return(close, 126)
-        metrics["return_12m"] = _safe_return(close, 252)
+        if len(closes) >= 50:
+            metrics["ma50"] = closes.rolling(window=50).mean().iloc[-1]
+        if len(closes) >= 200:
+            metrics["ma200"] = closes.rolling(window=200).mean().iloc[-1]
 
-        # Distance from 52-week high (negative is below)
-        if metrics["52_week_high"]:
-            metrics["pct_from_52w_high"] = (current / metrics["52_week_high"]) - 1.0
-
-        # Volatility (annualized)
-        returns = close.pct_change().dropna()
-        if len(returns) > 30:
-            metrics["volatility"] = returns.std() * np.sqrt(252)
-
-        # Simple RSI (14-day)
-        metrics["rsi_14"] = _calc_rsi(close, 14)
-
-        # Distance from 50-day and 200-day moving averages
-        if len(close) >= 50:
-            ma50 = close.rolling(50).mean().iloc[-1]
-            metrics["price_vs_ma50"] = (current / ma50) - 1.0
-        if len(close) >= 200:
-            ma200 = close.rolling(200).mean().iloc[-1]
-            metrics["price_vs_ma200"] = (current / ma200) - 1.0
-
-        # NEW: Volym-ratio (senaste dag vs 20-dagars snitt)
-        # Hög volym vid uppgång = bekräftad rörelse
-        if volume is not None and len(volume) > 20:
-            avg_vol = volume.tail(20).mean()
-            if avg_vol > 0:
-                metrics["volume_ratio"] = float(volume.iloc[-1]) / avg_vol
-
-        # NEW: MACD-signal (enkel: 12-26 EMA cross)
-        if len(close) >= 26:
-            ema12 = close.ewm(span=12).mean()
-            ema26 = close.ewm(span=26).mean()
-            macd  = ema12 - ema26
-            signal = macd.ewm(span=9).mean()
-            metrics["macd_above_signal"] = bool(macd.iloc[-1] > signal.iloc[-1])
-
-        # NEW: Bollinger Band position (var i bandet handlas aktien?)
-        # 0 = vid nedre band, 0.5 = mitten, 1 = vid övre band
-        if len(close) >= 20:
-            sma20  = close.rolling(20).mean()
-            std20  = close.rolling(20).std()
-            upper  = sma20 + 2 * std20
-            lower  = sma20 - 2 * std20
-            band_w = upper.iloc[-1] - lower.iloc[-1]
-            if band_w > 0:
-                metrics["bb_position"] = float((current - lower.iloc[-1]) / band_w)
+        if metrics.get("ma50"):
+            metrics["price_vs_ma50"] = (current_price / metrics["ma50"]) - 1
+        if metrics.get("ma200"):
+            metrics["price_vs_ma200"] = (current_price / metrics["ma200"]) - 1
+            
+        if len(closes) > 14:
+            delta = closes.diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            rs = rs.replace([np.inf, -np.inf], np.nan)
+            rsi = 100 - (100 / (1 + rs))
+            if not rsi.isna().iloc[-1]:
+                metrics["rsi_14"] = rsi.iloc[-1]
 
     return metrics
 
-
-def _safe_return(series: pd.Series, days_back: int):
-    """Calculate return over N trading days, return None if not enough data."""
-    if len(series) <= days_back:
-        return None
-    try:
-        return (series.iloc[-1] / series.iloc[-days_back - 1]) - 1.0
-    except Exception:
-        return None
-
-
-def _calc_rsi(prices: pd.Series, period: int = 14):
-    """Calculate Relative Strength Index."""
-    if len(prices) < period + 1:
-        return None
-    try:
-        delta = prices.diff().dropna()
-        gain = delta.clip(lower=0).rolling(period).mean().iloc[-1]
-        loss = (-delta.clip(upper=0)).rolling(period).mean().iloc[-1]
-        if loss == 0:
-            return 100.0
-        rs = gain / loss
-        return 100 - (100 / (1 + rs))
-    except Exception:
-        return None
-
-
 def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
-    """
-    Fetch metrics for all stocks in the universe.
-    Returns a DataFrame with one row per ticker.
-    """
+    """Fetch metrics for all stocks in the universe."""
     rows = []
     total = len(tickers)
     failed = []
@@ -411,7 +291,6 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
 
         info = fetch_stock_info(ticker)
 
-        # Try FMP fallback if yfinance returned nothing useful
         if not info or len(info) < 10:
             fmp_data = fetch_fmp_fallback(ticker)
             if fmp_data:
@@ -439,33 +318,11 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
 
     return df
 
-
-# ============================================================
-# FINNHUB SENTIMENT
-# ============================================================
-
 def _ticker_to_finnhub(ticker: str) -> str:
-    """
-    Convert yfinance ticker to Finnhub format.
-    yfinance: VOLV-B.ST  →  Finnhub: VOLV-B (Finnhub uses exchange suffix differently)
-    For US stocks they're the same. For others, Finnhub often just needs the base symbol.
-    """
-    # Remove exchange suffix (.ST, .DE, .L, .PA, .AS, .SW)
     base = ticker.split(".")[0]
     return base
 
-
 def fetch_finnhub_sentiment(ticker: str) -> float | None:
-    """
-    Fetch news sentiment score for a ticker from Finnhub.
-    Returns a score from -1.0 (very negative) to +1.0 (very positive),
-    or None if Finnhub is not configured or request fails.
-
-    Finnhub's /news-sentiment endpoint returns:
-      - buzz.articlesInLastWeek: article count
-      - sentiment.bearishPercent / bullishPercent
-      - companyNewsScore: 0-1 overall score
-    """
     if not config.FINNHUB_API_KEY:
         return None
 
@@ -482,39 +339,25 @@ def fetch_finnhub_sentiment(ticker: str) -> float | None:
 
         if resp.status_code == 200:
             data = resp.json()
-
-            # Extract bearish/bullish percentages
             sentiment = data.get("sentiment", {})
             bullish = sentiment.get("bullishPercent", 0.5)
             bearish = sentiment.get("bearishPercent", 0.5)
-
-            # Convert to -1 to +1 scale
-            # bullish=0.7, bearish=0.3 → score = 0.4 (positive)
             score = bullish - bearish
 
-            # Dampen: if very few articles, move toward neutral
             buzz = data.get("buzz", {})
             articles = buzz.get("articlesInLastWeek", 0)
             if articles < 3:
-                score = score * 0.3  # Low confidence → near-neutral
+                score = score * (articles / 3.0)
 
             _write_cache(cache_key, score)
             return score
-
-    except Exception as e:
-        pass  # Silently fail – sentiment is optional
+    except Exception:
+        pass
 
     return None
 
-
-def fetch_sentiment_batch(tickers: list, verbose: bool = True) -> dict:
-    """
-    Fetch sentiment scores for all tickers.
-    Returns dict: {ticker: score} where score is -1 to +1 or None.
-    """
-    if not config.FINNHUB_API_KEY:
-        if verbose:
-            print("  ℹ Finnhub API key not set – skipping sentiment (alla får neutral score)")
+def fetch_sentiment_batch(tickers: list, finnhub_key: str = None, verbose: bool = True) -> dict:
+    if not finnhub_key:
         return {}
 
     if verbose:
@@ -524,7 +367,6 @@ def fetch_sentiment_batch(tickers: list, verbose: bool = True) -> dict:
     for i, ticker in enumerate(tickers):
         score = fetch_finnhub_sentiment(ticker)
         results[ticker] = score
-        # Finnhub free tier: 60 calls/min → ~1 call/sec is safe
         time.sleep(1.1)
 
     scored = sum(1 for v in results.values() if v is not None)
@@ -533,13 +375,7 @@ def fetch_sentiment_batch(tickers: list, verbose: bool = True) -> dict:
 
     return results
 
-
 def search_stocks(query: str, max_results: int = 8) -> list:
-    """
-    Search for stocks by name or ticker using yfinance.
-    Returns list of dicts with ticker, name, exchange, type.
-    Used by the web UI for the search-and-add feature.
-    """
     try:
         import yfinance as yf
         search = yf.Search(query, max_results=max_results)
@@ -547,16 +383,14 @@ def search_stocks(query: str, max_results: int = 8) -> list:
 
         results = []
         for q in quotes:
-            # Filter to only stocks/ETFs, skip crypto etc
             q_type = q.get("quoteType", "")
             if q_type not in ("EQUITY", "ETF"):
                 continue
             results.append({
                 "ticker": q.get("symbol", ""),
                 "name": q.get("shortname") or q.get("longname") or q.get("symbol"),
-                "exchange": q.get("exchange", ""),
-                "type": q_type,
+                "exchange": q.get("exchange", "")
             })
-        return results[:max_results]
-    except Exception as e:
+        return results
+    except Exception:
         return []
