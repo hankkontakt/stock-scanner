@@ -34,17 +34,30 @@ try:
 except ImportError:
     _PIOTROSKI_AVAILABLE = False
 
-# Viktning per faktor (summerar till 1.0)
-FACTOR_WEIGHTS = {
-    "insider":    0.18,
-    "fcf_yield":  0.16,
-    "piotroski":  0.15,
-    "growth":     0.13,
-    "balance":    0.12,
-    "valuation":  0.12,
-    "momentum":   0.09,
-    "liquidity":  0.05,
-}
+def _load_weights() -> dict:
+    """Läser vikter från config.py SMALLCAP_CONFIG om tillgängligt."""
+    try:
+        import config
+        w = config.SMALLCAP_CONFIG.get("scoring_weights", {})
+        if w and abs(sum(w.values()) - 1.0) < 0.01:
+            # Mappa "value" → "valuation" om config använder kortformen
+            return {("valuation" if k == "value" else k): v for k, v in w.items()}
+    except (ImportError, AttributeError):
+        pass
+    return {
+        "insider":    0.18,
+        "fcf_yield":  0.16,
+        "piotroski":  0.15,
+        "growth":     0.13,
+        "balance":    0.12,
+        "valuation":  0.12,
+        "momentum":   0.09,
+        "liquidity":  0.05,
+    }
+
+
+# Viktning per faktor (läses från config.py om möjligt)
+FACTOR_WEIGHTS = _load_weights()
 
 
 # ══════════════════════════════════════════════════════════════
