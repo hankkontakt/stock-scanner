@@ -35,14 +35,14 @@ FIRST_NORTH = [
     "NETI-B.ST",    # Net Insight B – mediakommunikationsnätverk
     "CTEK.ST",      # CTEK – batterihantering och laddning
     "ALCA.ST",      # Alcadon Group – nätverksinfrastruktur
-    "SPEQTA.ST",    # Speqta – prestationsmarknadsföring
+    # SPEQTA.ST → bytt namn till BrightBid och avnoterat från Nasdaq Stockholm
     "CTM.ST",       # Catena Media – online gaming affiliates
     "ACAST.ST",     # Acast – global podcastplattform
     "BUSER.ST",     # Bambuser – live video commerce
     "EGTX.ST",      # Enad Global 7 – spelstudio
-    "EMPIR-B.ST",   # Empir Group B – IT-tjänster & mjukvaruutveckling
-    "PROACT.ST",    # ProAct IT Group – lagring & molnlösningar
-    "BAHNHOF.ST",   # Bahnhof – oberoende internetleverantör
+    "SAFETY-B.ST",  # mySafety Group B – f.d. Empir Group, bytte namn 2023
+    "PACT.ST",      # ProAct IT Group – lagring & molnlösningar
+    "BAHN-B.ST",    # Bahnhof – oberoende internetleverantör (B-aktie)
 
     # ── MedTech & Life Science ───────────────────────────────────────────────
     "XVIVO.ST",     # XVIVO Perfusion – organpreservering, global nischledare
@@ -233,7 +233,7 @@ SMALL_CAP = [
     "NOBI.ST",      # Nobina – kollektivtrafikoperatör (buss)
     "LATO-B.ST",    # Latour B – investmentbolag (Swegon, Tomra m.fl.)
     "BINV.ST",      # Byggmästare Anders J Ahlström Invest B
-    "KFAB.ST",      # Kungsleden B (numera sammanslagen)
+    # KFAB.ST → Kungsleden sammanslagen med Castellum 2022, avnoterat
 
     # ── Material & Skog ───────────────────────────────────────────────────────
     "SSAB-A.ST",    # SSAB A – höghållfast specialstål
@@ -372,8 +372,8 @@ SECTOR_GROUPS = {
     "Mjukvara & SaaS": [
         "LIME.ST", "FNOX.ST", "VIT-B.ST", "ANOD-B.ST", "ENEA.ST", "IAR-B.ST",
         "RAY-B.ST", "SECT-B.ST", "CINT.ST", "KNOW.ST", "PRIC-B.ST", "TOBII.ST",
-        "NETI-B.ST", "CTEK.ST", "ALCA.ST", "SPEQTA.ST", "CTM.ST", "ACAST.ST",
-        "BUSER.ST", "EGTX.ST", "EMPIR-B.ST", "PROACT.ST", "BAHNHOF.ST",
+        "NETI-B.ST", "CTEK.ST", "ALCA.ST", "CTM.ST", "ACAST.ST",
+        "BUSER.ST", "EGTX.ST", "SAFETY-B.ST", "PACT.ST", "BAHN-B.ST",
     ],
     "MedTech & Life Science": [
         "XVIVO.ST", "ELOS-B.ST", "BOMILL.ST", "BIOG-B.ST", "CEVI.ST", "MNTC.ST",
