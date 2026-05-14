@@ -20,7 +20,7 @@ on:
 jobs:
   full-scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
 
     steps:
       # ── Steg 1: Hämta koden ──────────────────────────────────
