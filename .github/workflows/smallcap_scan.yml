@@ -1,0 +1,98 @@
+name: 🏆 Småbolagsskanner (Måndag morgon)
+
+on:
+  schedule:
+    # Kör varje måndag kl 07:00 CET (06:00 UTC)
+    - cron: "0 6 * * 1"
+
+  workflow_dispatch:
+    inputs:
+      market:
+        description: "Marknadssegment att scanna"
+        type: choice
+        options: [all, first_north, small_cap, spotlight]
+        default: all
+      top_n:
+        description: "Antal bolag i rankinglistan"
+        default: "20"
+      send_email:
+        description: "Skicka rapport via e-post"
+        type: boolean
+        default: true
+      no_insider:
+        description: "Hoppa över insiderhämtning (snabbare)"
+        type: boolean
+        default: false
+
+jobs:
+  smallcap-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: 📥 Hämta kod
+        uses: actions/checkout@v4
+
+      - name: 🐍 Konfigurera Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 📦 Installera beroenden
+        run: |
+          pip install --upgrade pip
+          pip install curl_cffi
+          pip install -r requirements.txt
+          python -c "import yfinance; print('✓ yfinance OK')"
+
+      - name: 📂 Återställ cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/cache
+          key: smallcap-cache-${{ runner.os }}-${{ github.run_number }}
+          restore-keys: |
+            smallcap-cache-${{ runner.os }}-
+
+      - name: 📁 Skapa nödvändiga mappar
+        run: mkdir -p data/cache reports
+
+      - name: 🚀 Kör småbolagsskanner
+        env:
+          PYTHONWARNINGS: "ignore"
+          EMAIL_USER:     ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASS:     ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO:       ${{ secrets.EMAIL_TO }}
+        run: |
+          MARKET="${{ github.event.inputs.market || 'all' }}"
+          TOP="${{ github.event.inputs.top_n || '20' }}"
+          FLAGS=""
+          if [ "${{ github.event.inputs.send_email }}" = "true" ]; then
+            FLAGS="$FLAGS --email"
+          fi
+          if [ "${{ github.event.inputs.no_insider }}" = "true" ]; then
+            FLAGS="$FLAGS --no-insider"
+          fi
+          python -m smallcap.scanner \
+            --market "$MARKET" \
+            --top "$TOP" \
+            --output reports/ \
+            $FLAGS
+
+      - name: ✅ Verifiera output
+        run: |
+          if ls reports/smallcap_report_*.md 1> /dev/null 2>&1; then
+            echo "✓ Rapport genererad"
+            ls -la reports/smallcap_report_*.md | tail -1
+          else
+            echo "❌ Ingen rapport hittades"
+            exit 1
+          fi
+
+      - name: 📤 Spara rapport
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smallcap-report-${{ github.run_number }}
+          path: reports/smallcap_report_*.md
+          retention-days: 90
