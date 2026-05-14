@@ -283,3 +283,42 @@ EMAIL_TO       = os.getenv("EMAIL_TO",       "")
 BENCHMARK_OMXS30 = "XACTOMXS3.ST"
 BENCHMARK_SPY    = "SPY"
 BENCHMARK_LABEL  = "OMXS30"
+
+# ════════════════ SMÅBOLAGSSKANNER ════════════════
+# Inställningar för python -m smallcap.scanner
+# Alla filter-trösklar och scoringvikter samlade här.
+SMALLCAP_CONFIG = {
+
+    # ── Hårda filter (bolag som inte uppfyller dessa stryks innan scoring) ───
+    "min_daily_turnover_sek":  500_000,         # Daglig omsättning ≥ 500k SEK
+    "min_market_cap_sek":      30_000_000,      # Börsvärde ≥ 30 MSEK
+    "max_market_cap_sek":      10_000_000_000,  # Börsvärde ≤ 10 GSEK (annars mid/large cap)
+    "max_debt_to_equity":      300,             # D/E > 300 % = skuldfälla
+    "min_current_ratio":       0.5,             # CR < 0.5 = akut likviditetskris
+    "min_cash_runway_months":  12,              # Kassan måste räcka ≥ 12 månader
+    "max_piotroski_skip":      2,               # F-Score ≤ 2 = eliminera helt
+    "max_dilution_pct":        0.20,            # Aktieantal +20 % på 1 år = röd flagga
+
+    # ── Scoringvikter (8 faktorer, summerar till 1.0) ─────────────────────────
+    # Baserad på design-dokumentet: fokus på insider + FCF + Piotroski.
+    "scoring_weights": {
+        "insider":    0.18,  # Insynsägande & -handel (skin in the game)
+        "fcf_yield":  0.16,  # Fritt kassaflöde / börsvärde
+        "piotroski":  0.15,  # Piotroski F-Score (redovisningskvalitet 0–9)
+        "growth":     0.13,  # Omsättningstillväxt YoY
+        "balance":    0.12,  # Balansräkning (D/E + current ratio)
+        "value":      0.12,  # Värdering (EV/EBITDA eller P/B)
+        "momentum":   0.09,  # Relativ styrka 6–12 månader
+        "liquidity":  0.05,  # Daglig handelsvolym (exit-möjlighet)
+    },
+
+    # ── Rapport & utmatning ───────────────────────────────────────────────────
+    "top_n":                     20,        # Antal bolag i rankinglistan
+    "profiles_n":                5,         # Antal djupdyks-profiler
+    "output_dir":                "reports", # Mapp för rapportfil
+
+    # ── E-post ────────────────────────────────────────────────────────────────
+    "email_subject_template": "📊 Småbolagsrapport {date} | Topp: {top1} | {stars}",
+}
+assert abs(sum(SMALLCAP_CONFIG["scoring_weights"].values()) - 1.0) < 0.001, \
+    "SMALLCAP_CONFIG scoring_weights summerar inte till 1.0"

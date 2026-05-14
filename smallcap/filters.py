@@ -17,15 +17,25 @@ apply_all_filters() kör alla och loggar vad som filtreras bort.
 import pandas as pd
 import numpy as np
 
-# ── Trösklar ─────────────────────────────────────────────────────────────────
-MIN_DAILY_TURNOVER_SEK  = 500_000   # Daglig omsättning SEK (volym × pris)
-MIN_MARKET_CAP_SEK      = 30_000_000  # 30 MSEK – under detta = micro/penny
-MAX_MARKET_CAP_SEK      = 10_000_000_000  # 10 GSEK – över detta = mid/large cap
-MAX_DEBT_TO_EQUITY      = 300       # D/E > 300% = skuldfälla
-MIN_CURRENT_RATIO       = 0.5       # Under 0.5 = allvarlig likviditetskris
-MAX_PIOTROSKI_SKIP      = 2         # F-Score ≤ 2 = eliminera (ej bara penalty)
-MAX_DILUTION_PCT        = 0.20      # Aktieantal ökat > 20% senaste år = röd flagga
-MIN_CASH_RUNWAY_MONTHS  = 12        # Kassa måste räcka minst 12 månader
+
+def _cfg(key: str, default):
+    """Läser värde från config.py SMALLCAP_CONFIG om tillgängligt."""
+    try:
+        import config
+        return config.SMALLCAP_CONFIG.get(key, default)
+    except (ImportError, AttributeError, KeyError):
+        return default
+
+
+# ── Trösklar (läses från config.py SMALLCAP_CONFIG vid start) ────────────────
+MIN_DAILY_TURNOVER_SEK  = _cfg("min_daily_turnover_sek",  500_000)
+MIN_MARKET_CAP_SEK      = _cfg("min_market_cap_sek",      30_000_000)
+MAX_MARKET_CAP_SEK      = _cfg("max_market_cap_sek",      10_000_000_000)
+MAX_DEBT_TO_EQUITY      = _cfg("max_debt_to_equity",      300)
+MIN_CURRENT_RATIO       = _cfg("min_current_ratio",       0.5)
+MAX_PIOTROSKI_SKIP      = _cfg("max_piotroski_skip",      2)
+MAX_DILUTION_PCT        = _cfg("max_dilution_pct",        0.20)
+MIN_CASH_RUNWAY_MONTHS  = _cfg("min_cash_runway_months",  12)
 
 # SEK till USD approximation (yfinance returnerar USD market_cap för .ST)
 # Faktisk conversion-rate för filter-ändamål – bara ungefärlig
