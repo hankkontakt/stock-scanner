@@ -8,6 +8,7 @@ import pandas as pd
 
 import config, data_fetcher, scoring, filters, sectors
 import watchlist as wl
+import news_fetcher
 
 # ── Auto-rensa felaktigt svartlistade kända aktier vid start ─────────────────
 def _auto_clean_blacklist():
@@ -639,7 +640,56 @@ def _section_watchlist(scored: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
-def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df, holdings, warnings=None, removed=None, sector_mom=None, benchmarks=None):
+def _section_market_news(
+    global_news:    list,
+    swedish_news:   list,
+    news_by_ticker: dict,
+    holdings:       pd.DataFrame,
+    scored:         pd.DataFrame,
+) -> str:
+    """
+    Marknadsnyheter för söndagsrapporten.
+    Tre delar:
+      1. 🇸🇪 Svenska börsnyheter (RSS – ingen API-nyckel)
+      2. 🌍 Globala marknadsnyheter (Finnhub /news)
+      3. 📰 Bolagsnyheter för portfölj + bevakningslista
+    """
+    if not global_news and not swedish_news and not news_by_ticker:
+        return ""
+
+    # Ticker → namn (portfölj + bevakningslista)
+    ticker_names = {}
+    if holdings is not None and not holdings.empty:
+        if "name" in holdings.columns:
+            ticker_names.update(dict(zip(
+                holdings["ticker"].str.upper(), holdings["name"]
+            )))
+    for item in wl.load_watchlist():
+        ticker_names[item["ticker"]] = item.get("name", item["ticker"])
+
+    parts = []
+
+    # 1+2. Generella marknadsnyheter
+    market_md = news_fetcher.format_market_news_section_md(
+        global_news, swedish_news, compact=False
+    )
+    if market_md:
+        parts.append(market_md)
+
+    # 3. Bolagsnyheter
+    if news_by_ticker:
+        company_md = news_fetcher.format_news_section_md(
+            news_by_ticker,
+            ticker_names=ticker_names,
+            header="📰 Bolagsnyheter (portfölj + bevakningslista)",
+        )
+        if company_md:
+            parts.append(company_md)
+
+    return "\n".join(parts)
+
+
+def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df, holdings, warnings=None, removed=None, sector_mom=None, benchmarks=None, global_news=None, swedish_news=None, news_by_ticker=None):
     bm = benchmarks or {}
 
     parts = []
@@ -714,6 +764,15 @@ def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df,
 
     # 12. Bevakningslista
     _try("Bevakningslista", lambda: _section_watchlist(scored))
+
+    # 12.5 Marknadsnyheter (Sverige + globalt + bolagsspecifikt)
+    _try("Marknadsnyheter", lambda: _section_market_news(
+        global_news    or [],
+        swedish_news   or [],
+        news_by_ticker or {},
+        holdings,
+        scored,
+    ))
 
     # 13. Systemunderhåll
     _try("Systemunderhåll", lambda: _section_cleanup(warnings, removed))
@@ -921,22 +980,55 @@ def main():
     n_earn = len(portfolio_cal) + len(top_cal)
     if n_earn: print(f"   ✓ {n_earn} kommande rapporter")
 
+    # 11.5 Nyheter (marknad + bolagsspecifikt)
+    print("\n📰 Hämtar nyheter för veckorapporten...")
+    global_news    = []
+    swedish_news   = []
+    news_by_ticker = {}
+    finnhub_key    = config.FINNHUB_API_KEY
+    try:
+        swedish_news = news_fetcher.fetch_swedish_market_news(max_articles=5)
+        if swedish_news and v:
+            print(f"   ✓ {len(swedish_news)} svenska börsnyheter")
+        if finnhub_key:
+            global_news = news_fetcher.fetch_global_market_news(finnhub_key, max_articles=5)
+            if global_news and v:
+                print(f"   ✓ {len(global_news)} globala marknadsnyheter")
+            # Bolagsnyheter för portfölj + bevakningslista (3 dagar)
+            news_tickers = (
+                list(holdings["ticker"].str.upper() if not holdings.empty else []) +
+                [i["ticker"] for i in wl.load_watchlist()]
+            )
+            if news_tickers:
+                news_by_ticker = news_fetcher.fetch_news_batch(
+                    news_tickers, finnhub_key, days=3
+                )
+                if news_by_ticker and v:
+                    print(f"   ✓ Bolagsnyheter för {len(news_by_ticker)} aktier")
+        else:
+            if v: print("   ℹ FINNHUB_API_KEY ej satt – bolagsnyheter hoppas över")
+    except Exception as e:
+        print(f"   ⚠ Nyheter misslyckades: {e}")
+
     # 12. Rapport
     print("\n📝 Genererar rapport...")
 
     try:
         report = build_report(
-            scored       = scored,
-            analysis     = analysis,
-            summary      = summary,
-            sector_df    = sector_summary,
-            regime_info  = regime_info,
-            earnings_df  = earn_df,
-            holdings     = holdings,
-            benchmarks   = benchmarks,
-            sector_mom   = sector_mom,
-            warnings     = warnings,
-            removed      = removed,
+            scored         = scored,
+            analysis       = analysis,
+            summary        = summary,
+            sector_df      = sector_summary,
+            regime_info    = regime_info,
+            earnings_df    = earn_df,
+            holdings       = holdings,
+            benchmarks     = benchmarks,
+            sector_mom     = sector_mom,
+            warnings       = warnings,
+            removed        = removed,
+            global_news    = global_news,
+            swedish_news   = swedish_news,
+            news_by_ticker = news_by_ticker,
         )
     except Exception as e:
         import traceback
