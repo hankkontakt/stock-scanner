@@ -42,6 +42,11 @@ jobs:
       - name: 📁 Skapa mappar
         run: mkdir -p data/cache data/history reports
 
+      - name: ⭐ Ladda bevakningslista
+        if: ${{ secrets.WATCHLIST_JSON != '' }}
+        run: echo '${{ secrets.WATCHLIST_JSON }}' > data/watchlist.json
+        continue-on-error: true
+
       - name: 🌆 Kör kvällsrapport
         env:
           EMAIL_SENDER:    ${{ secrets.EMAIL_SENDER }}

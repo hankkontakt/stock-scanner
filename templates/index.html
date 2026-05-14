@@ -463,6 +463,40 @@
 
   .run-hint code { color: var(--accent); }
 
+  /* ── TABS ── */
+  .tab-bar {
+    display: flex; gap: 0; margin-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    background: none; border: none; border-bottom: 2px solid transparent;
+    color: var(--dim); font-family: inherit; font-size: 11px; font-weight: 600;
+    letter-spacing: 2px; text-transform: uppercase; padding: 10px 20px;
+    cursor: pointer; margin-bottom: -1px; transition: color .15s, border-color .15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── ADD MODE TOGGLE ── */
+  .mode-toggle {
+    display: flex; gap: 6px; margin-bottom: 16px;
+  }
+  .mode-btn {
+    padding: 6px 16px; border-radius: 2px; font-family: inherit;
+    font-size: 10px; font-weight: 600; letter-spacing: 1.5px;
+    text-transform: uppercase; cursor: pointer; border: 1px solid var(--border2);
+    background: none; color: var(--dim); transition: all .15s;
+  }
+  .mode-btn.active {
+    background: rgba(0,212,170,.1); border-color: var(--accent); color: var(--accent);
+  }
+
+  /* ── WATCHLIST TABLE ── */
+  .wl-badge {
+    font-size: 9px; padding: 2px 7px; border-radius: 10px; letter-spacing: 1px;
+    background: rgba(245,197,24,.1); border: 1px solid rgba(245,197,24,.3); color: var(--yellow);
+  }
+
   /* Responsive */
   @media (max-width: 700px) {
     .summary-bar { grid-template-columns: repeat(2, 1fr); }
@@ -485,6 +519,12 @@
       <div class="status-pill" id="statusPill">● LIVE</div>
     </div>
   </header>
+
+  <!-- TAB NAVIGATION -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('portfolio')" id="tabPortfolio">Portfölj</button>
+    <button class="tab-btn"        onclick="switchTab('watchlist')" id="tabWatchlist">Bevakningslista <span class="wl-badge" id="wlBadge" style="display:none">0</span></button>
+  </div>
 
   <!-- SEARCH -->
   <div class="search-section">
@@ -512,17 +552,38 @@
         </div>
         <button class="form-close" onclick="closeForm()">✕</button>
       </div>
-      <div class="form-row">
-        <div class="form-field">
-          <label>Antal aktier</label>
-          <input type="number" id="sharesInput" placeholder="t.ex. 100" min="0" step="0.01">
+
+      <!-- Mode toggle: Portfolio vs Watchlist -->
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="modePortfolio" onclick="setAddMode('portfolio')">Portfölj</button>
+        <button class="mode-btn"        id="modeWatchlist" onclick="setAddMode('watchlist')">Bevakningslista</button>
+      </div>
+
+      <!-- Portfolio mode: shares + cost -->
+      <div id="portfolioFields">
+        <div class="form-row">
+          <div class="form-field">
+            <label>Antal aktier</label>
+            <input type="number" id="sharesInput" placeholder="t.ex. 100" min="0" step="0.01">
+          </div>
+          <div class="form-field">
+            <label>Köpkurs (snitt)</label>
+            <input type="number" id="costInput" placeholder="t.ex. 210.50" min="0" step="0.01">
+          </div>
+          <button class="btn btn-primary" onclick="addHolding()">Lägg till i portfölj</button>
+          <button class="btn btn-secondary" onclick="closeForm()">Avbryt</button>
         </div>
-        <div class="form-field">
-          <label>Köpkurs (snitt)</label>
-          <input type="number" id="costInput" placeholder="t.ex. 210.50" min="0" step="0.01">
+      </div>
+
+      <!-- Watchlist mode: one-click -->
+      <div id="watchlistFields" style="display:none">
+        <div class="form-row">
+          <div class="form-field" style="flex:none">
+            <label style="visibility:hidden">.</label>
+            <button class="btn btn-primary" onclick="addToWatchlist()" style="background:var(--yellow);color:#060b11">Lägg till i bevakningslistan</button>
+          </div>
+          <button class="btn btn-secondary" onclick="closeForm()" style="align-self:flex-end">Avbryt</button>
         </div>
-        <button class="btn btn-primary" onclick="addHolding()">Lägg till</button>
-        <button class="btn btn-secondary" onclick="closeForm()">Avbryt</button>
       </div>
     </div>
 
@@ -576,21 +637,47 @@
   </div>
 
   <!-- PORTFOLIO TABLE -->
-  <div class="portfolio-section">
-    <div class="section-header">
-      <div class="section-title">
-        Innehav
-        <span class="count-badge" id="countBadge">0</span>
+  <div id="sectionPortfolio">
+    <div class="portfolio-section">
+      <div class="section-header">
+        <div class="section-title">
+          Innehav
+          <span class="count-badge" id="countBadge">0</span>
+        </div>
+        <button class="refresh-btn" onclick="loadHoldings()">↻ Uppdatera priser</button>
       </div>
-      <button class="refresh-btn" onclick="loadHoldings()">↻ Uppdatera priser</button>
-    </div>
 
-    <div class="table-wrap">
-      <div id="tableContainer">
-        <!-- Empty state initially -->
-        <div class="empty-state">
-          <div class="empty-icon">◈</div>
-          <div class="empty-text">Inga innehav ännu — sök efter en aktie ovan</div>
+      <div class="table-wrap">
+        <div id="tableContainer">
+          <div class="empty-state">
+            <div class="empty-icon">◈</div>
+            <div class="empty-text">Inga innehav ännu — sök efter en aktie ovan</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WATCHLIST TABLE -->
+  <div id="sectionWatchlist" style="display:none">
+    <div class="portfolio-section">
+      <div class="section-header">
+        <div class="section-title">
+          Bevakningslista
+          <span class="count-badge" id="wlCount">0</span>
+        </div>
+        <button class="refresh-btn" onclick="loadWatchlist()">↻ Uppdatera priser</button>
+      </div>
+      <div style="font-size:10px;color:var(--dim);margin-bottom:12px;letter-spacing:1px">
+        Aktier du bevakar extra noga — ingår automatiskt i morgon-, kväll- och veckoscannen
+      </div>
+
+      <div class="table-wrap">
+        <div id="wlTableContainer">
+          <div class="empty-state">
+            <div class="empty-icon">◉</div>
+            <div class="empty-text">Inga bevakade aktier — sök och välj "Bevakningslista" ovan</div>
+          </div>
         </div>
       </div>
     </div>
@@ -609,6 +696,30 @@
   // ── State ──────────────────────────────────────────────────────────────
   let selectedStock = null;
   let searchTimer   = null;
+  let currentTab    = 'portfolio';
+  let addMode       = 'portfolio';
+
+  // ── Tabs ───────────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('tabPortfolio').classList.toggle('active', tab === 'portfolio');
+    document.getElementById('tabWatchlist').classList.toggle('active', tab === 'watchlist');
+    document.getElementById('sectionPortfolio').style.display = tab === 'portfolio' ? '' : 'none';
+    document.getElementById('sectionWatchlist').style.display = tab === 'watchlist'  ? '' : 'none';
+    document.getElementById('summaryBar').style.display       = tab === 'portfolio'  ? '' : 'none';
+    if (tab === 'watchlist') loadWatchlist();
+    closeForm();
+  }
+
+  // ── Add mode toggle ────────────────────────────────────────────────────
+  function setAddMode(mode) {
+    addMode = mode;
+    document.getElementById('modePortfolio').classList.toggle('active', mode === 'portfolio');
+    document.getElementById('modeWatchlist').classList.toggle('active', mode === 'watchlist');
+    document.getElementById('portfolioFields').style.display = mode === 'portfolio' ? '' : 'none';
+    document.getElementById('watchlistFields').style.display = mode === 'watchlist'  ? '' : 'none';
+    if (mode === 'portfolio') document.getElementById('sharesInput').focus();
+  }
 
   // ── Search ─────────────────────────────────────────────────────────────
   const searchInput = document.getElementById('searchInput');
@@ -675,11 +786,12 @@
     closeDropdown();
     searchInput.value = '';
 
-    // Show add form
     document.getElementById('formTicker').textContent = ticker;
     document.getElementById('formName').textContent   = name;
     document.getElementById('addForm').classList.add('open');
-    document.getElementById('sharesInput').focus();
+
+    // Default to the mode matching the active tab
+    setAddMode(currentTab === 'watchlist' ? 'watchlist' : 'portfolio');
   }
 
   function closeForm() {
@@ -687,6 +799,105 @@
     document.getElementById('sharesInput').value = '';
     document.getElementById('costInput').value   = '';
     selectedStock = null;
+  }
+
+  // ── Add to watchlist ───────────────────────────────────────────────────
+  async function addToWatchlist() {
+    if (!selectedStock) return;
+    try {
+      const res = await fetch('/api/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker: selectedStock.ticker, name: selectedStock.name }),
+      });
+      const data = await res.json();
+      if (data.error) { showToast(data.error, 'error'); return; }
+      if (data.status === 'already_exists') {
+        showToast(`${selectedStock.ticker} finns redan i bevakningslistan`, 'error');
+      } else {
+        showToast(`${selectedStock.ticker} tillagd i bevakningslistan ⭐`, 'success');
+      }
+      closeForm();
+      loadWatchlistBadge();
+      if (currentTab === 'watchlist') loadWatchlist();
+    } catch (err) {
+      showToast('Serverfel – körs app.py?', 'error');
+    }
+  }
+
+  async function removeFromWatchlist(ticker) {
+    if (!confirm(`Ta bort ${ticker} från bevakningslistan?`)) return;
+    try {
+      await fetch(`/api/watchlist/${ticker}`, { method: 'DELETE' });
+      showToast(`${ticker} borttagen från bevakningslistan`, 'success');
+      loadWatchlist();
+      loadWatchlistBadge();
+    } catch (err) {
+      showToast('Serverfel', 'error');
+    }
+  }
+
+  async function loadWatchlist() {
+    try {
+      const res  = await fetch('/api/watchlist');
+      const data = await res.json();
+      renderWatchlist(data);
+    } catch (err) {
+      document.getElementById('wlTableContainer').innerHTML =
+        '<div class="empty-state"><div class="empty-text" style="color:var(--red)">Serverfel – körs app.py?</div></div>';
+    }
+  }
+
+  function renderWatchlist(items) {
+    const container = document.getElementById('wlTableContainer');
+    document.getElementById('wlCount').textContent = items.length;
+    const badge = document.getElementById('wlBadge');
+    if (items.length > 0) { badge.style.display = ''; badge.textContent = items.length; }
+    else badge.style.display = 'none';
+
+    if (items.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">◉</div>
+          <div class="empty-text">Inga bevakade aktier — sök och välj "Bevakningslista" ovan</div>
+        </div>`;
+      return;
+    }
+
+    const rows = items.map(h => `<tr>
+      <td>
+        <span class="td-ticker">${h.ticker}</span>
+        <span class="td-name">${escHtml(h.name)}</span>
+      </td>
+      <td>${h.currency || '—'}</td>
+      <td>${h.price ? fmtFloat(h.price) : '<span class="skeleton" style="width:60px;display:inline-block"></span>'}</td>
+      <td style="font-size:10px;color:var(--dim)">${h.added || '—'}</td>
+      <td>
+        <button class="del-btn" onclick="removeFromWatchlist('${h.ticker}')" title="Ta bort">✕</button>
+      </td>
+    </tr>`).join('');
+
+    container.innerHTML = `
+      <table>
+        <thead><tr>
+          <th style="text-align:left">Aktie</th>
+          <th>Valuta</th>
+          <th>Nuv. kurs</th>
+          <th>Tillagd</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  async function loadWatchlistBadge() {
+    try {
+      const res  = await fetch('/api/watchlist');
+      const data = await res.json();
+      const badge = document.getElementById('wlBadge');
+      if (data.length > 0) { badge.style.display = ''; badge.textContent = data.length; }
+      else badge.style.display = 'none';
+    } catch (_) {}
   }
 
   // ── Add holding ────────────────────────────────────────────────────────
@@ -950,6 +1161,7 @@
 
   // ── Init ───────────────────────────────────────────────────────────────
   loadHoldings();
+  loadWatchlistBadge();
 </script>
 </body>
 </html>
