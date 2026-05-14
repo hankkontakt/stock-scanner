@@ -12,7 +12,6 @@ Handles all data fetching from yfinance with:
 import os
 import sys
 import time
-import json
 import signal as _signal
 import socket
 import pickle
@@ -150,27 +149,21 @@ def _with_timeout(fn, timeout_sec=12):
 
 
 def _retry(fn, *args, timeout_sec=12, **kwargs):
-    """
-    Kör fn() med retry-logik. TimeoutError = direkt fail, ingen retry.
-
-    TimeoutError = ticker hänger i C-kod. Retry ger exakt samma timeout
-    och dubblerar dödtiden. En attempt räcker för att konstatera att
-    tickern inte svarar.
-
-    Retry sker bara vid nätverksfel (ConnectionError, HTTPError etc.)
-    som faktiskt kan lyckas vid nästa försök.
-    """
+    """Run a function with retry logic on failure, with per-attempt timeout."""
+    last_err = None
     for attempt in range(config.MAX_RETRIES):
         try:
             return _with_timeout(fn, timeout_sec=timeout_sec)
-        except TimeoutError:
-            raise   # Direkt vidare – ingen retry, ingen sleep
+        except TimeoutError as e:
+            last_err = e
+            # Timeout = direkt bail, ingen poäng att försöka igen snabbt
+            time.sleep(1)
         except Exception as e:
+            last_err = e
             if attempt < config.MAX_RETRIES - 1:
                 wait = config.RETRY_BACKOFF_SEC * (attempt + 1)
                 time.sleep(wait)
-                continue
-            raise
+    raise last_err
 
 
 def fetch_stock_info(ticker: str) -> dict:
@@ -514,30 +507,18 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
     total = len(tickers)
     failed = []
 
-    # Ladda blacklist – skippa kända trasiga tickers
-    _bl_path = Path("data/blacklist.json")
-    try:
-        _blacklist = json.loads(_bl_path.read_text()) if _bl_path.exists() else {}
-    except Exception:
-        _blacklist = {}
-
     for i, ticker in enumerate(tickers, 1):
-        if ticker in _blacklist:
-            if verbose:
-                print(f"  [{i}/{total}] {ticker}... SKIPPED (blacklist)")
-            continue
-
         if verbose:
             print(f"  [{i}/{total}] {ticker}...", end=" ", flush=True)
-
-        # SIGALRM(25s) täcker nu HELA ticker-blocket (info + history).
-        # Delisted/trasiga tickers: max 25s per ticker (var 54-80s).
+        
+        # Outer hard timeout per ticker (Linux/GitHub Actions only).
+        # SÄNKT TILL 8 SEKUNDER för att spara upp till en timmes dödtid!
         if _HAS_ALARM:
             def _alarm_handler(sig, frm, _t=ticker):
-                raise TimeoutError(f"Timeout (25s) for {_t}")
+                raise TimeoutError(f"Hard outer timeout for {_t}")
             _signal.signal(_signal.SIGALRM, _alarm_handler)
-            _signal.alarm(25)
-
+            _signal.alarm(8) 
+        
         try:
             info = fetch_stock_info(ticker)
 
@@ -562,27 +543,25 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
                 quality = sum(1 for v in metrics.values() if v is not None) / len(metrics)
                 print(f"OK ({quality:.0%} data)")
 
-        except TimeoutError:
-            failed.append(ticker)
-            if verbose:
-                print("TIMEOUT")
         except Exception as e:
             failed.append(ticker)
             if verbose:
                 print(f"ERROR: {e}")
         finally:
             if _HAS_ALARM:
-                _signal.alarm(0)
+                _signal.alarm(0)  # Always cancel the per-ticker alarm
                 
+    # ------------------------------------------------------------------------
+    # FIX: Debug-printarna måste ligga helt UTANFÖR for-loopen
+    # ------------------------------------------------------------------------
+    print("\nDEBUG: Huvudloopen är helt klar! Skapar DataFrame...", flush=True)
+    
     df = pd.DataFrame(rows)
 
     if failed and verbose:
-        n = len(failed)
-        print(f"  ⚠ {n} tickers misslyckades: "
-              f"{', '.join(failed[:8])}{'...' if n > 8 else ''}")
-        if n > 15:
-            print(f"  💡 Tips: Kör filters.clear_blacklist() om välkända aktier är med i listan")
+        print(f"  ⚠ Failed to fetch {len(failed)} tickers: {', '.join(failed[:5])}{'...' if len(failed) > 5 else ''}")
 
+    print("DEBUG: fetch_universe_data är klar och returnerar datan!", flush=True)
     return df
 
 
