@@ -4,10 +4,11 @@ filters.py – Hårda filter för svenska småbolag.
 Dessa filter körs INNAN scoring och eliminerar "giftiga" bolag:
   1. Likviditetsgräns     – för illikvida aktier kan man inte sälja i stress
   2. Marknadsvärde        – håll dig inom small/micro-cap-definitionen
-  3. Balansräkning        – negativt eget kapital = konkursrisk
-  4. Extremt hög skuld    – ränteskydd < 1x
-  5. Piotroski-gräns      – för svaga fundamenta
-  6. Utspädningsfälla     – bolag som kontinuerligt späder ut ägarna
+  3. Negativt eget kapital – teknisk insolvens
+  4. Balansräkning        – current ratio + extremt hög skuld
+  5. Kassabana            – < 12 mån kassa vid negativt kassaflöde = emissionsrisk
+  6. Piotroski-gräns      – för svaga fundamenta
+  7. Utspädningsfälla     – bolag som kontinuerligt späder ut ägarna
 
 Varje filter returnerar en bool-mask (True = behåll).
 apply_all_filters() kör alla och loggar vad som filtreras bort.
@@ -17,13 +18,14 @@ import pandas as pd
 import numpy as np
 
 # ── Trösklar ─────────────────────────────────────────────────────────────────
-MIN_DAILY_TURNOVER_SEK  = 300_000   # Daglig omsättning SEK (volym × pris)
+MIN_DAILY_TURNOVER_SEK  = 500_000   # Daglig omsättning SEK (volym × pris)
 MIN_MARKET_CAP_SEK      = 30_000_000  # 30 MSEK – under detta = micro/penny
 MAX_MARKET_CAP_SEK      = 10_000_000_000  # 10 GSEK – över detta = mid/large cap
 MAX_DEBT_TO_EQUITY      = 300       # D/E > 300% = skuldfälla
-MIN_CURRENT_RATIO       = 0.4       # Under 0.4 = likviditetskris
+MIN_CURRENT_RATIO       = 0.5       # Under 0.5 = allvarlig likviditetskris
 MAX_PIOTROSKI_SKIP      = 2         # F-Score ≤ 2 = eliminera (ej bara penalty)
-MAX_DILUTION_PCT        = 0.30      # Aktieantal ökat > 30% senaste år = stor röd flagga
+MAX_DILUTION_PCT        = 0.20      # Aktieantal ökat > 20% senaste år = röd flagga
+MIN_CASH_RUNWAY_MONTHS  = 12        # Kassa måste räcka minst 12 månader
 
 # SEK till USD approximation (yfinance returnerar USD market_cap för .ST)
 # Faktisk conversion-rate för filter-ändamål – bara ungefärlig
@@ -70,12 +72,29 @@ def filter_market_cap(df: pd.DataFrame, verbose: bool = True) -> pd.Series:
     return mask
 
 
+def filter_negative_equity(df: pd.DataFrame, verbose: bool = True) -> pd.Series:
+    """
+    Eliminera bolag med negativt bokfört eget kapital (teknisk insolvens).
+    book_value (per aktie) < 0 → negativt totalt eget kapital.
+    D/E-ratio täcker inte detta — den är meningslös när täljaren är negativ.
+    Saknas data → behåll (benefit of doubt).
+    """
+    bv = df.get("book_value", pd.Series(np.nan, index=df.index))
+    # Tillåt NaN (saknad data) men filtrera explicit negativa värden
+    mask = bv.isna() | (bv >= 0)
+    if verbose and (~mask).any():
+        n = (~mask).sum()
+        bad = df.loc[~mask, "ticker"].tolist()[:5]
+        print(f"  Negativt EK: tar bort {n} tekniskt insolventa ({bad})")
+    return mask
+
+
 def filter_balance_sheet(df: pd.DataFrame, verbose: bool = True) -> pd.Series:
     """
     Ta bort bolag med livsfarlig balansräkning:
-    - Negativt eget kapital (techniskt insolvent)
-    - Current ratio < 0.4 (kan inte betala kortfristiga skulder)
+    - Current ratio < 0.5 (kan inte betala kortfristiga skulder)
     - D/E > 300% (skuldfälla)
+    Negativt eget kapital hanteras separat i filter_negative_equity().
     """
     de = df.get("debt_to_equity", pd.Series(np.nan, index=df.index))
     cr = df.get("current_ratio",  pd.Series(np.nan, index=df.index))
@@ -88,6 +107,42 @@ def filter_balance_sheet(df: pd.DataFrame, verbose: bool = True) -> pd.Series:
         n = (~mask).sum()
         bad = df.loc[~mask, "ticker"].tolist()[:5]
         print(f"  Balansräkning: tar bort {n} farliga ({bad})")
+    return mask
+
+
+def filter_cash_runway(df: pd.DataFrame,
+                       min_months: int = MIN_CASH_RUNWAY_MONTHS,
+                       verbose: bool = True) -> pd.Series:
+    """
+    Filtrera bolag vars kassa inte räcker i minst 12 månader VID negativt kassaflöde.
+    Bolag med positivt operativt kassaflöde berörs inte.
+
+    Formel: runway = total_cash / (|operating_cashflow| / 12)
+    Filtret träffar typiskt: pre-revenue biotech, förlusttyngda SaaS, spec-stage industri.
+    """
+    cash = df.get("total_cash",         pd.Series(np.nan, index=df.index)).fillna(0)
+    ocf  = df.get("operating_cashflow", pd.Series(np.nan, index=df.index)).fillna(0)
+
+    # Bara relevant när bolaget faktiskt bränner pengar
+    burning = ocf < 0
+    monthly_burn = ocf.abs() / 12
+
+    # Räkna ut runway i månader för bolag med negativt OCF
+    runway = pd.Series(np.inf, index=df.index)
+    valid_burn = burning & (monthly_burn > 0)
+    runway[valid_burn] = cash[valid_burn] / monthly_burn[valid_burn]
+
+    # Saknar kassadata men bränner pengar → behåll (benefit of doubt, data-lucka)
+    missing_cash = burning & (df.get("total_cash", pd.Series(np.nan,
+                               index=df.index)).isna())
+
+    mask = ~burning | missing_cash | (runway >= min_months)
+
+    if verbose and (~mask).any():
+        n = (~mask).sum()
+        bad = df.loc[~mask, "ticker"].tolist()[:5]
+        print(f"  Kassabana: tar bort {n} med <{min_months}m runway ({bad})"
+              f" – emissionsrisk!")
     return mask
 
 
@@ -147,10 +202,12 @@ def apply_all_filters(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
         print(f"  Startuniversum: {n_start} bolag")
 
     mask = (
-        filter_has_price(df, verbose)    &
-        filter_liquidity(df, verbose)    &
-        filter_balance_sheet(df, verbose) &
-        filter_piotroski(df, verbose)    &
+        filter_has_price(df, verbose)        &
+        filter_liquidity(df, verbose)        &
+        filter_negative_equity(df, verbose)  &
+        filter_balance_sheet(df, verbose)    &
+        filter_cash_runway(df, verbose)      &
+        filter_piotroski(df, verbose)        &
         filter_dilution(df, verbose)
     )
     # market_cap-filtret är mjukare – varnar men exkluderar inte alltid
@@ -179,13 +236,15 @@ def get_red_flags(df: pd.DataFrame) -> pd.DataFrame:
         ticker = row.get("ticker", "?")
         ticker_flags = []
 
-        de = row.get("debt_to_equity", 0) or 0
-        cr = row.get("current_ratio",  2) or 2
-        pf = row.get("piotroski_score", 5) or 5
-        gm = row.get("gross_margin",   0) or 0
-        dy = row.get("dividend_yield", 0) or 0
-        ins = row.get("insider_pct",   0) or 0
-        fcf = row.get("free_cash_flow", 1) or 1
+        de  = row.get("debt_to_equity",    0) or 0
+        cr  = row.get("current_ratio",     2) or 2
+        pf  = row.get("piotroski_score",   5) or 5
+        gm  = row.get("gross_margin",      0) or 0
+        dy  = row.get("dividend_yield",    0) or 0
+        ins = row.get("insider_pct",       0) or 0
+        fcf = row.get("free_cash_flow",    1) or 1
+        ocf = row.get("operating_cashflow", 1) or 1
+        csh = row.get("total_cash",        0) or 0
 
         if de > 150:
             ticker_flags.append(f"Hög skuld D/E {de:.0f}%")
@@ -201,6 +260,12 @@ def get_red_flags(df: pd.DataFrame) -> pd.DataFrame:
             ticker_flags.append("Lågt insiderägarskap (<3%)")
         if fcf < 0:
             ticker_flags.append("Negativt FCF")
+        # Varna om kort kassabana (passerade filtret men nära gränsen)
+        if ocf < 0 and csh > 0:
+            monthly_burn = abs(ocf) / 12
+            runway_m = csh / monthly_burn if monthly_burn > 0 else float("inf")
+            if runway_m < 18:
+                ticker_flags.append(f"Kort kassabana {runway_m:.0f}m")
 
         flags.append({
             "ticker": ticker,
