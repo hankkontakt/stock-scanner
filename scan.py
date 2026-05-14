@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 import config, data_fetcher, scoring, filters, sectors
+import watchlist as wl
 
 # ── Auto-rensa felaktigt svartlistade kända aktier vid start ─────────────────
 def _auto_clean_blacklist():
@@ -246,6 +247,121 @@ def _section_cleanup(warnings, removed):
     
     return "\n".join(lines) + "\n"
 
+def _section_watchlist(scored: pd.DataFrame) -> str:
+    """
+    Bygger bevakningslistans sektion i veckorapporten.
+    Visar djupanalys per aktie: score, köp/sälj-bedömning, nyhetssentiment,
+    earnings-datum, och faktorprofil.
+    """
+    watchlist_items = wl.load_watchlist()
+    if not watchlist_items:
+        return ""
+
+    lines = ["\n## ⭐ Min Bevakningslista\n"]
+    lines.append("_Aktier jag bevakar extra noga – djupanalys varje vecka._\n")
+
+    score_lookup = {}
+    if not scored.empty and "ticker" in scored.columns:
+        score_lookup = scored.set_index("ticker").to_dict("index")
+
+    for item in watchlist_items:
+        ticker = item["ticker"]
+        sc     = score_lookup.get(ticker, {})
+        name   = sc.get("name") or item.get("name") or ticker
+
+        score      = sc.get("score_total")
+        rank       = sc.get("rank")
+        entry      = sc.get("entry_signal", "EJ SCANNAD")
+        conf       = sc.get("confidence_label", "—")
+        trend      = sc.get("trend_signal", "—")
+        rs         = sc.get("rs_label", "—")
+        sector     = sc.get("sector", "—")
+        universe_n = len(scored) if not scored.empty else 0
+
+        # Köp/sälj-bedömning
+        if score is None:
+            rec = "EJ SCANNAD"
+            rec_reason = "Aktien finns inte i nuvarande scan-universum"
+        elif score >= 70 and entry == "STARK":
+            rec = "KÖP"
+            rec_reason = f"Stark fundamental profil (score {score:.0f}/100), HÖG konfidens"
+        elif score >= 60 and entry in ("STARK", "OK"):
+            rec = "BEVAKA / KÖP VID DIP"
+            rec_reason = f"God fundamental kvalitet (score {score:.0f}/100), invänta bättre entry"
+        elif score >= 50:
+            rec = "VÄNTA"
+            rec_reason = f"Medelscore ({score:.0f}/100) – fundamenta ej tillräckligt starka"
+        else:
+            rec = "UNDVIK"
+            rec_reason = f"Svag fundamental profil (score {score:.0f}/100)"
+
+        rec_icon = {"KÖP": "🟢", "BEVAKA / KÖP VID DIP": "🔵", "VÄNTA": "🟡", "UNDVIK": "🔴", "EJ SCANNAD": "⚪"}.get(rec, "⚪")
+
+        lines.append(f"### {rec_icon} `{ticker}` · {name}")
+        lines.append(f"_Sektor: {sector}_\n")
+
+        if score is not None:
+            rank_s = f"Rank #{rank} av {universe_n}" if rank else "—"
+            lines.append(f"**Score: {score:.0f}/100** · {rank_s} · Entry: **{entry}** · Konfidens: {conf} · Trend: {trend} · RS: {rs}\n")
+        else:
+            lines.append("_Aktien finns inte i nuvarande scan-universum._\n")
+
+        lines.append(f"**Rekommendation: {rec}**  \n_{rec_reason}_\n")
+
+        # Faktorprofil (om data finns)
+        v_score  = sc.get("score_value")
+        q_score  = sc.get("score_quality")
+        m_score  = sc.get("score_momentum")
+        g_score  = sc.get("score_growth")
+        r_score  = sc.get("score_risk")
+        s_score  = sc.get("score_sentiment")
+
+        factor_parts = []
+        for label, val in [("Värdering", v_score), ("Kvalitet", q_score),
+                           ("Momentum", m_score), ("Tillväxt", g_score),
+                           ("Risk", r_score), ("Sentiment", s_score)]:
+            if val is not None and not (isinstance(val, float) and pd.isna(val)):
+                icon = "🟢" if val >= 70 else "🔴" if val < 40 else "🟡"
+                factor_parts.append(f"{label}: {icon}{val:.0f}")
+
+        if factor_parts:
+            lines.append("**Faktorer:** " + " · ".join(factor_parts) + "\n")
+
+        # Nyhetssentiment
+        sentiment = sc.get("sentiment_raw")
+        if sentiment is not None and not (isinstance(sentiment, float) and pd.isna(sentiment)):
+            sent_icon = "🟢 Positiva" if sentiment > 0.6 else "🔴 Negativa" if sentiment < 0.4 else "⚪ Neutrala"
+            lines.append(f"**Nyheter:** {sent_icon} (sentimentscore: {sentiment:.2f})\n")
+
+        # Earnings-datum
+        earn_date = sc.get("next_earnings_date") or sc.get("earnings_date")
+        if earn_date:
+            try:
+                days = (pd.Timestamp(earn_date).date() - datetime.now().date()).days
+                if 0 <= days <= 180:
+                    urgent = " ⚠️ Rapport inom 14 dagar!" if days <= 14 else ""
+                    lines.append(f"**Nästa rapport:** {str(earn_date)[:10]} (om {days} dagar){urgent}\n")
+            except Exception:
+                pass
+
+        # Viktiga nyckeltal
+        pe  = sc.get("pe_ratio")
+        pb  = sc.get("pb_ratio")
+        roe = sc.get("roe")
+        rev_g = sc.get("revenue_growth")
+        kv_parts = []
+        if pe  and not pd.isna(pe):  kv_parts.append(f"P/E: {pe:.1f}x")
+        if pb  and not pd.isna(pb):  kv_parts.append(f"P/B: {pb:.1f}x")
+        if roe and not pd.isna(roe): kv_parts.append(f"ROE: {roe*100:.1f}%")
+        if rev_g and not pd.isna(rev_g): kv_parts.append(f"Rev.tillväxt: {rev_g*100:.1f}%")
+        if kv_parts:
+            lines.append("**Nyckeltal:** " + " · ".join(kv_parts) + "\n")
+
+        lines.append("---")
+
+    return "\n".join(lines)
+
+
 def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df, holdings, warnings=None, removed=None, sector_mom=None, benchmarks=None):
     fw   = config.FACTOR_WEIGHTS
     bm   = benchmarks or {}
@@ -323,6 +439,9 @@ def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df,
     if not analysis.empty:
         _try("Portfölj", lambda: _section_portfolio(analysis, summary))
         _try("Portföljanalys", lambda: portfolio_analysis.build_portfolio_analysis_section(analysis, scored))
+
+    # 7.5. Bevakningslista
+    _try("Bevakningslista", lambda: _section_watchlist(scored))
 
     # 8. Sektoranalys Topp 5
     _try("Sektoranalys Topp5", lambda: _section_sectors_top5(scored, sector_df))

@@ -35,6 +35,7 @@ import alerts
 import logger
 import portfolio
 import earnings_calendar as ec
+import watchlist as wl
 
 # ── Trösklar ──────────────────────────────────────────────────────────────
 CRASH_WARN_PCT    = -3.0   # % – varning (gult)
@@ -283,6 +284,61 @@ def find_opportunities(
 
 
 # ══════════════════════════════════════════════════════════════
+# BEVAKNINGSLISTA – morgonkoll
+# ══════════════════════════════════════════════════════════════
+
+def build_watchlist_morning_section(
+    watchlist_items: list,
+    price_moves:     dict,
+    scored_df:       pd.DataFrame,
+) -> str:
+    """
+    Bygger bevakningslistans sektion för morgonrapporten.
+    Visar: prisrörelse, entry-signal från söndagens scan, dagar tills nästa rapport.
+    """
+    if not watchlist_items:
+        return ""
+
+    lines = ["## ⭐ Bevakningslista – morgonstatus\n"]
+    lines.append("| Ticker | Bolag | Idag | Score | Signal | Nästa rapport |")
+    lines.append("|--------|-------|------|-------|--------|---------------|")
+
+    score_lookup = {}
+    if not scored_df.empty and "ticker" in scored_df.columns:
+        score_lookup = scored_df.set_index("ticker").to_dict("index")
+
+    for item in watchlist_items:
+        ticker = item["ticker"]
+        name   = item.get("name", ticker)[:22]
+        move   = price_moves.get(ticker, {})
+        chg    = move.get("change_pct")
+        chg_s  = f"{chg:+.1f}%" if chg is not None else "—"
+        chg_icon = ("🟢" if chg >= 0 else "🔴") if chg is not None else "⚪"
+
+        sc     = score_lookup.get(ticker, {})
+        score  = sc.get("score_total")
+        signal = sc.get("entry_signal", "—")
+        score_s = f"{score:.0f}" if score is not None else "—"
+
+        # Earnings
+        earn_s = "—"
+        try:
+            earn_date = sc.get("next_earnings_date") or sc.get("earnings_date")
+            if earn_date:
+                days = (pd.Timestamp(earn_date).date() - date.today()).days
+                if 0 <= days <= 90:
+                    earn_s = f"{days}d"
+        except Exception:
+            pass
+
+        lines.append(
+            f"| `{ticker}` | {name} | {chg_icon} {chg_s} | {score_s} | {signal} | {earn_s} |"
+        )
+
+    return "\n".join(lines) + "\n"
+
+
+# ══════════════════════════════════════════════════════════════
 # RAPPORT-BYGGARE
 # ══════════════════════════════════════════════════════════════
 
@@ -293,6 +349,8 @@ def build_morning_report(
     top50_date:       str,
     holdings:         pd.DataFrame,
     price_moves:      dict,
+    watchlist_items:  list = None,
+    top50_df:         pd.DataFrame = None,
 ) -> tuple[str, str]:
     """
     Bygger rapporten. Returnerar (markdown, email-ämne).
@@ -380,6 +438,14 @@ def build_morning_report(
             lines.append(f"- **`{ticker}`** rapporterar **{d}** (om {days} dagar)")
         lines.append("")
 
+    # Bevakningslista
+    if watchlist_items:
+        wl_section = build_watchlist_morning_section(
+            watchlist_items, price_moves, top50_df if top50_df is not None else pd.DataFrame()
+        )
+        if wl_section:
+            lines.append(wl_section)
+
     lines.append("---\n*⚠ Inte finansiell rådgivning. MarketScan morgonkoll.*")
     return "\n".join(lines), subject
 
@@ -419,10 +485,17 @@ def main():
         if v:
             print(f"  ✓ {len(holdings)} innehav laddade")
 
+        # 3. Ladda bevakningslista
+        watchlist_items  = wl.load_watchlist()
+        watchlist_tickers = [i["ticker"] for i in watchlist_items]
+        if watchlist_tickers and v:
+            print(f"  ⭐ {len(watchlist_tickers)} aktier i bevakningslistan")
+
         # 3. Hämta priser
         all_tickers = list(set(
             list(holdings["ticker"].str.upper() if not holdings.empty else []) +
-            list(top50["ticker"].str.upper() if not top50.empty else [])
+            list(top50["ticker"].str.upper() if not top50.empty else []) +
+            watchlist_tickers
         ))
 
         print(f"\n📥 Hämtar priser ({len(all_tickers)} tickers)...")
@@ -465,7 +538,9 @@ def main():
         # 7. Bygg rapport
         report, subject = build_morning_report(
             portfolio_alerts, opportunities, earnings_soon,
-            top50_date, holdings, price_moves
+            top50_date, holdings, price_moves,
+            watchlist_items=watchlist_items,
+            top50_df=top50,
         )
 
         # Spara rapport

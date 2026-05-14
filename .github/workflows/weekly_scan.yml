@@ -67,6 +67,12 @@ jobs:
       - name: 📁 Skapa nödvändiga mappar
         run: mkdir -p data/cache data/history data/optimizer reports
 
+      # ── Steg 5.5: Ladda bevakningslista ─────────────────────
+      - name: ⭐ Ladda bevakningslista
+        if: ${{ secrets.WATCHLIST_JSON != '' }}
+        run: echo '${{ secrets.WATCHLIST_JSON }}' > data/watchlist.json
+        continue-on-error: true
+
       # ── Steg 6: Kör full scan ────────────────────────────────
       - name: 🚀 Kör vecko-scan
         env:
@@ -121,7 +127,8 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "MarketScan Bot"
           git add data/history/ data/paper_trades.json data/paper_portfolio.json \
-                  data/scan_log.json data/blacklist.json data/strike_list.json || true
+                  data/scan_log.json data/blacklist.json data/strike_list.json \
+                  data/watchlist.json || true
           git diff --staged --quiet || git commit -m "🤖 Auto: Veckovis scan $(date +%Y-%m-%d)"
           git push || true
         env:

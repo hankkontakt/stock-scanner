@@ -33,6 +33,7 @@ import logger
 import portfolio
 import paper_trading
 import earnings_calendar as ec
+import watchlist as wl
 
 OMXS30_PROXY = "XACTOMXS3.ST"
 SPY_TICKER   = "SPY"
@@ -269,13 +270,89 @@ def _build_evening_rec(
 
 
 # ══════════════════════════════════════════════════════════════
+# BEVAKNINGSLISTA – kvällsanalys
+# ══════════════════════════════════════════════════════════════
+
+def build_watchlist_evening_section(
+    watchlist_items: list,
+    prices:          dict,
+    scores:          dict,
+    universe_size:   int = 200,
+) -> str:
+    """
+    Kvällsanalys av bevakningslistan.
+    Visar pris, 1d/1w rörelse, score, rekommendation och nästa rapport.
+    """
+    if not watchlist_items:
+        return ""
+
+    lines = ["## ⭐ Bevakningslista – kvällsanalys\n"]
+    lines.append("_Aktier du bevakar extra noga – inkl. köp/sälj-bedömning och nästa rapport._\n")
+    lines.append("| | Ticker | Bolag | Idag | Vecka | Score | Rekommendation | Nästa rapport |")
+    lines.append("|---|--------|-------|------|-------|-------|----------------|---------------|")
+
+    for item in watchlist_items:
+        ticker     = item["ticker"]
+        name       = item.get("name", ticker)[:20]
+        pd_data    = prices.get(ticker, {})
+        sc_data    = scores.get(ticker, {})
+
+        price   = pd_data.get("price")
+        chg_1d  = pd_data.get("change_1d")
+        chg_1w  = pd_data.get("change_1w")
+        score   = sc_data.get("score_total")
+        rank    = sc_data.get("rank")
+        entry   = sc_data.get("entry_signal", "—")
+        ma200   = sc_data.get("price_vs_ma200")
+
+        chg_1d_s = f"{chg_1d:+.1f}%" if chg_1d is not None else "—"
+        chg_1w_s = f"{chg_1w:+.1f}%" if chg_1w is not None else "—"
+        d1_icon  = ("🟢" if chg_1d >= 0 else "🔴") if chg_1d is not None else "⚪"
+        score_s  = f"{score:.0f}" if score is not None else "—"
+
+        # Rekommendation (samma logik som portföljen)
+        rec, _, _ = _build_evening_rec(
+            ticker, score, rank, chg_1d, chg_1w, None, ma200, universe_size
+        )
+        rec_icon = {
+            "SÄLJ": "🔴", "SÄLJ/MINSKA": "🔴",
+            "TA HEM HALVA": "🟠", "MINSKA": "🟡", "BEVAKA": "🟡",
+            "BEHÅLL": "🔵", "BEHÅLL STARKT": "🔵", "KÖP MER": "🟢",
+            "KÖP": "🟢",
+        }.get(rec, "⚪")
+
+        # Earnings
+        earn_s = "—"
+        try:
+            earn_date = sc_data.get("next_earnings_date") or sc_data.get("earnings_date")
+            if earn_date:
+                days = (pd.Timestamp(earn_date).date() - date.today()).days
+                if 0 <= days <= 90:
+                    earn_s = f"{days}d"
+        except Exception:
+            pass
+
+        lines.append(
+            f"| {rec_icon} | **`{ticker}`** | {name} | "
+            f"{d1_icon} {chg_1d_s} | {chg_1w_s} | {score_s} | "
+            f"**{rec}** | {earn_s} |"
+        )
+
+    return "\n".join(lines) + "\n"
+
+
+# ══════════════════════════════════════════════════════════════
 # RAPPORT-BYGGARE
 # ══════════════════════════════════════════════════════════════
 
 def build_evening_report(
-    analysis:      list,
-    market:        dict,
-    earnings_soon: pd.DataFrame,
+    analysis:        list,
+    market:          dict,
+    earnings_soon:   pd.DataFrame,
+    watchlist_items: list = None,
+    wl_prices:       dict = None,
+    wl_scores:       dict = None,
+    universe_size:   int  = 200,
 ) -> str:
     """Bygger kvällsrapporten."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -373,6 +450,17 @@ def build_evening_report(
             lines.append(f"- **`{ticker}`** – {d} (om {days} dagar){est_s}")
         lines.append("")
 
+    # Bevakningslista
+    if watchlist_items:
+        wl_section = build_watchlist_evening_section(
+            watchlist_items,
+            wl_prices or {},
+            wl_scores or {},
+            universe_size,
+        )
+        if wl_section:
+            lines.append(wl_section)
+
     lines.append("---\n*⚠ Inte finansiell rådgivning. MarketScan kvällsrapport.*")
     return "\n".join(lines)
 
@@ -427,10 +515,19 @@ def main():
         log["n_holdings"] = len(holdings)
         if v: print(f"  {len(holdings)} innehav")
 
-        # 2. Hämta slutkurser
+        # 1b. Ladda bevakningslista
+        watchlist_items   = wl.load_watchlist()
+        wl_tickers        = [i["ticker"] for i in watchlist_items]
+        if wl_tickers and v:
+            print(f"  ⭐ {len(wl_tickers)} aktier i bevakningslistan")
+
+        # 2. Hämta slutkurser (portfölj + bevakningslista)
         print("\n📥 Hämtar slutkurser...")
-        tickers = list(holdings["ticker"].str.upper())
-        prices  = fetch_closing_prices(tickers)
+        tickers     = list(holdings["ticker"].str.upper())
+        all_tickers = list(set(tickers + wl_tickers))
+        prices      = fetch_closing_prices(all_tickers)
+        # Separera portfölj- och bevakningspriser ur samma dict (båda kan använda samma dict)
+        wl_prices   = {t: prices[t] for t in wl_tickers if t in prices}
         log["n_prices"] = len(prices)
         if v: print(f"  ✓ {len(prices)} priser hämtade")
 
@@ -440,13 +537,16 @@ def main():
 
         # 4. Hämta scores från söndagens scan
         scores = load_scores_for_holdings(tickers)
-        universe_size = 200  # Approximation om vi inte vet exakt
+        universe_size = 200
         try:
             csvs = sorted(Path(config.REPORT_DIR).glob("scored_universe_*.csv"), reverse=True)
             if csvs:
                 universe_size = len(pd.read_csv(csvs[0]))
         except Exception:
             pass
+
+        # Scores för bevakningslistan
+        wl_scores = load_scores_for_holdings(wl_tickers) if wl_tickers else {}
 
         # 5. Analysera hold/sälj
         analysis = analyze_hold_sell(holdings, prices, scores, universe_size)
@@ -469,7 +569,13 @@ def main():
             pass
 
         # 8. Bygg rapport
-        report  = build_evening_report(analysis, market, earnings_soon)
+        report  = build_evening_report(
+            analysis, market, earnings_soon,
+            watchlist_items=watchlist_items,
+            wl_prices=wl_prices,
+            wl_scores=wl_scores,
+            universe_size=universe_size,
+        )
         subject = build_email_subject(analysis, market)
 
         # Spara

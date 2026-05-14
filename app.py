@@ -28,6 +28,7 @@ import yfinance as yf
 from flask import Flask, jsonify, render_template, request
 
 import config
+import watchlist as wl
 
 app = Flask(__name__)
 HOLDINGS_FILE = config.HOLDINGS_FILE
@@ -78,6 +79,44 @@ def _encrypt_secret(public_key_b64: str, value: str) -> str:
     key = public.PublicKey(public_key_b64.encode(), encoding.Base64Encoder)
     box = public.SealedBox(key)
     return base64.b64encode(box.encrypt(value.encode())).decode()
+
+
+def sync_watchlist_to_github():
+    """Push watchlist.json content to GitHub Actions secret WATCHLIST_JSON."""
+    token = os.getenv("GITHUB_TOKEN")
+    owner = os.getenv("GITHUB_OWNER")
+    repo  = os.getenv("GITHUB_REPO")
+    if not all([token, owner, repo]):
+        return False, "GITHUB_TOKEN/OWNER/REPO saknas i .env"
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    base = f"https://api.github.com/repos/{owner}/{repo}"
+
+    r = requests.get(f"{base}/actions/secrets/public-key", headers=headers, timeout=10)
+    if r.status_code != 200:
+        return False, f"Kunde inte hämta publik nyckel: {r.status_code}"
+    pk_data = r.json()
+
+    from pathlib import Path as _P
+    wl_path = _P(config.WATCHLIST_FILE)
+    if not wl_path.exists():
+        return True, "Tom bevakningslista – inget att synka"
+    json_content = wl_path.read_text(encoding="utf-8")
+    encrypted    = _encrypt_secret(pk_data["key"], json_content)
+
+    r = requests.put(
+        f"{base}/actions/secrets/WATCHLIST_JSON",
+        headers=headers,
+        json={"encrypted_value": encrypted, "key_id": pk_data["key_id"]},
+        timeout=10,
+    )
+    if r.status_code in (201, 204):
+        return True, "OK"
+    return False, f"GitHub API svarade {r.status_code}: {r.text}"
 
 
 def sync_holdings_to_github():
@@ -284,6 +323,50 @@ def remove_holding(ticker: str):
 
     save_holdings(holdings)
     sync_holdings_to_github()
+    return jsonify({"status": "removed", "ticker": ticker})
+
+
+@app.route("/api/watchlist", methods=["GET"])
+def get_watchlist():
+    """Hämta alla aktier i bevakningslistan med live-priser."""
+    items = wl.load_watchlist()
+    enriched = []
+    for item in items:
+        live = get_live_price(item["ticker"])
+        enriched.append({
+            "ticker":   item["ticker"],
+            "name":     live["name"] or item.get("name", item["ticker"]),
+            "currency": live["currency"],
+            "price":    live["price"],
+            "added":    item.get("added", ""),
+        })
+    return jsonify(enriched)
+
+
+@app.route("/api/watchlist", methods=["POST"])
+def add_to_watchlist():
+    """Lägg till en aktie i bevakningslistan."""
+    data   = request.get_json()
+    ticker = data.get("ticker", "").strip().upper()
+    name   = data.get("name", "").strip()
+
+    if not ticker:
+        return jsonify({"error": "Ogiltigt ticker"}), 400
+
+    is_new = wl.add_ticker(ticker, name)
+    sync_watchlist_to_github()
+    status = "added" if is_new else "already_exists"
+    return jsonify({"status": status, "ticker": ticker})
+
+
+@app.route("/api/watchlist/<ticker>", methods=["DELETE"])
+def remove_from_watchlist(ticker: str):
+    """Ta bort en aktie från bevakningslistan."""
+    ticker = ticker.upper()
+    removed = wl.remove_ticker(ticker)
+    if not removed:
+        return jsonify({"error": "Ticker ej hittad i bevakningslistan"}), 404
+    sync_watchlist_to_github()
     return jsonify({"status": "removed", "ticker": ticker})
 
 
