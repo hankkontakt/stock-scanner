@@ -37,6 +37,15 @@ except ImportError:
     _YF_AVAILABLE = False
     print("⚠️  yfinance ej installerat – kör: pip install yfinance", file=sys.stderr)
 
+# Importera data_fetcher för att aktivera curl_cffi/timeout-patchar och
+# använda samma hämtningspipeline (caching, retry) som huvudskannern.
+try:
+    import data_fetcher as _df
+    _DF_AVAILABLE = True
+except ImportError:
+    _df = None
+    _DF_AVAILABLE = False
+
 from smallcap.universe  import get_universe, SECTOR_GROUPS
 from smallcap.filters   import apply_all_filters
 from smallcap.scoring   import score_universe
@@ -69,32 +78,35 @@ _FETCH_FIELDS = [
 
 
 def _fetch_single(ticker: str) -> dict | None:
-    """Hämtar info för en enskild ticker via yfinance."""
-    if not _YF_AVAILABLE:
-        return None
+    """
+    Hämtar info för en enskild ticker.
+    Använder data_fetcher (curl_cffi-patchad, med caching och retry) om tillgänglig,
+    annars raw yfinance som fallback.
+    """
     try:
-        info = yf.Ticker(ticker).info
-        if not info or info.get("regularMarketPrice") is None and \
-                       info.get("currentPrice") is None:
+        if _DF_AVAILABLE:
+            info = _df.fetch_stock_info(ticker)
+            hist = _df.fetch_price_history(ticker, period="13mo")
+        elif _YF_AVAILABLE:
+            info = yf.Ticker(ticker).info
+            hist = yf.Ticker(ticker).history(period="13mo", auto_adjust=True)
+        else:
+            return None
+
+        if not info or len(info) < 5:
             return None
 
         price = info.get("currentPrice") or info.get("regularMarketPrice") or \
                 info.get("previousClose", 0)
+        if not price:
+            return None
 
-        # Momentum – behöver historisk data
-        hist = yf.Ticker(ticker).history(period="13mo", auto_adjust=True)
+        # Momentum
         r12 = r6 = float("nan")
-        if not hist.empty and len(hist) > 20:
+        if hist is not None and not hist.empty and len(hist) > 20:
             c = hist["Close"]
-            r12 = (c.iloc[-1] / c.iloc[0] - 1) if len(c) >= 252 else float("nan")
-            r6  = (c.iloc[-1] / c.iloc[max(0, len(c)-126)] - 1)
-
-        # Aktieantal-förändring (utspädningsmått)
-        shares_change = float("nan")
-        if not hist.empty:
-            # yfinance har inte historiskt aktieantal enkelt – proxy: shares outstanding
-            # Vi jämför inte direkt här; sätts till NaN om ej tillgängligt
-            pass
+            r12 = float(c.iloc[-1] / c.iloc[0] - 1) if len(c) >= 252 else float("nan")
+            r6  = float(c.iloc[-1] / c.iloc[max(0, len(c) - 126)] - 1)
 
         return {
             "ticker":            ticker,
@@ -105,19 +117,19 @@ def _fetch_single(ticker: str) -> dict | None:
             "price_to_book":     info.get("priceToBook", float("nan")),
             "debt_to_equity":    info.get("debtToEquity", float("nan")),
             "current_ratio":     info.get("currentRatio", float("nan")),
-            "total_cash":         info.get("totalCash", float("nan")),
-            "total_debt":         info.get("totalDebt", float("nan")),
-            "free_cash_flow":     info.get("freeCashflow", float("nan")),
-            "operating_cashflow": info.get("operatingCashflow", float("nan")),
-            "book_value":         info.get("bookValue", float("nan")),
-            "gross_margin":       info.get("grossMargins", float("nan")),
+            "total_cash":        info.get("totalCash", float("nan")),
+            "total_debt":        info.get("totalDebt", float("nan")),
+            "free_cash_flow":    info.get("freeCashflow", float("nan")),
+            "operating_cashflow":info.get("operatingCashflow", float("nan")),
+            "book_value":        info.get("bookValue", float("nan")),
+            "gross_margin":      info.get("grossMargins", float("nan")),
             "operating_margin":  info.get("operatingMargins", float("nan")),
             "revenue_growth":    info.get("revenueGrowth", float("nan")),
             "earnings_growth":   info.get("earningsGrowth", float("nan")),
             "insider_pct":       info.get("heldPercentInsiders", float("nan")),
             "return_12m":        r12,
             "return_6m":         r6,
-            "shares_change_pct": shares_change,
+            "shares_change_pct": float("nan"),
         }
     except Exception as e:
         print(f"    ⚠️  {ticker}: {e}", file=sys.stderr)
@@ -139,7 +151,10 @@ def fetch_universe_data(tickers: list, delay: float = 0.4) -> pd.DataFrame:
         row = _fetch_single(ticker)
         if row:
             rows.append(row)
-        import time; time.sleep(delay)
+        # data_fetcher.fetch_stock_info har inbyggd REQUEST_DELAY_SEC (0.8s);
+        # lägg bara till extra delay om data_fetcher inte är tillgänglig
+        if not _DF_AVAILABLE:
+            import time; time.sleep(delay)
 
     print(f"    {n}/{n} klart.   ")
     df = pd.DataFrame(rows)
