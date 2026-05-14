@@ -389,6 +389,8 @@ def build_friday_summary(
     """
     Fredagsspecifik veckosammanfattning.
     Visar portföljens veckoavkastning, bästa/sämsta, marknadsfaktoid och nyhetshöjdpunkter.
+    Notera: generella marknadsnyheter (global_news/swedish_news) skrivs ut separat
+    via format_market_news_section_md() och inkluderas inte här.
     """
     lines = ["## 📅 Fredagssammanfattning – Veckans resultat\n"]
 
@@ -396,14 +398,12 @@ def build_friday_summary(
     week_rows = [(a["ticker"], a.get("change_1w"), a.get("market_value")) for a in analysis
                  if a.get("change_1w") is not None]
     if week_rows:
-        # Viktad veckoresultat
         mv_total = sum(mv or 0 for _, _, mv in week_rows if mv)
         if mv_total > 0:
             w_pct = sum((chg / 100) * (mv or 0) for _, chg, mv in week_rows) / mv_total * 100
             icon  = "🟢" if w_pct >= 0 else "🔴"
             lines.append(f"**Portfölj denna vecka: {icon} {w_pct:+.1f}%**\n")
 
-        # Bästa/sämsta
         sorted_week = sorted(week_rows, key=lambda x: x[1], reverse=True)
         best  = sorted_week[0]
         worst = sorted_week[-1]
@@ -433,9 +433,9 @@ def build_friday_summary(
                 lines.append(f"- `{ticker}` – {d}")
             lines.append("")
 
-    # Nyhetshöjdpunkter denna vecka
+    # Bolagsspecifika nyhetshöjdpunkter (max 4 stycken)
     if news_by_ticker:
-        lines.append("**Veckans nyhetshöjdpunkter:**")
+        lines.append("**Veckans bolagsnyhetshöjdpunkter:**")
         shown = 0
         for ticker, articles in news_by_ticker.items():
             if not articles or shown >= 4:
@@ -471,12 +471,16 @@ def build_evening_report(
     universe_size:   int   = 200,
     stoploss_alerts: list  = None,
     news_by_ticker:  dict  = None,
+    global_news:     list  = None,
+    swedish_news:    list  = None,
     is_friday:       bool  = False,
 ) -> str:
     """Bygger kvällsrapporten."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     stoploss_alerts = stoploss_alerts or []
     news_by_ticker  = news_by_ticker  or {}
+    global_news     = global_news     or []
+    swedish_news    = swedish_news    or []
 
     # Beräkna portfölj-totaler
     total_value    = sum(a.get("market_value") or 0 for a in analysis)
@@ -605,6 +609,13 @@ def build_evening_report(
         if news_md:
             lines.append(news_md)
 
+    # ── Generella marknadsnyheter ────────────────────────────
+    market_news_md = news_fetcher.format_market_news_section_md(
+        global_news, swedish_news, compact=not is_friday
+    )
+    if market_news_md:
+        lines.append(market_news_md)
+
     # ── Fredagssammanfattning ────────────────────────────────
     if is_friday:
         ticker_names = {a["ticker"]: a.get("name", a["ticker"]) for a in analysis}
@@ -730,24 +741,36 @@ def main():
         except Exception:
             pass
 
-        # 7b. Nyheter via Finnhub
+        # 7b. Nyheter via Finnhub + RSS
         news_by_ticker = {}
+        global_news    = []
+        swedish_news   = []
         finnhub_key    = os.environ.get("FINNHUB_API_KEY", "")
         is_friday      = date.today().weekday() == 4  # 4 = fredag
+
+        print("\n📰 Hämtar nyheter...")
         if finnhub_key:
             news_tickers = list(holdings["ticker"].str.upper()) + wl_tickers
-            # Fredag: hämta 5 dagars nyheter för veckosammanfattning
-            news_days = 5 if is_friday else 1
+            news_days    = 5 if is_friday else 1
             if news_tickers:
-                print(f"\n📰 Hämtar nyheter (senaste {news_days} dag(ar))...")
                 news_by_ticker = news_fetcher.fetch_news_batch(
                     news_tickers, finnhub_key, days=news_days
                 )
                 if news_by_ticker and v:
-                    print(f"  ✓ Nyheter för {len(news_by_ticker)} aktier")
+                    print(f"  ✓ Bolagsnyheter för {len(news_by_ticker)} aktier")
+            # Generella marknadsnyheter – fler på fredagar
+            max_market = 5 if is_friday else 3
+            global_news = news_fetcher.fetch_global_market_news(finnhub_key, max_articles=max_market)
+            if global_news and v:
+                print(f"  ✓ {len(global_news)} globala marknadsnyheter")
         else:
             if v:
-                print("  ℹ FINNHUB_API_KEY ej satt – nyheter hoppas över")
+                print("  ℹ FINNHUB_API_KEY ej satt – bolagsnyheter hoppas över")
+
+        max_swedish  = 5 if is_friday else 3
+        swedish_news = news_fetcher.fetch_swedish_market_news(max_articles=max_swedish)
+        if swedish_news and v:
+            print(f"  ✓ {len(swedish_news)} svenska börsnyheter")
 
         # 8. Bygg rapport
         report  = build_evening_report(
@@ -758,6 +781,8 @@ def main():
             universe_size    = universe_size,
             stoploss_alerts  = stoploss_alerts,
             news_by_ticker   = news_by_ticker,
+            global_news      = global_news,
+            swedish_news     = swedish_news,
             is_friday        = is_friday,
         )
         subject = build_email_subject(analysis, market, stoploss_alerts, is_friday)

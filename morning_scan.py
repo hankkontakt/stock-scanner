@@ -386,10 +386,12 @@ def build_morning_report(
     top50_date:       str,
     holdings:         pd.DataFrame,
     price_moves:      dict,
-    market_overview:  dict       = None,
-    stoploss_alerts:  list       = None,
-    news_by_ticker:   dict       = None,
-    watchlist_items:  list       = None,
+    market_overview:  dict         = None,
+    stoploss_alerts:  list         = None,
+    news_by_ticker:   dict         = None,
+    global_news:      list         = None,
+    swedish_news:     list         = None,
+    watchlist_items:  list         = None,
     top50_df:         pd.DataFrame = None,
 ) -> tuple[str, str]:
     """Bygger dagsbrevet. Returnerar (markdown, email-ämne)."""
@@ -399,6 +401,8 @@ def build_morning_report(
     normal = portfolio_alerts.get("normal", [])
     stoploss_alerts = stoploss_alerts or []
     news_by_ticker  = news_by_ticker  or {}
+    global_news     = global_news     or []
+    swedish_news    = swedish_news    or []
 
     # ── Ämnesrad (alltid informativ) ──────────────────────────
     omxs30_data = (market_overview or {}).get("^OMX", {})
@@ -534,7 +538,14 @@ def build_morning_report(
             lines.append(f"- **`{ticker}`** rapporterar **{d}** (om {days} dagar)")
         lines.append("")
 
-    # 8. Bevakningslista
+    # 8. Generella marknadsnyheter (kompakt, 3+3)
+    market_news_md = news_fetcher.format_market_news_section_md(
+        global_news, swedish_news, compact=True
+    )
+    if market_news_md:
+        lines.append(market_news_md)
+
+    # 9. Bevakningslista
     if watchlist_items:
         wl_section = build_watchlist_morning_section(
             watchlist_items, price_moves, top50_df if top50_df is not None else pd.DataFrame()
@@ -686,24 +697,34 @@ def main():
         except Exception:
             pass
 
-        # 9. Nyheter via Finnhub
-        news_by_ticker = {}
-        finnhub_key    = os.environ.get("FINNHUB_API_KEY", "")
+        # 9. Nyheter via Finnhub (bolagsspecifika + generella marknadsnyheter)
+        news_by_ticker  = {}
+        global_news     = []
+        swedish_news    = []
+        finnhub_key     = os.environ.get("FINNHUB_API_KEY", "")
+
+        print("\n📰 Hämtar nyheter...")
         if finnhub_key:
             news_tickers = (
                 list(holdings["ticker"].str.upper() if not holdings.empty else []) +
                 watchlist_tickers
             )
             if news_tickers:
-                print(f"\n📰 Hämtar nyheter ({len(news_tickers)} tickers)...")
                 news_by_ticker = news_fetcher.fetch_news_batch(
                     news_tickers, finnhub_key, days=1
                 )
                 if news_by_ticker and v:
-                    print(f"  ✓ Nyheter hittade för {len(news_by_ticker)} aktier")
+                    print(f"  ✓ Bolagsnyheter för {len(news_by_ticker)} aktier")
+            global_news = news_fetcher.fetch_global_market_news(finnhub_key, max_articles=3)
+            if global_news and v:
+                print(f"  ✓ {len(global_news)} globala marknadsnyheter")
         else:
             if v:
-                print("  ℹ FINNHUB_API_KEY ej satt – nyheter hoppas över")
+                print("  ℹ FINNHUB_API_KEY ej satt – bolagsnyheter och globala nyheter hoppas över")
+
+        swedish_news = news_fetcher.fetch_swedish_market_news(max_articles=3)
+        if swedish_news and v:
+            print(f"  ✓ {len(swedish_news)} svenska börsnyheter")
 
         # 10. Bygg rapport
         report, subject = build_morning_report(
@@ -712,6 +733,8 @@ def main():
             market_overview  = market_overview,
             stoploss_alerts  = stoploss_alerts,
             news_by_ticker   = news_by_ticker,
+            global_news      = global_news,
+            swedish_news     = swedish_news,
             watchlist_items  = watchlist_items,
             top50_df         = top50,
         )
@@ -738,7 +761,9 @@ def main():
         print(f"  Crash alerts:    {len(portfolio_alerts.get('crash', []))}")
         print(f"  Uppgångar:       {len(portfolio_alerts.get('surge', []))}")
         print(f"  Köpmöjligheter:  {len(opportunities)}")
-        print(f"  Nyheter för:     {len(news_by_ticker)} aktier")
+        print(f"  Bolagsnyheter:   {len(news_by_ticker)} aktier")
+        print(f"  Svenska nyheter: {len(swedish_news)}")
+        print(f"  Globala nyheter: {len(global_news)}")
         print(f"  Rapport:         {report_path}")
 
 
