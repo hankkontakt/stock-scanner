@@ -12,6 +12,8 @@ Ticker-format: Yahoo Finance .ST-suffix.
 Verifiera: python -m smallcap.validate_universe
 """
 
+from pathlib import Path
+
 # ── NASDAQ FIRST NORTH GROWTH MARKET ─────────────────────────────────────────
 # Tillväxtbolag, ofta grundarledd med högt ägarengagemang.
 
