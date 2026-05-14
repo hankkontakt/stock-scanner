@@ -52,6 +52,101 @@ def fmt_cur(x):
 
 
 # ── Rapport-sektioner ──────────────────────────────────────────────────────────
+
+def _section_executive_summary(
+    scored:      pd.DataFrame,
+    regime_info: dict,
+    benchmarks:  dict,
+    analysis:    pd.DataFrame,
+) -> str:
+    """
+    DEL 1 – Executive Summary.
+    Kortfattad marknadsöversikt: läs på ≤3 sekunder och vet om du ska vara
+    aggressiv eller defensiv.
+    """
+    ri   = regime_info or {}
+    bm   = benchmarks  or {}
+    lines = ["# 📊 Veckovis Aktiescan\n", "---\n", "## 🚦 Executive Summary\n"]
+
+    # ── Marknadsregim ─────────────────────────────────────────
+    regime    = ri.get("regime", "OSÄKER")
+    composite = ri.get("composite")
+    vix       = ri.get("vix_level")
+    breadth   = ri.get("breadth_delta")
+    spy_ma200 = ri.get("spy_vs_ma200")
+
+    regime_icon = {"TJUR": "🟢", "BJÖRN": "🔴", "OSÄKER": "🟡"}.get(regime, "⚪")
+    lines.append(f"### {regime_icon} Marknadsregim: **{regime}**")
+    if composite is not None:
+        conf_label = "Stark" if composite >= 0.70 else "Svag" if composite <= 0.45 else "Moderat"
+        lines.append(f"Sammansatt konfidenspoäng: **{composite:.2f}/1.0** ({conf_label})\n")
+
+    # ── Nyckelindikatorer ─────────────────────────────────────
+    kpi_lines = []
+    if vix is not None:
+        vix_icon = "🔴 HÖG" if vix >= 25 else "🟡 FÖRHÖJD" if vix >= 18 else "🟢 LÅG"
+        kpi_lines.append(f"**VIX:** {vix:.1f} ({vix_icon} risk)")
+    if spy_ma200 is not None:
+        ma_icon = "🟢" if spy_ma200 > 0 else "🔴"
+        kpi_lines.append(f"**SPY vs MA200:** {ma_icon} {spy_ma200*100:+.1f}%")
+    if breadth is not None:
+        br_icon = "🟢 BRED" if breadth > 0 else "🔴 SMAL"
+        kpi_lines.append(f"**Marknadsbredd (RSP/SPY):** {br_icon} ({breadth:+.3f})")
+    for name, data in bm.items():
+        ytd = data.get("change_ytd", 0)
+        d1  = data.get("change_1d", 0)
+        kpi_lines.append(f"**{name}:** {d1:+.1f}% idag · {ytd:+.1f}% YTD")
+
+    if kpi_lines:
+        lines.append("\n".join(kpi_lines) + "\n")
+
+    # ── Scan-signaler ─────────────────────────────────────────
+    if not scored.empty:
+        n_total  = len(scored)
+        n_stark  = (scored.get("entry_signal",  pd.Series()) == "STARK").sum()
+        n_hog    = (scored.get("confidence_label", pd.Series()) == "HÖG").sum()
+        n_up     = (~scored.get("trend_capped", pd.Series(True))).sum()
+        pct_up   = n_up / n_total * 100 if n_total else 0
+
+        stance_icon = "🟢 AGGRESSIV" if (regime == "TJUR" and pct_up > 60) else \
+                      "🔴 DEFENSIV"  if (regime == "BJÖRN" or pct_up < 35) else \
+                      "🟡 NEUTRAL"
+        lines.append(f"**Rekommenderad hållning: {stance_icon}**\n")
+        lines.append(
+            f"Scannade: **{n_total}** aktier · "
+            f"**{n_stark}** STARK entry · "
+            f"**{n_hog}** HÖG konfidens · "
+            f"**{pct_up:.0f}%** i upptrend\n"
+        )
+
+        if regime == "BJÖRN":
+            lines.append(
+                "> ⚠️ **Björnmarknad aktiv** – marknadsbredden är negativ och/eller VIX spikar. "
+                "Höj kraven för nya köp. Prioritera stop-losses och defensiva sektorer.\n"
+            )
+        elif regime == "TJUR" and pct_up > 60:
+            lines.append(
+                "> ✅ Bred uppgång med god marknadsbredd. Köpklimat normalläge.\n"
+            )
+
+    # ── Portfölj-snabbstatus ──────────────────────────────────
+    if analysis is not None and not (isinstance(analysis, pd.DataFrame) and analysis.empty):
+        try:
+            df = analysis if isinstance(analysis, pd.DataFrame) else pd.DataFrame(analysis)
+            n_sell  = (df["recommendation"].str.contains("SÄLJ", na=False)).sum()
+            n_buy   = (df["recommendation"].str.contains("KÖP MER", na=False)).sum()
+            n_hold  = (df["recommendation"].str.contains("BEHÅLL", na=False)).sum()
+            lines.append(
+                f"**Portfölj:** 🔴 {n_sell} SÄLJ · 🟢 {n_buy} KÖP MER · 🔵 {n_hold} BEHÅLL\n"
+            )
+        except Exception:
+            pass
+
+    lines.append("\n---\n")
+    return "\n".join(lines)
+
+
+# ── Rapport-sektioner ──────────────────────────────────────────────────────────
 def _section_sectors_top5(scored: pd.DataFrame, sector_summary: pd.DataFrame) -> str:
     """
     Rankar sektorer efter potential (snitt_score) och visar de upp till 5 
@@ -106,21 +201,93 @@ def _section_sectors_top5(scored: pd.DataFrame, sector_summary: pd.DataFrame) ->
     
 
     
+def _section_sector_heatmap(scored: pd.DataFrame, sector_df: pd.DataFrame) -> str:
+    """
+    DEL 2 – Enkel sektors-heatmap: upptrend vs nedtrend-textmatris.
+    Kompaktare alternativ till de djupa 1-5 per sektor-listorna.
+    """
+    if scored.empty or "sector" not in scored.columns:
+        return ""
+
+    up_sectors   = []
+    down_sectors = []
+    neutral      = []
+
+    if sector_df is not None and not sector_df.empty and "sector" in sector_df.columns:
+        for _, row in sector_df.iterrows():
+            sec   = row["sector"]
+            score = row.get("snitt_score", 50)
+            # Bestäm trend via andel aktier i upptrend inom sektorn
+            sec_stocks = scored[scored["sector"] == sec]
+            if sec_stocks.empty:
+                continue
+            pct_up = (~sec_stocks.get("trend_capped", pd.Series(True))).mean() * 100
+            if pct_up >= 60 and score >= 55:
+                up_sectors.append((sec, score, pct_up))
+            elif pct_up < 40 or score < 45:
+                down_sectors.append((sec, score, pct_up))
+            else:
+                neutral.append((sec, score, pct_up))
+    else:
+        return ""
+
+    lines = ["\n## 🗺️ Sektors-heatmap\n"]
+    if up_sectors:
+        tickers = " · ".join(
+            f"**{s}** ({sc:.0f}pts, {p:.0f}% upp)"
+            for s, sc, p in sorted(up_sectors, key=lambda x: -x[1])
+        )
+        lines.append(f"🟢 **UPPTREND:** {tickers}\n")
+    if neutral:
+        tickers = " · ".join(f"{s}" for s, _, _ in neutral)
+        lines.append(f"🟡 **NEUTRAL:** {tickers}\n")
+    if down_sectors:
+        tickers = " · ".join(
+            f"**{s}** ({sc:.0f}pts)"
+            for s, sc, _ in sorted(down_sectors, key=lambda x: x[1])
+        )
+        lines.append(f"🔴 **NEDTREND:** {tickers}\n")
+
+    return "\n".join(lines)
+
+
 def _section_top_n(scored, n):
     """
     Bygger topp-N-tabellen med sektorcap på MAX 2 per sektor.
     Holdingbolag och råvarubolag är redan nedviktade via scoring.py,
     men cap 2 ger extra skydd mot att en sektor tar fler platser.
 
+    Automatisk förfiltrering: aktier med för hög volatilitet (score_risk < 25)
+    eller mycket svag Piotroski-poäng (< 2) sorteras bort innan utskrift.
+
     Visar listnummer (#1-10) istället för global rank, eftersom
     global rank inte stämmer efter sektorcap-filtreringen.
     """
     MAX_PER_SECTOR = 2  # Max 2 aktier per sektor i topp-N
 
+    # ── Volatilitets- och Piotroski-förfilter (Del 2) ────────
+    pre_len = len(scored)
+    risk_col = "score_risk"
+    pio_col  = "piotroski_score"
+    filtered = scored.copy()
+    if risk_col in filtered.columns:
+        filtered = filtered[
+            filtered[risk_col].isna() | (filtered[risk_col] >= 25)
+        ]
+    if pio_col in filtered.columns:
+        filtered = filtered[
+            filtered[pio_col].isna() | (filtered[pio_col] >= 2)
+        ]
+    n_removed = pre_len - len(filtered)
+    filter_note = (
+        f"_⚙️ Förfilter: {n_removed} aktier sorterades bort (hög volatilitet / låg Piotroski) "
+        f"innan topp-{n} valdes ut._\n"
+    ) if n_removed > 0 else ""
+
     top_list = []
     sector_counts = {}
 
-    for _, r in scored.iterrows():
+    for _, r in filtered.iterrows():
         sec = r.get("sector", "Övrigt")
         if pd.isna(sec):
             sec = "Övrigt"
@@ -136,6 +303,8 @@ def _section_top_n(scored, n):
     top = pd.DataFrame(top_list)
 
     lines = [f"## 🏆 Topp {n} aktier (Max {MAX_PER_SECTOR} per sektor)\n"]
+    if filter_note:
+        lines.append(filter_note)
     lines.append("| # | Ticker | Bolag | Score | Entry | Konf | Trend | RS | Insider | EPS | Δ |")
     lines.append("|---|--------|-------|-------|-------|------|-------|----|---------|-----|---|")
     ei = {"STARK": "🟢", "OK": "🔵", "VÄNTA": "🟡", "EJ AKTUELL": "🔴"}
@@ -209,15 +378,123 @@ def _section_portfolio(analysis, summary):
 
 
 def _section_claude_prompt():
-    return ("\n## 🤖 Klistra in i Claude Pro\n```\n"
-            "Här är min veckovisa scan. Sök senaste 30 dagars nyheter för topp 20\n"
-            "och mina innehav. Filtrera bort röda flaggor.\n\n"
-            "Ge mig:\n"
-            "1. Topp 10 köpkandidater med motivering\n"
-            "2. Bekräfta/överrid rekommendationerna för mina innehav\n"
-            "3. Varningssignaler jag missat\n"
-            "4. Är jag för exponerad mot en sektor?\n"
-            "5. Vad säger makrobilden just nu?\n```")
+    return (
+        "\n## 🤖 AI-analyspromptar\n"
+        "_Klistra in rapporten + dessa frågor i Claude Pro / ChatGPT för djupanalys._\n\n"
+
+        "**1. Dataintegritet och algoritmkontroll:**\n"
+        "```\n"
+        "Läs det bifogade AI-datalagret (JSON/CSV) längst ner i dokumentet. "
+        "Finns det några uppenbara fel i datainhämtningen (t.ex. saknade värden, NaN, eller "
+        "orimliga volatilitetssiffror) som riskerar att snedvrida topplistan? Granska även om "
+        "algoritmens nuvarande vikter (t.ex. Value vs Momentum) är optimala för den aktuella "
+        "marknadsregimen.\n"
+        "```\n\n"
+
+        "**2. Nyhets- och riskvalidering av toppkandidater (Sök-trigger):**\n"
+        "```\n"
+        "Ta de 5 högst rankade aktierna från listan. Sök på nätet efter de allra senaste "
+        "nyheterna, kvartalsrapporterna och eventuella makroekonomiska händelser som kan påverka "
+        "dessa specifika bolag. Finns det någon fundamental anledning, nyhet eller "
+        "varningsklocka som inte syns i den tekniska datan till varför jag INTE bör köpa "
+        "någon av dessa idag?\n"
+        "```\n\n"
+
+        "**3. Sektormomentum och framtidsinsikter (Sök-trigger):**\n"
+        "```\n"
+        "Analysera sektors-heatmapen och rådatan för sektorerna i filen. Vilka underliggande "
+        "trender driver de ledande sektorerna just nu? Sök efter aktuella nyheter för dessa "
+        "sektorer och ge en bedömning av om detta momentum är hållbart, eller om marknaden "
+        "indikerar en stundande sektorrotation.\n"
+        "```\n\n"
+
+        "**4. Portföljsynk och rebalansering:**\n"
+        "```\n"
+        "Utifrån min nuvarande portfölj och den rådande marknadsregimen (SPY vs MA200 och "
+        "marknadsbredd): Vilka av de kurerade toppkandidaterna erbjuder bäst diversifiering "
+        "för att sänka min totala portföljrisk? Identifiera även baserat på rådatan vilka av "
+        "mina nuvarande innehav som visar svagast teknisk trend och därmed bör övervägas "
+        "för försäljning.\n"
+        "```"
+    )
+
+
+def _section_ai_datalayer(scored: pd.DataFrame, regime_info: dict) -> str:
+    """
+    DEL 3 – AI-optimerat Datalager.
+    Minifierad JSON + CSV med all rådata längst ner i rapporten.
+    AI-modeller kan direkt utföra exakta matematiska tväranalyser utan läsfel.
+    """
+    import json as _json
+
+    lines = ["\n---\n## 📦 AI-Datalager (Maskinläsbart)\n"]
+    lines.append("_Rådata för AI-analys. Klistra in hela rapporten i Claude Pro._\n")
+
+    # ── Algoritm-metadata ─────────────────────────────────────
+    fw = config.FACTOR_WEIGHTS
+    meta = {
+        "scan_date":      datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "universe_size":  len(scored),
+        "regime":         (regime_info or {}).get("regime", "OSÄKER"),
+        "composite":      (regime_info or {}).get("composite"),
+        "vix":            (regime_info or {}).get("vix_level"),
+        "spy_vs_ma200":   (regime_info or {}).get("spy_vs_ma200"),
+        "breadth_delta":  (regime_info or {}).get("breadth_delta"),
+        "factor_weights": fw,
+        "thresholds": {
+            "buy_more_percentile": config.BUY_MORE_PERCENTILE,
+            "hold_percentile":     config.HOLD_PERCENTILE,
+            "min_data_quality":    config.MIN_DATA_QUALITY,
+            "top_n":               config.TOP_N_RECOMMENDATIONS,
+        },
+    }
+    lines.append("### Metadata\n```json")
+    lines.append(_json.dumps(meta, indent=2))
+    lines.append("```\n")
+
+    # ── Topp-50 som JSON ──────────────────────────────────────
+    if not scored.empty:
+        cols_to_export = [
+            c for c in [
+                "ticker", "name", "sector", "score_total", "rank",
+                "entry_signal", "confidence_label", "trend_signal",
+                "score_value", "score_quality", "score_momentum",
+                "score_growth", "score_risk", "score_sentiment",
+                "pe_ratio", "pb_ratio", "roe", "revenue_growth",
+                "piotroski_score", "rs_label", "insider_signal",
+                "earnings_signal", "data_quality", "price_vs_ma200",
+            ] if c in scored.columns
+        ]
+        top50_df = scored.head(50)[cols_to_export].copy()
+
+        # Rensa NaN/Inf för JSON-serialisering
+        top50_df = top50_df.replace([float("inf"), float("-inf")], None)
+        top50_records = []
+        for row in top50_df.to_dict("records"):
+            clean = {k: (None if isinstance(v, float) and pd.isna(v) else v) for k, v in row.items()}
+            top50_records.append(clean)
+
+        lines.append("### Topp-50 Aktier (JSON)\n```json")
+        lines.append(_json.dumps(top50_records, ensure_ascii=False))
+        lines.append("```\n")
+
+        # ── Portfölj-aktier som CSV ───────────────────────────
+        lines.append("### Alla Analyserade Aktier – Score-sammanfattning (CSV)\n```csv")
+        csv_cols = [c for c in ["ticker", "name", "sector", "score_total", "rank",
+                                "entry_signal", "confidence_label"] if c in scored.columns]
+        lines.append(",".join(csv_cols))
+        for _, row in scored[csv_cols].iterrows():
+            vals = []
+            for c in csv_cols:
+                v = row[c]
+                if isinstance(v, float) and pd.isna(v):
+                    vals.append("")
+                else:
+                    vals.append(str(v).replace(",", ";"))
+            lines.append(",".join(vals))
+        lines.append("```")
+
+    return "\n".join(lines)
             
             
 def _section_cleanup(warnings, removed):
@@ -363,22 +640,9 @@ def _section_watchlist(scored: pd.DataFrame) -> str:
 
 
 def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df, holdings, warnings=None, removed=None, sector_mom=None, benchmarks=None):
-    fw   = config.FACTOR_WEIGHTS
-    bm   = benchmarks or {}
-    date = datetime.now().strftime("%Y-%m-%d %H:%M")
-    stark  = (scored.get("entry_signal",pd.Series())=="STARK").sum() if "entry_signal" in scored.columns else 0
-    high_c = (scored.get("confidence_label",pd.Series())=="HÖG").sum() if "confidence_label" in scored.columns else 0
-    in_up  = (~scored.get("trend_capped",pd.Series(True))).sum() if "trend_capped" in scored.columns else 0
+    bm = benchmarks or {}
 
-    parts = [
-        "# 📊 Veckovis Aktiescan",
-        f"**Datum:** {date}  \n**Scannade:** {len(scored)} aktier",
-        f"**Vikter:** Value {fw['value']*100:.0f}% · Quality {fw['quality']*100:.0f}% · "
-        f"Momentum {fw['momentum']*100:.0f}% · Growth {fw['growth']*100:.0f}% · "
-        f"Risk {fw['risk']*100:.0f}% · Sentiment {fw.get('sentiment',0)*100:.0f}%",
-        f"**Signaler:** {in_up} upptrend · {high_c} HÖG konfidens · {stark} STARK entry",
-        "\n---\n",
-    ]
+    parts = []
 
     def _try(label, fn):
         try:
@@ -390,11 +654,16 @@ def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df,
             print(f"  ⚠ Sektion '{label}' misslyckades: {e}")
             traceback.print_exc()
 
-    # 1. Marknadsregim
+    # ── DEL 1: Executive Summary (alltid överst) ──────────────
+    _try("Executive Summary", lambda: _section_executive_summary(scored, regime_info, bm, analysis))
+
+    # ── DEL 2: Kurerad topplista + sektors-heatmap ────────────
+
+    # 1. Detaljerad marknadsregim (expanderad)
     if regime_info:
         _try("Marknadsregim", lambda: macro_regime.build_regime_section(regime_info))
 
-    # Benchmark
+    # 2. Benchmark-tabell
     if bm:
         def _bm():
             bm_lines = ["\n## 📊 Benchmark\n",
@@ -409,53 +678,54 @@ def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df,
             return "\n".join(bm_lines)
         _try("Benchmark", _bm)
 
-    # 2. Topp-N
+    # 3. Sektors-heatmap (enkel textmatris, Del 2)
+    _try("Sektors-heatmap", lambda: _section_sector_heatmap(scored, sector_df))
+
+    # 4. Topp-N (med volatilitets-/Piotroski-förfilter, Del 2)
     _try("Topp-N", lambda: _section_top_n(scored, config.TOP_N_RECOMMENDATIONS))
 
-    # 2.5. Piotroski
+    # 5. Piotroski
     _try("Piotroski", lambda: piotroski.build_piotroski_section(scored))
 
-    # 3. Risk Parity
+    # 6. Risk Parity
     _try("Risk Parity", lambda: portfolio_analysis._section_risk_parity(scored))
 
-    # 3.5. Sektor-ETF momentum
+    # 7. Sektor-ETF momentum
     if sector_mom:
         _try("Sektor-momentum", lambda: sector_momentum.build_sector_momentum_section(sector_mom))
 
-    # 4. Sektorer
+    # 8. Sektorer (detaljerad ranking)
     _try("Sektorer", lambda: _section_sectors(sector_df))
 
-    # 5. Delta
+    # 9. Delta
     _try("Delta", lambda: delta_tracker.build_delta_report_section(scored))
 
-    # 6. Earnings
+    # 10. Earnings
     def _earn():
         pc = earnings_df.get("portfolio", pd.DataFrame()) if isinstance(earnings_df, dict) else earnings_df
         tc = earnings_df.get("top", pd.DataFrame()) if isinstance(earnings_df, dict) else pd.DataFrame()
         return earnings_calendar.build_earnings_section(pc, tc)
     _try("Earnings", _earn)
 
-    # 7. Portfölj
+    # 11. Portfölj
     if not analysis.empty:
         _try("Portfölj", lambda: _section_portfolio(analysis, summary))
         _try("Portföljanalys", lambda: portfolio_analysis.build_portfolio_analysis_section(analysis, scored))
 
-    # 7.5. Bevakningslista
+    # 12. Bevakningslista
     _try("Bevakningslista", lambda: _section_watchlist(scored))
 
-    # 8. Sektoranalys Topp 5
-    _try("Sektoranalys Topp5", lambda: _section_sectors_top5(scored, sector_df))
-
-    # 9. Systemunderhåll
+    # 13. Systemunderhåll
     _try("Systemunderhåll", lambda: _section_cleanup(warnings, removed))
 
-    # 9.5. Paper trading
+    # 14. Paper trading
     _try("Paper trading", lambda: paper_trading.build_paper_trading_section())
 
-    # 10. Avslutning
+    # ── DEL 3: AI-prompts + Datalager (alltid sist) ───────────
     parts.append(_section_claude_prompt())
+    _try("AI-datalager", lambda: _section_ai_datalayer(scored, regime_info))
     parts.append("\n---\n*⚠ Inte finansiell rådgivning.*")
-    
+
     return "\n".join(parts)
 
 
