@@ -1,30 +1,35 @@
 """
 morning_scan.py
 ===============
-Vardaglig morgonkoll kl 09:35 CET.
+Vardaglig morgonkoll kl 09:35 CET – "dagsbrev" format.
 
-Tre saker:
-  1. CRASH-ALERT      – öppnar något av dina innehav ned >3% / >6%?
-  2. STARK UPPGÅNG    – öppnar något av dina innehav upp >3%? (ta hem vinst?)
-  3. KÖPMÖJLIGHETER   – topp-50 från söndagens scan som har bra entry just nu
-
-Skickar email:
-  - Alltid om det finns alerts (crash, uppgång, köpmöjlighet)
-  - Tyst (inget email) om allt är normalt och inga signaler finns
+Skickar ALLTID email (dagsbrev), inte bara vid alerts.
+Innehåll:
+  1. MARKNADSÖVERSIKT  – OMXS30/SPY öppning, index-rörelse
+  2. STOPPLOSS-ALERTS  – innehav ned >15% från inköpspris (kräver åtgärd)
+  3. CRASH/SURGE       – intradag-rörelser >3% / >6%
+  4. PORTFÖLJ-BRIEF    – alla innehav, kort statusrad
+  5. KÖPMÖJLIGHETER    – topp-50 från söndagens scan
+  6. NYHETER           – Finnhub-nyheter för innehav + bevakningslista
+  7. EARNINGS-PÅMINNELSE
+  8. BEVAKNINGSLISTA
 
 Tidszoner:
-  - Stockholmsbörsen öppnar 09:00 CET  → vi kör 09:35 (35 min in, öppningsgap satt)
-  - NYSE öppnar 15:30 CET              → US-aktier: använder igårkvällens stängning
-  - Europeiska börser: realtidsdata tillgänglig
+  - Stockholmsbörsen öppnar 09:00 CET  → vi kör 09:35
+  - NYSE öppnar 15:30 CET              → US-aktier: igårkvällens stängning
 
 Kör manuellt: python morning_scan.py
-GitHub Actions: morning_scan.yml (vardag 08:35 UTC = 09:35 CET vinter, 10:35 sommartid)
+GitHub Actions: morning_scan.yml (vardag 08:35 UTC = 09:35 CET vinter)
 """
 
+import os
 import sys
 import time
 import argparse
+import smtplib
 from datetime import date, datetime, timedelta
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
 
 import pandas as pd
@@ -36,17 +41,22 @@ import logger
 import portfolio
 import earnings_calendar as ec
 import watchlist as wl
+import news_fetcher
 
 # ── Trösklar ──────────────────────────────────────────────────────────────
 CRASH_WARN_PCT    = -3.0   # % – varning (gult)
 CRASH_SELL_PCT    = -6.0   # % – sälj-signal (rött)
 SURGE_NOTIFY_PCT  = +3.0   # % – stark uppgång, notifiera
 SURGE_TAKEHALF    = +8.0   # % – uppgång så stor att "ta hem halva" är aktuellt
+STOPLOSS_PCT      = -15.0  # % – stopploss-gräns mot inköpspris
 MORNING_TOP_N     = 50     # Antal aktier från söndags-scan att kontrollera
 
-# ── US börser stänger vid 22:00 CET, öppnar 15:30 CET ──────────────────────
-US_SUFFIXES  = {"", None}   # Inga suffix = US
-EU_OPEN_HOUR = 9            # Europeiska börser öppnar ~09:00 CET
+# Benchmark-tickers för marknadsöversikt
+BENCHMARK_TICKERS = {
+    "^OMX":  "OMXS30",
+    "SPY":   "S&P 500 (igår)",
+    "^VIX":  "VIX",
+}
 
 
 # ══════════════════════════════════════════════════════════════
@@ -54,10 +64,7 @@ EU_OPEN_HOUR = 9            # Europeiska börser öppnar ~09:00 CET
 # ══════════════════════════════════════════════════════════════
 
 def load_top50_from_sunday() -> tuple[pd.DataFrame, str]:
-    """
-    Läser senaste scored_universe_*.csv och returnerar topp-50.
-    Returnerar (df, käll-datum) eller (tom df, "").
-    """
+    """Läser senaste scored_universe_*.csv och returnerar topp-50."""
     csvs = sorted(
         Path(config.REPORT_DIR).glob("scored_universe_*.csv"),
         reverse=True
@@ -70,7 +77,6 @@ def load_top50_from_sunday() -> tuple[pd.DataFrame, str]:
 
     try:
         df = pd.read_csv(latest)
-        # Sortera på score_total om det finns
         if "score_total" in df.columns:
             df = df.sort_values("score_total", ascending=False)
         return df.head(MORNING_TOP_N).copy(), date_str
@@ -80,21 +86,48 @@ def load_top50_from_sunday() -> tuple[pd.DataFrame, str]:
 
 
 # ══════════════════════════════════════════════════════════════
+# MARKNADSÖVERSIKT
+# ══════════════════════════════════════════════════════════════
+
+def fetch_market_overview() -> dict:
+    """
+    Hämtar OMXS30 och SPY för att ge kontextuell marknadsöversikt.
+    Returnerar {symbol: {name, change_pct, price, note}}.
+    """
+    result = {}
+    for symbol, name in BENCHMARK_TICKERS.items():
+        try:
+            time.sleep(0.3)
+            hist = yf.Ticker(symbol).history(period="3d", auto_adjust=True)
+            if hist.empty or len(hist) < 2:
+                continue
+            curr = float(hist["Close"].iloc[-1])
+            prev = float(hist["Close"].iloc[-2])
+            chg  = (curr / prev - 1) * 100
+            note = "" if symbol != "SPY" else "(NYSE stängt – igårkväll)"
+            result[symbol] = {
+                "name":       name,
+                "change_pct": round(chg, 2),
+                "price":      round(curr, 2),
+                "note":       note,
+            }
+        except Exception:
+            pass
+    return result
+
+
+# ══════════════════════════════════════════════════════════════
 # PRISHÄMTNING
 # ══════════════════════════════════════════════════════════════
 
 def is_us_ticker(ticker: str) -> bool:
-    """US-aktier har inget suffix (AAPL, MSFT) eller specifika US-suffix."""
     return "." not in ticker
 
 
 def fetch_opening_moves(tickers: list, verbose: bool = True) -> dict:
     """
     Hämtar procentuell rörelse sedan igår för varje ticker.
-
-    För europeiska aktier: dagens rörelse (börsen öppen)
-    För US-aktier: igårkvällens stängning vs dagen innan
-                   (NYSE inte öppen kl 09:35 CET)
+    EU-tickers: realtid. US-tickers: igårkvällens stängning.
     """
     result = {}
     eu_tickers = [t for t in tickers if not is_us_ticker(t)]
@@ -103,9 +136,7 @@ def fetch_opening_moves(tickers: list, verbose: bool = True) -> dict:
     if verbose:
         print(f"  Hämtar {len(eu_tickers)} EU + {len(us_tickers)} US-tickers...")
 
-    # Hämta 3 dagars data för att täcka helger
-    all_tickers = eu_tickers + us_tickers
-    for ticker in all_tickers:
+    for ticker in eu_tickers + us_tickers:
         try:
             time.sleep(0.25)
             hist = yf.Ticker(ticker).history(period="3d", auto_adjust=True)
@@ -116,7 +147,6 @@ def fetch_opening_moves(tickers: list, verbose: bool = True) -> dict:
             prev  = float(hist["Close"].iloc[-2])
             chg   = (curr / prev - 1) * 100
 
-            # Volym-ratio (jämför med 5-dagars snitt om vi har det)
             vol_ratio = None
             if "Volume" in hist.columns and len(hist) >= 2:
                 vol_today = float(hist["Volume"].iloc[-1])
@@ -130,7 +160,7 @@ def fetch_opening_moves(tickers: list, verbose: bool = True) -> dict:
                 "prev_close": round(prev, 2),
                 "is_us":      is_us_ticker(ticker),
                 "vol_ratio":  vol_ratio,
-                "data_fresh": not is_us_ticker(ticker),  # EU = realtid, US = igår
+                "data_fresh": not is_us_ticker(ticker),
             }
         except Exception:
             pass
@@ -142,19 +172,43 @@ def fetch_opening_moves(tickers: list, verbose: bool = True) -> dict:
 # ALERT-DETEKTERING
 # ══════════════════════════════════════════════════════════════
 
-def detect_portfolio_alerts(
-    holdings: pd.DataFrame,
-    price_moves: dict,
-) -> dict:
+def detect_stoploss_alerts(holdings: pd.DataFrame, price_moves: dict) -> list:
     """
-    Klassificerar rörelser i dina innehav.
+    Hittar innehav ned >15% från inköpspris (cost_basis).
+    Returnerar [{ticker, change_pct_total, price, cost_basis, msg}].
+    """
+    alerts_list = []
+    for _, row in holdings.iterrows():
+        ticker = str(row["ticker"]).upper()
+        cost   = row.get("cost_basis")
+        move   = price_moves.get(ticker, {})
+        price  = move.get("price")
 
-    Returnerar:
-    {
-      "crash":   [{"ticker", "change_pct", "price", "action", "msg"}, ...],
-      "surge":   [{"ticker", "change_pct", "price", "action", "msg"}, ...],
-      "normal":  [{"ticker", "change_pct", "price"}, ...],
-    }
+        if not price or not cost:
+            continue
+        try:
+            cost_f = float(cost)
+            if cost_f <= 0:
+                continue
+            total_pct = (price / cost_f - 1) * 100
+            if total_pct <= STOPLOSS_PCT:
+                alerts_list.append({
+                    "ticker":    ticker,
+                    "price":     price,
+                    "cost_basis": cost_f,
+                    "total_pct": round(total_pct, 1),
+                    "msg":       f"Ned {total_pct:.1f}% från inköpspris {cost_f:.2f}",
+                })
+        except Exception:
+            pass
+
+    return sorted(alerts_list, key=lambda x: x["total_pct"])
+
+
+def detect_portfolio_alerts(holdings: pd.DataFrame, price_moves: dict) -> dict:
+    """
+    Klassificerar intradag-rörelser i portföljen.
+    Returnerar {crash: [...], surge: [...], normal: [...]}.
     """
     crash  = []
     surge  = []
@@ -222,25 +276,16 @@ def detect_portfolio_alerts(
 # KÖPMÖJLIGHETER FRÅN TOPP-50
 # ══════════════════════════════════════════════════════════════
 
-def find_opportunities(
-    top50:       pd.DataFrame,
-    price_moves: dict,
-    holdings:    pd.DataFrame,
-) -> list:
+def find_opportunities(top50: pd.DataFrame, price_moves: dict, holdings: pd.DataFrame) -> list:
     """
-    Hittar köpmöjligheter bland topp-50 som:
-      - Inte redan finns i portföljen
-      - Har STARK eller OK entry-signal från söndagens scan
-      - Öppnat i "sweet spot": pullback -2% till -6% från föregående stängning
-        (dipp i upptrend) ELLER nära en breakout (+1% till +4%)
+    Hittar köpmöjligheter bland topp-50 som inte redan finns i portföljen.
+    Dip i upptrend (-2% till -8%) eller breakout (+1% till +5%, volym ≥1.3x).
     """
     portfolio_tickers = set(holdings["ticker"].str.upper()) if not holdings.empty else set()
     opportunities = []
 
     for _, row in top50.iterrows():
         ticker = str(row.get("ticker", "")).upper()
-
-        # Hoppa över egna innehav
         if ticker in portfolio_tickers:
             continue
 
@@ -252,7 +297,6 @@ def find_opportunities(
         if chg is None or score < 60:
             continue
 
-        # Dipp i upptrend: aktien fallit 2-8% idag men är stark fundamentalt
         if -8.0 <= chg <= -2.0 and entry_signal in ("STARK", "OK"):
             opportunities.append({
                 "ticker":  ticker,
@@ -264,10 +308,9 @@ def find_opportunities(
                 "msg":     f"Dipp {chg:.1f}% i upptrend – potentiell entry",
                 "sector":  str(row.get("sector", "")),
             })
-        # Breakout: aktien stiger med volym, stark fundamental
         elif 1.0 <= chg <= 5.0 and entry_signal == "STARK":
             vol = move.get("vol_ratio", 1.0) or 1.0
-            if vol >= 1.3:  # Kräv minst 30% högre volym än igår
+            if vol >= 1.3:
                 opportunities.append({
                     "ticker":  ticker,
                     "name":    str(row.get("name", ""))[:30],
@@ -279,7 +322,6 @@ def find_opportunities(
                     "sector":  str(row.get("sector", "")),
                 })
 
-    # Sortera: dips och breakouts efter score
     return sorted(opportunities, key=lambda x: x["score"], reverse=True)[:5]
 
 
@@ -292,10 +334,6 @@ def build_watchlist_morning_section(
     price_moves:     dict,
     scored_df:       pd.DataFrame,
 ) -> str:
-    """
-    Bygger bevakningslistans sektion för morgonrapporten.
-    Visar: prisrörelse, entry-signal från söndagens scan, dagar tills nästa rapport.
-    """
     if not watchlist_items:
         return ""
 
@@ -315,12 +353,11 @@ def build_watchlist_morning_section(
         chg_s  = f"{chg:+.1f}%" if chg is not None else "—"
         chg_icon = ("🟢" if chg >= 0 else "🔴") if chg is not None else "⚪"
 
-        sc     = score_lookup.get(ticker, {})
-        score  = sc.get("score_total")
-        signal = sc.get("entry_signal", "—")
+        sc      = score_lookup.get(ticker, {})
+        score   = sc.get("score_total")
+        signal  = sc.get("entry_signal", "—")
         score_s = f"{score:.0f}" if score is not None else "—"
 
-        # Earnings
         earn_s = "—"
         try:
             earn_date = sc.get("next_earnings_date") or sc.get("earnings_date")
@@ -349,51 +386,81 @@ def build_morning_report(
     top50_date:       str,
     holdings:         pd.DataFrame,
     price_moves:      dict,
-    watchlist_items:  list = None,
+    market_overview:  dict       = None,
+    stoploss_alerts:  list       = None,
+    news_by_ticker:   dict       = None,
+    watchlist_items:  list       = None,
     top50_df:         pd.DataFrame = None,
 ) -> tuple[str, str]:
-    """
-    Bygger rapporten. Returnerar (markdown, email-ämne).
-    """
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    """Bygger dagsbrevet. Returnerar (markdown, email-ämne)."""
+    now    = datetime.now().strftime("%Y-%m-%d %H:%M")
     crash  = portfolio_alerts.get("crash",  [])
     surge  = portfolio_alerts.get("surge",  [])
     normal = portfolio_alerts.get("normal", [])
+    stoploss_alerts = stoploss_alerts or []
+    news_by_ticker  = news_by_ticker  or {}
 
-    has_alerts = bool(crash or surge or opportunities)
+    # ── Ämnesrad (alltid informativ) ──────────────────────────
+    omxs30_data = (market_overview or {}).get("^OMX", {})
+    omx_chg     = omxs30_data.get("change_pct")
+    omx_s       = f"OMXS30 {omx_chg:+.1f}%" if omx_chg is not None else ""
 
-    # ── Ämnesrad ──────────────────────────────────────────────
-    if crash and any(a["action"] == "SÄLJ/MINSKA" for a in crash):
-        tickers = ", ".join(a["ticker"] for a in crash if a["action"] == "SÄLJ/MINSKA")
-        subject = f"🚨 CRASH ALERT: {tickers} – MarketScan {date.today().strftime('%d %b')}"
+    if stoploss_alerts:
+        tickers  = ", ".join(a["ticker"] for a in stoploss_alerts[:2])
+        subject  = f"🛑 STOPPLOSS: {tickers} – {date.today().strftime('%d %b')}"
+    elif crash and any(a["action"] == "SÄLJ/MINSKA" for a in crash):
+        tickers  = ", ".join(a["ticker"] for a in crash if a["action"] == "SÄLJ/MINSKA")
+        subject  = f"🚨 CRASH ALERT: {tickers} – MarketScan {date.today().strftime('%d %b')}"
     elif crash:
-        tickers = ", ".join(a["ticker"] for a in crash)
-        subject = f"⚠️ Varning: {tickers} ned vid öppning – MarketScan {date.today().strftime('%d %b')}"
+        tickers  = ", ".join(a["ticker"] for a in crash)
+        subject  = f"⚠️ Varning: {tickers} ned – {omx_s or date.today().strftime('%d %b')}"
     elif surge and any(a["action"] == "TA HEM HALVA" for a in surge):
-        tickers = ", ".join(a["ticker"] for a in surge if a["action"] == "TA HEM HALVA")
-        subject = f"🚀 Stark uppgång: {tickers} – ta hem vinst? {date.today().strftime('%d %b')}"
+        tickers  = ", ".join(a["ticker"] for a in surge if a["action"] == "TA HEM HALVA")
+        subject  = f"🚀 Stark uppgång: {tickers} – ta hem vinst? {date.today().strftime('%d %b')}"
     elif opportunities:
-        first = opportunities[0]
-        typ   = "Dipp" if first["type"] == "DIP" else "Breakout"
-        subject = f"💡 {typ}: {first['ticker']} ({first['score']:.0f}p) – MarketScan {date.today().strftime('%d %b')}"
+        first   = opportunities[0]
+        typ     = "Dipp" if first["type"] == "DIP" else "Breakout"
+        subject = f"💡 {typ}: {first['ticker']} ({first['score']:.0f}p) | {omx_s or date.today().strftime('%d %b')}"
     else:
-        subject = f"✅ Morgon OK – inga alerts {date.today().strftime('%d %b')}"
+        subject = f"🌅 Morgonkoll {date.today().strftime('%d %b')} | {omx_s or 'Lugnt'} – inga alerts"
 
     # ── Rapport ───────────────────────────────────────────────
     lines = [f"# 🌅 Morgonkoll – {now}\n", "---\n"]
 
-    # Crash-alerts
+    # 1. Marknadsöversikt
+    if market_overview:
+        lines.append("## 📊 Marknadsöversikt\n")
+        lines.append("| Index | Rörelse | Kurs |")
+        lines.append("|-------|---------|------|")
+        for sym, d in market_overview.items():
+            chg   = d["change_pct"]
+            icon  = "🟢" if chg >= 0 else "🔴"
+            note  = f" _{d['note']}_" if d.get("note") else ""
+            lines.append(f"| {d['name']}{note} | {icon} {chg:+.2f}% | {d['price']:.2f} |")
+        lines.append("")
+
+    # 2. Stopploss-alerts (kritiska – visas högst upp)
+    if stoploss_alerts:
+        lines.append("## 🛑 STOPPLOSS-ALERTS\n")
+        lines.append("> Följande innehav är ned mer än 15% från inköpspris och bör ses över.\n")
+        for a in stoploss_alerts:
+            lines.append(
+                f"🛑 **`{a['ticker']}`** – ned **{a['total_pct']:.1f}%** från "
+                f"inköpspris {a['cost_basis']:.2f} (nuvarande {a['price']:.2f})  \n"
+                f"_{a['msg']}_\n"
+            )
+
+    # 3. Intradag-alerts (crash/surge)
     if crash:
         lines.append("## 🚨 Portfölj-alerts\n")
         for a in sorted(crash, key=lambda x: x["change_pct"]):
-            icon = "🔴" if a["action"] == "SÄLJ/MINSKA" else "🟡"
+            icon  = "🔴" if a["action"] == "SÄLJ/MINSKA" else "🟡"
             pnl_s = f" · Totalt P&L: {a['total_pnl']:+.1f}%" if a.get("total_pnl") is not None else ""
             lines.append(
                 f"{icon} **`{a['ticker']}`** {a['change_pct']:+.1f}% "
                 f"→ **{a['action']}**  \n_{a['msg']}{pnl_s}_\n"
             )
 
-    # Surge-alerts
     if surge:
         lines.append("## 🚀 Stark uppgång i portföljen\n")
         for a in sorted(surge, key=lambda x: x["change_pct"], reverse=True):
@@ -403,18 +470,33 @@ def build_morning_report(
                 f"→ **{a['action']}**  \n_{a['msg']}{pnl_s}_\n"
             )
 
-    # Normal portfölj-översikt
-    if normal:
-        lines.append("## 💼 Övriga innehav\n")
-        lines.append("| Ticker | Idag | Pris |")
-        lines.append("|--------|------|------|")
-        for n in sorted(normal, key=lambda x: x["change_pct"]):
-            sign = "+" if n["change_pct"] >= 0 else ""
-            icon = "🟢" if n["change_pct"] >= 0 else "🔴"
-            lines.append(f"| `{n['ticker']}` | {icon} {sign}{n['change_pct']:.1f}% | {n['price']:.2f} |")
+    # 4. Portfölj-brief (alla innehav)
+    if not holdings.empty and price_moves:
+        lines.append("## 💼 Portfölj-brief\n")
+        lines.append("| Ticker | Idag | Pris | Totalt |")
+        lines.append("|--------|------|------|--------|")
+        all_holding_rows = list(holdings.iterrows())
+        for _, row in all_holding_rows:
+            ticker  = str(row["ticker"]).upper()
+            move    = price_moves.get(ticker, {})
+            chg     = move.get("change_pct")
+            price   = move.get("price")
+            cost    = row.get("cost_basis")
+            if chg is None:
+                continue
+            chg_icon  = "🟢" if chg >= 0 else "🔴"
+            price_s   = f"{price:.2f}" if price else "—"
+            total_s   = "—"
+            if price and cost:
+                try:
+                    total_pct = (price / float(cost) - 1) * 100
+                    total_s   = f"{total_pct:+.1f}%"
+                except Exception:
+                    pass
+            lines.append(f"| `{ticker}` | {chg_icon} {chg:+.1f}% | {price_s} | {total_s} |")
         lines.append("")
 
-    # Köpmöjligheter
+    # 5. Köpmöjligheter
     if opportunities:
         lines.append(f"## 💡 Köpmöjligheter (topp-50 från {top50_date})\n")
         for opp in opportunities:
@@ -425,20 +507,34 @@ def build_morning_report(
                 f"Score: **{opp['score']:.0f}** · {opp['change']:+.1f}% · "
                 f"{opp['signal']} · {opp['msg']}\n"
             )
-    elif not has_alerts:
-        lines.append("## ℹ️ Status\n\n✅ Inga signaler – allt normalt.\n")
 
-    # Earnings-påminnelse
+    # 6. Nyheter (Finnhub)
+    if news_by_ticker:
+        ticker_names = {}
+        if not holdings.empty and "ticker" in holdings.columns and "name" in holdings.columns:
+            ticker_names.update(
+                dict(zip(holdings["ticker"].str.upper(), holdings.get("name", holdings["ticker"])))
+            )
+        for item in (watchlist_items or []):
+            ticker_names[item["ticker"]] = item.get("name", item["ticker"])
+
+        news_md = news_fetcher.format_news_section_md(
+            news_by_ticker, ticker_names=ticker_names, header="📰 Nyheter (senaste 24h)"
+        )
+        if news_md:
+            lines.append(news_md)
+
+    # 7. Earnings-påminnelse
     if earnings_soon is not None and not earnings_soon.empty:
         lines.append("## 📅 Kommande rapporter (dina innehav)\n")
         for _, row in earnings_soon.iterrows():
-            days = row.get("days_until", "?")
+            days   = row.get("days_until", "?")
             ticker = row.get("ticker", "")
-            d = str(row.get("date", ""))[:10]
+            d      = str(row.get("date", ""))[:10]
             lines.append(f"- **`{ticker}`** rapporterar **{d}** (om {days} dagar)")
         lines.append("")
 
-    # Bevakningslista
+    # 8. Bevakningslista
     if watchlist_items:
         wl_section = build_watchlist_morning_section(
             watchlist_items, price_moves, top50_df if top50_df is not None else pd.DataFrame()
@@ -446,8 +542,50 @@ def build_morning_report(
         if wl_section:
             lines.append(wl_section)
 
+    # Statusrad om inga alerts
+    has_alerts = bool(crash or surge or stoploss_alerts or opportunities)
+    if not has_alerts:
+        lines.append("## ℹ️ Status\n\n✅ Inga signaler – marknaden öppnar normalt.\n")
+
     lines.append("---\n*⚠ Inte finansiell rådgivning. MarketScan morgonkoll.*")
     return "\n".join(lines), subject
+
+
+# ══════════════════════════════════════════════════════════════
+# EMAIL
+# ══════════════════════════════════════════════════════════════
+
+def send_email(subject: str, report: str) -> bool:
+    """Skickar email med markdown + HTML. Returnerar True vid lyckat utskick."""
+    sender, password, to = alerts._get_email_config()
+    if not sender or not password:
+        return False
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"]    = f"MarketScan <{sender}>"
+    msg["To"]      = to
+    msg.attach(MIMEText(report, "plain", "utf-8"))
+
+    html_body = alerts._markdown_to_html(report)
+    full_html = (
+        "<html><body style=\"font-family:sans-serif;max-width:680px;"
+        "margin:0 auto;padding:20px\">"
+        + html_body
+        + "<div style=\"margin-top:24px;font-size:11px;color:#999\">"
+        "Automatisk rapport från MarketScan. Inte finansiell rådgivning."
+        "</div></body></html>"
+    )
+    msg.attach(MIMEText(full_html, "html", "utf-8"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+            s.login(sender, password)
+            s.sendmail(sender, to, msg.as_string())
+        return True
+    except Exception as e:
+        print(f"  ⚠ Email-fel: {e}")
+        return False
 
 
 # ══════════════════════════════════════════════════════════════
@@ -455,11 +593,11 @@ def build_morning_report(
 # ══════════════════════════════════════════════════════════════
 
 def main():
-    parser = argparse.ArgumentParser(description="Morgonkoll – crash alert + köpmöjligheter")
-    parser.add_argument("--quiet",      action="store_true")
-    parser.add_argument("--no-email",   action="store_true")
-    parser.add_argument("--force-email",action="store_true",
-                        help="Skicka email även utan alerts (för test)")
+    parser = argparse.ArgumentParser(description="Morgonkoll – dagsbrev med marknadsöversikt")
+    parser.add_argument("--quiet",       action="store_true")
+    parser.add_argument("--no-email",    action="store_true")
+    parser.add_argument("--force-email", action="store_true",
+                        help="(Deprecated) Email skickas alltid numera")
     args = parser.parse_args()
     v = not args.quiet
 
@@ -479,44 +617,57 @@ def main():
             if age_days > 8:
                 print("  ⚠ Scanen är mer än 8 dagar gammal – kör en ny söndagsscan")
 
-        # 2. Ladda portfölj
-        holdings = portfolio.load_holdings()
+        # 2. Ladda portfölj och bevakningslista
+        holdings         = portfolio.load_holdings()
+        watchlist_items  = wl.load_watchlist()
+        watchlist_tickers = [i["ticker"] for i in watchlist_items]
         log["n_holdings"] = len(holdings)
         if v:
             print(f"  ✓ {len(holdings)} innehav laddade")
-
-        # 3. Ladda bevakningslista
-        watchlist_items  = wl.load_watchlist()
-        watchlist_tickers = [i["ticker"] for i in watchlist_items]
         if watchlist_tickers and v:
             print(f"  ⭐ {len(watchlist_tickers)} aktier i bevakningslistan")
 
-        # 3. Hämta priser
+        # 3. Hämta marknadsöversikt (benchmarks)
+        print("\n📈 Hämtar marknadsöversikt (OMXS30/SPY/VIX)...")
+        market_overview = fetch_market_overview()
+        if market_overview and v:
+            for sym, d in market_overview.items():
+                sign = "+" if d["change_pct"] >= 0 else ""
+                print(f"  {d['name']}: {sign}{d['change_pct']:.2f}%")
+
+        # 4. Hämta priser för alla tickers
         all_tickers = list(set(
             list(holdings["ticker"].str.upper() if not holdings.empty else []) +
             list(top50["ticker"].str.upper() if not top50.empty else []) +
             watchlist_tickers
         ))
-
         print(f"\n📥 Hämtar priser ({len(all_tickers)} tickers)...")
         price_moves = fetch_opening_moves(all_tickers, verbose=v)
         log["n_prices"] = len(price_moves)
         print(f"  ✓ {len(price_moves)} priser hämtade")
 
-        # 4. Detektera portfolio-alerts
+        # 5. Stopploss-alerts
+        stoploss_alerts = []
+        if not holdings.empty:
+            stoploss_alerts = detect_stoploss_alerts(holdings, price_moves)
+            if stoploss_alerts and v:
+                print(f"\n  🛑 {len(stoploss_alerts)} stopploss-alert(s)!")
+        log["n_stoploss"] = len(stoploss_alerts)
+
+        # 6. Intradag-alerts
         portfolio_alerts = {"crash": [], "surge": [], "normal": []}
         if not holdings.empty:
             portfolio_alerts = detect_portfolio_alerts(holdings, price_moves)
             n_crash = len(portfolio_alerts["crash"])
             n_surge = len(portfolio_alerts["surge"])
             if n_crash:
-                print(f"\n  🚨 {n_crash} crash/varnings-alert(s) i portföljen!")
+                print(f"  🚨 {n_crash} crash/varnings-alert(s) i portföljen!")
             if n_surge:
                 print(f"  🚀 {n_surge} stark uppgång(ar) i portföljen!")
-        log["n_crash"]  = len(portfolio_alerts.get("crash", []))
-        log["n_surge"]  = len(portfolio_alerts.get("surge", []))
+        log["n_crash"] = len(portfolio_alerts.get("crash", []))
+        log["n_surge"] = len(portfolio_alerts.get("surge", []))
 
-        # 5. Hitta köpmöjligheter
+        # 7. Köpmöjligheter
         opportunities = []
         if not top50.empty and not holdings.empty:
             opportunities = find_opportunities(top50, price_moves, holdings)
@@ -524,7 +675,7 @@ def main():
                 print(f"  💡 {len(opportunities)} köpmöjlighet(er) identifierade")
         log["n_opportunities"] = len(opportunities)
 
-        # 6. Earnings-påminnelse
+        # 8. Earnings-påminnelse
         earnings_soon = pd.DataFrame()
         try:
             if not holdings.empty:
@@ -535,12 +686,34 @@ def main():
         except Exception:
             pass
 
-        # 7. Bygg rapport
+        # 9. Nyheter via Finnhub
+        news_by_ticker = {}
+        finnhub_key    = os.environ.get("FINNHUB_API_KEY", "")
+        if finnhub_key:
+            news_tickers = (
+                list(holdings["ticker"].str.upper() if not holdings.empty else []) +
+                watchlist_tickers
+            )
+            if news_tickers:
+                print(f"\n📰 Hämtar nyheter ({len(news_tickers)} tickers)...")
+                news_by_ticker = news_fetcher.fetch_news_batch(
+                    news_tickers, finnhub_key, days=1
+                )
+                if news_by_ticker and v:
+                    print(f"  ✓ Nyheter hittade för {len(news_by_ticker)} aktier")
+        else:
+            if v:
+                print("  ℹ FINNHUB_API_KEY ej satt – nyheter hoppas över")
+
+        # 10. Bygg rapport
         report, subject = build_morning_report(
             portfolio_alerts, opportunities, earnings_soon,
             top50_date, holdings, price_moves,
-            watchlist_items=watchlist_items,
-            top50_df=top50,
+            market_overview  = market_overview,
+            stoploss_alerts  = stoploss_alerts,
+            news_by_ticker   = news_by_ticker,
+            watchlist_items  = watchlist_items,
+            top50_df         = top50,
         )
 
         # Spara rapport
@@ -549,61 +722,23 @@ def main():
         report_path.write_text(report, encoding="utf-8")
         log["report_path"] = str(report_path)
 
-        # 8. Skicka email
-        has_alerts = bool(
-            portfolio_alerts.get("crash") or
-            portfolio_alerts.get("surge") or
-            opportunities
-        )
-
-        should_email = (has_alerts or args.force_email) and not args.no_email
-
-        if should_email and alerts.email_configured():
-            print(f"\n✉ Skickar: {subject}")
-            import smtplib
-            from email.mime.multipart import MIMEMultipart
-            from email.mime.text import MIMEText
-
-            # Konvertera till enkel HTML
-            html = "<br>".join(
-                f"<b>{l}</b>" if l.startswith("#") else l
-                for l in report.split("\n")
-            )
-
-            sender, password, to = alerts._get_email_config()
-            if sender and password:
-                msg = MIMEMultipart("alternative")
-                msg["Subject"] = subject
-                msg["From"]    = f"MarketScan <{sender}>"
-                msg["To"]      = to
-                msg.attach(MIMEText(report, "plain", "utf-8"))
-
-                # Använd alerts-modulens HTML-konvertering
-                html_body = alerts._markdown_to_html(report)
-                full_html = f"""<html><body style="font-family:sans-serif;max-width:680px;margin:0 auto;padding:20px">
-                {html_body}
-                <div style="margin-top:24px;font-size:11px;color:#999">
-                Automatisk rapport från MarketScan. Inte finansiell rådgivning.
-                </div></body></html>"""
-                msg.attach(MIMEText(full_html, "html", "utf-8"))
-
-                try:
-                    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-                        s.login(sender, password)
-                        s.sendmail(sender, to, msg.as_string())
-                    print(f"  ✉ Email skickat till {to}")
-                except Exception as e:
-                    print(f"  ⚠ Email-fel: {e}")
-        elif not has_alerts and not args.force_email:
-            print("\n  ✅ Inga alerts – inget email skickat")
+        # 11. Skicka email (alltid, om inte --no-email)
+        if not args.no_email and alerts.email_configured():
+            print(f"\n✉ Skickar dagsbrev: {subject}")
+            ok = send_email(subject, report)
+            if ok:
+                _, _, to = alerts._get_email_config()
+                print(f"  ✉ Email skickat till {to}")
         elif not alerts.email_configured():
-            print("\n  ℹ Email ej konfigurerat")
+            print("\n  ℹ Email ej konfigurerat – hoppar över")
 
         # Terminal-sammanfattning
         print(f"\n{'─'*40}")
+        print(f"  Stopploss:       {len(stoploss_alerts)}")
         print(f"  Crash alerts:    {len(portfolio_alerts.get('crash', []))}")
         print(f"  Uppgångar:       {len(portfolio_alerts.get('surge', []))}")
         print(f"  Köpmöjligheter:  {len(opportunities)}")
+        print(f"  Nyheter för:     {len(news_by_ticker)} aktier")
         print(f"  Rapport:         {report_path}")
 
 

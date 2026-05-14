@@ -17,10 +17,14 @@ Kör manuellt: python evening_scan.py
 GitHub Actions: evening_scan.yml (vardag 16:30 UTC = 17:30 CET vinter)
 """
 
+import os
 import sys
 import time
 import argparse
+import smtplib
 from datetime import date, datetime, timedelta
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
 
 import pandas as pd
@@ -34,6 +38,7 @@ import portfolio
 import paper_trading
 import earnings_calendar as ec
 import watchlist as wl
+import news_fetcher
 
 OMXS30_PROXY = "XACTOMXS3.ST"
 SPY_TICKER   = "SPY"
@@ -43,6 +48,35 @@ SELL_SCORE_THRESH    = 40    # Score under detta → SÄLJ-signal
 REDUCE_SCORE_THRESH  = 50    # Score under detta → MINSKA
 STRONG_HOLD_THRESH   = 70    # Score över detta → BEHÅLL starkt
 WEEKLY_LOSS_WARN     = -5.0  # Veckotapp % → varning
+STOPLOSS_PCT         = -15.0 # % – stopploss-gräns mot inköpspris
+
+
+# ══════════════════════════════════════════════════════════════
+# STOPPLOSS-DETEKTERING
+# ══════════════════════════════════════════════════════════════
+
+def detect_stoploss_alerts(holdings: pd.DataFrame, prices: dict) -> list:
+    """Hittar innehav ned >15% från inköpspris (cost_basis)."""
+    result = []
+    for _, row in holdings.iterrows():
+        ticker = str(row["ticker"]).upper()
+        cost   = row.get("cost_basis")
+        price  = (prices.get(ticker) or {}).get("price")
+        if not price or not cost:
+            continue
+        try:
+            cost_f    = float(cost)
+            total_pct = (price / cost_f - 1) * 100
+            if total_pct <= STOPLOSS_PCT:
+                result.append({
+                    "ticker":     ticker,
+                    "price":      price,
+                    "cost_basis": cost_f,
+                    "total_pct":  round(total_pct, 1),
+                })
+        except Exception:
+            pass
+    return sorted(result, key=lambda x: x["total_pct"])
 
 
 # ══════════════════════════════════════════════════════════════
@@ -342,6 +376,88 @@ def build_watchlist_evening_section(
 
 
 # ══════════════════════════════════════════════════════════════
+# FREDAGS-SAMMANFATTNING
+# ══════════════════════════════════════════════════════════════
+
+def build_friday_summary(
+    analysis:       list,
+    market:         dict,
+    earnings_soon:  pd.DataFrame,
+    news_by_ticker: dict,
+    ticker_names:   dict,
+) -> str:
+    """
+    Fredagsspecifik veckosammanfattning.
+    Visar portföljens veckoavkastning, bästa/sämsta, marknadsfaktoid och nyhetshöjdpunkter.
+    """
+    lines = ["## 📅 Fredagssammanfattning – Veckans resultat\n"]
+
+    # Portfölj-veckoavkastning
+    week_rows = [(a["ticker"], a.get("change_1w"), a.get("market_value")) for a in analysis
+                 if a.get("change_1w") is not None]
+    if week_rows:
+        # Viktad veckoresultat
+        mv_total = sum(mv or 0 for _, _, mv in week_rows if mv)
+        if mv_total > 0:
+            w_pct = sum((chg / 100) * (mv or 0) for _, chg, mv in week_rows) / mv_total * 100
+            icon  = "🟢" if w_pct >= 0 else "🔴"
+            lines.append(f"**Portfölj denna vecka: {icon} {w_pct:+.1f}%**\n")
+
+        # Bästa/sämsta
+        sorted_week = sorted(week_rows, key=lambda x: x[1], reverse=True)
+        best  = sorted_week[0]
+        worst = sorted_week[-1]
+        lines.append(f"🏆 **Bäst:** `{best[0]}` {best[1]:+.1f}%  \n"
+                     f"📉 **Sämst:** `{worst[0]}` {worst[1]:+.1f}%\n")
+
+    # Marknadsindex vecka
+    if market:
+        lines.append("| Index | Vecka | YTD |")
+        lines.append("|-------|-------|-----|")
+        for name, d in market.items():
+            w1  = d.get("change_1w", 0)
+            ytd = d.get("change_ytd", 0)
+            icon = "🟢" if w1 >= 0 else "🔴"
+            lines.append(f"| {name} | {icon} {w1:+.1f}% | {ytd:+.1f}% |")
+        lines.append("")
+
+    # Nästa veckas rapporter (earnings preview)
+    if earnings_soon is not None and not earnings_soon.empty:
+        next_week = earnings_soon[earnings_soon.get("days_until", 99) <= 7] \
+            if "days_until" in earnings_soon.columns else earnings_soon
+        if not next_week.empty:
+            lines.append("**Nästa veckas rapporter:**")
+            for _, row in next_week.iterrows():
+                ticker = row.get("ticker", "")
+                d      = str(row.get("date", ""))[:10]
+                lines.append(f"- `{ticker}` – {d}")
+            lines.append("")
+
+    # Nyhetshöjdpunkter denna vecka
+    if news_by_ticker:
+        lines.append("**Veckans nyhetshöjdpunkter:**")
+        shown = 0
+        for ticker, articles in news_by_ticker.items():
+            if not articles or shown >= 4:
+                break
+            name = ticker_names.get(ticker, ticker)
+            a    = articles[0]
+            icon = "🔴" if a["age_hours"] < 24 else "🟡" if a["age_hours"] < 72 else "⚪"
+            lines.append(
+                f"{icon} **`{ticker}`** [{a['headline']}]({a['url']})  \n"
+                f"   _{a['source']} · {a['datetime_str']}_"
+            )
+            shown += 1
+        lines.append("")
+
+    # Veckofaktoid
+    factoid = news_fetcher.get_weekly_factoid()
+    lines.append(f"> 💡 **Veckans börstips:** {factoid}\n")
+
+    return "\n".join(lines)
+
+
+# ══════════════════════════════════════════════════════════════
 # RAPPORT-BYGGARE
 # ══════════════════════════════════════════════════════════════
 
@@ -349,13 +465,18 @@ def build_evening_report(
     analysis:        list,
     market:          dict,
     earnings_soon:   pd.DataFrame,
-    watchlist_items: list = None,
-    wl_prices:       dict = None,
-    wl_scores:       dict = None,
-    universe_size:   int  = 200,
+    watchlist_items: list  = None,
+    wl_prices:       dict  = None,
+    wl_scores:       dict  = None,
+    universe_size:   int   = 200,
+    stoploss_alerts: list  = None,
+    news_by_ticker:  dict  = None,
+    is_friday:       bool  = False,
 ) -> str:
     """Bygger kvällsrapporten."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    stoploss_alerts = stoploss_alerts or []
+    news_by_ticker  = news_by_ticker  or {}
 
     # Beräkna portfölj-totaler
     total_value    = sum(a.get("market_value") or 0 for a in analysis)
@@ -369,6 +490,16 @@ def build_evening_report(
     n_buymore = sum(1 for a in analysis if "KÖP MER" in a["recommendation"].upper())
 
     lines = [f"# 🌆 Kvällsrapport – {now}\n", "---\n"]
+
+    # ── Stopploss-alerts ──────────────────────────────────────
+    if stoploss_alerts:
+        lines.append("## 🛑 STOPPLOSS-ALERTS\n")
+        lines.append("> Följande innehav är ned mer än 15% från inköpspris.\n")
+        for a in stoploss_alerts:
+            lines.append(
+                f"🛑 **`{a['ticker']}`** ned **{a['total_pct']:.1f}%** från "
+                f"inköpspris {a['cost_basis']:.2f} (nu {a['price']:.2f})\n"
+            )
 
     # ── Marknadsöversikt ──────────────────────────────────────
     if market:
@@ -450,7 +581,7 @@ def build_evening_report(
             lines.append(f"- **`{ticker}`** – {d} (om {days} dagar){est_s}")
         lines.append("")
 
-    # Bevakningslista
+    # ── Bevakningslista ───────────────────────────────────────
     if watchlist_items:
         wl_section = build_watchlist_evening_section(
             watchlist_items,
@@ -461,34 +592,59 @@ def build_evening_report(
         if wl_section:
             lines.append(wl_section)
 
+    # ── Nyheter (Finnhub) ─────────────────────────────────────
+    if news_by_ticker:
+        ticker_names = {}
+        if analysis:
+            ticker_names.update({a["ticker"]: a.get("name", a["ticker"]) for a in analysis})
+        for item in (watchlist_items or []):
+            ticker_names[item["ticker"]] = item.get("name", item["ticker"])
+        news_md = news_fetcher.format_news_section_md(
+            news_by_ticker, ticker_names=ticker_names, header="📰 Nyheter"
+        )
+        if news_md:
+            lines.append(news_md)
+
+    # ── Fredagssammanfattning ────────────────────────────────
+    if is_friday:
+        ticker_names = {a["ticker"]: a.get("name", a["ticker"]) for a in analysis}
+        for item in (watchlist_items or []):
+            ticker_names[item["ticker"]] = item.get("name", item["ticker"])
+        lines.append(build_friday_summary(
+            analysis, market, earnings_soon, news_by_ticker, ticker_names
+        ))
+
     lines.append("---\n*⚠ Inte finansiell rådgivning. MarketScan kvällsrapport.*")
     return "\n".join(lines)
 
 
-def build_email_subject(analysis: list, market: dict) -> str:
-    port_change = None
-    for name, d in market.items():
-        if name == "OMXS30":
-            pass
-
-    # Beräkna portfölj-rörelse
+def build_email_subject(
+    analysis:        list,
+    market:          dict,
+    stoploss_alerts: list = None,
+    is_friday:       bool = False,
+) -> str:
     mv   = sum(a.get("market_value") or 0 for a in analysis)
     pnl  = sum(a.get("pnl_today_sek") or 0 for a in analysis)
     pct  = (pnl / (mv - pnl)) * 100 if mv > 0 else 0
+    omx  = market.get("OMXS30", {}).get("change_1d", 0)
+    sign = "+" if pct >= 0 else ""
+    date_s = date.today().strftime("%d %b")
+
+    if stoploss_alerts:
+        tickers = ", ".join(a["ticker"] for a in stoploss_alerts[:2])
+        return f"🛑 Stopploss: {tickers} – {date_s}"
 
     n_sell = sum(1 for a in analysis if "SÄLJ" in a["recommendation"].upper())
-    omx    = market.get("OMXS30", {}).get("change_1d", 0)
-
     if n_sell > 0:
         tickers = ", ".join(a["ticker"] for a in analysis
                             if "SÄLJ" in a["recommendation"].upper())
-        return f"🚨 Sälj-signal: {tickers} – {date.today().strftime('%d %b')}"
+        return f"🚨 Sälj-signal: {tickers} – {date_s}"
 
-    sign = "+" if pct >= 0 else ""
-    return (
-        f"📊 {date.today().strftime('%d %b')} – "
-        f"Portfölj {sign}{pct:.1f}% · OMXS30 {omx:+.1f}%"
-    )
+    if is_friday:
+        return f"📅 Fredagssammanfattning {date_s} – Portfölj {sign}{pct:.1f}% · OMXS30 {omx:+.1f}%"
+
+    return f"📊 {date_s} – Portfölj {sign}{pct:.1f}% · OMXS30 {omx:+.1f}%"
 
 
 # ══════════════════════════════════════════════════════════════
@@ -552,6 +708,12 @@ def main():
         analysis = analyze_hold_sell(holdings, prices, scores, universe_size)
         log["n_sell_signals"] = sum(1 for a in analysis if "SÄLJ" in a["recommendation"].upper())
 
+        # 5b. Stopploss-alerts
+        stoploss_alerts = detect_stoploss_alerts(holdings, prices)
+        if stoploss_alerts and v:
+            print(f"\n  🛑 {len(stoploss_alerts)} stopploss-alert(s)!")
+        log["n_stoploss"] = len(stoploss_alerts)
+
         # 6. Earnings
         earnings_soon = pd.DataFrame()
         try:
@@ -568,15 +730,37 @@ def main():
         except Exception:
             pass
 
+        # 7b. Nyheter via Finnhub
+        news_by_ticker = {}
+        finnhub_key    = os.environ.get("FINNHUB_API_KEY", "")
+        is_friday      = date.today().weekday() == 4  # 4 = fredag
+        if finnhub_key:
+            news_tickers = list(holdings["ticker"].str.upper()) + wl_tickers
+            # Fredag: hämta 5 dagars nyheter för veckosammanfattning
+            news_days = 5 if is_friday else 1
+            if news_tickers:
+                print(f"\n📰 Hämtar nyheter (senaste {news_days} dag(ar))...")
+                news_by_ticker = news_fetcher.fetch_news_batch(
+                    news_tickers, finnhub_key, days=news_days
+                )
+                if news_by_ticker and v:
+                    print(f"  ✓ Nyheter för {len(news_by_ticker)} aktier")
+        else:
+            if v:
+                print("  ℹ FINNHUB_API_KEY ej satt – nyheter hoppas över")
+
         # 8. Bygg rapport
         report  = build_evening_report(
             analysis, market, earnings_soon,
-            watchlist_items=watchlist_items,
-            wl_prices=wl_prices,
-            wl_scores=wl_scores,
-            universe_size=universe_size,
+            watchlist_items  = watchlist_items,
+            wl_prices        = wl_prices,
+            wl_scores        = wl_scores,
+            universe_size    = universe_size,
+            stoploss_alerts  = stoploss_alerts,
+            news_by_ticker   = news_by_ticker,
+            is_friday        = is_friday,
         )
-        subject = build_email_subject(analysis, market)
+        subject = build_email_subject(analysis, market, stoploss_alerts, is_friday)
 
         # Spara
         Path(config.REPORT_DIR).mkdir(exist_ok=True)
@@ -588,13 +772,9 @@ def main():
         # 9. Skicka email (alltid)
         if not args.no_email and alerts.email_configured():
             print(f"✉ Skickar: {subject}")
-            try:
-                import smtplib
-                from email.mime.multipart import MIMEMultipart
-                from email.mime.text import MIMEText
-
-                sender, password, to = alerts._get_email_config()
-                if sender and password:
+            sender, password, to = alerts._get_email_config()
+            if sender and password:
+                try:
                     msg = MIMEMultipart("alternative")
                     msg["Subject"] = subject
                     msg["From"]    = f"MarketScan <{sender}>"
@@ -602,20 +782,20 @@ def main():
                     msg.attach(MIMEText(report, "plain", "utf-8"))
                     html_body = alerts._markdown_to_html(report)
                     full_html = (
-                        f"<html><body style='font-family:sans-serif;"
-                        f"max-width:680px;margin:0 auto;padding:20px'>"
-                        f"{html_body}"
-                        f"<div style='margin-top:24px;font-size:11px;color:#999'>"
-                        f"Automatisk rapport från MarketScan. Inte finansiell rådgivning."
-                        f"</div></body></html>"
+                        "<html><body style=\"font-family:sans-serif;"
+                        "max-width:680px;margin:0 auto;padding:20px\">"
+                        + html_body
+                        + "<div style=\"margin-top:24px;font-size:11px;color:#999\">"
+                        "Automatisk rapport från MarketScan. Inte finansiell rådgivning."
+                        "</div></body></html>"
                     )
                     msg.attach(MIMEText(full_html, "html", "utf-8"))
                     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
                         s.login(sender, password)
                         s.sendmail(sender, to, msg.as_string())
                     print(f"  ✉ Email skickat till {to}")
-            except Exception as e:
-                print(f"  ⚠ Email-fel: {e}")
+                except Exception as e:
+                    print(f"  ⚠ Email-fel: {e}")
         elif not alerts.email_configured():
             print("  ℹ Email ej konfigurerat")
 
@@ -624,9 +804,13 @@ def main():
         n_sell   = sum(1 for a in analysis if "SÄLJ" in a["recommendation"].upper())
         n_reduce = sum(1 for a in analysis if "MINSKA" in a["recommendation"].upper())
         n_hold   = sum(1 for a in analysis if "BEHÅLL" in a["recommendation"].upper())
-        print(f"  SÄLJ:    {n_sell}")
-        print(f"  MINSKA:  {n_reduce}")
-        print(f"  BEHÅLL:  {n_hold}")
+        print(f"  Stopploss:  {len(stoploss_alerts)}")
+        print(f"  SÄLJ:       {n_sell}")
+        print(f"  MINSKA:     {n_reduce}")
+        print(f"  BEHÅLL:     {n_hold}")
+        print(f"  Nyheter:    {len(news_by_ticker)} aktier")
+        if is_friday:
+            print("  📅 Fredagssammanfattning inkluderad")
 
 
 if __name__ == "__main__":
