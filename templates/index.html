@@ -477,6 +477,33 @@
   .tab-btn:hover { color: var(--text); }
   .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
+  /* ── SEGMENT SELECT ── */
+  .segment-select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border2);
+    border-radius: 2px; color: var(--text); font-family: inherit;
+    font-size: 13px; padding: 10px 12px; outline: none;
+    transition: border-color .15s; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235a7a99'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+  }
+  .segment-select:focus { border-color: var(--accent); }
+
+  /* ── SMALLCAP INFO BAR ── */
+  .sc-info-bar {
+    display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .sc-stat {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 3px; padding: 10px 16px;
+    font-size: 11px; color: var(--dim); letter-spacing: 1px;
+  }
+  .sc-stat span { color: var(--accent); font-weight: 600; font-size: 14px; }
+  .sc-builtin-badge {
+    font-size: 9px; padding: 2px 7px; border-radius: 10px;
+    background: rgba(0,153,255,.1); border: 1px solid rgba(0,153,255,.3);
+    color: var(--accent2); letter-spacing: 1px; margin-left: 6px;
+  }
+
   /* ── ADD MODE TOGGLE ── */
   .mode-toggle {
     display: flex; gap: 6px; margin-bottom: 16px;
@@ -524,6 +551,7 @@
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab('portfolio')" id="tabPortfolio">Portfölj</button>
     <button class="tab-btn"        onclick="switchTab('watchlist')" id="tabWatchlist">Bevakningslista <span class="wl-badge" id="wlBadge" style="display:none">0</span></button>
+    <button class="tab-btn"        onclick="switchTab('smallcap')"  id="tabSmallcap">Småbolag <span class="wl-badge" id="scBadge" style="display:none;background:rgba(0,153,255,.15);border-color:rgba(0,153,255,.35);color:var(--accent2)">0</span></button>
   </div>
 
   <!-- SEARCH -->
@@ -553,10 +581,11 @@
         <button class="form-close" onclick="closeForm()">✕</button>
       </div>
 
-      <!-- Mode toggle: Portfolio vs Watchlist -->
+      <!-- Mode toggle: Portfolio / Watchlist / Småbolag -->
       <div class="mode-toggle">
         <button class="mode-btn active" id="modePortfolio" onclick="setAddMode('portfolio')">Portfölj</button>
         <button class="mode-btn"        id="modeWatchlist" onclick="setAddMode('watchlist')">Bevakningslista</button>
+        <button class="mode-btn"        id="modeSmallcap"  onclick="setAddMode('smallcap')">Småbolag</button>
       </div>
 
       <!-- Portfolio mode: shares + cost -->
@@ -581,6 +610,24 @@
           <div class="form-field" style="flex:none">
             <label style="visibility:hidden">.</label>
             <button class="btn btn-primary" onclick="addToWatchlist()" style="background:var(--yellow);color:#060b11">Lägg till i bevakningslistan</button>
+          </div>
+          <button class="btn btn-secondary" onclick="closeForm()" style="align-self:flex-end">Avbryt</button>
+        </div>
+      </div>
+
+      <!-- Småbolag mode: segment picker + add -->
+      <div id="smallcapFields" style="display:none">
+        <div class="form-row">
+          <div class="form-field">
+            <label>Marknadssegment</label>
+            <select class="segment-select" id="segmentSelect">
+              <option value="first_north">Nasdaq First North</option>
+              <option value="small_cap">Nasdaq Small Cap</option>
+              <option value="spotlight">Spotlight / NGM</option>
+            </select>
+          </div>
+          <div class="form-field" style="flex:none;align-self:flex-end">
+            <button class="btn btn-primary" onclick="addToSmallcap()" style="background:var(--accent2)">Lägg till i småbolagslistan</button>
           </div>
           <button class="btn btn-secondary" onclick="closeForm()" style="align-self:flex-end">Avbryt</button>
         </div>
@@ -683,6 +730,39 @@
     </div>
   </div>
 
+  <!-- SMÅBOLAG SECTION -->
+  <div id="sectionSmallcap" style="display:none">
+    <div class="portfolio-section">
+      <div class="section-header">
+        <div class="section-title">
+          Dina tillägg till småbolagslistan
+          <span class="count-badge" id="scCustomCount">0</span>
+        </div>
+        <button class="refresh-btn" onclick="loadSmallcap()">↻ Uppdatera</button>
+      </div>
+
+      <!-- Stats row -->
+      <div class="sc-info-bar" id="scInfoBar">
+        <div class="sc-stat">Basuniversum: <span id="scBaseCount">—</span> bolag</div>
+        <div class="sc-stat">Totalt universum: <span id="scTotalCount">—</span> bolag</div>
+      </div>
+
+      <div style="font-size:10px;color:var(--dim);margin-bottom:14px;letter-spacing:1px">
+        Sök på ett bolag ovan och välj <strong style="color:var(--accent2)">Småbolag</strong> för att lägga till det direkt i nästa körning av scanners.
+        Bolag i basuniversumet kan inte tas bort härifrån – redigera då <code style="color:var(--accent);font-size:10px">smallcap/universe.py</code>.
+      </div>
+
+      <div class="table-wrap">
+        <div id="scTableContainer">
+          <div class="empty-state">
+            <div class="empty-icon">◈</div>
+            <div class="empty-text">Inga egna tillägg ännu — sök efter ett bolag ovan och välj "Småbolag"</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <footer>
     <div class="footer-note">Sparas automatiskt till holdings.csv · Används av scan.py</div>
     <div class="run-hint">Kör veckovis scan: <code>python scan.py</code></div>
@@ -704,10 +784,13 @@
     currentTab = tab;
     document.getElementById('tabPortfolio').classList.toggle('active', tab === 'portfolio');
     document.getElementById('tabWatchlist').classList.toggle('active', tab === 'watchlist');
+    document.getElementById('tabSmallcap').classList.toggle('active',  tab === 'smallcap');
     document.getElementById('sectionPortfolio').style.display = tab === 'portfolio' ? '' : 'none';
     document.getElementById('sectionWatchlist').style.display = tab === 'watchlist'  ? '' : 'none';
+    document.getElementById('sectionSmallcap').style.display  = tab === 'smallcap'   ? '' : 'none';
     document.getElementById('summaryBar').style.display       = tab === 'portfolio'  ? '' : 'none';
     if (tab === 'watchlist') loadWatchlist();
+    if (tab === 'smallcap')  loadSmallcap();
     closeForm();
   }
 
@@ -716,8 +799,10 @@
     addMode = mode;
     document.getElementById('modePortfolio').classList.toggle('active', mode === 'portfolio');
     document.getElementById('modeWatchlist').classList.toggle('active', mode === 'watchlist');
+    document.getElementById('modeSmallcap').classList.toggle('active',  mode === 'smallcap');
     document.getElementById('portfolioFields').style.display = mode === 'portfolio' ? '' : 'none';
     document.getElementById('watchlistFields').style.display = mode === 'watchlist'  ? '' : 'none';
+    document.getElementById('smallcapFields').style.display  = mode === 'smallcap'   ? '' : 'none';
     if (mode === 'portfolio') document.getElementById('sharesInput').focus();
   }
 
@@ -791,7 +876,8 @@
     document.getElementById('addForm').classList.add('open');
 
     // Default to the mode matching the active tab
-    setAddMode(currentTab === 'watchlist' ? 'watchlist' : 'portfolio');
+    if (currentTab === 'smallcap') setAddMode('smallcap');
+    else setAddMode(currentTab === 'watchlist' ? 'watchlist' : 'portfolio');
   }
 
   function closeForm() {
@@ -896,6 +982,109 @@
       const data = await res.json();
       const badge = document.getElementById('wlBadge');
       if (data.length > 0) { badge.style.display = ''; badge.textContent = data.length; }
+      else badge.style.display = 'none';
+    } catch (_) {}
+  }
+
+  // ── Småbolag ───────────────────────────────────────────────────────────
+  async function addToSmallcap() {
+    if (!selectedStock) return;
+    const segment = document.getElementById('segmentSelect').value;
+    try {
+      const res = await fetch('/api/smallcap/universe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticker: selectedStock.ticker, name: selectedStock.name, segment }),
+      });
+      const data = await res.json();
+      if (data.error) { showToast(data.error, 'error'); return; }
+      if (data.status === 'already_exists') {
+        showToast(`${selectedStock.ticker} finns redan i småbolagslistan`, 'error');
+      } else {
+        showToast(`${selectedStock.ticker} tillagd i småbolagslistan ◈`, 'success');
+      }
+      closeForm();
+      loadSmallcapBadge();
+      if (currentTab === 'smallcap') loadSmallcap();
+    } catch (err) {
+      showToast('Serverfel – körs app.py?', 'error');
+    }
+  }
+
+  async function removeFromSmallcap(ticker) {
+    if (!confirm(`Ta bort ${ticker} från småbolagslistan?`)) return;
+    try {
+      await fetch(`/api/smallcap/universe/${ticker}`, { method: 'DELETE' });
+      showToast(`${ticker} borttagen från småbolagslistan`, 'success');
+      loadSmallcap();
+      loadSmallcapBadge();
+    } catch (err) {
+      showToast('Serverfel', 'error');
+    }
+  }
+
+  async function loadSmallcap() {
+    try {
+      const res  = await fetch('/api/smallcap/universe');
+      const data = await res.json();
+      renderSmallcap(data);
+    } catch (err) {
+      document.getElementById('scTableContainer').innerHTML =
+        '<div class="empty-state"><div class="empty-text" style="color:var(--red)">Serverfel – körs app.py?</div></div>';
+    }
+  }
+
+  function renderSmallcap(data) {
+    const container = document.getElementById('scTableContainer');
+    document.getElementById('scBaseCount').textContent  = data.base_count  ?? '—';
+    document.getElementById('scTotalCount').textContent = data.total_count ?? '—';
+
+    const items = data.custom ?? [];
+    const badge = document.getElementById('scBadge');
+    if (data.total_count > 0) { badge.style.display = ''; badge.textContent = data.total_count; }
+    else badge.style.display = 'none';
+
+    if (items.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">◈</div>
+          <div class="empty-text">Inga egna tillägg ännu — sök efter ett bolag ovan och välj "Småbolag"</div>
+        </div>`;
+      return;
+    }
+
+    const segLabel = { first_north: 'First North', small_cap: 'Small Cap', spotlight: 'Spotlight', other: 'Övrigt' };
+    const rows = items.map(h => `<tr>
+      <td>
+        <span class="td-ticker">${h.ticker}</span>
+        <span class="td-name">${escHtml(h.name || '')}</span>
+      </td>
+      <td><span style="font-size:10px;color:var(--accent2);border:1px solid rgba(0,153,255,.3);padding:1px 5px;border-radius:2px">${segLabel[h.segment] ?? h.segment}</span></td>
+      <td style="font-size:10px;color:var(--dim)">${h.added || '—'}</td>
+      <td>
+        <button class="del-btn" onclick="removeFromSmallcap('${h.ticker}')" title="Ta bort">✕</button>
+      </td>
+    </tr>`).join('');
+
+    container.innerHTML = `
+      <table>
+        <thead><tr>
+          <th style="text-align:left">Aktie</th>
+          <th>Segment</th>
+          <th>Tillagd</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  async function loadSmallcapBadge() {
+    try {
+      const res  = await fetch('/api/smallcap/universe');
+      const data = await res.json();
+      const badge = document.getElementById('scBadge');
+      const n = data.total_count ?? 0;
+      if (n > 0) { badge.style.display = ''; badge.textContent = n; }
       else badge.style.display = 'none';
     } catch (_) {}
   }
@@ -1162,6 +1351,7 @@
   // ── Init ───────────────────────────────────────────────────────────────
   loadHoldings();
   loadWatchlistBadge();
+  loadSmallcapBadge();
 </script>
 </body>
 </html>

@@ -285,10 +285,67 @@ _ALL = FIRST_NORTH + SMALL_CAP + SPOTLIGHT
 # Deduplicera (behåll första förekomsten, ordning spelar ingen roll)
 SMALLCAP_UNIVERSE = list(dict.fromkeys(t.upper() for t in _ALL))
 
+# Sökväg till användarens egna tickers (skapas automatiskt vid första tillägget)
+_CUSTOM_FILE = Path(__file__).parent.parent / "data" / "smallcap_custom.json"
+
+
+# ── Anpassat universum (via app.py) ───────────────────────────────────────────
+
+def load_custom() -> list:
+    """Returnerar användartillagda tickers från data/smallcap_custom.json."""
+    try:
+        if _CUSTOM_FILE.exists():
+            import json
+            return json.loads(_CUSTOM_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return []
+
+
+def _save_custom(items: list):
+    import json
+    _CUSTOM_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _CUSTOM_FILE.write_text(
+        json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def add_custom(ticker: str, name: str = "", segment: str = "first_north") -> bool:
+    """Lägger till en ticker i custom-listan. Returnerar True om ny."""
+    from datetime import date
+    ticker = ticker.strip().upper()
+    custom = load_custom()
+    if any(c["ticker"] == ticker for c in custom):
+        return False
+    custom.append({
+        "ticker":  ticker,
+        "name":    name.strip(),
+        "segment": segment,
+        "added":   str(date.today()),
+    })
+    _save_custom(custom)
+    return True
+
+
+def remove_custom(ticker: str) -> bool:
+    """Tar bort en ticker ur custom-listan. Returnerar True om borttagen."""
+    ticker = ticker.strip().upper()
+    custom = load_custom()
+    new = [c for c in custom if c["ticker"] != ticker]
+    if len(new) == len(custom):
+        return False
+    _save_custom(new)
+    return True
+
+
+def is_builtin(ticker: str) -> bool:
+    """Returnerar True om tickern redan finns i basuniversumet."""
+    return ticker.strip().upper() in SMALLCAP_UNIVERSE
+
 
 def get_universe(market: str = "all") -> list:
     """
-    Returnerar ticker-lista baserat på marknad.
+    Returnerar ticker-lista baserat på marknad (inkl. custom-tickers).
     market: "all" | "first_north" | "small_cap" | "spotlight"
     """
     mapping = {
@@ -297,7 +354,15 @@ def get_universe(market: str = "all") -> list:
         "small_cap":   list(dict.fromkeys(t.upper() for t in SMALL_CAP)),
         "spotlight":   list(dict.fromkeys(t.upper() for t in SPOTLIGHT)),
     }
-    return mapping.get(market, SMALLCAP_UNIVERSE)
+    base = mapping.get(market, SMALLCAP_UNIVERSE)
+
+    custom = load_custom()
+    if market == "all":
+        extra = [c["ticker"] for c in custom]
+    else:
+        extra = [c["ticker"] for c in custom if c.get("segment") == market]
+
+    return list(dict.fromkeys(base + extra))
 
 
 # ── Bransch-kategorier ────────────────────────────────────────────────────────
