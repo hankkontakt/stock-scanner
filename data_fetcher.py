@@ -536,7 +536,7 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
             def _alarm_handler(sig, frm, _t=ticker):
                 raise TimeoutError(f"Timeout (25s) for {_t}")
             _signal.signal(_signal.SIGALRM, _alarm_handler)
-            _signal.alarm(25)
+            _signal.alarm(15)
 
         try:
             info = fetch_stock_info(ticker)
