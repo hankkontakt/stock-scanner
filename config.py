@@ -14,7 +14,7 @@ US_LARGE_CAP = [
     "CRM", "ADBE", "AMD", "INTC", "CSCO", "QCOM", "TXN", "IBM", "NOW", "INTU",
     "PANW", "PLTR", "SNOW", "MU", "AMAT", "LRCX", "KLAC", "ADI", "MRVL", "FTNT",
     "DDOG", "CRWD", "WDAY", "TEAM", "MDB", "NET", "ZS", "OKTA", "SHOP", "UBER",
-    "ABNB", "DASH", "SPOT", "ADSK", "ANSS", "CDNS", "SNPS", "VRSN", "CTSH", "GLW",
+    "ABNB", "DASH", "SPOT", "ADSK", "CDNS", "SNPS", "VRSN", "CTSH", "GLW",
     "HPQ", "HPE", "DELL", "WDC", "STX", "PSTG", "NTAP", "AKAM", "CDW", "ZBRA",
     "ARM", "SMCI", "ACN", "EPAM", "GLOB", "APP", "FLUT", "ANET", "VRT", "NTNX", 
     "CHKP", "CYBR", "TOST", "FOUR", "ASAN", "ESTC", "SMTS", "DOCS", "LAW", "AMPL", 
@@ -46,9 +46,9 @@ US_LARGE_CAP = [
 
     # Consumer Staples
     "WMT", "PG", "KO", "PEP", "COST", "MDLZ", "PM", "MO", "CL", "KMB",
-    "GIS", "K", "SYY", "MNST", "STZ", "EL", "CHD", "CLX", "HRL", "MKC",
+    "GIS", "SYY", "MNST", "STZ", "EL", "CHD", "CLX", "HRL", "MKC",
     "SJM", "CAG", "CPB", "HSY", "INGR", "LANC", "BRBR", "SMPL", "TR", "SFM", 
-    "KR", "ACI", "WBA", "RAD", "DG", "DLTR", "OLLI", "FIVE", "BJ", "BMBL", "GRND",
+    "KR", "ACI", "RAD", "DG", "DLTR", "OLLI", "FIVE", "BJ", "BMBL", "GRND",
 
     # Consumer Discretionary
     "MCD", "NKE", "SBUX", "TGT", "HD", "LOW", "DIS", "NFLX", "BKNG", "MAR",
@@ -60,7 +60,7 @@ US_LARGE_CAP = [
     "CAT", "BA", "GE", "HON", "UPS", "FDX", "LMT", "RTX", "DE", "MMM",
     "EMR", "ETN", "ITW", "PH", "ROK", "GD", "NOC", "TDG", "WM", "CSX",
     "UNP", "NSC", "LUV", "DAL", "UAL", "AAL", "PCAR", "CMI", "AGCO", "TEX",
-    "HII", "KTOS", "BWXT", "TXT", "DRS", "MRCY", "HEI", "TDY", "WWD", "SPR", 
+    "HII", "KTOS", "BWXT", "TXT", "DRS", "MRCY", "HEI", "TDY", "WWD",
     "MANT", "CACI", "LDOS", "SAIC", "BAH", "LHX", "HWM", "WNC", "GBX", "ALG", 
     "GGG", "NDSN", "DOV", "AME", "ROIC", "FIX", "EME", "PWR", "MYRG", "TTC", "MIDD",
 
@@ -157,7 +157,7 @@ EUROPE = [
     # Healthcare / Läkemedel
     "BAYN.DE", "FRE.DE", "SAN.PA", "AZN.L", "GSK.L", "NOVN.SW", "ROG.SW", "LONN.SW", 
     "ALC.SW", "PHIA.AS", "NOVO-B.CO", "GMAB.CO", "DEMANT.CO", "ZEAL.CO", "ALK-B.CO", 
-    "AMBU-B.CO", "FRES.DE", "EVT.DE", "DIM.PA",
+    "AMBU-B.CO", "FRES.L", "EVT.DE", "DIM.PA",
 
     # Consumer Discretionary / Lyx / Fordon
     "BMW.DE", "MBG.DE", "VOW3.DE", "ADS.DE", "PUM.DE", "ZAL.DE", "P911.DE", "MC.PA", 

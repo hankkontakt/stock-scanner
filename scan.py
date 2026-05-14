@@ -801,11 +801,13 @@ def main():
     else:
         df["sentiment_raw"] = None
 
+    # Spara rådata (efter fetch, INNAN scoring) för strike-systemets diagnostik.
+    # Måste vara df (från data_fetcher), inte scored – annars ges strikes
+    # om scoring tappar en ticker av interna skäl.
+    df_raw = df.copy()
+
     # Anropa scoringen
     scored = scoring.score_universe(df, regime=current_regime)
-    
-    # Spara en kopia av ALLA scorade aktier för Strike-systemets diagnostik
-    df_raw = scored.copy()
     
     # Räkna hur många vi har innan vi rensar bort de med dålig data
     pre_filter_count = len(scored)
