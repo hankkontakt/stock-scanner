@@ -1,15 +1,33 @@
 """
 scan.py – Huvudscript. Kör varje söndag: python scan.py
 """
-import warnings
-warnings.filterwarnings("ignore")  # <--- MÅSTE LIGGA HÄR UPPE!
-
 import argparse, sys, os, time, threading
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
 
 import config, data_fetcher, scoring, filters, sectors
+
+# ── Auto-rensa felaktigt svartlistade kända aktier vid start ─────────────────
+def _auto_clean_blacklist():
+    """Rensar bort kända storbolag som felaktigt hamnat i blacklist.json."""
+    import json as _json
+    bl_path = Path("data/blacklist.json")
+    if not bl_path.exists():
+        return
+    try:
+        bl = _json.loads(bl_path.read_text(encoding="utf-8"))
+        to_remove = [t for t in list(bl.keys()) if t in filters.NEVER_BLACKLIST]
+        if to_remove:
+            for t in to_remove:
+                del bl[t]
+            bl_path.write_text(_json.dumps(bl, indent=4), encoding="utf-8")
+            print(f"  🧹 Auto-rensade {len(to_remove)} felaktigt blacklistade: "
+                  f"{to_remove[:8]}{'...' if len(to_remove)>8 else ''}")
+    except Exception:
+        pass
+
+_auto_clean_blacklist()
 import portfolio, portfolio_analysis, extra_data
 import delta_tracker, macro_regime, earnings_calendar
 import sentiment as sentiment_module
@@ -61,7 +79,9 @@ def _section_sectors_top5(scored: pd.DataFrame, sector_summary: pd.DataFrame) ->
     for _, row in sector_summary.iterrows():
         sec_name = row['sector']
         # Hämta de 5 bästa aktierna i just denna sektor
-        sec_stocks = scored[scored['sector'] == sec_name].head(5)
+        sec_stocks = (scored[scored['sector'] == sec_name]
+                      .sort_values("score_total", ascending=False)
+                      .head(5))
         
         if sec_stocks.empty: 
             continue
@@ -86,40 +106,65 @@ def _section_sectors_top5(scored: pd.DataFrame, sector_summary: pd.DataFrame) ->
 
     
 def _section_top_n(scored, n):
-    # --- NY SEKTORTAK-LOGIK ---
+    """
+    Bygger topp-N-tabellen med sektorcap på MAX 2 per sektor.
+    Holdingbolag och råvarubolag är redan nedviktade via scoring.py,
+    men cap 2 ger extra skydd mot att en sektor tar fler platser.
+
+    Visar listnummer (#1-10) istället för global rank, eftersom
+    global rank inte stämmer efter sektorcap-filtreringen.
+    """
+    MAX_PER_SECTOR = 2  # Max 2 aktier per sektor i topp-N
+
     top_list = []
     sector_counts = {}
-    
+
     for _, r in scored.iterrows():
         sec = r.get("sector", "Övrigt")
-        if pd.isna(sec): 
+        if pd.isna(sec):
             sec = "Övrigt"
-            
-        # Lägg bara till aktien om vi har färre än 5 från denna sektor
-        if sector_counts.get(sec, 0) < 5:
+
+        # Sektorcap: max MAX_PER_SECTOR per sektor
+        if sector_counts.get(sec, 0) < MAX_PER_SECTOR:
             top_list.append(r)
             sector_counts[sec] = sector_counts.get(sec, 0) + 1
-            
+
         if len(top_list) >= n:
             break
-            
-    top = pd.DataFrame(top_list)
-    # --------------------------
 
-    lines = [f"## 🏆 Topp {n} aktier (Max 5 per sektor)\n"]
-    lines.append("| Rank | Ticker | Bolag | Score | Entry | Konf | Trend | RS | Insider | EPS | Δ |")
-    lines.append("|------|--------|-------|-------|-------|------|-------|----|---------|-----|---|")
-    ei = {"STARK":"🟢","OK":"🔵","VÄNTA":"🟡","EJ AKTUELL":"🔴"}
-    for _, r in top.iterrows():
-        entry = r.get("entry_signal","—"); conf = r.get("confidence_label","—")
-        trend = "✅" if not r.get("trend_capped",False) else "⚠️"
-        flag  = r.get("delta_flag","") or ""; rs = r.get("rs_label","—")
-        ins = r.get("insider_signal"); eps = r.get("earnings_signal")
-        ins_s = ("🟢" if ins>0.65 else "🔴" if ins<0.35 else "⚪") if pd.notna(ins or float("nan")) else "—"
-        eps_s = ("🟢" if eps>0.65 else "🔴" if eps<0.35 else "⚪") if pd.notna(eps or float("nan")) else "—"
-        lines.append(f"| {r['rank']} | `{r['ticker']}` | {str(r.get('name',''))[:22]} | "
-                     f"**{r['score_total']:.0f}** | {ei.get(entry,'—')} {entry} | "
-                     f"{conf} | {trend} | {rs} | {ins_s} | {eps_s} | {flag[:35]} |")
+    top = pd.DataFrame(top_list)
+
+    lines = [f"## 🏆 Topp {n} aktier (Max {MAX_PER_SECTOR} per sektor)\n"]
+    lines.append("| # | Ticker | Bolag | Score | Entry | Konf | Trend | RS | Insider | EPS | Δ |")
+    lines.append("|---|--------|-------|-------|-------|------|-------|----|---------|-----|---|")
+    ei = {"STARK": "🟢", "OK": "🔵", "VÄNTA": "🟡", "EJ AKTUELL": "🔴"}
+
+    for list_pos, (_, r) in enumerate(top.iterrows(), 1):
+        entry = r.get("entry_signal", "—")
+        conf  = r.get("confidence_label", "—")
+        trend = "✅" if not r.get("trend_capped", False) else "⚠️"
+        flag  = r.get("delta_flag", "") or ""
+        rs    = r.get("rs_label", "—")
+        ctype = r.get("company_type", "standard")
+
+        # Visa bolagstyp-ikon så man vet varför score kan vara rabatterat
+        type_icon = " 🏦" if ctype == "holding" else " ⛏" if ctype == "commodity" else ""
+
+        ins = r.get("insider_signal")
+        eps = r.get("earnings_signal")
+        ins_s = ("🟢" if ins > 0.65 else "🔴" if ins < 0.35 else "⚪") if pd.notna(ins or float("nan")) else "—"
+        eps_s = ("🟢" if eps > 0.65 else "🔴" if eps < 0.35 else "⚪") if pd.notna(eps or float("nan")) else "—"
+
+        # Använd listnummer (#1-10) inte global rank (som är missvisande efter sektorcap)
+        global_rank = r.get("rank", "—")
+        rank_display = f"#{list_pos} (rank {global_rank})"
+
+        lines.append(
+            f"| {rank_display} | `{r['ticker']}`{type_icon} | "
+            f"{str(r.get('name', ''))[:22]} | "
+            f"**{r['score_total']:.0f}** | {ei.get(entry, '—')} {entry} | "
+            f"{conf} | {trend} | {rs} | {ins_s} | {eps_s} | {flag[:35]} |"
+        )
     return "\n".join(lines)
 
 
@@ -380,9 +425,17 @@ def main():
     scored = scored[scored["data_quality"] >= config.MIN_DATA_QUALITY]
     
     # --- 🧹 STRIKE-SYSTEM & AI DIAGNOS ---
-    # Vi jämför ursprungslistan (tickers) med de som faktiskt klarade sig (scored)
+    # Strikes triggas BARA för tickers som inte ens kunde hämtas (tomma rader i df_raw),
+    # INTE för tickers som filtrerades bort av data_quality-tröskeln.
     survived_list = scored["ticker"].tolist()
-    warnings, removed = filters.update_ticker_health(tickers, survived_list, df_raw)
+
+    # Hitta tickers som saknas helt i df_raw (verkliga hämtningsfel)
+    fetched_set    = set(df_raw["ticker"].str.upper()) if not df_raw.empty else set()
+    fetch_failed   = [t for t in tickers if t.upper() not in fetched_set]
+
+    warnings, removed = filters.update_ticker_health(
+        tickers, survived_list, df_raw, fetch_failed=fetch_failed
+    )
     
     # Skriv ut status i terminalen
     diff = pre_filter_count - len(scored)

@@ -122,4 +122,3 @@ def get_sector_summary(df: pd.DataFrame) -> pd.DataFrame:
     summary["bästa_score"] = summary["bästa_score"].round(1)
 
     return summary.sort_values("snitt_score", ascending=False)
-    return summary.sort_values("snitt_score", ascending=False)

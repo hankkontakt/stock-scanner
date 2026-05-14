@@ -280,6 +280,47 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
         # Fallback om config har sentiment men inte get_dynamic_weights
         df["score_total"] += config.FACTOR_WEIGHTS.get("sentiment", 0.10) * df["score_sentiment"]
 
+    # ── Holdingbolag & råvarubolag: score-rabatt ────────────────────────
+    # Dessa bolag ser "fantastiska" ut i en faktormodell men av fel skäl:
+    #   Holdingbolag  → vinster = orealiserade portföljuppgångar, ej operativ lönsamhet
+    #   Guld/Silver   → marginaler driven av råvarupris, ej uthållig quality
+    # Rabatten hindrar dem från att dominera topp-10 utan att utesluta dem helt.
+
+    HOLDING_INDUSTRIES = {
+        "asset management", "diversified investments", "investment trusts",
+        "closed-end fund", "exchange traded fund", "capital markets",
+    }
+    COMMODITY_INDUSTRIES = {
+        "gold", "silver", "copper", "other precious metals & mining",
+        "steel", "aluminum", "uranium", "oil & gas e&p",
+    }
+
+    if "industry" in df.columns:
+        ind_lower = df["industry"].fillna("").str.lower()
+
+        # Holdingbolag: 15% rabatt (de är köpvärda men ska inte dominera)
+        is_holding = ind_lower.apply(
+            lambda i: any(h in i for h in HOLDING_INDUSTRIES)
+        )
+        df.loc[is_holding, "score_total"] = (
+            df.loc[is_holding, "score_total"] * 0.85
+        ).clip(0, 100)
+        df.loc[is_holding, "company_type"] = "holding"
+
+        # Råvarubolag: 10% rabatt (cykliska, commoditypris-beroende)
+        is_commodity = ind_lower.apply(
+            lambda i: any(c in i for c in COMMODITY_INDUSTRIES)
+        )
+        df.loc[is_commodity & ~is_holding, "score_total"] = (
+            df.loc[is_commodity & ~is_holding, "score_total"] * 0.90
+        ).clip(0, 100)
+        df.loc[is_commodity & ~is_holding, "company_type"] = "commodity"
+
+    # Sätt standard för alla som saknar company_type
+    if "company_type" not in df.columns:
+        df["company_type"] = "standard"
+    df["company_type"] = df["company_type"].fillna("standard")
+
     # Add rank column
     df["rank"] = df["score_total"].rank(ascending=False, method="min").astype("Int64")
 
@@ -364,6 +405,27 @@ def score_universe_with_sentiment(df: pd.DataFrame, sentiment_scores: dict) -> p
         w["dividend"]  * df["score_dividend"]  +
         w.get("sentiment", 0.10) * df["score_sentiment"]
     )
+
+    # ── Holdingbolag & råvarubolag: score-rabatt (samma som score_universe) ──
+    if "industry" in df.columns:
+        ind_lower = df["industry"].fillna("").str.lower()
+        HOLDING_INDUSTRIES = {
+            "asset management", "diversified investments", "investment trusts",
+            "closed-end fund", "exchange traded fund", "capital markets",
+        }
+        COMMODITY_INDUSTRIES = {
+            "gold", "silver", "copper", "other precious metals & mining",
+            "steel", "aluminum", "uranium", "oil & gas e&p",
+        }
+        is_holding   = ind_lower.apply(lambda i: any(h in i for h in HOLDING_INDUSTRIES))
+        is_commodity = ind_lower.apply(lambda i: any(c in i for c in COMMODITY_INDUSTRIES))
+        df.loc[is_holding,                    "score_total"] = (df.loc[is_holding,                    "score_total"] * 0.85).clip(0, 100)
+        df.loc[is_commodity & ~is_holding,    "score_total"] = (df.loc[is_commodity & ~is_holding,    "score_total"] * 0.90).clip(0, 100)
+        df["company_type"] = "standard"
+        df.loc[is_holding,                    "company_type"] = "holding"
+        df.loc[is_commodity & ~is_holding,    "company_type"] = "commodity"
+    else:
+        df["company_type"] = "standard"
 
     df["rank"] = df["score_total"].rank(ascending=False, method="min").astype("Int64")
 

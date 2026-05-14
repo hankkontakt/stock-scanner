@@ -311,57 +311,161 @@ def apply_all_filters(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     return df
 
 
-def update_ticker_health(attempted_tickers: list, survived_tickers: list, df_raw: pd.DataFrame) -> tuple:
+# Tickers som ALDRIG ska blacklistas oavsett datakvalitet.
+# Välkända storbolag där problemet alltid är tillfälliga Yahoo-fel.
+NEVER_BLACKLIST = {
+    # US mega cap – alltid tillgängliga men kan sakna enstaka fält
+    "AAPL","MSFT","GOOGL","GOOG","AMZN","META","NVDA","TSLA","AVGO","ORCL",
+    "CRM","ADBE","AMD","INTC","CSCO","QCOM","TXN","IBM","NOW","INTU",
+    "PANW","PLTR","SNOW","MU","AMAT","LRCX","KLAC","ADI","MRVL","FTNT",
+    "DDOG","CRWD","WDAY","TEAM","MDB","NET","ZS","OKTA","SHOP","UBER",
+    # Finansbolag
+    "JPM","BAC","WFC","GS","MS","C","BLK","AXP","V","MA","BRK-B","SCHW",
+    # Övriga välkända
+    "JNJ","UNH","LLY","PFE","ABBV","MRK","TMO","ABT","WMT","PG","KO","PEP",
+    "COST","MCD","NKE","SBUX","HD","DIS","NFLX","XOM","CVX","CAT","BA",
+    # Svenska large cap
+    "VOLV-B.ST","ERIC-B.ST","INVE-A.ST","INVE-B.ST","INDU-C.ST","INDU-A.ST",
+    "ATCO-A.ST","ATCO-B.ST","ASSA-B.ST","SEB-A.ST","SHB-A.ST","SWED-A.ST",
+    "HM-B.ST","ABB.ST","SAND.ST","ALFA.ST","AZN.ST","EVO.ST","EQT.ST",
+    # Europeiska large cap
+    "ASML.AS","SAP.DE","NOVO-B.CO","NESN.SW","NOVN.SW","ROG.SW","SHEL.L",
+    "AZN.L","HSBA.L","BP.L","MC.PA","LVMH.PA",
+}
+
+
+def update_ticker_health(
+    attempted_tickers:  list,
+    survived_tickers:   list,
+    df_raw:             pd.DataFrame,
+    fetch_failed:       list = None,   # Tickers som HELT misslyckades med hämtning
+) -> tuple:
     """
-    Hanterar Strikes. 3 missar = Blacklist.
+    Hanterar strike-systemet korrekt:
+
+    VIKTIGT: Strikes triggas BARA vid verkliga hämtningsfel (fetch_failed),
+    INTE när en ticker filtreras bort av data_quality-tröskeln.
+    Att ha 75% datakvalitet (6/8 fält) är inte ett fel – det är vanligt
+    för investmentbolag, råvarubolag och tillväxtbolag utan earnings.
+
+    3 verkliga hämtningsfel = permanent blacklist.
+    Tickers i NEVER_BLACKLIST skyddas alltid.
+
     Returnerar (warnings, removed_details)
     """
-    strikes = _load_json(STRIKE_FILE)
-    blacklist = _load_json(BLACKLIST_FILE)
-    
-    warnings = []
-    removed_details = [] # Innehåller ticker + AI-diagnos
-    
-    for ticker in attempted_tickers:
-        if ticker in blacklist: continue
-            
-        if ticker not in survived_tickers:
-            strikes[ticker] = strikes.get(ticker, 0) + 1
-            
-            # Hämta rådata för att se vad som saknas för diagnostik
-            ticker_data = df_raw[df_raw['ticker'] == ticker] if not df_raw.empty else pd.DataFrame()
-            diagnosis = diagnose_failure(ticker, ticker_data)
-            
-            if strikes[ticker] == 2:
-                warnings.append(f"{ticker} ({diagnosis})")
-            elif strikes[ticker] >= 3:
-                removed_details.append({"ticker": ticker, "reason": diagnosis})
-                blacklist[ticker] = {"reason": diagnosis, "date": str(datetime.now().date())}
-                if ticker in strikes: del strikes[ticker]
-        else:
-            if ticker in strikes: del strikes[ticker]
-                
+    strikes       = _load_json(STRIKE_FILE)
+    blacklist     = _load_json(BLACKLIST_FILE)
+    fetch_failed  = fetch_failed or []
+
+    warnings        = []
+    removed_details = []
+
+    for ticker in fetch_failed:
+        # Aldrig blacklista kända storbolag
+        if ticker in NEVER_BLACKLIST:
+            continue
+        if ticker in blacklist:
+            continue
+
+        # Hämta rådata för diagnostik
+        ticker_data = (
+            df_raw[df_raw["ticker"] == ticker]
+            if not df_raw.empty else pd.DataFrame()
+        )
+        diagnosis = diagnose_failure(ticker, ticker_data)
+
+        strikes[ticker] = strikes.get(ticker, 0) + 1
+
+        if strikes[ticker] == 2:
+            warnings.append(f"{ticker} ({diagnosis})")
+        elif strikes[ticker] >= 3:
+            removed_details.append({"ticker": ticker, "reason": diagnosis})
+            blacklist[ticker] = {
+                "reason": diagnosis,
+                "date":   str(datetime.now().date()),
+            }
+            del strikes[ticker]
+
+    # Rensa strikes för tickers som nu klarar sig
+    for ticker in survived_tickers:
+        if ticker in strikes:
+            del strikes[ticker]
+
     _save_json(STRIKE_FILE, strikes)
     _save_json(BLACKLIST_FILE, blacklist)
     return warnings, removed_details
 
-def diagnose_failure(ticker: str, row: pd.DataFrame) -> str:
-    """AI-diagnostik: Listar ut om felet ligger i Yahoo, koden eller aktien."""
-    if row.empty:
-        return "Yahoo Finance hittar ingen data (kontrollera ticker-suffix)"
-    
-    missing = []
-    if pd.isna(row.get('pe_trailing')).all(): missing.append("P/E")
-    if pd.isna(row.get('market_cap')).all(): missing.append("MarketCap")
-    if pd.isna(row.get('revenue_growth')).all(): missing.append("Growth")
-    
-    if len(missing) > 2:
-        return "Fundamentaldata saknas hos Yahoo (vanligt för små/europeiska bolag)"
-    if not ticker.endswith(".ST") and len(ticker) > 5:
-        return "Möjligt kodfel: Saknar .ST suffix för svensk aktie?"
-    
-    return "Okänd brist i datakvalitet"
 
-def _load_json(p): return json.loads(p.read_text()) if p.exists() else {}
-def _save_json(p, d): p.parent.mkdir(parents=True, exist_ok=True); p.write_text(json.dumps(d, indent=4))
-def _save_json(p, d): p.parent.mkdir(parents=True, exist_ok=True); p.write_text(json.dumps(d, indent=4))
+def diagnose_failure(ticker: str, row: pd.DataFrame) -> str:
+    """
+    Bestämmer sannolik orsak till att en ticker HELT misslyckades att hämta data.
+    Skiljer mellan: Yahoo-fel, felaktigt suffix, genuint saknad data.
+    """
+    # Ingen data alls = Yahoo kan inte hitta tickern
+    if row is None or (hasattr(row, "empty") and row.empty):
+        suffix = ticker.rsplit(".", 1)[-1] if "." in ticker else ""
+        known_suffixes = {
+            "ST","L","DE","PA","AS","SW","CO","OL","HE","MC","MI",
+            "TO","AX","T","KS","HK","TW","NS","SA","SI","VI","PL","MX","LS"
+        }
+        if suffix and suffix not in known_suffixes:
+            return f"Okänt börssuffix '.{suffix}' – kontrollera ticker"
+        return "Yahoo Finance hittar ingen data för denna ticker"
+
+    # Data finns men kanske ofullständig
+    missing = []
+    for field in ["pe_trailing", "market_cap", "revenue_growth", "current_price"]:
+        val = row.get(field)
+        if val is None or (hasattr(val, "all") and pd.isna(val).all()):
+            missing.append(field)
+
+    if "current_price" in missing:
+        return "Kan inte hämta aktuellt pris – troligt delistning eller namnbyte"
+
+    if len(missing) >= 3:
+        return "Fundamentaldata saknas hos Yahoo (vanligt för nystartade/delisted bolag)"
+
+    return "Intermittent hämtningsfel – försöker igen nästa körning"
+
+
+def clear_blacklist(tickers: list = None):
+    """
+    Rensar blacklist manuellt.
+    Om tickers=None rensas hela blacklisten (nollstart).
+    Om tickers=["INTC","SNOW"] rensas bara de angivna.
+    """
+    blacklist = _load_json(BLACKLIST_FILE)
+    strikes   = _load_json(STRIKE_FILE)
+
+    if tickers is None:
+        removed = list(blacklist.keys())
+        blacklist = {}
+        strikes   = {}
+        print(f"✓ Hela blacklisten rensad ({len(removed)} tickers)")
+    else:
+        removed = []
+        for t in tickers:
+            t = t.upper()
+            if t in blacklist:
+                del blacklist[t]; removed.append(t)
+            if t in strikes:
+                del strikes[t]
+        print(f"✓ Rensade {len(removed)} tickers: {removed}")
+
+    _save_json(BLACKLIST_FILE, blacklist)
+    _save_json(STRIKE_FILE, strikes)
+    return removed
+
+
+def _load_json(p: Path) -> dict:
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_json(p: Path, d: dict):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(d, indent=4, ensure_ascii=False), encoding="utf-8")

@@ -121,7 +121,8 @@ def record_weekly_picks(
         ticker = str(row["ticker"])
         price  = row.get("current_price") or _get_price(ticker)
 
-        if not price:
+        # Fångar None, 0, NaN – bool(float('nan')) är True så 'not price' fångar EJ nan
+        if price is None or (isinstance(price, float) and (price != price)) or price == 0:
             continue
 
         shares = round(capital_per_stock / price, 4)
