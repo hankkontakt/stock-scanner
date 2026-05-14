@@ -166,13 +166,13 @@ SMALL_CAP = [
     "NOTE.ST",      # NOTE – elektroniktillverkning (EMS)
     "AQ.ST",        # AQ Group – elektroniktillverkning
     "BEIJ-B.ST",    # Beijer Electronics B – industriautomation & HMI
-    "HMSN.ST",      # HMS Networks B – industriell datakommunikation
+    "HMS.ST",       # HMS Networks – industriell datakommunikation
     "NOLA-B.ST",    # Nolato B – polymertillverkning (medtech, packaging)
     "HPOL-B.ST",    # Hexpol B – gummiblandningar
     "BMAX.ST",      # Byggmax – lågprisbyggvaruhandel
     "VBG-B.ST",     # VBG Group B – dragkopplingssystem & trucksystem
     "ADDT-B.ST",    # Addtech B – teknisk distribution (annan än AddNode!)
-    "BETE.ST",      # BE Group – stålhandel
+    # BETE.ST → ej identifierad aktie på Nasdaq Stockholm/First North, borttagen
     "LOOMIS.ST",    # Loomis – värdetransporter & kontanthantering
     "DOM.ST",       # Dometic Group – mobillivsprodukter (RV, marin, last)
     "AAK.ST",       # AAK – specialfetter & vegetabiliska oljor
@@ -186,7 +186,7 @@ SMALL_CAP = [
     "CLAS-B.ST",    # Clas Ohlson B – verktyg & fritidsprodukter
     "DUNI.ST",      # Duni – bordsdukning & förpackningar
     "MSON-B.ST",    # Midsona B – hälsokostprodukter (Kung Markatta, Urtekram)
-    "DORO.ST",      # Doro – seniortelefoner & trygghetslarm
+    # DORO.ST → Doro avnoterat 17 dec 2025, uppköpt av Xplora Technologies
 
     # ── Tjänster & Konsult ────────────────────────────────────────────────────
     "BTS-B.ST",     # BTS Group B – affärssimuleringar & lärande
@@ -389,14 +389,14 @@ SECTOR_GROUPS = {
         "REJL-B.ST", "HEXA-B.ST", "MILDEF.ST", "INSTAL.ST", "IVSO.ST",
         "BERG-B.ST", "EOLU-B.ST", "BRAV.ST", "SENSYS.ST", "HANZA.ST",
         "TAGM.ST", "BUFAB.ST", "LIAB.ST", "ITAB.ST", "NCAB.ST", "TROAX.ST",
-        "SYSR.ST", "MYCR.ST", "NOTE.ST", "AQ.ST", "BEIJ-B.ST", "HMSN.ST",
-        "NOLA-B.ST", "HPOL-B.ST", "VBG-B.ST", "ADDT-B.ST", "BETE.ST",
+        "SYSR.ST", "MYCR.ST", "NOTE.ST", "AQ.ST", "BEIJ-B.ST", "HMS.ST",
+        "NOLA-B.ST", "HPOL-B.ST", "VBG-B.ST", "ADDT-B.ST",
         "DOM.ST", "INWI.ST", "LOOMIS.ST", "OBDU.ST", "IMPC.ST",
     ],
     "Konsument & Livsstil": [
         "THULE.ST", "RVRC.ST", "SKIS-B.ST", "CARY.ST", "BHG.ST", "BJBO.ST",
         "FING-B.ST", "MEKO.ST", "BILI-A.ST", "CLAS-B.ST", "DUNI.ST",
-        "MSON-B.ST", "DORO.ST", "AAK.ST", "AXFO.ST", "BMAX.ST",
+        "MSON-B.ST", "AAK.ST", "AXFO.ST", "BMAX.ST",
     ],
     "Fintech & Finans": [
         "QLIRO.ST", "NOWO.ST", "RESURS.ST", "HOFI.ST", "INTRUM.ST",
