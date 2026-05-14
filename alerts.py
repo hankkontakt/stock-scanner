@@ -58,16 +58,28 @@ def email_configured() -> bool:
 def _markdown_to_html(md: str) -> str:
     """Enkel markdown → HTML konvertering för email."""
     import re
+
+    # Klipp AI-Datalager-sektionen – den är för filen, inte e-posten
+    for marker in ["## 📦 AI-Datalager", "## 🤖 AI-analyspromptar"]:
+        if marker in md:
+            md = md[:md.index(marker)]
+
     lines = md.split("\n")
-    out   = []
+    out      = []
     in_table = False
     in_code  = False
+    in_list  = False
 
     for line in lines:
         # Kodblockar
         if line.strip().startswith("```"):
+            if in_list:
+                out.append("</ul>")
+                in_list = False
             if not in_code:
-                out.append('<pre style="background:#f4f4f4;padding:12px;border-radius:6px;font-size:13px;overflow-x:auto">')
+                out.append('<pre style="background:#f4f4f4;padding:12px;border-radius:6px;'
+                           'font-size:12px;overflow-x:auto;white-space:pre-wrap;'
+                           'word-break:break-all">')
                 in_code = True
             else:
                 out.append("</pre>")
@@ -77,6 +89,23 @@ def _markdown_to_html(md: str) -> str:
         if in_code:
             out.append(html.escape(line))
             continue
+
+        # Bullet-listor (- item eller * item)
+        if re.match(r"^[-*] ", line):
+            if in_table:
+                out.append("</table>")
+                in_table = False
+            if not in_list:
+                out.append('<ul style="margin:4px 0 8px 20px;padding:0;font-size:14px">')
+                in_list = True
+            out.append(f'<li style="margin:2px 0;line-height:1.5">{_inline_md(line[2:])}</li>')
+            continue
+        elif in_list and line.strip() != "":
+            out.append("</ul>")
+            in_list = False
+        elif in_list and line.strip() == "":
+            out.append("</ul>")
+            in_list = False
 
         # Tabeller
         if line.startswith("|"):
@@ -98,9 +127,11 @@ def _markdown_to_html(md: str) -> str:
 
         # Rubriker
         if line.startswith("### "):
-            out.append(f'<h3 style="font-size:15px;margin:16px 0 6px;color:#1a1a1a">{_inline_md(line[4:])}</h3>')
+            out.append(f'<h3 style="font-size:15px;margin:16px 0 6px;color:#1a1a1a">'
+                       f'{_inline_md(line[4:])}</h3>')
         elif line.startswith("## "):
-            out.append(f'<h2 style="font-size:17px;margin:20px 0 8px;border-bottom:1px solid #eee;padding-bottom:4px">{_inline_md(line[3:])}</h2>')
+            out.append(f'<h2 style="font-size:17px;margin:20px 0 8px;border-bottom:1px solid #eee;'
+                       f'padding-bottom:4px">{_inline_md(line[3:])}</h2>')
         elif line.startswith("# "):
             out.append(f'<h1 style="font-size:20px;margin:0 0 16px">{_inline_md(line[2:])}</h1>')
         elif line.strip() == "---":
@@ -109,21 +140,45 @@ def _markdown_to_html(md: str) -> str:
             if not in_table:
                 out.append("<br>")
         else:
-            out.append(f'<p style="margin:4px 0;font-size:14px;line-height:1.6">{_inline_md(line)}</p>')
+            out.append(f'<p style="margin:4px 0;font-size:14px;line-height:1.6">'
+                       f'{_inline_md(line)}</p>')
 
     if in_table:
         out.append("</table>")
+    if in_list:
+        out.append("</ul>")
 
     return "\n".join(out)
 
 
 def _inline_md(text: str) -> str:
-    """Konverterar inline markdown (bold, code, italic) till HTML."""
+    """Konverterar inline markdown (bold, code, italic, links) till HTML."""
     import re
+    # Konvertera markdown-länkar INNAN html.escape (URL-tecknen måste vara intakta)
+    link_matches = []
+    def _save_link(m):
+        idx = len(link_matches)
+        link_matches.append((m.group(1), m.group(2)))
+        return f"\x00LINK{idx}\x00"
+    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', _save_link, text)
+
     text = html.escape(text)
+
+    # Återställ sparade länkar
+    for idx, (title, url) in enumerate(link_matches):
+        title_safe = html.escape(title)
+        url_safe   = html.escape(url)
+        text = text.replace(
+            f"\x00LINK{idx}\x00",
+            f'<a href="{url_safe}" style="color:#0066cc;text-decoration:none">{title_safe}</a>'
+        )
+
     text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-    text = re.sub(r"`(.+?)`",        r'<code style="background:#f0f0f0;padding:1px 4px;border-radius:3px;font-size:12px">\1</code>', text)
-    text = re.sub(r"\*(.+?)\*",      r"<em>\1</em>", text)
+    text = re.sub(r"`(.+?)`",
+                  r'<code style="background:#f0f0f0;padding:1px 4px;border-radius:3px;'
+                  r'font-size:12px">\1</code>', text)
+    text = re.sub(r"\*(.+?)\*",    r"<em>\1</em>", text)
+    text = re.sub(r"_([^_]+)_",    r"<em>\1</em>", text)
     return text
 
 

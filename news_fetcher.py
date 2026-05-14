@@ -199,8 +199,10 @@ def format_news_section_md(
         lines.append(f"**`{ticker}`** {name}")
         for a in articles:
             icon = "🔴" if a["age_hours"] < 6 else "🟡" if a["age_hours"] < 24 else "⚪"
+            url = a["url"]
+            title = f"[{a['headline']}]({url})" if url and "finnhub.io" not in url else a["headline"]
             lines.append(
-                f"{icon} [{a['headline']}]({a['url']})  \n"
+                f"{icon} {title}  \n"
                 f"   _{a['source']} · {a['datetime_str']}_"
             )
         lines.append("")
@@ -403,8 +405,10 @@ def format_market_news_section_md(
         lines.append("### 🇸🇪 Sverige\n")
         for a in swedish_news[:max_n]:
             icon = "🔴" if a["age_hours"] < 6 else "🟡" if a["age_hours"] < 24 else "⚪"
+            url = a["url"]
+            title = f"[{a['headline']}]({url})" if url and "finnhub.io" not in url else a["headline"]
             lines.append(
-                f"{icon} [{a['headline']}]({a['url']})  \n"
+                f"{icon} {title}  \n"
                 f"   _{a['source']} · {a['datetime_str']}_\n"
             )
 
@@ -412,8 +416,10 @@ def format_market_news_section_md(
         lines.append("### 🌍 Globalt\n")
         for a in global_news[:max_n]:
             icon = "🔴" if a["age_hours"] < 6 else "🟡" if a["age_hours"] < 24 else "⚪"
+            url = a["url"]
+            title = f"[{a['headline']}]({url})" if url and "finnhub.io" not in url else a["headline"]
             lines.append(
-                f"{icon} [{a['headline']}]({a['url']})  \n"
+                f"{icon} {title}  \n"
                 f"   _{a['source']} · {a['datetime_str']}_\n"
             )
 

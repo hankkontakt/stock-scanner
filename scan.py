@@ -361,8 +361,9 @@ def _section_portfolio(analysis, summary):
         if summary.get("total_unrealized_pnl") is not None:
             p = summary["total_unrealized_pnl"]
             lines.append(f"- **P&L:** {'+' if p>=0 else ''}{fmt_cur(p)} ({fmt_pct(summary.get('total_return_pct'))})")
-        if summary.get("average_score"):
-            lines.append(f"- **Snittscore:** {summary['average_score']:.0f}/100")
+        avg = summary.get("average_score")
+        if avg is not None and not (avg != avg):  # isnan check without importing math
+            lines.append(f"- **Snittscore:** {avg:.0f}/100")
         recs = summary.get("recommendations",{})
         if recs:
             lines.append("- **Reker:** " + " · ".join(f"**{k}** {v}st" for k,v in recs.items()))
@@ -520,7 +521,8 @@ def _section_cleanup(warnings, removed):
     if warnings:
         lines.append("### ⚠️ Varning: På väg att raderas (2 strikes)")
         lines.append("Dessa aktier saknar data och raderas vid nästa misslyckade scan:")
-        lines.append(", ".join([f"`{w}`" for w in warnings]))
+        for w in warnings:
+            lines.append(f"- `{w}`")
         lines.append("")
     
     return "\n".join(lines) + "\n"
