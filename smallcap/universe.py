@@ -12,6 +12,8 @@ Ticker-format: Yahoo Finance .ST-suffix.
 Verifiera: python -m smallcap.validate_universe
 """
 
+from pathlib import Path
+
 # ── NASDAQ FIRST NORTH GROWTH MARKET ─────────────────────────────────────────
 # Tillväxtbolag, ofta grundarledd med högt ägarengagemang.
 
@@ -33,14 +35,14 @@ FIRST_NORTH = [
     "NETI-B.ST",    # Net Insight B – mediakommunikationsnätverk
     "CTEK.ST",      # CTEK – batterihantering och laddning
     "ALCA.ST",      # Alcadon Group – nätverksinfrastruktur
-    "SPEQTA.ST",    # Speqta – prestationsmarknadsföring
+    # SPEQTA.ST → bytt namn till BrightBid och avnoterat från Nasdaq Stockholm
     "CTM.ST",       # Catena Media – online gaming affiliates
     "ACAST.ST",     # Acast – global podcastplattform
     "BUSER.ST",     # Bambuser – live video commerce
     "EGTX.ST",      # Enad Global 7 – spelstudio
-    "EMPIR-B.ST",   # Empir Group B – IT-tjänster & mjukvaruutveckling
-    "PROACT.ST",    # ProAct IT Group – lagring & molnlösningar
-    "BAHNHOF.ST",   # Bahnhof – oberoende internetleverantör
+    "SAFETY-B.ST",  # mySafety Group B – f.d. Empir Group, bytte namn 2023
+    "PACT.ST",      # ProAct IT Group – lagring & molnlösningar
+    "BAHN-B.ST",    # Bahnhof – oberoende internetleverantör (B-aktie)
 
     # ── MedTech & Life Science ───────────────────────────────────────────────
     "XVIVO.ST",     # XVIVO Perfusion – organpreservering, global nischledare
@@ -65,21 +67,21 @@ FIRST_NORTH = [
     "MCOV-B.ST",    # Medicover B – hälsovård & diagnostik Östeuropa
     "VIMIAN.ST",    # Vimian Group – veterinär MedTech
     "BOUL.ST",      # Boule Diagnostics – blodanalysinstrument
-    "MOBERG.ST",    # Moberg Pharma – OTC dermatologi
-    "PEPTONIC.ST",  # Peptonic Medical – medicinteknisk enhet
-    "CERENO.ST",    # Cereno Scientific – trombosbehandling
+    "MOB.ST",       # Moberg Pharma – OTC dermatologi (f.d. MOBERG.ST)
+    "PMED.ST",      # Peptonic Medical – medicinteknisk enhet (f.d. PEPTONIC.ST)
+    "CRNO-B.ST",    # Cereno Scientific B – trombosbehandling (f.d. CERENO.ST)
     "XBRANE.ST",    # Xbrane Biopharma – biosimilarer
     "SEDANA.ST",    # Sedana Medical – inhalationssedation
-    "SENZIME.ST",   # Senzime – intraoperativ neuroövervakning
-    "GLYCOREX.ST",  # Glycorex Transplantation – blodgruppsbehandling
-    "CANTARGIA.ST", # Cantargia – IL1RAP-cancerbehandling
-    "POWERCELL.ST", # PowerCell Sweden – vätgasbränsleceller
-    "MINESTO.ST",   # Minesto – tidvattenskraft
+    "SEZI.ST",      # Senzime – intraoperativ neuroövervakning (f.d. SENZIME.ST)
+    # GLYCOREX.ST → handlas på NGM (Nordic Growth Market), ej Yahoo .ST
+    "CANTA.ST",     # Cantargia – IL1RAP-cancerbehandling (f.d. CANTARGIA.ST)
+    "PCELL.ST",     # PowerCell Sweden – vätgasbränsleceller (f.d. POWERCELL.ST)
+    "MINEST.ST",    # Minesto – tidvattenskraft (f.d. MINESTO.ST)
     "RECI-B.ST",    # Recipharm B – kontraktstillverkning läkemedel
     "MAHA-A.ST",    # Maha Energy A – oljeproduktion (Kanada/Brasilien)
-    "OBDU.ST",      # Obducat – nanoimprintingteknologi
-    "ANOTO.ST",     # Anoto Group – digital skriv- och ritteknologi
-    "BRIGHTER.ST",  # Brighter – digital diabeteshantering
+    # OBDU.ST → handlas på NGM (Nordic Growth Market), ej Yahoo .ST
+    "ANOT.ST",      # Anoto Group – digital skriv- och ritteknologi (f.d. ANOTO.ST)
+    # BRIGHTER.ST → konkurs nov 2022, avnoterat
     "INTEG-B.ST",   # Integrum B – bioniska proteser med direktnervkoppling
 
     # ── Industri & Clean Tech ────────────────────────────────────────────────
@@ -97,10 +99,10 @@ FIRST_NORTH = [
     "COIC.ST",      # Coieo – industriell distribution
     "EOLU-B.ST",    # Eolus Vind B – vindkraftsutveckling
     "BRAV.ST",      # Bravida – teknisk installation & service
-    "SENSYS.ST",    # Sensys Gatso – trafiksäkerhetslösningar (kameror)
+    "SENS.ST",      # Sensys Gatso – trafiksäkerhetslösningar (f.d. SENSYS.ST)
     "HANZA.ST",     # Hanza – elektroniktillverkning (contract manufacturing)
-    "TAGM.ST",      # TagMaster – RFID för transport & logistik
-    "NILAR.ST",     # Nilar International – nickelmetallhydridbatterier
+    "TAGM-B.ST",    # TagMaster B – RFID för transport & logistik (f.d. TAGM.ST)
+    # NILAR.ST → konkurs nov 2023, avnoterat
 
     # ── Fintech & Finans ─────────────────────────────────────────────────────
     "QLIRO.ST",     # Qliro – BNPL & betalningslösningar för e-handel
@@ -113,7 +115,7 @@ FIRST_NORTH = [
     "SKIS-B.ST",    # Skistar B – skidorter (Sälen, Åre, Trysil)
     "CARY.ST",      # Cary Group – skadeverkstäder (vindrutor & kaross)
     "BHG.ST",       # BHG Group – onlinehandel hem & trädgård
-    "BJBO.ST",      # Björn Borg – sportmode och underkläder
+    "BORG.ST",      # Björn Borg – sportmode och underkläder (f.d. BJBO.ST)
     "FING-B.ST",    # Fingerprint Cards B – fingeravtrycksbiometri
 
     # ── Gaming & Underhållning ───────────────────────────────────────────────
@@ -134,7 +136,7 @@ FIRST_NORTH = [
     # ── Fastighet ────────────────────────────────────────────────────────────
     "KFAST-B.ST",   # K-Fast Holding B – hyresbostäder
     "SSM.ST",       # SSM Holding – studentbostäder
-    "NIV.ST",       # Nivika Fastigheter
+    # NIV.ST → ej identifierad aktie på Nasdaq Stockholm/First North
     "NP3.ST",       # NP3 Fastigheter – norrländska kommersiella fastigheter
     "SLP-B.ST",     # SLP B – industri- och logistikfastigheter
     "CIBUS.ST",     # Cibus Nordic Real Estate – dagligvaruankrade fastigheter
@@ -164,13 +166,13 @@ SMALL_CAP = [
     "NOTE.ST",      # NOTE – elektroniktillverkning (EMS)
     "AQ.ST",        # AQ Group – elektroniktillverkning
     "BEIJ-B.ST",    # Beijer Electronics B – industriautomation & HMI
-    "HMSN.ST",      # HMS Networks B – industriell datakommunikation
+    "HMS.ST",       # HMS Networks – industriell datakommunikation (f.d. HMSN.ST)
     "NOLA-B.ST",    # Nolato B – polymertillverkning (medtech, packaging)
     "HPOL-B.ST",    # Hexpol B – gummiblandningar
     "BMAX.ST",      # Byggmax – lågprisbyggvaruhandel
     "VBG-B.ST",     # VBG Group B – dragkopplingssystem & trucksystem
     "ADDT-B.ST",    # Addtech B – teknisk distribution (annan än AddNode!)
-    "BETE.ST",      # BE Group – stålhandel
+    # BETE.ST → ej identifierad aktie på Nasdaq Stockholm/First North, borttagen
     "LOOMIS.ST",    # Loomis – värdetransporter & kontanthantering
     "DOM.ST",       # Dometic Group – mobillivsprodukter (RV, marin, last)
     "AAK.ST",       # AAK – specialfetter & vegetabiliska oljor
@@ -184,12 +186,12 @@ SMALL_CAP = [
     "CLAS-B.ST",    # Clas Ohlson B – verktyg & fritidsprodukter
     "DUNI.ST",      # Duni – bordsdukning & förpackningar
     "MSON-B.ST",    # Midsona B – hälsokostprodukter (Kung Markatta, Urtekram)
-    "DORO.ST",      # Doro – seniortelefoner & trygghetslarm
+    # DORO.ST → avnoterat 17 dec 2025, uppköpt av Xplora Technologies
 
     # ── Tjänster & Konsult ────────────────────────────────────────────────────
     "BTS-B.ST",     # BTS Group B – affärssimuleringar & lärande
     "COOR.ST",      # Coor Service Management – FM-tjänster
-    "HUMANA.ST",    # Humana – omsorgstjänster (LSS, äldreomsorg)
+    "HUM.ST",       # Humana – omsorgstjänster LSS/äldreomsorg (f.d. HUMANA.ST)
 
     # ── MedTech & Pharma ──────────────────────────────────────────────────────
     "EKTA-B.ST",    # Elekta B – strålbehandlingssystem
@@ -231,7 +233,7 @@ SMALL_CAP = [
     "NOBI.ST",      # Nobina – kollektivtrafikoperatör (buss)
     "LATO-B.ST",    # Latour B – investmentbolag (Swegon, Tomra m.fl.)
     "BINV.ST",      # Byggmästare Anders J Ahlström Invest B
-    "KFAB.ST",      # Kungsleden B (numera sammanslagen)
+    # KFAB.ST → Kungsleden sammanslagen med Castellum 2022, avnoterat
 
     # ── Material & Skog ───────────────────────────────────────────────────────
     "SSAB-A.ST",    # SSAB A – höghållfast specialstål
@@ -252,25 +254,24 @@ SMALL_CAP = [
 
 SPOTLIGHT = [
     # ── Biotech & MedTech ────────────────────────────────────────────────────
-    "BIOT.ST",      # Biotech IgG – antikroppsproduktion
-    "ELCG.ST",      # Elicera Therapeutics – CAR-T-cellterapi
-    "KDEV.ST",      # Kancera – kinasbaserad cancerforskning
+    "BIOT.ST",      # Biotage – analytiska instrument & separationsteknik
+    "ELIC.ST",      # Elicera Therapeutics – CAR-T-cellterapi (f.d. ELCG.ST)
+    "KDEV.ST",      # Karolinska Development – life science-investmentbolag
     "ENZY.ST",      # Enzymatica – enzymbaserade läkemedel
     "IMPC.ST",      # Impact Coatings – PVD-beläggningssystem
-    "GLYCOREX.ST",  # Glycorex Transplantation (dup, dedup)
-    "WNTRESEARCH.ST", # Wnt Research – kancerstammceller
-    "BRIGHTER.ST",  # Brighter (dup, dedup)
+    # GLYCOREX.ST → handlas på NGM (Nordic Growth Market), ej Yahoo .ST
+    # WNTRESEARCH.ST → bytte namn till Opsy Holding (OPSYH.ST) apr 2025, annan verksamhet
+    # BRIGHTER.ST → konkurs nov 2022, avnoterat
 
     # ── Cleantech & Energi ────────────────────────────────────────────────────
-    "MYFC.ST",      # myFC Holding – bränsleceller (dup)
-    "POWERCELL.ST", # PowerCell Sweden (dup)
-    "MINESTO.ST",   # Minesto (dup)
+    "PCELL.ST",     # PowerCell Sweden – vätgasbränsleceller (f.d. POWERCELL.ST)
+    "MINEST.ST",    # Minesto – tidvattenskraft (f.d. MINESTO.ST)
 
     # ── Industri / Nisch ─────────────────────────────────────────────────────
-    "OBDU.ST",      # Obducat – nanoimprinting (dup)
-    "TAGM.ST",      # TagMaster (dup)
-    "ANOTO.ST",     # Anoto Group (dup)
-    "SENSYS.ST",    # Sensys Gatso (dup)
+    # OBDU.ST → handlas på NGM (Nordic Growth Market), ej Yahoo .ST
+    "TAGM-B.ST",    # TagMaster B – RFID för transport & logistik (f.d. TAGM.ST)
+    "ANOT.ST",      # Anoto Group – digital skriv- och ritteknologi (f.d. ANOTO.ST)
+    "SENS.ST",      # Sensys Gatso – trafiksäkerhetslösningar (f.d. SENSYS.ST)
 
     # ── Fastighet ────────────────────────────────────────────────────────────
     "MTRS.ST",      # Mälarstaden – fastighetsbolag
@@ -285,10 +286,67 @@ _ALL = FIRST_NORTH + SMALL_CAP + SPOTLIGHT
 # Deduplicera (behåll första förekomsten, ordning spelar ingen roll)
 SMALLCAP_UNIVERSE = list(dict.fromkeys(t.upper() for t in _ALL))
 
+# Sökväg till användarens egna tickers (skapas automatiskt vid första tillägget)
+_CUSTOM_FILE = Path(__file__).parent.parent / "data" / "smallcap_custom.json"
+
+
+# ── Anpassat universum (via app.py) ───────────────────────────────────────────
+
+def load_custom() -> list:
+    """Returnerar användartillagda tickers från data/smallcap_custom.json."""
+    try:
+        if _CUSTOM_FILE.exists():
+            import json
+            return json.loads(_CUSTOM_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return []
+
+
+def _save_custom(items: list):
+    import json
+    _CUSTOM_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _CUSTOM_FILE.write_text(
+        json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def add_custom(ticker: str, name: str = "", segment: str = "first_north") -> bool:
+    """Lägger till en ticker i custom-listan. Returnerar True om ny."""
+    from datetime import date
+    ticker = ticker.strip().upper()
+    custom = load_custom()
+    if any(c["ticker"] == ticker for c in custom):
+        return False
+    custom.append({
+        "ticker":  ticker,
+        "name":    name.strip(),
+        "segment": segment,
+        "added":   str(date.today()),
+    })
+    _save_custom(custom)
+    return True
+
+
+def remove_custom(ticker: str) -> bool:
+    """Tar bort en ticker ur custom-listan. Returnerar True om borttagen."""
+    ticker = ticker.strip().upper()
+    custom = load_custom()
+    new = [c for c in custom if c["ticker"] != ticker]
+    if len(new) == len(custom):
+        return False
+    _save_custom(new)
+    return True
+
+
+def is_builtin(ticker: str) -> bool:
+    """Returnerar True om tickern redan finns i basuniversumet."""
+    return ticker.strip().upper() in SMALLCAP_UNIVERSE
+
 
 def get_universe(market: str = "all") -> list:
     """
-    Returnerar ticker-lista baserat på marknad.
+    Returnerar ticker-lista baserat på marknad (inkl. custom-tickers).
     market: "all" | "first_north" | "small_cap" | "spotlight"
     """
     mapping = {
@@ -297,7 +355,15 @@ def get_universe(market: str = "all") -> list:
         "small_cap":   list(dict.fromkeys(t.upper() for t in SMALL_CAP)),
         "spotlight":   list(dict.fromkeys(t.upper() for t in SPOTLIGHT)),
     }
-    return mapping.get(market, SMALLCAP_UNIVERSE)
+    base = mapping.get(market, SMALLCAP_UNIVERSE)
+
+    custom = load_custom()
+    if market == "all":
+        extra = [c["ticker"] for c in custom]
+    else:
+        extra = [c["ticker"] for c in custom if c.get("segment") == market]
+
+    return list(dict.fromkeys(base + extra))
 
 
 # ── Bransch-kategorier ────────────────────────────────────────────────────────
@@ -305,31 +371,31 @@ SECTOR_GROUPS = {
     "Mjukvara & SaaS": [
         "LIME.ST", "FNOX.ST", "VIT-B.ST", "ANOD-B.ST", "ENEA.ST", "IAR-B.ST",
         "RAY-B.ST", "SECT-B.ST", "CINT.ST", "KNOW.ST", "PRIC-B.ST", "TOBII.ST",
-        "NETI-B.ST", "CTEK.ST", "ALCA.ST", "SPEQTA.ST", "CTM.ST", "ACAST.ST",
-        "BUSER.ST", "EGTX.ST", "EMPIR-B.ST", "PROACT.ST", "BAHNHOF.ST",
+        "NETI-B.ST", "CTEK.ST", "ALCA.ST", "CTM.ST", "ACAST.ST",
+        "BUSER.ST", "EGTX.ST", "SAFETY-B.ST", "PACT.ST", "BAHN-B.ST",
     ],
     "MedTech & Life Science": [
         "XVIVO.ST", "ELOS-B.ST", "BOMILL.ST", "BIOG-B.ST", "CEVI.ST", "MNTC.ST",
         "ALIG.ST", "IRRAS.ST", "QLINEA.ST", "ONCO.ST", "XSPRAY.ST", "HNSA.ST",
         "CALTX.ST", "DMYD-B.ST", "ORX.ST", "ACTI.ST", "IMMU.ST", "MCOV-B.ST",
-        "VIMIAN.ST", "BOUL.ST", "MOBERG.ST", "PEPTONIC.ST", "CERENO.ST",
-        "XBRANE.ST", "SEDANA.ST", "SENZIME.ST", "GLYCOREX.ST", "CANTARGIA.ST",
-        "RECI-B.ST", "INTEG-B.ST", "BIOT.ST", "ELCG.ST", "KDEV.ST", "ENZY.ST",
+        "VIMIAN.ST", "BOUL.ST", "MOB.ST", "PMED.ST", "CRNO-B.ST",
+        "XBRANE.ST", "SEDANA.ST", "SEZI.ST", "CANTA.ST",
+        "RECI-B.ST", "INTEG-B.ST", "BIOT.ST", "ELIC.ST", "KDEV.ST", "ENZY.ST",
         "GETI-B.ST", "EKTA-B.ST", "ARJO-B.ST", "VITR.ST", "BICO.ST",
     ],
     "Industri & Verkstad": [
         "MIPS.ST", "GARO.ST", "OEM-B.ST", "SDIP-B.ST", "XANO-B.ST",
         "REJL-B.ST", "HEXA-B.ST", "MILDEF.ST", "INSTAL.ST", "IVSO.ST",
-        "BERG-B.ST", "EOLU-B.ST", "BRAV.ST", "SENSYS.ST", "HANZA.ST",
-        "TAGM.ST", "BUFAB.ST", "LIAB.ST", "ITAB.ST", "NCAB.ST", "TROAX.ST",
-        "SYSR.ST", "MYCR.ST", "NOTE.ST", "AQ.ST", "BEIJ-B.ST", "HMSN.ST",
-        "NOLA-B.ST", "HPOL-B.ST", "VBG-B.ST", "ADDT-B.ST", "BETE.ST",
-        "DOM.ST", "INWI.ST", "LOOMIS.ST", "OBDU.ST", "IMPC.ST",
+        "BERG-B.ST", "EOLU-B.ST", "BRAV.ST", "SENS.ST", "HANZA.ST",
+        "TAGM-B.ST", "BUFAB.ST", "LIAB.ST", "ITAB.ST", "NCAB.ST", "TROAX.ST",
+        "SYSR.ST", "MYCR.ST", "NOTE.ST", "AQ.ST", "BEIJ-B.ST", "HMS.ST",
+        "NOLA-B.ST", "HPOL-B.ST", "VBG-B.ST", "ADDT-B.ST",
+        "DOM.ST", "INWI.ST", "LOOMIS.ST", "IMPC.ST", "ANOT.ST",
     ],
     "Konsument & Livsstil": [
-        "THULE.ST", "RVRC.ST", "SKIS-B.ST", "CARY.ST", "BHG.ST", "BJBO.ST",
+        "THULE.ST", "RVRC.ST", "SKIS-B.ST", "CARY.ST", "BHG.ST", "BORG.ST",
         "FING-B.ST", "MEKO.ST", "BILI-A.ST", "CLAS-B.ST", "DUNI.ST",
-        "MSON-B.ST", "DORO.ST", "AAK.ST", "AXFO.ST", "BMAX.ST",
+        "MSON-B.ST", "AAK.ST", "AXFO.ST", "BMAX.ST",
     ],
     "Fintech & Finans": [
         "QLIRO.ST", "NOWO.ST", "RESURS.ST", "HOFI.ST", "INTRUM.ST",
@@ -338,7 +404,7 @@ SECTOR_GROUPS = {
         "G5EN.ST", "BETS-B.ST", "EMBRAC-B.ST", "PDX.ST", "NENT-B.ST", "MTG-B.ST",
     ],
     "Cleantech & Energi": [
-        "ARISE.ST", "EOLU-B.ST", "GRNG.ST", "POWERCELL.ST", "MINESTO.ST",
+        "ARISE.ST", "EOLU-B.ST", "GRNG.ST", "PCELL.ST", "MINEST.ST",
         "MYFC.ST", "MAHA-A.ST",
     ],
     "Investmentbolag": [
@@ -347,14 +413,14 @@ SECTOR_GROUPS = {
         "RATO-B.ST", "LATO-B.ST",
     ],
     "Fastighet": [
-        "KFAST-B.ST", "SSM.ST", "NIV.ST", "NP3.ST", "SLP-B.ST", "CIBUS.ST",
+        "KFAST-B.ST", "SSM.ST", "NP3.ST", "SLP-B.ST", "CIBUS.ST",
         "PION-B.ST", "BALD-B.ST", "CAST.ST", "FABG.ST", "SAGA-B.ST",
         "WIHL.ST", "DIOS.ST", "JM.ST", "PEAB-B.ST", "NCC-B.ST", "HUFV-A.ST",
         "CORE-B.ST", "FPAR-A.ST", "HEBA-B.ST", "BONAV-B.ST", "PLAZ-B.ST",
         "NYF.ST", "SBB-B.ST", "MTRS.ST", "HTRO.ST",
     ],
     "Tjänster & Konsult": [
-        "BTS-B.ST", "COOR.ST", "HUMANA.ST", "NOBI.ST", "ESSITY-B.ST",
+        "BTS-B.ST", "COOR.ST", "HUM.ST", "NOBI.ST", "ESSITY-B.ST",
     ],
     "Material & Skog": [
         "SSAB-A.ST", "SSAB-B.ST", "SCA-B.ST", "HOLM-B.ST",

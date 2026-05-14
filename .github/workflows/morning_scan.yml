@@ -50,9 +50,24 @@ jobs:
       - name: 📁 Skapa mappar
         run: mkdir -p data/cache data/history reports
 
+      - name: 📋 Ladda innehav (holdings.csv)
+        run: |
+          if [ -n "$HOLDINGS_CSV" ]; then
+            echo "$HOLDINGS_CSV" > holdings.csv
+            echo "✓ holdings.csv laddad ($(wc -l < holdings.csv) rader)"
+          else
+            echo "ℹ HOLDINGS_CSV ej satt – kör utan portföljdata"
+          fi
+        env:
+          HOLDINGS_CSV: ${{ secrets.HOLDINGS_CSV }}
+
       - name: ⭐ Ladda bevakningslista
-        if: ${{ secrets.WATCHLIST_JSON != '' }}
-        run: echo '${{ secrets.WATCHLIST_JSON }}' > data/watchlist.json
+        run: |
+          if [ -n "$WATCHLIST_JSON" ]; then
+            echo "$WATCHLIST_JSON" > data/watchlist.json
+          fi
+        env:
+          WATCHLIST_JSON: ${{ secrets.WATCHLIST_JSON }}
         continue-on-error: true
 
       - name: 🌅 Kör morgonkoll

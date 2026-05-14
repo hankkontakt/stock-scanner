@@ -370,6 +370,49 @@ def remove_from_watchlist(ticker: str):
     return jsonify({"status": "removed", "ticker": ticker})
 
 
+@app.route("/api/smallcap/universe", methods=["GET"])
+def get_smallcap_universe():
+    """Returnerar custom-tickers + basuniversumstatistik."""
+    from smallcap.universe import load_custom, SMALLCAP_UNIVERSE, is_builtin
+    custom = load_custom()
+    return jsonify({
+        "custom":      custom,
+        "base_count":  len(SMALLCAP_UNIVERSE),
+        "total_count": len(SMALLCAP_UNIVERSE) + sum(
+            1 for c in custom if not is_builtin(c["ticker"])
+        ),
+    })
+
+
+@app.route("/api/smallcap/universe", methods=["POST"])
+def add_to_smallcap():
+    """Lägger till en ticker i custom-listan."""
+    data    = request.get_json()
+    ticker  = data.get("ticker", "").strip().upper()
+    name    = data.get("name", "").strip()
+    segment = data.get("segment", "first_north")
+    if not ticker:
+        return jsonify({"error": "Ogiltigt ticker"}), 400
+    from smallcap.universe import add_custom, is_builtin
+    is_new  = add_custom(ticker, name, segment)
+    builtin = is_builtin(ticker)
+    return jsonify({
+        "status":  "added" if is_new else "already_exists",
+        "ticker":  ticker,
+        "builtin": builtin,
+    })
+
+
+@app.route("/api/smallcap/universe/<ticker>", methods=["DELETE"])
+def remove_from_smallcap(ticker: str):
+    """Tar bort en ticker ur custom-listan."""
+    ticker = ticker.upper()
+    from smallcap.universe import remove_custom
+    if not remove_custom(ticker):
+        return jsonify({"error": "Ticker ej hittad i custom-listan"}), 404
+    return jsonify({"status": "removed", "ticker": ticker})
+
+
 @app.route("/api/import/avanza", methods=["POST"])
 def import_avanza_preview():
     """Parse Avanza CSV and return rows with suggested ticker matches."""
