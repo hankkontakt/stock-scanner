@@ -38,6 +38,7 @@ import yfinance as yf
 from core import config
 from core import alerts
 from core import logger
+from core import ai_analysis
 from portfolio import portfolio
 from core import earnings_calendar as ec
 from portfolio import watchlist as wl
@@ -783,6 +784,56 @@ def main():
             watchlist_items  = watchlist_items,
             top50_df         = top50,
         )
+
+        # 10b. AI Morning Brief (Feature 6)
+        ai_brief = ""
+        try:
+            print("\n🤖 Genererar AI-morgonbrief...")
+            # Bygg data för AI-anropet
+            bench_data = {}
+            for sym, d in (market_overview or {}).items():
+                bench_data[d.get("name", sym)] = {
+                    "change_pct": d.get("change_pct"),
+                    "price": d.get("price"),
+                }
+            portfolio_data = {
+                "num_holdings": len(holdings),
+                "holdings": []
+            }
+            if not holdings.empty and price_moves:
+                for _, row in holdings.iterrows():
+                    t = str(row["ticker"]).upper()
+                    m = price_moves.get(t, {})
+                    portfolio_data["holdings"].append({
+                        "ticker": t,
+                        "change_pct": m.get("change_pct"),
+                        "price": m.get("price"),
+                        "cost_basis": row.get("cost_basis"),
+                    })
+            ai_alerts = []
+            for a in stoploss_alerts:
+                ai_alerts.append({"type": "stoploss", "ticker": a["ticker"], "pct": a["total_pct"]})
+            for a in portfolio_alerts.get("crash", []):
+                ai_alerts.append({"type": "crash", "ticker": a["ticker"], "pct": a["change_pct"], "action": a["action"]})
+            for a in portfolio_alerts.get("surge", []):
+                ai_alerts.append({"type": "surge", "ticker": a["ticker"], "pct": a["change_pct"], "action": a["action"]})
+            ai_opps = []
+            for o in opportunities:
+                ai_opps.append({"ticker": o["ticker"], "type": o["type"], "score": o["score"], "msg": o["msg"]})
+
+            ai_brief = ai_analysis.generate_morning_brief(
+                market_data=bench_data,
+                portfolio_data=portfolio_data,
+                alerts_list=ai_alerts,
+                opportunities=ai_opps,
+            )
+            if ai_brief and not ai_brief.startswith("⚠") and not ai_brief.startswith("ℹ"):
+                report += f"\n\n## 🤖 AI-morgonbrief\n\n{ai_brief}\n"
+                print("  ✓ AI-morgonbrief tillagd i rapporten")
+            else:
+                print(f"  ℹ AI-morgonbrief hoppades över: {ai_brief[:60] if ai_brief else 'tomt svar'}")
+        except Exception as e:
+            print(f"  ⚠ AI-morgonbrief misslyckades: {e}")
 
         # Spara rapport
         Path(config.REPORT_DIR).mkdir(exist_ok=True)

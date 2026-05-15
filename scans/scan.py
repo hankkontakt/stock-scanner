@@ -25,6 +25,7 @@ from core import filters
 from core import sectors
 from portfolio import watchlist as wl
 from core import news_fetcher
+from core import ai_analysis
 
 # ── Auto-rensa felaktigt svartlistade kända aktier vid start ─────────────────
 def _auto_clean_blacklist():
@@ -828,12 +829,32 @@ def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df,
     # 14. Paper trading
     _try("Paper trading", lambda: paper_trading.build_paper_trading_section())
 
-    # ── DEL 3: AI-prompts + Datalager (alltid sist) ───────────
+    # ── DEL 3: AI-driven veckoanalys (DeepSeek) ──────────────
+    if config.DEEPSEEK_API_KEY:
+        _try("AI Weekly Analysis", lambda: _section_ai_weekly_analysis(scored, regime_info))
+    
+    # ── DEL 4: AI-prompts + Datalager (alltid sist) ───────────
     parts.append(_section_claude_prompt())
     _try("AI-datalager", lambda: _section_ai_datalayer(scored, regime_info))
     parts.append("\n---\n*⚠ Inte finansiell rådgivning.*")
 
     return "\n".join(parts)
+
+
+def _section_ai_weekly_analysis(scored: pd.DataFrame, regime_info: dict) -> str:
+    """AI-genererad veckoanalys från DeepSeek."""
+    if not config.DEEPSEEK_API_KEY:
+        return ""
+    print("  🤖 AI-genererar veckoanalys (DeepSeek)...")
+    try:
+        ai_content = ai_analysis.generate_weekly_ai_analysis(
+            scored, regime_info
+        )
+        if ai_content and "misslyckades" not in ai_content:
+            return f"\n---\n## 🤖 AI-Veckoanalys (DeepSeek)\n{ai_content}"
+    except Exception as e:
+        print(f"  ⚠ AI-analysis misslyckades: {e}")
+    return ""
 
 
 # ── Validering ─────────────────────────────────────────────────────────────────

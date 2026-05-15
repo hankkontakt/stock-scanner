@@ -249,6 +249,12 @@ assert abs(sum(FACTOR_WEIGHTS.values()) - 1.0) < 0.001
 FMP_API_KEY      = os.getenv("FMP_API_KEY", "")
 FINNHUB_API_KEY  = os.getenv("FINNHUB_API_KEY", "")
 
+# ════════════════ AI / DEEPSEEK ════════════════
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+AI_MODEL         = "deepseek-chat"          # deepseek-chat eller deepseek-reasoner
+AI_MAX_TOKENS    = 2048                     # Max tokens per svar
+AI_TEMPERATURE   = 0.3                      # Låg temperatur = mer deterministiska svar
+
 # ════════════════ PARALLELLA INSTÄLLNINGAR ════════════════
 PARALLEL_WORKERS          = 8   # Antal parallella trådar för yfinance-datahämtning
 PARALLEL_TICKER_TIMEOUT   = 30  # Max sekunder per ticker (ersätter SIGALRM)
