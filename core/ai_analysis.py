@@ -22,20 +22,27 @@ Användning:
 import json
 import os
 import hashlib
+import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 
-from core import config
+from . import config
 
 # ══════════════════════════════════════════════════════════════════════════════
 # KONSTANTER
 # ══════════════════════════════════════════════════════════════════════════════
 
-AI_CACHE_DIR = Path("data/ai_cache")
-AI_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+# Använd Path(__file__) för att alltid hamna rätt oavsett cwd (Streamlit Cloud)
+_MODULE_DIR  = Path(__file__).resolve().parent.parent   # projektroten
+AI_CACHE_DIR = _MODULE_DIR / "data" / "ai_cache"
+try:
+    AI_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    AI_CACHE_DIR = Path(tempfile.gettempdir()) / "marketscan_ai_cache"
+    AI_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 AI_CACHE_HOURS = 24  # Cachelagra AI-svar i 24h för samma fråga
 
 # ══════════════════════════════════════════════════════════════════════════════
