@@ -157,6 +157,43 @@ NORDIC = [
     "RELAIS.HE", "PUUILO.HE", "HARVIA.HE", "MARIMEKKO.HE",
 ]
 
+# ════════════════ SVERIGE – OMX Stockholm Large/Mid Cap ════════════════
+OMX_SE = [
+    # Industri & Verkstad
+    "VOLV-B.ST", "VOLV-A.ST", "SAND.ST", "SKF-B.ST", "ALFA.ST",
+    "ATCO-A.ST", "ATCO-B.ST", "HEXA-B.ST", "EPIR-B.ST", "SWEC-B.ST",
+    "NCC-B.ST", "SSAB-A.ST", "SSAB-B.ST", "BOLM.ST", "THULE.ST",
+    "HUSQ-B.ST", "TROAX.ST", "DIOS.ST", "AFRY.ST", "MSAB-B.ST",
+
+    # Finans & Bank
+    "SEB-A.ST", "SHB-A.ST", "SWED-A.ST", "NDA-SE.ST", "INVE-A.ST",
+    "INVE-B.ST", "LATO-A.ST", "LATO-B.ST", "LUND-B.ST",
+    "BURE.ST", "SVNK-A.ST", "KINV-B.ST", "CBRE.ST",
+
+    # Tech & Mjukvara
+    "ERIC-B.ST", "ERIC-A.ST", "EVO.ST", "CINT.ST", "BOKU.ST",
+    "NOLA-B.ST", "INDT.ST", "HMS.ST", "DIAM-B.ST", "ADDV-B.ST",
+    "SINCH.ST", "NETG-B.ST", "CMORE.ST",
+
+    # Healthcare & Life Science
+    "SOBI.ST", "ONCO.ST", "BIOG-B.ST", "ALZ.ST", "HMED.ST",
+    "BIOTAGE.ST", "XVIVO.ST", "NANOFORM.ST",
+
+    # Konsument & Handel
+    "HM-B.ST", "HM-A.ST", "AXFO.ST", "CLAS-B.ST", "BOOZT.ST",
+    "BILIA-A.ST", "OEM-B.ST", "KNOW-IT.ST", "MATAS.ST",
+
+    # Fastighet
+    "CAST.ST", "SBB-B.ST", "CALD.ST", "FABG.ST", "WIHL.ST",
+    "CAPP.ST", "KLOVERN-B.ST", "NYFOSA.ST", "NIBE-B.ST",
+
+    # Energi & Utilities
+    "VATTENFALL.ST", "TELIA.ST", "SSCP.ST",
+
+    # Material & Skog
+    "SCA-B.ST", "HOLM-B.ST", "ESSITY-B.ST", "BETZ.ST",
+]
+
 # ════════════════ EUROPA (Uppdelad i Sektorer) ════════════════
 EUROPE = [
     # Industri & Verkstad
