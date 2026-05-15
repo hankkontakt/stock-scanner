@@ -89,7 +89,6 @@ FIRST_NORTH = [
     # ── Konsument & Livsstil ─────────────────────────────────────────────────
     "RVRC.ST",      # RVRC Holding – outdoor/workwear DTC
     "SKIS-B.ST",    # Skistar B – skidorter
-    "CARY.ST",      # Cary Group – skadeverkstäder
     "BHG.ST",       # BHG Group – onlinehandel hem & trädgård
     "BORG.ST",      # Björn Borg – sportmode
     "FING-B.ST",    # Fingerprint Cards B – fingeravtrycksbiometri
@@ -129,12 +128,10 @@ FIRST_NORTH = [
     "CEVI.ST",      # CellaVision – bloddifferentiering
     "MNTC.ST",      # Mentice – kirurgisk simulering
     "ALIG.ST",      # Alligator Bioscience – immuno-onkologi
-    "IRRAS.ST",     # IRRAS – neurointensivvård
     "QLINEA.ST",    # Q-linea – antibiotikaresistens
     "ONCO.ST",      # Oncopeptides – blodcancer
     "XSPRAY.ST",    # XSpray Pharma – nanopartikelformulering
     "HNSA.ST",      # Hansa Biopharma – enzymterapi
-    "CALTX.ST",     # Calliditas Therapeutics – IgA-nefropati
     "DMYD-B.ST",    # Diamyd Medical – autoimmun diabetes
     "ORX.ST",       # Orexo – beroendemedicin
     "ACTI.ST",      # Active Biotech – immunologi
@@ -239,7 +236,6 @@ SMALL_CAP = [
     "ALIF-B.ST",    # AddLife B – medicinteknisk distribution (f.d. ADDL-B.ST)
     "BIOA-B.ST",    # BioArctic B – Alzheimer-behandling
     "ARISE.ST",     # Arise – vindkraftsutveckling
-    "MYFC.ST",      # myFC Holding – bränsleceller
     "BIOT.ST",      # Biotage – analytiska instrument
     # ── Tech & Mjukvara ───────────────────────────────────────────────────────
     "SINCH.ST",     # Sinch – kommunikationsplattform CPaaS
@@ -316,8 +312,6 @@ SPOTLIGHT = [
     "IMPC.ST",      # Impact Coatings – PVD-beläggning
     "DICOT.ST",     # Dicot Pharma – erektil dysfunktion
     "SPAGO.ST",     # Spago Nanomedical – radiosensibilisering
-    "REDW.ST",      # Redwood Pharma – näsinhalation
-    "LIDDS.ST",     # Lidds AB – prostatacancer
     "XINT.ST",      # Xintela – ledbroskterapier
     "REAL.ST",      # Real Heart – konstgjort hjärta
     # ── Cleantech & Energi ────────────────────────────────────────────────────
@@ -452,14 +446,14 @@ SECTOR_GROUPS = {
     ],
     "MedTech & Life Science": [
         "XVIVO.ST", "ELOS-B.ST", "BOMILL.ST", "BIOG-B.ST", "CEVI.ST", "MNTC.ST",
-        "ALIG.ST", "IRRAS.ST", "QLINEA.ST", "ONCO.ST", "XSPRAY.ST", "HNSA.ST",
-        "CALTX.ST", "DMYD-B.ST", "ORX.ST", "ACTI.ST", "IMMU.ST", "MCOV-B.ST",
+        "ALIG.ST", "QLINEA.ST", "ONCO.ST", "XSPRAY.ST", "HNSA.ST",
+        "DMYD-B.ST", "ORX.ST", "ACTI.ST", "IMMU.ST", "MCOV-B.ST",
         "VIMIAN.ST", "BOUL.ST", "MOB.ST", "PMED.ST", "CRNO-B.ST", "XBRANE.ST",
         "SEDANA.ST", "SEZI.ST", "CANTA.ST", "INTEG-B.ST", "EGTX.ST",
         "BIOT.ST", "ELIC.ST", "KDEV.ST", "ENZY.ST", "GETI-B.ST", "EKTA-B.ST",
         "ARJO-B.ST", "VITR.ST", "BICO.ST", "LINC.ST", "CAMX.ST", "ALIF-B.ST",
         "SOBI.ST", "BIOA-B.ST", "DICOT.ST", "SPAGO.ST",
-        "REDW.ST", "LIDDS.ST", "REAL.ST", "SECARE.ST",
+        "REAL.ST", "SECARE.ST",
         "DVYSR.ST", "VICO.ST", "REDS.ST", "XINT.ST", "IMPC.ST",
     ],
     "Industri & Verkstad": [
@@ -474,7 +468,7 @@ SECTOR_GROUPS = {
         "SINT.ST", "FNM.ST",
     ],
     "Konsument & Livsstil": [
-        "THULE.ST", "RVRC.ST", "SKIS-B.ST", "CARY.ST", "BHG.ST", "BORG.ST",
+        "THULE.ST", "RVRC.ST", "SKIS-B.ST", "BHG.ST", "BORG.ST",
         "FING-B.ST", "MEKO.ST", "BILI-A.ST", "CLAS-B.ST", "DUNI.ST", "MSON-B.ST",
         "AAK.ST", "AXFO.ST", "BMAX.ST", "RUSTA.ST", "NEWA-B.ST", "ALLIGO-B.ST", "LYKO-A.ST",
         "KABE-B.ST", "FAG.ST", "ICA.ST", "NELLY.ST", "CLA-B.ST", "PLEJD.ST",
@@ -490,7 +484,7 @@ SECTOR_GROUPS = {
         "EVO.ST", "ANGL.ST", "BEYOND.ST", "SF.ST",
     ],
     "Cleantech & Energi": [
-        "EOLU-B.ST", "GRNG.ST", "PCELL.ST", "MINEST.ST", "MYFC.ST",
+        "EOLU-B.ST", "GRNG.ST", "PCELL.ST", "MINEST.ST",
         "MAHA-A.ST", "EPRO-B.ST", "ORRON.ST", "SUSG.ST", "SOLT.ST",
         "ARISE.ST", "OPTI.ST",
     ],
