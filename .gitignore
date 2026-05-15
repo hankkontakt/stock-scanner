@@ -5,12 +5,15 @@
 # Personlig portföljdata
 holdings.csv
 
-# Cache-data
+# Cache-data (aldrig committa, kan vara GB-stora)
 data/cache/
-data/
 
-# Rapporter
-reports/
+# Personlig lokal data (hanteras via GitHub Secrets i CI)
+data/ticker_map.json
+
+# Rapporter – markdown-filer behövs inte i repot, men CSV:erna läses av Streamlit
+reports/*.md
+reports/*.txt
 
 # Python
 __pycache__/
