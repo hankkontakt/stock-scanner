@@ -2,9 +2,6 @@
 .env
 *.env
 
-# Personlig portföljdata
-holdings.csv
-
 # Cache-data (aldrig committa, kan vara GB-stora)
 data/cache/
 
@@ -44,3 +41,4 @@ Thumbs.db
 
 # Claude Code worktrees (ska aldrig spåras av git)
 .claude/worktrees/
+.aider*
