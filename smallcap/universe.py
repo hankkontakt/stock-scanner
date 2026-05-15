@@ -54,12 +54,10 @@ FIRST_NORTH = [
     "FERRO.ST",     # Ferroamp Elektronik – energilagring
     # ── Konsument & Handel ───────────────────────────────────────────────────
     "RUSTA.ST",     # Rusta – lågprisvaruhus
-    "NWG-B.ST",     # New Wave Group B – profilkläder & sport
+    "NEWA-B.ST",    # New Wave Group B – profilkläder & sport (f.d. NWG-B.ST)
     "ALLIGO-B.ST",  # Alligo B – teknisk distribution
-    "KOPY-B.ST",    # Kopparbergs Bryggeri B – (f.d. KOPP-B.ST)
     "LYKO-A.ST",    # Lyko Group A – skönhet online
     "BOOZT.ST",     # Boozt AB – mode-e-handel (f.d. BOOZ.ST)
-    "HOVD.ST",      # Hövding Sverige – airbag-hjälm (f.d. HVD.ST)
     "HAYPP.ST",     # Haypp Group – tobaksalternativ (f.d. HAYP.ST)
     # ── Industri & Clean Tech ────────────────────────────────────────────────
     "MIPS.ST",      # MIPS – hjälmteknik, royaltymodell
@@ -86,12 +84,12 @@ FIRST_NORTH = [
     # ── Fintech & Finans ─────────────────────────────────────────────────────
     "QLIRO.ST",     # Qliro – BNPL & betalningslösningar
     "NOWO.ST",      # Nowo – digital bank
-    "RESURS-B.ST",  # Resurs Holding B – konsumentlån (f.d. RESURS.ST)
+    "RESURS.ST",    # Resurs Holding – konsumentlån
     "HOFI.ST",      # Hoist Finance – kreditfordringsinköp
     # ── Konsument & Livsstil ─────────────────────────────────────────────────
     "RVRC.ST",      # RVRC Holding – outdoor/workwear DTC
     "SKIS-B.ST",    # Skistar B – skidorter
-    "CARY-B.ST",    # Cary Group B – skadeverkstäder (f.d. CARY.ST)
+    "CARY.ST",      # Cary Group – skadeverkstäder
     "BHG.ST",       # BHG Group – onlinehandel hem & trädgård
     "BORG.ST",      # Björn Borg – sportmode
     "FING-B.ST",    # Fingerprint Cards B – fingeravtrycksbiometri
@@ -140,7 +138,7 @@ FIRST_NORTH = [
     "DMYD-B.ST",    # Diamyd Medical – autoimmun diabetes
     "ORX.ST",       # Orexo – beroendemedicin
     "ACTI.ST",      # Active Biotech – immunologi
-    "IMMU.ST",      # Immunicum – cancerimmunologi
+    "IMMU.ST",      # Mendus AB – cancervaccin (f.d. Immunicum)
     "LINC.ST",      # LINC – life science-investmentbolag
     "CAMX.ST",      # CancerQ/CancerXomics – diagnostik
     "MCOV-B.ST",    # Medicover B – hälsovård Östeuropa
@@ -158,7 +156,6 @@ FIRST_NORTH = [
     "MAHA-A.ST",    # Maha Energy A – oljeproduktion
     "ANOT.ST",      # Anoto Group – digital skrivteknik
     "INTEG-B.ST",   # Integrum B – bioniska proteser
-    "MEND.ST",      # Mendus AB – cancervaccin
     # ── Nya bolag: kvantitativ analys maj 2026 ───────────────────────────────
     "NYAB.ST",      # NYAB AB – infrastruktur & anläggning
     "SECARE.ST",    # Swedencare – husdjurshälsa, 57,9% bruttomarginal
@@ -168,7 +165,7 @@ FIRST_NORTH = [
     "KAMBI.ST",     # Kambi Group – B2B sportbetting SaaS
     "STORY-B.ST",   # Story of AMS B
     "MAGI.ST",      # Maginatics (kontrollera)
-    "SF.ST",        # SF Studios (kontrollera)
+    "SF.ST",        # Stillfront Group – spelutveckling
 ]
 
 
@@ -228,8 +225,8 @@ SMALL_CAP = [
     "BTS-B.ST",     # BTS Group B – affärssimuleringar
     "COOR.ST",      # Coor Service Management
     "HUM.ST",       # Humana – omsorgstjänster LSS/äldreomsorg
-    "EWK.ST",       # Ework Group – konsultförmedling (f.d. EWORK.ST)
-    "SJR-B.ST",     # SJR in Scandinavia B – rekrytering
+    "EWRK.ST",      # Ework Group – konsultförmedling
+    "OGUN-B.ST",    # Ogunsen B – rekrytering (f.d. SJR in Scandinavia)
     "NOBI.ST",      # Nobina – kollektivtrafikoperatör
     # ── MedTech & Pharma ──────────────────────────────────────────────────────
     "EKTA-B.ST",    # Elekta B – strålbehandlingssystem
@@ -305,7 +302,6 @@ SMALL_CAP = [
     "OVZON.ST",     # Ovzon – SatCom-as-a-Service
     "NEOBO.ST",     # Neobo Fastigheter – bostäder, aktieåterköp
     "VICO.ST",      # Vicore Pharma – IPF-pipeline (f.d. VICOR.ST)
-    "SFGR.ST",      # Stillfront Group – spelutveckling (f.d. SFRG.ST)
     "KDEV.ST",      # Karolinska Development – life science investmentbolag
 ]
 
@@ -320,29 +316,22 @@ SPOTLIGHT = [
     "IMPC.ST",      # Impact Coatings – PVD-beläggning
     "DICOT.ST",     # Dicot Pharma – erektil dysfunktion
     "SPAGO.ST",     # Spago Nanomedical – radiosensibilisering
-    "LUMITO.ST",    # Lumito – upconverting nanoparticles
-    "PROX.ST",      # Promore Pharma – sårläkning
-    "RED.ST",       # Redwood Pharma – näsinhalation
-    "RHO.ST",       # RhoVac – prostatacancer
-    "LIDD.ST",      # Lidds AB – prostatacancer
-    "XIN.ST",       # Xintela – ledbroskterapier
+    "REDW.ST",      # Redwood Pharma – näsinhalation
+    "LIDDS.ST",     # Lidds AB – prostatacancer
+    "XINT.ST",      # Xintela – ledbroskterapier
     "REAL.ST",      # Real Heart – konstgjort hjärta
-    "MEND.ST",      # Mendus AB – cancervaccin (alt. notering)
     # ── Cleantech & Energi ────────────────────────────────────────────────────
-    "ECOWV.ST",     # Eco Wave Power – vågenergi (f.d. ECO.ST)
     "SOLT.ST",      # Soltech Energy – solenergi (f.d. SOL.ST)
     "BESQAB.ST",    # Besqab AB – bostadsutveckling (f.d. AROS.ST)
     "OPTI.ST",      # Opti AB – avloppsoptimering
     # ── IT & Digitalt ────────────────────────────────────────────────────────
     "CLAV.ST",      # Clavister Holding – cybersäkerhet
     "VERI.ST",      # Verisec – digital identitet
-    "AYI.ST",       # Ayima Group – digital marknadsföring
-    "BRI.ST",       # BrightBid – AI-baserad annonsering
-    "AWA.ST",       # AWA AB – IP-juridik & rådgivning
-    "AWAR.ST",      # Awardit – lojalitetsprogram
-    "EASY.ST",      # EasyFill – fyllnadsautomation för butiker
+    "AYIMA-B.ST",   # Ayima Group B – digital marknadsföring
+    "BRIGHT.ST",    # BrightBid – AI-baserad annonsering
+    "AWRD.ST",      # Awardit – lojalitetsprogram
+    "EASY-B.ST",    # EasyFill B – fyllnadsautomation för butiker
     "NBZ.ST",       # Northbaze Group – headphones (f.d. JAYS.ST)
-    "XIN.ST",       # Xintela – ledbroskterapier
     "SAFE.ST",      # Safeture – resandesäkerhet
     "SPEC.ST",      # Speakerset
     "MCAP.ST",      # Midroc Invest
@@ -457,8 +446,8 @@ SECTOR_GROUPS = {
         "NETI-B.ST", "CTEK.ST", "ALCA.ST", "CTM.ST", "ACAST.ST", "BUSER.ST",
         "SAFETY-B.ST", "PACT.ST", "BAHN-B.ST", "FPIP.ST", "MSAB-B.ST", "SOF-B.ST",
         "PRFO.ST", "BIM.ST", "UPSALE.ST", "PREV-B.ST", "NIL-B.ST", "EXS.ST",
-        "ADVE.ST", "SINCH.ST", "CLAV.ST", "VERI.ST", "AWA.ST", "AWAR.ST",
-        "SAFE.ST", "EASY.ST", "QBNK.ST", "EWK.ST", "BRI.ST", "AYI.ST",
+        "ADVE.ST", "SINCH.ST", "CLAV.ST", "VERI.ST", "AWRD.ST",
+        "SAFE.ST", "EASY-B.ST", "QBNK.ST", "EWRK.ST", "BRIGHT.ST", "AYIMA-B.ST",
         "KAMBI.ST", "NBZ.ST",
     ],
     "MedTech & Life Science": [
@@ -466,12 +455,12 @@ SECTOR_GROUPS = {
         "ALIG.ST", "IRRAS.ST", "QLINEA.ST", "ONCO.ST", "XSPRAY.ST", "HNSA.ST",
         "CALTX.ST", "DMYD-B.ST", "ORX.ST", "ACTI.ST", "IMMU.ST", "MCOV-B.ST",
         "VIMIAN.ST", "BOUL.ST", "MOB.ST", "PMED.ST", "CRNO-B.ST", "XBRANE.ST",
-        "SEDANA.ST", "SEZI.ST", "CANTA.ST", "INTEG-B.ST", "EGTX.ST", "MEND.ST",
+        "SEDANA.ST", "SEZI.ST", "CANTA.ST", "INTEG-B.ST", "EGTX.ST",
         "BIOT.ST", "ELIC.ST", "KDEV.ST", "ENZY.ST", "GETI-B.ST", "EKTA-B.ST",
         "ARJO-B.ST", "VITR.ST", "BICO.ST", "LINC.ST", "CAMX.ST", "ALIF-B.ST",
-        "SOBI.ST", "BIOA-B.ST", "DICOT.ST", "SPAGO.ST", "LUMITO.ST",
-        "PROX.ST", "RED.ST", "LIDD.ST", "REAL.ST", "RHO.ST", "SECARE.ST",
-        "DVYSR.ST", "VICO.ST", "REDS.ST", "XIN.ST", "IMPC.ST",
+        "SOBI.ST", "BIOA-B.ST", "DICOT.ST", "SPAGO.ST",
+        "REDW.ST", "LIDDS.ST", "REAL.ST", "SECARE.ST",
+        "DVYSR.ST", "VICO.ST", "REDS.ST", "XINT.ST", "IMPC.ST",
     ],
     "Industri & Verkstad": [
         "MIPS.ST", "GARO.ST", "OEM-B.ST", "SDIP-B.ST", "XANO-B.ST", "REJL-B.ST",
@@ -485,24 +474,24 @@ SECTOR_GROUPS = {
         "SINT.ST", "FNM.ST",
     ],
     "Konsument & Livsstil": [
-        "THULE.ST", "RVRC.ST", "SKIS-B.ST", "CARY-B.ST", "BHG.ST", "BORG.ST",
+        "THULE.ST", "RVRC.ST", "SKIS-B.ST", "CARY.ST", "BHG.ST", "BORG.ST",
         "FING-B.ST", "MEKO.ST", "BILI-A.ST", "CLAS-B.ST", "DUNI.ST", "MSON-B.ST",
-        "AAK.ST", "AXFO.ST", "BMAX.ST", "RUSTA.ST", "ALLIGO-B.ST", "LYKO-A.ST",
+        "AAK.ST", "AXFO.ST", "BMAX.ST", "RUSTA.ST", "NEWA-B.ST", "ALLIGO-B.ST", "LYKO-A.ST",
         "KABE-B.ST", "FAG.ST", "ICA.ST", "NELLY.ST", "CLA-B.ST", "PLEJD.ST",
-        "HAYPP.ST", "KOPY-B.ST", "BOOZT.ST", "HOVD.ST",
+        "HAYPP.ST", "BOOZT.ST",
     ],
     "Fintech & Finans": [
-        "QLIRO.ST", "NOWO.ST", "RESURS-B.ST", "HOFI.ST", "INTRUM.ST",
+        "QLIRO.ST", "NOWO.ST", "RESURS.ST", "HOFI.ST", "INTRUM.ST",
         "AZA.ST", "SEB-A.ST", "SHB-A.ST", "SWED-A.ST", "NDA-SE.ST",
         "MORROW.ST", "KAMBI.ST",
     ],
     "Gaming & Underhållning": [
         "G5EN.ST", "BETS-B.ST", "EMBRAC-B.ST", "PDX.ST", "VPLAY-B.ST", "MTG-B.ST",
-        "EVO.ST", "ANGL.ST", "BEYOND.ST", "SFGR.ST",
+        "EVO.ST", "ANGL.ST", "BEYOND.ST", "SF.ST",
     ],
     "Cleantech & Energi": [
         "EOLU-B.ST", "GRNG.ST", "PCELL.ST", "MINEST.ST", "MYFC.ST",
-        "MAHA-A.ST", "EPRO-B.ST", "ORRON.ST", "SUSG.ST", "ECOWV.ST", "SOLT.ST",
+        "MAHA-A.ST", "EPRO-B.ST", "ORRON.ST", "SUSG.ST", "SOLT.ST",
         "ARISE.ST", "OPTI.ST",
     ],
     "Investmentbolag": [
@@ -519,8 +508,8 @@ SECTOR_GROUPS = {
         "ALM.ST", "BRIN-B.ST", "ATRLJ-B.ST", "NEOBO.ST", "BESQAB.ST",
     ],
     "Tjänster & Konsult": [
-        "BTS-B.ST", "COOR.ST", "HUM.ST", "NOBI.ST", "ESSITY-B.ST", "EWK.ST",
-        "DUST.ST", "WISE.ST", "SJR-B.ST", "ATT.ST", "AMBEA.ST",
+        "BTS-B.ST", "COOR.ST", "HUM.ST", "NOBI.ST", "ESSITY-B.ST", "EWRK.ST",
+        "DUST.ST", "WISE.ST", "OGUN-B.ST", "ATT.ST", "AMBEA.ST",
         "SWEC-B.ST", "AFRY.ST", "SOLIDX.ST", "GJAB.ST", "FREETR.ST", "BPCINS.ST",
         "VOLO.ST", "BEGR.ST",
     ],
