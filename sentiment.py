@@ -12,10 +12,15 @@ import time
 import requests
 from pathlib import Path
 import pickle
+import threading
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import config  # För parallella inställningar
 
 CACHE_DIR = "data/cache"
 SENTIMENT_CACHE_HOURS = 12  # Nyheter kan cachas kortare än fundamenta
+
 
 
 def _cache_path(key: str) -> Path:
@@ -109,9 +114,31 @@ def fetch_news_sentiment(ticker: str, api_key: str, delay: float = 0.3) -> float
         return 0.5
 
 
+# Rate-limiter för Finnhub (delad mellan trådar)
+class _FinnhubRateLimiter:
+    """Sliding-window rate limiter specifikt för Finnhub (50 calls/min)."""
+    def __init__(self, calls_per_min: float = 50):
+        self.min_interval = 60.0 / calls_per_min
+        self._lock = threading.Lock()
+        self._last_call = 0.0
+
+    def acquire(self):
+        with self._lock:
+            now = time.monotonic()
+            since_last = now - self._last_call
+            if since_last < self.min_interval:
+                time.sleep(self.min_interval - since_last)
+            self._last_call = time.monotonic()
+
+_FINNHUB_LIMITER = _FinnhubRateLimiter(calls_per_min=config.FINNHUB_CALLS_PER_MINUTE)
+
+
 def fetch_sentiment_batch(tickers: list, api_key: str, verbose: bool = True) -> dict:
     """
-    Hämtar sentiment för en lista aktier.
+    Hämtar sentiment för en lista aktier med parallella trådar och rate limiting.
+
+    Gratis Finnhub: 60 calls/min → vi använder 50 calls/min (headroom).
+    Med FINNHUB_PARALLEL_WORKERS trådar blir det ~3x snabbare än sekventiellt.
     Returnerar dict: {ticker: score (0-1)}
     """
     if not api_key:
@@ -119,11 +146,22 @@ def fetch_sentiment_batch(tickers: list, api_key: str, verbose: bool = True) -> 
             print("  ℹ Finnhub API-nyckel saknas – sentiment sätts till neutralt (50)")
         return {t: 0.5 for t in tickers}
 
+    n_workers = min(config.FINNHUB_PARALLEL_WORKERS, len(tickers))
+    if verbose:
+        print(f"  ⚙  {n_workers} parallella workers · {len(tickers)} tickers")
+
+    def _fetch_one(t: str) -> tuple:
+        _FINNHUB_LIMITER.acquire()
+        return (t, fetch_news_sentiment(t, api_key, delay=0))
+
     results = {}
-    for i, ticker in enumerate(tickers, 1):
-        score = fetch_news_sentiment(ticker, api_key)
-        results[ticker] = score
-        if verbose and i % 10 == 0:
-            print(f"  Sentiment: {i}/{len(tickers)}")
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        futures = {pool.submit(_fetch_one, t): t for t in tickers}
+        for i, future in enumerate(as_completed(futures), 1):
+            t, score = future.result()
+            results[t] = score
+            if verbose and i % 10 == 0:
+                print(f"  Sentiment: {i}/{len(tickers)}")
 
     return results
+

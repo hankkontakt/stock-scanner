@@ -16,12 +16,14 @@ import sys
 import time
 from datetime import date, datetime
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import yfinance as yf
 
 import config
 import alerts
+
 
 
 # ── Ladda senaste vecko-scores ─────────────────────────────────────────────
@@ -47,17 +49,28 @@ def load_latest_scores(min_score: float = 55.0):
 # ── Hämta färsk prisdata ───────────────────────────────────────────────────
 
 def fetch_price_data(tickers: list) -> dict:
-    """Hämtar 3 månaders prishistorik + volym för varje ticker."""
+    """Hämtar 3 månaders prishistorik + volym med ThreadPoolExecutor."""
     result = {}
-    for ticker in tickers:
+    n_workers = min(6, len(tickers))
+
+    def _fetch_one(t: str) -> tuple:
         try:
-            time.sleep(0.25)
-            hist = yf.Ticker(ticker).history(period="3mo", auto_adjust=True)
+            hist = yf.Ticker(t).history(period="3mo", auto_adjust=True)
             if len(hist) >= 15:
-                result[ticker] = hist
+                return (t, hist)
         except Exception:
             pass
+        return (t, None)
+
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        futures = {pool.submit(_fetch_one, t): t for t in tickers}
+        for future in as_completed(futures):
+            t, hist = future.result()
+            if hist is not None:
+                result[t] = hist
+
     return result
+
 
 
 # ── Detektera möjligheter ──────────────────────────────────────────────────

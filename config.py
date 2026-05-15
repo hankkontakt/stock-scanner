@@ -249,18 +249,29 @@ assert abs(sum(FACTOR_WEIGHTS.values()) - 1.0) < 0.001
 FMP_API_KEY      = os.getenv("FMP_API_KEY", "")
 FINNHUB_API_KEY  = os.getenv("FINNHUB_API_KEY", "")
 
+# ════════════════ PARALLELLA INSTÄLLNINGAR ════════════════
+PARALLEL_WORKERS          = 8   # Antal parallella trådar för yfinance-datahämtning
+PARALLEL_TICKER_TIMEOUT   = 30  # Max sekunder per ticker (ersätter SIGALRM)
+REQUEST_DELAY_SEC         = 0.3 # Fördröjning per anrop i trådpoolen (total delay = delay * workers)
+MAX_RETRIES               = 2
+RETRY_BACKOFF_SEC         = 3
+
+# Finnhub (gratis: 60 anrop/min)
+FINNHUB_PARALLEL_WORKERS  = 3   # Antal parallella Finnhub-anrop
+FINNHUB_CALLS_PER_MINUTE  = 50  # Lämna headroom på 60/min-gränsen
+
+FINNHUB_NEWS_DAYS         = 7
+SENTIMENT_CACHE_HOURS     = 6
+FLASK_PORT                = 5000
+MIN_DATA_QUALITY          = 0.5  # 0.5 = accepterar 4/8 fält (investmentbolag, råvarubolag etc.)
+
 # ════════════════ DATA-INSTÄLLNINGAR ════════════════
 CACHE_DIR             = "data/cache"
 CACHE_HOURS           = 720  # Statisk fundamental data – cachas 30 dagar (ändras bara vid kvartalsrapport)
 DYNAMIC_CACHE_HOURS   = 170  # Dynamisk data – cachas 7 dagar (P/E, analytikermål, blankning, beta)
 PRICE_CACHE_HOURS     = 24   # Prishistorik – alltid färsk (RSI, MACD, marknadsvärde)
-REQUEST_DELAY_SEC     = 0.8  # 1000+ aktier kräver längre paus för att undvika Yahoo rate limit
-MAX_RETRIES           = 2
-RETRY_BACKOFF_SEC     = 3
-FINNHUB_NEWS_DAYS     = 7
-SENTIMENT_CACHE_HOURS = 6
-FLASK_PORT            = 5000
 MIN_DATA_QUALITY      = 0.5  # 0.5 = accepterar 4/8 fält (investmentbolag, råvarubolag etc.)
+
 
 # ════════════════ RAPPORT ════════════════
 TOP_N_RECOMMENDATIONS   = 10        # Topp 10 – läsbart och fokuserat

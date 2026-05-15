@@ -17,7 +17,8 @@ on:
 jobs:
   morning-scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 10   # Morgonkoll ska aldrig ta mer än 10 min
+    timeout-minutes: 30   # 700+ aktier med 8 parallella workers tar ~3 min (10x snabbare än sekventiellt)
+
 
     steps:
       - name: 📥 Hämta kod
