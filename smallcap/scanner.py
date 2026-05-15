@@ -50,7 +50,7 @@ from smallcap.universe  import get_universe, SECTOR_GROUPS
 from smallcap.filters   import apply_all_filters
 from smallcap.scoring   import score_universe
 from smallcap.insider   import fetch_insider_data, merge_insider_data
-from smallcap.report    import build_report, save_report
+from smallcap.report    import build_report, save_report, _sector_for
 from smallcap.history   import save_scores, load_prev_scores
 
 try:
@@ -370,9 +370,23 @@ def run_scan(
     # Spara aktuella poäng för nästa körnings trendpilar
     save_scores(scored)
 
-    # 8. Spara
+    # 8. Spara rapport + CSV (för dashboard)
     report_path = save_report(report, output_dir=output_dir)
     print(f"  ✓  Rapport sparad: {report_path}")
+
+    # Exportera scored DataFrame till reports/ för Streamlit-dashboarden
+    # Lägg till sektorkolumn (krävs av dashboardens filter)
+    try:
+        _csv_df = scored.copy()
+        if "sector" not in _csv_df.columns:
+            _csv_df["sector"] = _csv_df["ticker"].apply(_sector_for)
+        _reports_dir = _ROOT / "reports"
+        _reports_dir.mkdir(parents=True, exist_ok=True)
+        _csv_path = _reports_dir / f"smallcap_scored_{datetime.today().strftime('%Y-%m-%d')}.csv"
+        _csv_df.to_csv(_csv_path, index=False)
+        print(f"  ✓  Smallcap CSV: {_csv_path.name}")
+    except Exception as _e:
+        print(f"  ⚠  Kunde inte spara CSV: {_e}")
 
     # 9. E-post
     if send_mail:
