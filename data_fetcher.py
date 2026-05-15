@@ -13,13 +13,13 @@ import os
 import sys
 import time
 import json
-import signal as _signal
 import socket
 import pickle
 import hashlib
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import yfinance as yf
 import pandas as pd
@@ -31,14 +31,12 @@ import config
 import requests
 import requests.sessions
 
-# True on Linux/macOS (GitHub Actions), False on Windows
-_HAS_ALARM = hasattr(_signal, 'SIGALRM')
-
 # ── Lager 1: socket.setdefaulttimeout ────────────────────────────────────
 # Sätts INNAN yfinance importeras. Påverkar alla nya sockets på OS-nivå,
 # inklusive SSL-handskakningar i OpenSSL (C-kod) som varken signal.alarm
 # eller requests-patchen kan nå. Det enda som stoppar ett äkta C-hang.
 socket.setdefaulttimeout(7)
+
 
 # ── Lager 2: requests.Session.send-patch ─────────────────────────────────
 # Sätter explicit (connect, read)-timeout på alla requests-anrop som
@@ -505,85 +503,130 @@ def _calc_rsi(prices: pd.Series, period: int = 14):
         return None
 
 
+# ── Rate-limited semaphore för parallell yfinance ─────────────────────
+# Med 8 workers och REQUEST_DELAY_SEC=0.3 blir total takt ~27 anrop/sek,
+# vilket är högre än yahoos informella gräns (~10/sek). Semaphore delays
+# säkerställer max (1/REQUEST_DELAY_SEC) anrop/sek *över alla workers*.
+class _RateLimiter:
+    """Sliding-window rate limiter för parallella anrop."""
+    def __init__(self, calls_per_sec: float):
+        self.min_interval = 1.0 / calls_per_sec if calls_per_sec > 0 else 0
+        self._lock = threading.Lock()
+        self._last_call = 0.0
+
+    def acquire(self):
+        """Block until it's safe to make the next call."""
+        if self.min_interval <= 0:
+            return
+        with self._lock:
+            now = time.monotonic()
+            since_last = now - self._last_call
+            if since_last < self.min_interval:
+                time.sleep(self.min_interval - since_last)
+            self._last_call = time.monotonic()
+
+# Yahoo brukar tolerera ~8-10 anrop/sek över längre perioder.
+# Med 8 workers kör vi sammanlagt ~8 anrop/sek → säkert.
+_YAHOO_RATE_LIMITER = _RateLimiter(calls_per_sec=config.PARALLEL_WORKERS)
+
+
+def _fetch_single_ticker(
+    ticker: str,
+    blacklist: set,
+    verbose: bool,
+) -> tuple:
+    """
+    Hämta alla data för en enskild ticker.
+    Anropas från ThreadPoolExecutor.
+    Returnerar (ticker, metrics_dict|None, status_str).
+    """
+    if ticker in blacklist:
+        return (ticker, None, "SKIPPED")
+
+    try:
+        # Rate-limit före varje tickers anrop totalt (info + history)
+        _YAHOO_RATE_LIMITER.acquire()
+
+        info = fetch_stock_info(ticker)
+
+        # Try FMP fallback if yfinance returned nothing useful
+        if not info or len(info) < 10:
+            fmp_data = fetch_fmp_fallback(ticker)
+            if fmp_data:
+                info = fmp_data
+
+        history = fetch_price_history(ticker, period="1y")
+
+        if not info and history.empty:
+            return (ticker, None, "FAILED")
+
+        metrics = extract_metrics(ticker, info, history)
+        return (ticker, metrics, "OK")
+
+    except TimeoutError:
+        return (ticker, None, "TIMEOUT")
+    except Exception as e:
+        return (ticker, None, f"ERROR: {e}")
+
+
 def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
     """
-    Fetch metrics for all stocks in the universe.
+    Fetch metrics for all stocks in the universe using a ThreadPoolExecutor
+    for parallel yfinance calls.
+
+    Med 8 workers och PRICE_CACHE_HOURS=24h-cache blir ~700 tickers klara
+    på 2-3 minuter (i stället för 9-10 min sekventiellt).
     Returns a DataFrame with one row per ticker.
     """
-    rows = []
     total = len(tickers)
-    failed = []
 
     # Ladda blacklist – skippa kända trasiga tickers
     _bl_path = Path("data/blacklist.json")
     try:
-        _blacklist = json.loads(_bl_path.read_text()) if _bl_path.exists() else {}
+        _blacklist = set(json.loads(_bl_path.read_text()).keys()) if _bl_path.exists() else set()
     except Exception:
-        _blacklist = {}
+        _blacklist = set()
 
-    for i, ticker in enumerate(tickers, 1):
-        if ticker in _blacklist:
+    if verbose:
+        print(f"  ⚙  {config.PARALLEL_WORKERS} parallella workers · {total} tickers")
+
+    rows = []
+    failed = []
+    completed = 0
+
+    # Skicka alla tickers till poolen
+    with ThreadPoolExecutor(max_workers=config.PARALLEL_WORKERS) as pool:
+        futures = {
+            pool.submit(_fetch_single_ticker, t, _blacklist, verbose): t
+            for t in tickers
+        }
+
+        for future in as_completed(futures):
+            ticker, metrics, status = future.result()
+            completed += 1
+
             if verbose:
-                print(f"  [{i}/{total}] {ticker}... SKIPPED (blacklist)")
-            continue
+                # Kompakt utskrift: "✓ AAPL OK" eller "✗ XYZ TIMEOUT"
+                icon = "✓" if metrics is not None else "✗"
+                print(f"  [{completed}/{total}] {icon} {ticker} {status}")
 
-        if verbose:
-            print(f"  [{i}/{total}] {ticker}...", end=" ", flush=True)
-
-        # SIGALRM(25s) täcker nu HELA ticker-blocket (info + history).
-        # Delisted/trasiga tickers: max 25s per ticker (var 54-80s).
-        if _HAS_ALARM:
-            def _alarm_handler(sig, frm, _t=ticker):
-                raise TimeoutError(f"Timeout (25s) for {_t}")
-            _signal.signal(_signal.SIGALRM, _alarm_handler)
-            _signal.alarm(15)
-
-        try:
-            info = fetch_stock_info(ticker)
-
-            # Try FMP fallback if yfinance returned nothing useful
-            if not info or len(info) < 10:
-                fmp_data = fetch_fmp_fallback(ticker)
-                if fmp_data:
-                    info = fmp_data
-
-            history = fetch_price_history(ticker, period="1y")
-
-            if not info and history.empty:
+            if metrics is not None:
+                rows.append(metrics)
+            else:
                 failed.append(ticker)
-                if verbose:
-                    print("FAILED")
-                continue
 
-            metrics = extract_metrics(ticker, info, history)
-            rows.append(metrics)
-
-            if verbose:
-                quality = sum(1 for v in metrics.values() if v is not None) / len(metrics)
-                print(f"OK ({quality:.0%} data)")
-
-        except TimeoutError:
-            failed.append(ticker)
-            if verbose:
-                print("TIMEOUT")
-        except Exception as e:
-            failed.append(ticker)
-            if verbose:
-                print(f"ERROR: {e}")
-        finally:
-            if _HAS_ALARM:
-                _signal.alarm(0)
-                
     df = pd.DataFrame(rows)
 
     if failed and verbose:
         n = len(failed)
         print(f"  ⚠ {n} tickers misslyckades: "
-              f"{', '.join(failed[:8])}{'...' if n > 8 else ''}")
+              f"{', '.join(failed[:10])}{'...' if n > 10 else ''}")
         if n > 15:
             print(f"  💡 Tips: Kör filters.clear_blacklist() om välkända aktier är med i listan")
+        print(f"  ✓ {len(df)}/{total} aktier hämtade")
 
     return df
+
 
 
 # ============================================================
@@ -655,8 +698,11 @@ def fetch_finnhub_sentiment(ticker: str) -> float | None:
 
 def fetch_sentiment_batch(tickers: list, verbose: bool = True) -> dict:
     """
-    Fetch sentiment scores for all tickers.
-    Returns dict: {ticker: score} where score is -1 to +1 or None.
+    Fetch sentiment scores for all tickers using parallel Finnhub calls.
+
+    Gratis Finnhub: 60 calls/min → 50 calls/min med headroom.
+    Med 3 parallella workers och tokens-per-interval-rate-limiter håller vi oss
+    inom gränsen: requests sprids jämnt över 60-sekundersfönster.
     """
     if not config.FINNHUB_API_KEY:
         if verbose:
@@ -666,18 +712,30 @@ def fetch_sentiment_batch(tickers: list, verbose: bool = True) -> dict:
     if verbose:
         print(f"  Fetching Finnhub sentiment for {len(tickers)} tickers...")
 
+    # Token-bucket rate limiter: 50 calls per 60 seconds = ~0.83 calls/sec totalt
+    # Med 3 workers blir det ~0.28 calls/sec per worker.
+    _finnhub_limiter = _RateLimiter(
+        calls_per_sec=config.FINNHUB_CALLS_PER_MINUTE / 60.0
+    )
+
+    def _fetch_one(t: str) -> tuple:
+        """Hämta sentiment för en ticker. Rate-limited."""
+        _finnhub_limiter.acquire()
+        return (t, fetch_finnhub_sentiment(t))
+
     results = {}
-    for i, ticker in enumerate(tickers):
-        score = fetch_finnhub_sentiment(ticker)
-        results[ticker] = score
-        # Finnhub free tier: 60 calls/min → ~1 call/sec is safe
-        time.sleep(1.1)
+    with ThreadPoolExecutor(max_workers=config.FINNHUB_PARALLEL_WORKERS) as pool:
+        futures = {pool.submit(_fetch_one, t): t for t in tickers}
+        for future in as_completed(futures):
+            ticker, score = future.result()
+            results[ticker] = score
 
     scored = sum(1 for v in results.values() if v is not None)
     if verbose:
         print(f"  ✓ Got sentiment for {scored}/{len(tickers)} tickers")
 
     return results
+
 
 
 def search_stocks(query: str, max_results: int = 8) -> list:
