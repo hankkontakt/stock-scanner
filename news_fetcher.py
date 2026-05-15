@@ -454,3 +454,317 @@ WEEKLY_FACTOIDS = [
 def get_weekly_factoid() -> str:
     week = datetime.now().isocalendar()[1]
     return WEEKLY_FACTOIDS[week % len(WEEKLY_FACTOIDS)]
+
+
+# ══════════════════════════════════════════════════════════════
+# GOOGLE NEWS RSS – Bolagsspecifika nyheter (svenska + globala)
+# ══════════════════════════════════════════════════════════════
+
+_GOOGLE_NEWS_BASE  = "https://news.google.com/rss/search"
+_GOOGLE_NEWS_DELAY = 1.2   # Google rate-limitar – minst 1.2s mellan anrop
+_GOOGLE_NEWS_UA    = "Mozilla/5.0 (compatible; MarketScan/1.0)"
+
+
+def fetch_google_news_rss(
+    company_name: str,
+    max_items:    int  = 4,
+    lang:         str  = "sv",
+    days_back:    int  = 7,
+) -> list:
+    """
+    Hämtar bolagsspecifika nyheter från Google News RSS.
+    Fungerar för svenska och globala bolag – ingen API-nyckel krävs.
+
+    Args:
+        company_name: Bolagsnamn (t.ex. "Boule Diagnostics" eller "Volvo")
+        max_items:    Max antal artiklar att returnera
+        lang:         "sv" = svenska, "en" = engelska
+        days_back:    Filtrera bort artiklar äldre än detta
+
+    Returnerar [{headline, source, url, datetime_str, age_hours}] nyast först.
+    """
+    if not company_name or not company_name.strip():
+        return []
+
+    cache_key = f"gnews:{company_name.lower()}:{lang}:{days_back}"
+    cached    = _read_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    if lang == "sv":
+        params = {"q": f'"{company_name}"', "hl": "sv", "gl": "SE", "ceid": "SE:sv"}
+    else:
+        params = {"q": f'"{company_name}"', "hl": "en", "gl": "US", "ceid": "US:en"}
+
+    try:
+        time.sleep(_GOOGLE_NEWS_DELAY)
+        resp = requests.get(
+            _GOOGLE_NEWS_BASE,
+            params=params,
+            timeout=12,
+            headers={"User-Agent": _GOOGLE_NEWS_UA},
+        )
+        if resp.status_code != 200:
+            _write_cache(cache_key, [])
+            return []
+
+        root  = ET.fromstring(resp.content)
+        items = root.findall(".//item")
+
+        cutoff_age_h = days_back * 24
+        results      = []
+
+        for item in items:
+            if len(results) >= max_items:
+                break
+
+            # Rubrik – Google lägger ibland till " - Källa" i slutet
+            title_el = item.find("title")
+            headline = (title_el.text or "").strip() if title_el is not None else ""
+            if not headline:
+                continue
+
+            source = ""
+            if " - " in headline:
+                parts    = headline.rsplit(" - ", 1)
+                headline = parts[0].strip()
+                source   = parts[1].strip()
+
+            # URL (Google redirect – klickbar men omdirigerande)
+            link_el = item.find("link")
+            url = ""
+            if link_el is not None:
+                url = (link_el.text or "").strip()
+                # Google RSS lägger ibland URL som tail på föregående element
+                if not url and link_el.tail:
+                    url = link_el.tail.strip()
+
+            # Publiceringsdatum
+            pub_el = item.find("pubDate")
+            age_h  = 999
+            dt_s   = "—"
+            if pub_el is not None and pub_el.text:
+                try:
+                    dt    = parsedate_to_datetime(pub_el.text.strip())
+                    age_h = (datetime.now(dt.tzinfo) - dt).total_seconds() / 3600
+                    dt_s  = dt.strftime("%d %b %H:%M")
+                except Exception:
+                    pass
+
+            if age_h > cutoff_age_h:
+                continue
+
+            # Undvik dubbletter baserat på rubrikens start
+            if any(r["headline"][:50] == headline[:50] for r in results):
+                continue
+
+            results.append({
+                "headline":     headline[:130],
+                "source":       source,
+                "url":          url,
+                "datetime_str": dt_s,
+                "age_hours":    round(age_h, 1),
+            })
+
+        _write_cache(cache_key, results)
+        return results
+
+    except Exception:
+        _write_cache(cache_key, [])
+        return []
+
+
+def fetch_company_news_google_batch(
+    ticker_name_map: dict,
+    max_items:       int   = 4,
+    delay:           float = 1.3,
+) -> dict:
+    """
+    Hämtar Google News RSS för flera bolag.
+
+    Args:
+        ticker_name_map: {ticker: company_name} – tomt namn hoppas över
+        max_items:       Max artiklar per bolag
+        delay:           Väntetid mellan anrop (Google rate-limit)
+
+    Returnerar {ticker: [articles]} – bara tickers med minst 1 artikel.
+    """
+    result = {}
+    for ticker, name in ticker_name_map.items():
+        if not name or not str(name).strip():
+            continue
+        articles = fetch_google_news_rss(str(name).strip(), max_items=max_items)
+        if articles:
+            result[ticker] = articles
+        time.sleep(delay)
+    return result
+
+
+def _merge_news(finnhub: list, google: list, max_total: int = 5) -> list:
+    """
+    Slår ihop Finnhub + Google News, deduplikerar på rubrikens start,
+    sorterar nyast → äldst och trunkerar till max_total.
+    """
+    seen     = set()
+    combined = []
+    for a in sorted(finnhub + google, key=lambda x: x.get("age_hours", 999)):
+        key = a["headline"][:50].lower()
+        if key not in seen:
+            seen.add(key)
+            combined.append(a)
+        if len(combined) >= max_total:
+            break
+    return combined
+
+
+# ══════════════════════════════════════════════════════════════
+# NASDAQ NORDIC – Officiella börsmeddelanden
+# ══════════════════════════════════════════════════════════════
+
+_NASDAQ_NORDIC_URL = "https://api.news.eu.nasdaq.com/news/query.action"
+_NASDAQ_NORDIC_HDR = {
+    "User-Agent": "MarketScan/1.0 (stock scanner)",
+    "Accept":     "application/json",
+}
+
+
+def fetch_nasdaq_nordic_news(
+    market:     str = "SSE",
+    max_items:  int = 10,
+    hours_back: int = 48,
+) -> list:
+    """
+    Hämtar officiella börsmeddelanden från Nasdaq Nordics öppna API.
+    Täcker: Stockholm (SSE), Helsinki (HELSE), Köpenhamn (CSE), Oslo (NOTC).
+    Ingen API-nyckel krävs.
+
+    Returnerar [{headline, company, ticker, url, datetime_str, age_hours, category}]
+    """
+    cache_key = f"nasdaq_nordic:{market}:{hours_back}"
+    cached    = _read_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    params = {
+        "type":    "json",
+        "market":  market,
+        "limit":   min(max_items * 3, 50),
+        "offset":  0,
+    }
+
+    try:
+        time.sleep(0.6)
+        resp = requests.get(
+            _NASDAQ_NORDIC_URL,
+            params=params,
+            headers=_NASDAQ_NORDIC_HDR,
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            _write_cache(cache_key, [])
+            return []
+
+        data = resp.json()
+
+        # API:n kan returnera olika strukturer beroende på version
+        items = (
+            data.get("results", {}).get("item") or
+            data.get("item") or
+            data.get("items") or
+            []
+        )
+        if isinstance(items, dict):
+            items = [items]
+
+        results = []
+
+        for item in items:
+            if len(results) >= max_items:
+                break
+
+            headline = (
+                item.get("headline") or item.get("title") or
+                item.get("messageTitle") or ""
+            ).strip()
+            if not headline:
+                continue
+
+            company  = (item.get("issuer")  or item.get("company")  or "").strip()
+            ticker   = (item.get("symbol")  or item.get("ticker")   or "").strip()
+            url      = (item.get("messageUrl") or item.get("url")   or "").strip()
+            category = (item.get("category") or item.get("messageType") or "").strip()
+
+            # Publiceringsdatum – Nasdaq Nordic skickar ISO 8601
+            pub_str = (
+                item.get("releaseTime") or item.get("publishedTime") or
+                item.get("created") or ""
+            )
+            age_h = 999
+            dt_s  = "—"
+            if pub_str:
+                try:
+                    dt    = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
+                    age_h = (datetime.now(dt.tzinfo) - dt).total_seconds() / 3600
+                    dt_s  = dt.strftime("%d %b %H:%M")
+                except Exception:
+                    pass
+
+            if age_h > hours_back:
+                continue
+
+            results.append({
+                "headline":     headline[:140],
+                "company":      company,
+                "ticker":       ticker,
+                "url":          url,
+                "datetime_str": dt_s,
+                "age_hours":    round(age_h, 1),
+                "category":     category,
+            })
+
+        _write_cache(cache_key, results)
+        return results
+
+    except Exception:
+        _write_cache(cache_key, [])
+        return []
+
+
+def format_nasdaq_nordic_section_md(news: list, max_items: int = 8) -> str:
+    """
+    Formaterar Nasdaq Nordic-nyheter som markdown-sektion.
+    Returnerar tom sträng om listan är tom.
+    """
+    if not news:
+        return ""
+
+    lines = [
+        "## 📋 Nasdaq Nordic – Officiella Börsmeddelanden\n",
+        "_Regulatoriska meddelanden och pressreleaser från Stockholmsbörsen (senaste 48h)._\n",
+    ]
+
+    for item in news[:max_items]:
+        age_h = item.get("age_hours", 999)
+        icon  = "🔴" if age_h < 6 else "🟡" if age_h < 24 else "⚪"
+
+        company  = item.get("company", "")
+        ticker   = item.get("ticker",  "")
+        category = item.get("category", "")
+        url      = item.get("url", "")
+        dt_s     = item.get("datetime_str", "—")
+
+        # Metarad: Company `TICKER` · kategori · tid
+        meta_parts = []
+        if company:
+            meta_parts.append(f"**{company}**" + (f" `{ticker}`" if ticker else ""))
+        elif ticker:
+            meta_parts.append(f"`{ticker}`")
+        if category:
+            meta_parts.append(f"_{category}_")
+        meta_parts.append(dt_s)
+        meta = " · ".join(meta_parts)
+
+        title = f"[{item['headline']}]({url})" if url else item["headline"]
+        lines.append(f"{icon} {title}  \n   {meta}\n")
+
+    return "\n".join(lines)

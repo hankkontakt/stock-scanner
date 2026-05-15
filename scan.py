@@ -648,15 +648,23 @@ def _section_market_news(
     news_by_ticker: dict,
     holdings:       pd.DataFrame,
     scored:         pd.DataFrame,
+    top_news:       dict = None,
+    nasdaq_news:    list = None,
 ) -> str:
     """
     Marknadsnyheter för söndagsrapporten.
-    Tre delar:
-      1. 🇸🇪 Svenska börsnyheter (RSS – ingen API-nyckel)
-      2. 🌍 Globala marknadsnyheter (Finnhub /news)
-      3. 📰 Bolagsnyheter för portfölj + bevakningslista
+    Fyra delar:
+      1. 📋 Nasdaq Nordic – officiella börsmeddelanden (nytt)
+      2. 🇸🇪 Svenska börsnyheter (RSS)
+      3. 🌍 Globala marknadsnyheter (Finnhub)
+      4. 🏆 Nyheter för topp-10 rankade aktier (nytt – Google News RSS)
+      5. 📰 Bolagsnyheter portfölj + bevakningslista
     """
-    if not global_news and not swedish_news and not news_by_ticker:
+    top_news    = top_news    or {}
+    nasdaq_news = nasdaq_news or []
+
+    if not global_news and not swedish_news and not news_by_ticker \
+            and not top_news and not nasdaq_news:
         return ""
 
     # Ticker → namn (portfölj + bevakningslista)
@@ -668,17 +676,36 @@ def _section_market_news(
             )))
     for item in wl.load_watchlist():
         ticker_names[item["ticker"]] = item.get("name", item["ticker"])
+    # Lägg till scored-namn för topp-aktier
+    if not scored.empty and "name" in scored.columns:
+        for _, r in scored.head(15).iterrows():
+            ticker_names[r["ticker"]] = str(r.get("name", r["ticker"]) or r["ticker"])
 
     parts = []
 
-    # 1+2. Generella marknadsnyheter
+    # 1. Nasdaq Nordic
+    nasdaq_md = news_fetcher.format_nasdaq_nordic_section_md(nasdaq_news, max_items=10)
+    if nasdaq_md:
+        parts.append(nasdaq_md)
+
+    # 2+3. Generella marknadsnyheter (Sverige + globalt)
     market_md = news_fetcher.format_market_news_section_md(
         global_news, swedish_news, compact=False
     )
     if market_md:
         parts.append(market_md)
 
-    # 3. Bolagsnyheter
+    # 4. Topp-10 rankade aktier – nyheter (Google News RSS)
+    if top_news:
+        top_md = news_fetcher.format_news_section_md(
+            top_news,
+            ticker_names=ticker_names,
+            header="🏆 Nyheter – Veckans Topp-10 Kandidater",
+        )
+        if top_md:
+            parts.append(top_md)
+
+    # 5. Bolagsnyheter portfölj + bevakningslista
     if news_by_ticker:
         company_md = news_fetcher.format_news_section_md(
             news_by_ticker,
@@ -691,7 +718,7 @@ def _section_market_news(
     return "\n".join(parts)
 
 
-def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df, holdings, warnings=None, removed=None, sector_mom=None, benchmarks=None, global_news=None, swedish_news=None, news_by_ticker=None):
+def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df, holdings, warnings=None, removed=None, sector_mom=None, benchmarks=None, global_news=None, swedish_news=None, news_by_ticker=None, top_news=None, nasdaq_news=None):
     bm = benchmarks or {}
 
     parts = []
@@ -767,13 +794,15 @@ def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df,
     # 12. Bevakningslista
     _try("Bevakningslista", lambda: _section_watchlist(scored))
 
-    # 12.5 Marknadsnyheter (Sverige + globalt + bolagsspecifikt)
+    # 12.5 Marknadsnyheter (Sverige + globalt + Nasdaq Nordic + bolagsspecifikt)
     _try("Marknadsnyheter", lambda: _section_market_news(
         global_news    or [],
         swedish_news   or [],
         news_by_ticker or {},
         holdings,
         scored,
+        top_news    = top_news    or {},
+        nasdaq_news = nasdaq_news or [],
     ))
 
     # 13. Systemunderhåll
@@ -982,33 +1011,87 @@ def main():
     n_earn = len(portfolio_cal) + len(top_cal)
     if n_earn: print(f"   ✓ {n_earn} kommande rapporter")
 
-    # 11.5 Nyheter (marknad + bolagsspecifikt)
+    # 11.5 Nyheter (marknad + bolagsspecifikt + Nasdaq Nordic)
     print("\n📰 Hämtar nyheter för veckorapporten...")
-    global_news    = []
-    swedish_news   = []
-    news_by_ticker = {}
-    finnhub_key    = config.FINNHUB_API_KEY
+    global_news     = []
+    swedish_news    = []
+    news_by_ticker  = {}
+    top_news        = {}   # Nyheter för topp-10 rankade (nytt!)
+    nasdaq_news     = []
+    finnhub_key     = config.FINNHUB_API_KEY
+    watchlist_items = wl.load_watchlist()
+
     try:
+        # Svenska RSS
         swedish_news = news_fetcher.fetch_swedish_market_news(max_articles=5)
         if swedish_news and v:
             print(f"   ✓ {len(swedish_news)} svenska börsnyheter")
+
+        # Nasdaq Nordic – regulatoriska meddelanden (hel vecka)
+        nasdaq_news = news_fetcher.fetch_nasdaq_nordic_news(market="SSE", max_items=10, hours_back=168)
+        if nasdaq_news and v:
+            print(f"   ✓ {len(nasdaq_news)} Nasdaq Nordic-meddelanden")
+
+        # Finnhub portfölj/bevakningslista-nyheter
         if finnhub_key:
             global_news = news_fetcher.fetch_global_market_news(finnhub_key, max_articles=5)
             if global_news and v:
                 print(f"   ✓ {len(global_news)} globala marknadsnyheter")
-            # Bolagsnyheter för portfölj + bevakningslista (3 dagar)
-            news_tickers = (
+            finnhub_tickers = (
                 list(holdings["ticker"].str.upper() if not holdings.empty else []) +
-                [i["ticker"] for i in wl.load_watchlist()]
+                [i["ticker"] for i in watchlist_items]
             )
-            if news_tickers:
+            if finnhub_tickers:
                 news_by_ticker = news_fetcher.fetch_news_batch(
-                    news_tickers, finnhub_key, days=3
+                    finnhub_tickers, finnhub_key, days=3
                 )
                 if news_by_ticker and v:
-                    print(f"   ✓ Bolagsnyheter för {len(news_by_ticker)} aktier")
+                    print(f"   ✓ Bolagsnyheter (Finnhub): {len(news_by_ticker)} aktier")
         else:
-            if v: print("   ℹ FINNHUB_API_KEY ej satt – bolagsnyheter hoppas över")
+            if v: print("   ℹ FINNHUB_API_KEY ej satt – Finnhub global/portfölj hoppas över")
+
+        # Google News för top-10 rankade aktier (det centrala nya bidraget)
+        top_tickers  = list(scored.head(10)["ticker"]) if not scored.empty else []
+        top_name_map = {}
+        if not scored.empty and "name" in scored.columns:
+            for _, r in scored.head(10).iterrows():
+                n = str(r.get("name", "") or "").strip()
+                if n:
+                    top_name_map[r["ticker"]] = n
+
+        # Komplettera portfölj/bevakningslista med Google News (bättre svensk täckning)
+        port_wl_name_map = {}
+        if not holdings.empty and "name" in holdings.columns:
+            for _, row in holdings.iterrows():
+                t = str(row["ticker"]).upper()
+                n = str(row.get("name", "") or "").strip()
+                if n:
+                    port_wl_name_map[t] = n
+        for item in watchlist_items:
+            t = item["ticker"]
+            n = item.get("name", "")
+            if n:
+                port_wl_name_map[t] = n
+
+        all_google_map = {**top_name_map, **port_wl_name_map}
+        if all_google_map:
+            print(f"   🔍 Google News för {len(all_google_map)} bolag (topp-10 + portfölj)...")
+            google_batch = news_fetcher.fetch_company_news_google_batch(
+                all_google_map, max_items=3, delay=1.3
+            )
+            # Separera top-10 nyheter från portfölj/bevakningslista
+            for ticker, g_articles in google_batch.items():
+                if ticker in top_name_map:
+                    top_news[ticker] = g_articles
+                # Slå ihop med Finnhub-nyheter för portfölj/wl
+                existing = news_by_ticker.get(ticker, [])
+                merged   = news_fetcher._merge_news(existing, g_articles, max_total=4)
+                if merged:
+                    news_by_ticker[ticker] = merged
+            if google_batch and v:
+                print(f"   ✓ Google News: {len(google_batch)} bolag "
+                      f"({len(top_news)} top-rankat, {len(news_by_ticker)} total)")
+
     except Exception as e:
         print(f"   ⚠ Nyheter misslyckades: {e}")
 
@@ -1031,6 +1114,8 @@ def main():
             global_news    = global_news,
             swedish_news   = swedish_news,
             news_by_ticker = news_by_ticker,
+            top_news       = top_news,
+            nasdaq_news    = nasdaq_news,
         )
     except Exception as e:
         import traceback

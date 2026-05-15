@@ -53,6 +53,12 @@ from smallcap.insider   import fetch_insider_data, merge_insider_data
 from smallcap.report    import build_report, save_report
 from smallcap.history   import save_scores, load_prev_scores
 
+try:
+    import news_fetcher as _nf
+    _NF_AVAILABLE = True
+except ImportError:
+    _NF_AVAILABLE = False
+
 
 # ── Data­hämtning ──────────────────────────────────────────────────────────────
 
@@ -150,8 +156,11 @@ def _fetch_single(ticker: str) -> dict | None:
             r6          = float(c.iloc[-1] / c.iloc[max(0, len(c) - 126)] - 1)
             week_change = float(c.iloc[-1] / c.iloc[max(0, len(c) - 5)] - 1)
 
+        name = (info.get("longName") or info.get("shortName") or "").strip()
+
         return {
             "ticker":            ticker,
+            "name":              name,
             "current_price":     price,
             "day_change_pct":    day_change,
             "week_change_pct":   week_change,
@@ -321,26 +330,51 @@ def run_scan(
     top5 = scored.head(5)[["ticker", "sc_total", "sc_stars"]].to_string(index=False)
     print(f"\n  🏆 Top-5 resultat:\n{top5}\n")
 
-    # 6. Rapport (läser historik för trendpilar internt)
+    # 6. Nyheter för topp-5 profiler (Google News RSS + Nasdaq Nordic)
+    company_news = {}   # {ticker: [articles]}
+    nasdaq_news  = []
+    if _NF_AVAILABLE:
+        print("  Hämtar nyheter (Google News + Nasdaq Nordic) ...")
+        # Bygg ticker→namn mapping från topp-profiles_n
+        name_map = {}
+        if "name" in scored.columns:
+            for _, r in scored.head(profiles_n).iterrows():
+                n = str(r.get("name", "") or "").strip()
+                if n:
+                    name_map[r["ticker"]] = n
+        if name_map:
+            company_news = _nf.fetch_company_news_google_batch(
+                name_map, max_items=3, delay=1.3
+            )
+            if company_news:
+                print(f"    ✓ Google News: {len(company_news)} bolag")
+        # Nasdaq Nordic – regulatoriska meddelanden (Stockholm, senaste 7 dagar)
+        nasdaq_news = _nf.fetch_nasdaq_nordic_news(market="SSE", max_items=8, hours_back=168)
+        if nasdaq_news:
+            print(f"    ✓ Nasdaq Nordic: {len(nasdaq_news)} meddelanden")
+
+    # 7. Rapport (läser historik för trendpilar internt)
     print("  Bygger rapport ...")
     prev_scores = load_prev_scores()
     report = build_report(
         scored,
-        n_universe  = n_universe,
-        top_n       = top_n,
-        profiles_n  = profiles_n,
-        insider_df  = insider_df,
-        prev_scores = prev_scores,
+        n_universe   = n_universe,
+        top_n        = top_n,
+        profiles_n   = profiles_n,
+        insider_df   = insider_df,
+        prev_scores  = prev_scores,
+        company_news = company_news,
+        nasdaq_news  = nasdaq_news,
     )
 
     # Spara aktuella poäng för nästa körnings trendpilar
     save_scores(scored)
 
-    # 7. Spara
+    # 8. Spara
     report_path = save_report(report, output_dir=output_dir)
     print(f"  ✓  Rapport sparad: {report_path}")
 
-    # 8. E-post
+    # 9. E-post
     if send_mail:
         date_str = datetime.today().strftime("%d %b %Y")
         top1     = scored.iloc[0]["ticker"] if not scored.empty else "—"

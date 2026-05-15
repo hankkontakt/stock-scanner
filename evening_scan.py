@@ -473,6 +473,7 @@ def build_evening_report(
     news_by_ticker:  dict  = None,
     global_news:     list  = None,
     swedish_news:    list  = None,
+    nasdaq_news:     list  = None,
     is_friday:       bool  = False,
 ) -> str:
     """Bygger kvällsrapporten."""
@@ -481,6 +482,7 @@ def build_evening_report(
     news_by_ticker  = news_by_ticker  or {}
     global_news     = global_news     or []
     swedish_news    = swedish_news    or []
+    nasdaq_news     = nasdaq_news     or []
 
     # Beräkna portfölj-totaler
     total_value    = sum(a.get("market_value") or 0 for a in analysis)
@@ -608,6 +610,13 @@ def build_evening_report(
         )
         if news_md:
             lines.append(news_md)
+
+    # ── Nasdaq Nordic – officiella börsmeddelanden ───────────
+    nasdaq_md = news_fetcher.format_nasdaq_nordic_section_md(
+        nasdaq_news, max_items=8 if is_friday else 5
+    )
+    if nasdaq_md:
+        lines.append(nasdaq_md)
 
     # ── Generella marknadsnyheter ────────────────────────────
     market_news_md = news_fetcher.format_market_news_section_md(
@@ -741,14 +750,17 @@ def main():
         except Exception:
             pass
 
-        # 7b. Nyheter via Finnhub + RSS
+        # 7b. Nyheter (Finnhub + Google News RSS + Nasdaq Nordic)
         news_by_ticker = {}
         global_news    = []
         swedish_news   = []
+        nasdaq_news    = []
         finnhub_key    = os.environ.get("FINNHUB_API_KEY", "")
         is_friday      = date.today().weekday() == 4  # 4 = fredag
 
         print("\n📰 Hämtar nyheter...")
+
+        # 7b-i. Finnhub bolagsnyheter (US-aktier)
         if finnhub_key:
             news_tickers = list(holdings["ticker"].str.upper()) + wl_tickers
             news_days    = 5 if is_friday else 1
@@ -757,16 +769,49 @@ def main():
                     news_tickers, finnhub_key, days=news_days
                 )
                 if news_by_ticker and v:
-                    print(f"  ✓ Bolagsnyheter för {len(news_by_ticker)} aktier")
-            # Generella marknadsnyheter – fler på fredagar
-            max_market = 5 if is_friday else 3
+                    print(f"  ✓ Bolagsnyheter (Finnhub): {len(news_by_ticker)} aktier")
+            max_market  = 5 if is_friday else 3
             global_news = news_fetcher.fetch_global_market_news(finnhub_key, max_articles=max_market)
             if global_news and v:
                 print(f"  ✓ {len(global_news)} globala marknadsnyheter")
         else:
             if v:
-                print("  ℹ FINNHUB_API_KEY ej satt – bolagsnyheter hoppas över")
+                print("  ℹ FINNHUB_API_KEY ej satt – Finnhub hoppas över")
 
+        # 7b-ii. Google News RSS per bolag (svenska + globala)
+        ticker_name_map = {}
+        if not holdings.empty:
+            for _, row in holdings.iterrows():
+                t = str(row["ticker"]).upper()
+                n = str(row.get("name", "") or "").strip()
+                if n:
+                    ticker_name_map[t] = n
+        for item in watchlist_items:
+            t = item["ticker"]
+            n = item.get("name", "")
+            if n:
+                ticker_name_map[t] = n
+
+        if ticker_name_map:
+            google_days = 5 if is_friday else 2
+            print(f"  🔍 Google News för {len(ticker_name_map)} bolag...")
+            google_by_ticker = news_fetcher.fetch_company_news_google_batch(
+                ticker_name_map, max_items=3, delay=1.3
+            )
+            for ticker, g_articles in google_by_ticker.items():
+                existing = news_by_ticker.get(ticker, [])
+                news_by_ticker[ticker] = news_fetcher._merge_news(existing, g_articles, max_total=4)
+            if google_by_ticker and v:
+                print(f"  ✓ Google News: {len(google_by_ticker)} bolag")
+
+        # 7b-iii. Nasdaq Nordic
+        print("  📋 Nasdaq Nordic...")
+        nn_hours     = 120 if is_friday else 48  # Fredagar: hela veckan
+        nasdaq_news  = news_fetcher.fetch_nasdaq_nordic_news(market="SSE", max_items=8, hours_back=nn_hours)
+        if nasdaq_news and v:
+            print(f"  ✓ {len(nasdaq_news)} Nasdaq Nordic-meddelanden")
+
+        # 7b-iv. Svenska RSS-nyheter
         max_swedish  = 5 if is_friday else 3
         swedish_news = news_fetcher.fetch_swedish_market_news(max_articles=max_swedish)
         if swedish_news and v:
@@ -783,6 +828,7 @@ def main():
             news_by_ticker   = news_by_ticker,
             global_news      = global_news,
             swedish_news     = swedish_news,
+            nasdaq_news      = nasdaq_news,
             is_friday        = is_friday,
         )
         subject = build_email_subject(analysis, market, stoploss_alerts, is_friday)

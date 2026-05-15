@@ -316,7 +316,7 @@ def _section_thematic(scored: pd.DataFrame) -> str:
 # AVSNITT 5 – DJUPDYK (topp-N profiler)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _company_profile(row: pd.Series, prev_scores: dict) -> str:
+def _company_profile(row: pd.Series, prev_scores: dict, news: list = None) -> str:
     from .history import arrow as trend_arrow, delta_str
 
     t      = row.get("ticker", "?")
@@ -396,14 +396,36 @@ def _company_profile(row: pd.Series, prev_scores: dict) -> str:
         lines.append(f"**Poängfördelning:** {' · '.join(parts)}")
         lines.append("")
 
+    # Nyheter (Google News RSS om tillgängliga)
+    if news:
+        lines.append("**Senaste nyheter:**")
+        for a in news[:3]:
+            age_h = a.get("age_hours", 999)
+            icon  = "🔴" if age_h < 6 else "🟡" if age_h < 24 else "⚪"
+            url   = a.get("url", "")
+            title = f"[{a['headline']}]({url})" if url else a["headline"]
+            src   = a.get("source", "")
+            dt_s  = a.get("datetime_str", "—")
+            meta  = f"_{src} · {dt_s}_" if src else f"_{dt_s}_"
+            lines.append(f"{icon} {title}  \n   {meta}")
+        lines.append("")
+
     return "\n".join(lines)
 
 
-def _section_profiles(scored: pd.DataFrame, top_n: int, prev_scores: dict) -> str:
-    top   = scored.head(top_n)
-    parts = [f"## Djupdyk – Top {top_n}\n"]
+def _section_profiles(
+    scored:       pd.DataFrame,
+    top_n:        int,
+    prev_scores:  dict,
+    company_news: dict = None,
+) -> str:
+    top          = scored.head(top_n)
+    company_news = company_news or {}
+    parts        = [f"## Djupdyk – Top {top_n}\n"]
     for _, row in top.iterrows():
-        parts.append(_company_profile(row, prev_scores))
+        ticker = row.get("ticker", "")
+        news   = company_news.get(ticker, [])
+        parts.append(_company_profile(row, prev_scores, news=news))
         parts.append("---\n")
     return "\n".join(parts)
 
@@ -498,13 +520,31 @@ _Data från Yahoo Finance (yfinance). Rapporten är inte finansiell rådgivning.
 # HUVUD-FUNKTION
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _section_nasdaq_nordic(nasdaq_news: list) -> str:
+    """Nasdaq Nordic regulatoriska nyheter – wrapper mot news_fetcher."""
+    if not nasdaq_news:
+        return ""
+    try:
+        import sys
+        from pathlib import Path
+        _root = Path(__file__).parent.parent
+        if str(_root) not in sys.path:
+            sys.path.insert(0, str(_root))
+        import news_fetcher as _nf
+        return _nf.format_nasdaq_nordic_section_md(nasdaq_news, max_items=8)
+    except Exception:
+        return ""
+
+
 def build_report(
-    scored: pd.DataFrame,
-    n_universe: int,
-    top_n: int = 20,
-    profiles_n: int = 5,
-    insider_df: Optional[pd.DataFrame] = None,
-    prev_scores: Optional[dict] = None,
+    scored:       pd.DataFrame,
+    n_universe:   int,
+    top_n:        int                       = 20,
+    profiles_n:   int                       = 5,
+    insider_df:   Optional[pd.DataFrame]    = None,
+    prev_scores:  Optional[dict]            = None,
+    company_news: Optional[dict]            = None,
+    nasdaq_news:  Optional[list]            = None,
 ) -> str:
     """
     Bygger en fullständig Markdown-rapport.
@@ -520,8 +560,9 @@ def build_report(
     Returns:
         Markdown-sträng redo att sparas som .md eller skickas i e-post.
     """
-    if prev_scores is None:
-        prev_scores = {}
+    if prev_scores  is None: prev_scores  = {}
+    if company_news is None: company_news = {}
+    if nasdaq_news  is None: nasdaq_news  = []
 
     if scored.empty:
         return (
@@ -535,12 +576,19 @@ def build_report(
         _section_score_table(scored, top_n=top_n, prev_scores=prev_scores),
         _section_factor_table(scored, top_n=top_n),
         _section_thematic(scored),
-        _section_profiles(scored, top_n=profiles_n, prev_scores=prev_scores),
+        _section_profiles(scored, top_n=profiles_n, prev_scores=prev_scores,
+                          company_news=company_news),
         _section_sectors(scored),
         _section_red_flags(scored),
         _section_insider_activity(scored),
-        _METHOD_TEXT,
     ]
+
+    # Nasdaq Nordic (om nyheter finns)
+    nasdaq_md = _section_nasdaq_nordic(nasdaq_news)
+    if nasdaq_md:
+        parts.append(nasdaq_md)
+
+    parts.append(_METHOD_TEXT)
 
     return "\n\n".join(parts)
 
