@@ -258,6 +258,11 @@ def merge_insider_data(df: pd.DataFrame, insider_df: pd.DataFrame) -> pd.DataFra
     """
     Sammanfogar insiderdata med huvud-DataFrame.
     df måste ha kolumnen 'ticker'.
+
+    OBS: Droppar kolumner som redan finns i insider_df från df innan merge
+    för att undvika _x/_y-suffix (pandas beteende vid kollidering).
+    insider_df:s värden är primärkällan – de härrör från en dedikerad
+    hämtning och är mer tillförlitliga.
     """
     if insider_df is None or insider_df.empty:
         for col in ["insider_pct", "insider_net_buy_6m",
@@ -266,7 +271,10 @@ def merge_insider_data(df: pd.DataFrame, insider_df: pd.DataFrame) -> pd.DataFra
                 df[col] = np.nan if "pct" in col or "buy" in col or "count" in col else "N/A"
         return df
 
-    return df.merge(insider_df, on="ticker", how="left")
+    # Ta bort kolumner från df som även finns i insider_df (förutom join-nyckeln)
+    overlap = [c for c in insider_df.columns if c != "ticker" and c in df.columns]
+    df_clean = df.drop(columns=overlap, errors="ignore")
+    return df_clean.merge(insider_df, on="ticker", how="left")
 
 
 def get_insider_summary(df: pd.DataFrame, top_n: int = 5) -> str:

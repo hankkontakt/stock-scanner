@@ -51,6 +51,7 @@ from smallcap.filters   import apply_all_filters
 from smallcap.scoring   import score_universe
 from smallcap.insider   import fetch_insider_data, merge_insider_data
 from smallcap.report    import build_report, save_report
+from smallcap.history   import save_scores, load_prev_scores
 
 
 # ── Data­hämtning ──────────────────────────────────────────────────────────────
@@ -77,6 +78,40 @@ _FETCH_FIELDS = [
 ]
 
 
+def _piotroski_proxy(row: dict) -> int:
+    """
+    Enkel 3-faktors Piotroski-proxy när full F-Score saknas.
+    Beräknar ett 1–9-värde baserat på tillgänglig data:
+      +1  Positiv rörelsemarginal (>5%)   -1 negativ
+      +1  Positivt operativt kassaflöde   -1 negativt
+      +1  Current ratio > 1.5             -1 < 1.0
+    Baseline = 4 (neutral).
+    """
+    import math
+    score = 4
+
+    def _f(key):
+        v = row.get(key, float("nan"))
+        try:
+            f = float(v if v is not None else float("nan"))
+            return float("nan") if math.isnan(f) else f
+        except (TypeError, ValueError):
+            return float("nan")
+
+    om  = _f("operating_margin")
+    ocf = _f("operating_cashflow")
+    cr  = _f("current_ratio")
+
+    if not math.isnan(om):
+        score += 1 if om > 0.05 else (-1 if om < 0 else 0)
+    if not math.isnan(ocf):
+        score += 1 if ocf > 0 else -1
+    if not math.isnan(cr):
+        score += 1 if cr > 1.5 else (-1 if cr < 1.0 else 0)
+
+    return max(1, min(9, score))
+
+
 def _fetch_single(ticker: str) -> dict | None:
     """
     Hämtar info för en enskild ticker.
@@ -101,16 +136,25 @@ def _fetch_single(ticker: str) -> dict | None:
         if not price:
             return None
 
-        # Momentum
-        r12 = r6 = float("nan")
+        # Daglig förändring
+        prev_close  = info.get("previousClose", 0) or 0
+        day_change  = float("nan")
+        if prev_close > 0 and price:
+            day_change = (price - prev_close) / prev_close
+
+        # Momentum + vecklig förändring
+        r12 = r6 = week_change = float("nan")
         if hist is not None and not hist.empty and len(hist) > 20:
             c = hist["Close"]
-            r12 = float(c.iloc[-1] / c.iloc[0] - 1) if len(c) >= 252 else float("nan")
-            r6  = float(c.iloc[-1] / c.iloc[max(0, len(c) - 126)] - 1)
+            r12         = float(c.iloc[-1] / c.iloc[0] - 1) if len(c) >= 252 else float("nan")
+            r6          = float(c.iloc[-1] / c.iloc[max(0, len(c) - 126)] - 1)
+            week_change = float(c.iloc[-1] / c.iloc[max(0, len(c) - 5)] - 1)
 
         return {
             "ticker":            ticker,
             "current_price":     price,
+            "day_change_pct":    day_change,
+            "week_change_pct":   week_change,
             "avg_volume":        info.get("averageVolume") or info.get("averageVolume10days", 0),
             "market_cap":        info.get("marketCap", float("nan")),
             "ev_to_ebitda":      info.get("enterpriseToEbitda", float("nan")),
@@ -161,19 +205,23 @@ def fetch_universe_data(tickers: list, delay: float = 0.4) -> pd.DataFrame:
     if df.empty:
         return df
 
-    # Piotroski-beräkning om modulen finns
+    # Piotroski-beräkning: försök med piotroski.py, fallback till proxy
     try:
         import piotroski as _piotroski
         scores = []
         for _, r in df.iterrows():
             try:
                 s = _piotroski.compute(r.get("ticker", ""))
-                scores.append(s if s is not None else 5)
+                # Om compute() returnerar None (API-miss) → proxy från tillgänglig data
+                scores.append(s if s is not None else _piotroski_proxy(r.to_dict()))
             except Exception:
-                scores.append(5)
+                scores.append(_piotroski_proxy(r.to_dict()))
         df["piotroski_score"] = scores
     except ImportError:
-        df["piotroski_score"] = 5   # Neutral default
+        # Piotroski-modulen saknas helt – beräkna proxy för alla
+        df["piotroski_score"] = df.apply(
+            lambda r: _piotroski_proxy(r.to_dict()), axis=1
+        )
 
     return df
 
@@ -273,15 +321,20 @@ def run_scan(
     top5 = scored.head(5)[["ticker", "sc_total", "sc_stars"]].to_string(index=False)
     print(f"\n  🏆 Top-5 resultat:\n{top5}\n")
 
-    # 6. Rapport
+    # 6. Rapport (läser historik för trendpilar internt)
     print("  Bygger rapport ...")
+    prev_scores = load_prev_scores()
     report = build_report(
         scored,
         n_universe  = n_universe,
         top_n       = top_n,
         profiles_n  = profiles_n,
         insider_df  = insider_df,
+        prev_scores = prev_scores,
     )
+
+    # Spara aktuella poäng för nästa körnings trendpilar
+    save_scores(scored)
 
     # 7. Spara
     report_path = save_report(report, output_dir=output_dir)

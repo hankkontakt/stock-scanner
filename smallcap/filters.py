@@ -30,7 +30,7 @@ def _cfg(key: str, default):
 # ── Trösklar (läses från config.py SMALLCAP_CONFIG vid start) ────────────────
 MIN_DAILY_TURNOVER_SEK  = _cfg("min_daily_turnover_sek",  500_000)
 MIN_MARKET_CAP_SEK      = _cfg("min_market_cap_sek",      30_000_000)
-MAX_MARKET_CAP_SEK      = _cfg("max_market_cap_sek",      10_000_000_000)
+MAX_MARKET_CAP_SEK      = _cfg("max_market_cap_sek",      25_000_000_000)  # 25 GSEK – exkl. Large Cap
 MAX_DEBT_TO_EQUITY      = _cfg("max_debt_to_equity",      300)
 MIN_CURRENT_RATIO       = _cfg("min_current_ratio",       0.5)
 MAX_PIOTROSKI_SKIP      = _cfg("max_piotroski_skip",      2)
@@ -78,7 +78,9 @@ def filter_market_cap(df: pd.DataFrame, verbose: bool = True) -> pd.Series:
     mask = mask | mkcap.isna() | mkcap.eq(0)
     if verbose and (~mask).any():
         n = (~mask).sum()
-        print(f"  Marknadsvärde: tar bort {n} utanför 30 MSEK–10 GSEK")
+        bad = df.loc[~mask & mkcap.gt(MAX_MARKET_CAP_SEK * SEK_USD_APPROX), "ticker"].tolist()[:5]
+        print(f"  Marknadsvärde: tar bort {n} utanför 30 MSEK–25 GSEK"
+              + (f" (för stora: {bad})" if bad else ""))
     return mask
 
 
@@ -214,14 +216,13 @@ def apply_all_filters(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     mask = (
         filter_has_price(df, verbose)        &
         filter_liquidity(df, verbose)        &
+        filter_market_cap(df, verbose)       &
         filter_negative_equity(df, verbose)  &
         filter_balance_sheet(df, verbose)    &
         filter_cash_runway(df, verbose)      &
         filter_piotroski(df, verbose)        &
         filter_dilution(df, verbose)
     )
-    # market_cap-filtret är mjukare – varnar men exkluderar inte alltid
-    # (yfinance-data för .ST är ibland USD-konverterad)
 
     result = df[mask].copy()
     n_kept = len(result)
