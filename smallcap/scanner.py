@@ -184,12 +184,17 @@ def send_email(subject: str, body: str) -> bool:
     """Skickar rapporten via e-post. Returnerar True vid framgång."""
     smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    smtp_user = os.environ.get("EMAIL_USER", "")
-    smtp_pass = os.environ.get("EMAIL_PASS", "")
-    to_addr   = os.environ.get("EMAIL_TO",   smtp_user)
+    # Stöd både EMAIL_USER/EMAIL_PASS (lokalt) och EMAIL_SENDER/EMAIL_PASSWORD (GitHub Actions)
+    smtp_user = (os.environ.get("EMAIL_USER") or
+                 os.environ.get("EMAIL_SENDER", ""))
+    smtp_pass = (os.environ.get("EMAIL_PASS") or
+                 os.environ.get("EMAIL_PASSWORD", ""))
+    to_addr   = (os.environ.get("EMAIL_TO") or
+                 os.environ.get("EMAIL_RECIPIENT") or
+                 smtp_user)
 
     if not smtp_user or not smtp_pass:
-        print("⚠️  E-post ej konfigurerat (EMAIL_USER / EMAIL_PASS saknas)")
+        print("⚠️  E-post ej konfigurerat (EMAIL_USER/EMAIL_SENDER eller EMAIL_PASS/EMAIL_PASSWORD saknas)")
         return False
 
     msg = MIMEMultipart("alternative")
