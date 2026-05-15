@@ -23,6 +23,7 @@ import yfinance as yf
 
 from core import config
 from core import alerts
+from core import ai_analysis
 
 
 
@@ -219,8 +220,40 @@ def main():
     total = sum(len(v) for v in opps.values())
     print(f"   {len(opps['dips'])} dips · {len(opps['breakouts'])} utbrott · {len(opps['oversold'])} översålda")
 
+    # 4b. AI Opportunity Analysis (Feature 7)
+    ai_sections = []
+    if total > 0:
+        print("\n🤖 Genererar AI-analys för möjligheter...")
+        for signal_type, items in [("dip", opps["dips"]), ("breakout", opps["breakouts"]), ("oversold", opps["oversold"])]:
+            for item in items:
+                try:
+                    stock_data = {
+                        "name": item.get("name", ""),
+                        "sector": item.get("sector", ""),
+                        "score": item.get("score", 0),
+                        "price": item.get("price", 0),
+                        "ret3d": item.get("ret3d"),
+                        "ret5d": item.get("ret5d"),
+                        "dist52h": item.get("dist52h"),
+                        "volrat": item.get("volrat"),
+                        "entry": item.get("entry", ""),
+                        "signal": item.get("signal", ""),
+                    }
+                    ai_text = ai_analysis.analyze_opportunity(
+                        ticker=item["ticker"],
+                        signal_type=signal_type,
+                        stock_data=stock_data,
+                    )
+                    if ai_text and not ai_text.startswith("⚠") and not ai_text.startswith("ℹ"):
+                        ai_sections.append(f"### {item['ticker']} ({signal_type.upper()})\n\n{ai_text}\n")
+                        print(f"  ✓ AI-analys: {item['ticker']} ({signal_type})")
+                except Exception as e:
+                    print(f"  ⚠ AI-fel för {item['ticker']}: {e}")
+
     # 5. Spara rapport
     report = build_report(opps, benchmarks, age_days)
+    if ai_sections:
+        report += "\n\n## 🤖 AI-analys av möjligheter\n\n" + "\n---\n".join(ai_sections)
     Path("reports").mkdir(exist_ok=True)
     path = Path(f"reports/opportunity_{date.today().isoformat()}.md")
     path.write_text(report, encoding="utf-8")

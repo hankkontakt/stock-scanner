@@ -23,6 +23,7 @@ import streamlit as st
 import yfinance as yf
 from data_management import avanza_import
 from core import config
+from core import ai_analysis
 from portfolio import watchlist as wl
 
 # ── Sökvägar ──────────────────────────────────────────────────────────────────
@@ -230,7 +231,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
         page = st.radio(
             "Navigering",
             ["📊 Översikt", "🔍 Veckoscanner", "🏦 Småbolag",
-             "💼 Portfölj", "📈 Teknisk analys", "🔧 Admin"],
+             "💼 Portfölj", "📈 Teknisk analys", "🤖 AI", "🔧 Admin"],
             label_visibility="collapsed",
         )
 
@@ -520,6 +521,31 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
         )
         st.plotly_chart(fig, use_container_width=True)
 
+    # ── AI Market Summary button (Feature 8) ────────────────────────────────
+    st.markdown("---")
+    ai_col1, ai_col2 = st.columns([3, 1])
+    with ai_col1:
+        st.subheader("🤖 AI-marknadssammanfattning")
+    with ai_col2:
+        open_ai = st.button("➡️ Öppna AI Dashboard", key="btn_ov_ai_go", use_container_width=True)
+        if open_ai:
+            st.switch_page("streamlit_app.py")  # Låter användaren navigera manuellt
+
+    if st.button("🤖 Generera marknadssammanfattning", key="btn_ov_market_summary", use_container_width=True):
+        if config.DEEPSEEK_API_KEY:
+            with st.spinner("Analyserar marknaden..."):
+                try:
+                    result = ai_analysis.generate_market_summary(
+                        df=df if not df.empty else None,
+                        sc_df=sc_df if not sc_df.empty else None,
+                    )
+                    with st.container(border=True):
+                        st.markdown(result)
+                except Exception as e:
+                    st.error(f"❌ {e}")
+        else:
+            st.info("💡 DeepSeek API-nyckel krävs. Konfigurera i .env")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SIDA 2 – VECKOSCANNER
@@ -677,6 +703,24 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
             st.plotly_chart(sector_bar_chart(filt_df), use_container_width=True)
         with c2:
             st.plotly_chart(score_distribution_chart(filt_df), use_container_width=True)
+
+        # ── AI-knapp: Analysera vald ticker ─────────────────────────────────
+        st.markdown("---")
+        st.subheader("🤖 AI-analys av enskild aktie")
+        if not filt_df.empty and "ticker" in filt_df.columns:
+            ai_ticker = st.selectbox("Välj aktie", sorted(filt_df["ticker"].tolist()),
+                                     key="ws_ai_ticker")
+            if st.button("🤖 Analysera med AI", key="btn_ws_ai", use_container_width=True):
+                if config.DEEPSEEK_API_KEY:
+                    with st.spinner(f"Analyserar {ai_ticker}..."):
+                        try:
+                            result = ai_analysis.analyze_stock(ai_ticker, df=df)
+                            with st.container(border=True):
+                                st.markdown(result)
+                        except Exception as e:
+                            st.error(f"❌ {e}")
+                else:
+                    st.info("💡 DeepSeek API-nyckel krävs")
 
     with tab2:
         if filt_df.empty:
@@ -917,6 +961,24 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
             with c2:
                 st.plotly_chart(score_distribution_chart(filt, score_col), use_container_width=True)
 
+            # ── AI-knapp: Analysera smallcap-ticker ─────────────────────────
+            st.markdown("---")
+            st.subheader("🤖 AI-analys av smallcap")
+            if not filt.empty and "ticker" in filt.columns:
+                sc_ai_ticker = st.selectbox("Välj smallcap-aktie", sorted(filt["ticker"].tolist()),
+                                            key="sc_ai_ticker")
+                if st.button("🤖 Analysera med AI", key="btn_sc_ai", use_container_width=True):
+                    if config.DEEPSEEK_API_KEY:
+                        with st.spinner(f"Analyserar {sc_ai_ticker}..."):
+                            try:
+                                result = ai_analysis.analyze_stock(sc_ai_ticker, df=sc_df)
+                                with st.container(border=True):
+                                    st.markdown(result)
+                            except Exception as e:
+                                st.error(f"❌ {e}")
+                    else:
+                        st.info("💡 DeepSeek API-nyckel krävs")
+
     with tab2:
         if not filt.empty:
             key_cols = [c for c in [
@@ -1083,6 +1145,26 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list):
             st.markdown("---")
             st.plotly_chart(holdings_pie(pd.DataFrame(rows).rename(columns={"Sektor": "sector"})),
                             use_container_width=True)
+
+    # ── AI Portfolio Optimizer button (Feature 4) ──────────────────────────
+    if not holdings.empty:
+        st.markdown("---")
+        st.subheader("🤖 AI-portföljoptimering")
+        st.caption("Få AI-analys av din portfölj med förslag")
+        if st.button("🤖 Analysera portfölj med AI", key="btn_portfolio_ai",
+                     use_container_width=True, type="primary"):
+            if config.DEEPSEEK_API_KEY:
+                with st.spinner("Analyserar portfölj..."):
+                    try:
+                        result = ai_analysis.analyze_portfolio(
+                            holdings, df=df if not df.empty else None
+                        )
+                        with st.container(border=True):
+                            st.markdown(result)
+                    except Exception as e:
+                        st.error(f"❌ {e}")
+            else:
+                st.info("💡 DeepSeek API-nyckel krävs")
 
     # Bevakningslista
     st.markdown("---")
@@ -1268,6 +1350,416 @@ def page_technical(df: pd.DataFrame, filters: dict):
                     "return_12m": "12m", "return_3m": "3m", "score_total": "Score"
                 }), use_container_width=True, hide_index=True)
 
+    # ── AI-knapp: AI tolkning av teknisk data (Feature 3) ───────────────────
+    st.markdown("---")
+    st.subheader("🤖 AI-tolkning")
+    if st.button("🤖 Tolka teknisk data med AI", key="btn_tech_ai", use_container_width=True):
+        if config.DEEPSEEK_API_KEY:
+            with st.spinner("Analyserar teknisk data..."):
+                try:
+                    # Skapa en prompt baserad på teknisk data
+                    tech_context = {
+                        "n_upptrend": n_upptrend,
+                        "n_over_ma200": n_over_ma,
+                        "avg_rsi": round(avg_rsi, 1),
+                        "n_overbought": n_overbought,
+                        "n_stocks": len(out),
+                    }
+                    result = ai_analysis.ai_chat(
+                        "Ge mig en teknisk analys av marknaden baserat på denna data",
+                        context=json.dumps(tech_context, ensure_ascii=False)
+                    )
+                    with st.container(border=True):
+                        st.markdown(result)
+                except Exception as e:
+                    st.error(f"❌ {e}")
+        else:
+            st.info("💡 DeepSeek API-nyckel krävs")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SIDA 6 – AI (Features 2-5, 8)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _ai_section_header():
+    """Gemensam rubrik för AI-sektioner."""
+    return '<div style="background:#1a2332;border:1px solid #2d3250;border-radius:8px;padding:12px 18px;margin-bottom:16px">'
+
+
+def _ai_section_footer():
+    return '</div>'
+
+
+def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
+    """AI Dashboard – alla AI-funktioner samlade."""
+    st.title("🤖 AI – MarketScan Intelligence")
+
+    api_key = config.DEEPSEEK_API_KEY
+    if not api_key:
+        st.warning("⚠️ DeepSeek API-nyckel saknas. Ställ in DEEPSEEK_API_KEY i .env för att använda AI-funktionerna.")
+        return
+
+    # API-status
+    status = ai_analysis.test_api_key()
+    if status.get("status") == "ok":
+        st.caption(f"✅ {status['message']}")
+    else:
+        st.warning(f"⚠️ {status['message']}")
+        if "saknas" in status.get("message", "").lower():
+            return
+
+    tab_market, tab_stock, tab_compare, tab_sector, tab_chat, tab_portfolio, tab_news = st.tabs([
+        "📊 Marknad", "📈 Aktieanalys", "🔄 Jämför", "🏭 Sektor",
+        "💬 Chat", "💼 Portfölj", "📰 Nyheter"
+    ])
+
+    # ── Flik 1: Market Dashboard Summary (Feature 8) ────────────────────────
+    with tab_market:
+        st.subheader("📊 AI-marknadssammanfattning")
+        st.caption("Få en snabb AI-genererad överblick över dagens marknad baserat på senaste scandata.")
+
+        refresh_market = st.checkbox("Hoppa över cache", key="ai_market_refresh")
+
+        if st.button("🤖 Generera marknadssammanfattning", key="btn_market_summary",
+                     type="primary", use_container_width=True):
+            with st.spinner("Analyserar marknaden..."):
+                try:
+                    result = ai_analysis.generate_market_summary(
+                        df=df if not df.empty else None,
+                        sc_df=sc_df if not sc_df.empty else None,
+                        force_refresh=refresh_market,
+                    )
+                    st.markdown(_ai_section_header(), unsafe_allow_html=True)
+                    st.markdown(result)
+                    st.markdown(_ai_section_footer(), unsafe_allow_html=True)
+                except Exception as e:
+                    st.error(f"❌ Kunde inte generera sammanfattning: {e}")
+
+        if not df.empty:
+            st.markdown("---")
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.metric("Bolag i scan", len(df))
+            with c2:
+                if "score_total" in df.columns:
+                    st.metric("Snittpoäng", f"{df['score_total'].mean():.1f}")
+            with c3:
+                if "entry_signal" in df.columns:
+                    n_stark = int((df["entry_signal"] == "STARK").sum())
+                    st.metric("STARK entry", n_stark)
+            with c4:
+                if not df.empty and "score_total" in df.columns:
+                    top = df.nlargest(1, "score_total").iloc[0]
+                    st.metric("Topp", f"{top['ticker']} ({top['score_total']:.0f}p)")
+
+    # ── Flik 2: One-click Stock Analysis (Feature 2b) ───────────────────────
+    with tab_stock:
+        st.subheader("📈 AI-aktieanalys")
+        st.caption("Välj en aktie för djupgående AI-analys av alla faktorer.")
+
+        if not df.empty and "ticker" in df.columns:
+            tickers = sorted(df["ticker"].tolist())
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                sel_ticker = st.selectbox("Välj aktie", tickers, key="ai_stock_ticker")
+            with col2:
+                force_refresh = st.checkbox("Hoppa över cache", key="ai_stock_refresh")
+
+            if st.button("🤖 Analysera aktie", key="btn_stock_analysis",
+                         type="primary", use_container_width=True):
+                with st.spinner(f"Analyserar {sel_ticker}..."):
+                    try:
+                        result = ai_analysis.analyze_stock(
+                            sel_ticker, df=df, force_refresh=force_refresh
+                        )
+                        st.markdown(_ai_section_header(), unsafe_allow_html=True)
+                        st.markdown(result)
+                        st.markdown(_ai_section_footer(), unsafe_allow_html=True)
+                    except Exception as e:
+                        st.error(f"❌ Analys misslyckades: {e}")
+
+            # Visa snabbdata för vald aktie
+            if sel_ticker:
+                row = df[df["ticker"] == sel_ticker]
+                if not row.empty:
+                    r = row.iloc[0]
+                    st.markdown("---")
+                    st.caption("📋 Snabbdata")
+                    cc1, cc2, cc3, cc4, cc5 = st.columns(5)
+                    with cc1:
+                        st.metric("Score", f"{r.get('score_total', '—'):.0f}/100" if not pd.isna(r.get('score_total')) else "—")
+                    with cc2:
+                        st.metric("Entry", r.get("entry_signal", "—"))
+                    with cc3:
+                        st.metric("Trend", r.get("trend_signal", "—"))
+                    with cc4:
+                        st.metric("RSI", f"{r.get('rsi_14', '—'):.0f}" if not pd.isna(r.get('rsi_14', '—')) else "—")
+                    with cc5:
+                        st.metric("Piotroski", f"{r.get('piotroski_f', '—')}/9" if not pd.isna(r.get('piotroski_f', '—')) else "—")
+        else:
+            st.info("Ingen scandata tillgänglig för aktieval.")
+
+    # ── Flik 3: Compare Two Stocks (Feature 2c) ────────────────────────────
+    with tab_compare:
+        st.subheader("🔄 AI-jämförelse – två aktier")
+        st.caption("Jämför två aktier sida vid sida med AI-analys.")
+
+        if not df.empty and "ticker" in df.columns:
+            tickers = sorted(df["ticker"].tolist())
+            col1, col2, col3 = st.columns([2, 2, 1])
+            with col1:
+                 ticker_a = st.selectbox("Aktie A", tickers, key="ai_cmp_a")
+            with col2:
+                 ticker_b = st.selectbox("Aktie B", tickers, index=min(1, len(tickers)-1), key="ai_cmp_b")
+            with col3:
+                 force_refresh = st.checkbox("Hoppa över cache", key="ai_cmp_refresh")
+
+            if st.button("🤖 Jämför aktier", key="btn_compare",
+                         type="primary", use_container_width=True):
+                with st.spinner(f"Jämför {ticker_a} vs {ticker_b}..."):
+                    try:
+                        result = ai_analysis.compare_stocks(
+                            ticker_a, ticker_b, df=df, force_refresh=force_refresh
+                        )
+                        st.markdown(_ai_section_header(), unsafe_allow_html=True)
+                        st.markdown(result)
+                        st.markdown(_ai_section_footer(), unsafe_allow_html=True)
+                    except Exception as e:
+                        st.error(f"❌ Jämförelse misslyckades: {e}")
+
+            # Snabbjämförelsetabell
+            if ticker_a and ticker_b and ticker_a != ticker_b:
+                row_a = df[df["ticker"] == ticker_a].iloc[0] if not df[df["ticker"] == ticker_a].empty else None
+                row_b = df[df["ticker"] == ticker_b].iloc[0] if not df[df["ticker"] == ticker_b].empty else None
+                if row_a is not None and row_b is not None:
+                    st.markdown("---")
+                    st.caption("📋 Snabbjämförelse")
+                    cmp_data = []
+                    for field, label in [("score_total", "Total Score"), ("score_momentum", "Momentum"),
+                                         ("score_value", "Värdering"), ("score_quality", "Kvalitet"),
+                                         ("score_growth", "Tillväxt"), ("rsi_14", "RSI"),
+                                         ("pe_trailing", "P/E"), ("roe", "ROE"),
+                                         ("return_12m", "12m-avkastning"), ("price_vs_ma200", "vs MA200")]:
+                        va = row_a.get(field)
+                        vb = row_b.get(field)
+                        if va is not None and not pd.isna(va):
+                            va = f"{va:.1f}" if isinstance(va, float) else va
+                        if vb is not None and not pd.isna(vb):
+                            vb = f"{vb:.1f}" if isinstance(vb, float) else vb
+                        cmp_data.append({"Mått": label, ticker_a: va if va is not None else "—", ticker_b: vb if vb is not None else "—"})
+                    st.dataframe(pd.DataFrame(cmp_data), use_container_width=True, hide_index=True)
+        else:
+            st.info("Ingen scandata tillgänglig för jämförelse.")
+
+    # ── Flik 4: Sector Analysis (Feature 2d) ───────────────────────────────
+    with tab_sector:
+        st.subheader("🏭 AI-sektoranalys")
+        st.caption("Få en AI-genererad analys av en hel sektor.")
+
+        if not df.empty and "sector" in df.columns:
+            sectors = sorted(df["sector"].dropna().unique().tolist())
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                sel_sector = st.selectbox("Välj sektor", sectors, key="ai_sector")
+            with col2:
+                force_refresh = st.checkbox("Hoppa över cache", key="ai_sector_refresh")
+
+            if st.button("🤖 Analysera sektor", key="btn_sector_analysis",
+                         type="primary", use_container_width=True):
+                with st.spinner(f"Analyserar sektorn {sel_sector}..."):
+                    try:
+                        result = ai_analysis.analyze_sector(
+                            sel_sector, df=df, force_refresh=force_refresh
+                        )
+                        st.markdown(_ai_section_header(), unsafe_allow_html=True)
+                        st.markdown(result)
+                        st.markdown(_ai_section_footer(), unsafe_allow_html=True)
+                    except Exception as e:
+                        st.error(f"❌ Sektoranalys misslyckades: {e}")
+
+            # Visa sektorns bolag
+            if sel_sector:
+                st.markdown("---")
+                sec_df = df[df["sector"] == sel_sector].copy()
+                st.caption(f"📋 Bolag i sektorn ({len(sec_df)} st)")
+                show_cols = [c for c in ["ticker", "name", "score_total", "entry_signal",
+                                         "trend_signal", "rsi_14"] if c in sec_df.columns]
+                if show_cols:
+                    st.dataframe(sec_df[show_cols].reset_index(drop=True), use_container_width=True, height=300)
+        else:
+            st.info("Ingen sektordata tillgänglig.")
+
+    # ── Flik 5: AI Chat (Feature 2a) ────────────────────────────────────────
+    with tab_chat:
+        st.subheader("💬 AI-chatt – fråga MarketScan AI")
+        st.caption("Ställ frågor om marknaden, aktier, strategier – AI:n svarar med aktuell data som kontext.")
+
+        # Förifyllda frågeförslag
+        suggestions = [
+            "Välj en fråga...",
+            "Vilka sektorer ser starkast ut just nu?",
+            "Vilka aktier har bäst momentum just nu?",
+            "Hur ser risksituationen ut på marknaden?",
+            "Ge mig en analys av dagens topp 10 aktier",
+            "Vilka aktier är mest undervärderade just nu?",
+            "Vad är din syn på marknaden just nu?",
+        ]
+
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            suggested_q = st.selectbox("Frågeförslag", suggestions, key="ai_chat_suggestion")
+        with col2:
+            chat_refresh = st.checkbox("Hoppa över cache", key="ai_chat_refresh")
+
+        # Fritextfråga
+        user_question = st.text_area(
+            "Din fråga (på svenska):",
+            value=suggested_q if suggested_q != suggestions[0] else "",
+            placeholder="Ställ en fråga om marknaden...",
+            height=100,
+            key="ai_chat_input",
+        )
+
+        if st.button("💬 Skicka fråga", key="btn_ai_chat",
+                     type="primary", use_container_width=True):
+            if user_question.strip():
+                # Bygg kontext från aktuell data
+                context_parts = []
+                if not df.empty:
+                    context_parts.append(f"Global scan: {len(df)} bolag")
+                    if "score_total" in df.columns:
+                        context_parts.append(f"snittscore {df['score_total'].mean():.1f}")
+                    if "entry_signal" in df.columns:
+                        n_stark = int((df["entry_signal"] == "STARK").sum())
+                        context_parts.append(f"STARK-signaler: {n_stark}")
+                if not sc_df.empty:
+                    sc_col = "sc_total" if "sc_total" in sc_df.columns else "score_total"
+                    context_parts.append(f"Småbolag: {len(sc_df)} bolag")
+                    if sc_col in sc_df.columns:
+                        context_parts.append(f"småbolagssnitt: {sc_df[sc_col].mean():.1f}")
+
+                context_str = ". ".join(context_parts) + "." if context_parts else ""
+                with st.chat_message("assistant"):
+                    with st.spinner("🤖 AI tänker..."):
+                        try:
+                            result = ai_analysis.ai_chat(
+                                user_question,
+                                context=context_str if context_str else "",
+                                force_refresh=chat_refresh,
+                            )
+                            st.markdown(result)
+                        except Exception as e:
+                            st.error(f"❌ Chatten misslyckades: {e}")
+            else:
+                st.warning("Skriv en fråga först.")
+
+    # ── Flik 6: Portfolio Optimizer (Feature 4) ────────────────────────────
+    with tab_portfolio:
+        st.subheader("💼 AI-portföljoptimering")
+        st.caption("Få AI-analys av din portfölj med förslag på förbättringar.")
+
+        if not holdings.empty:
+            if st.button("🤖 Analysera portfölj", key="btn_portfolio_ai_tab",
+                         type="primary", use_container_width=True):
+                with st.spinner("Analyserar portfölj..."):
+                    try:
+                        result = ai_analysis.analyze_portfolio(
+                            holdings, df=df if not df.empty else None
+                        )
+                        st.markdown(_ai_section_header(), unsafe_allow_html=True)
+                        st.markdown(result)
+                        st.markdown(_ai_section_footer(), unsafe_allow_html=True)
+                    except Exception as e:
+                        st.error(f"❌ Portföljanalys misslyckades: {e}")
+
+            # Visa portföljinnehav
+            st.markdown("---")
+            st.caption(f"📋 Dina {len(holdings)} innehav")
+            if not df.empty and "ticker" in df.columns:
+                score_lu = df.set_index("ticker").to_dict("index")
+            else:
+                score_lu = {}
+            rows = []
+            for _, h in holdings.iterrows():
+                t = h["ticker"]
+                sc = score_lu.get(t, {})
+                rows.append({
+                    "Ticker": t,
+                    "Score": sc.get("score_total", "—"),
+                    "Entry": sc.get("entry_signal", "—"),
+                    "Trend": sc.get("trend_signal", "—"),
+                })
+            if rows:
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("Inga portföljinnehav hittade. Lägg till innehav i Admin-fliken först.")
+
+    # ── Flik 7: News Analysis (Feature 5) ──────────────────────────────────
+    with tab_news:
+        st.subheader("📰 AI-nyhetsanalys")
+        st.caption("Hämta och analysera nyheter för en specifik aktie.")
+
+        if not df.empty and "ticker" in df.columns:
+            tickers = sorted(df["ticker"].tolist())
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                news_ticker = st.selectbox("Välj aktie för nyhetsanalys", tickers, key="ai_news_ticker")
+            with col2:
+                force_refresh = st.checkbox("Hoppa över cache", key="ai_news_refresh")
+
+            if st.button("📰 Hämta och analysera nyheter", key="btn_news_analysis",
+                         type="primary", use_container_width=True):
+                with st.spinner(f"Hämtar nyheter för {news_ticker}..."):
+                    try:
+                        # Försök hämta nyheter via Finnhub
+                        news_items = None
+                        try:
+                            from news_fetcher import fetch_company_news
+                            items = fetch_company_news(news_ticker, days_back=7)
+                            if items:
+                                news_items = [{"title": n.get("headline", n.get("title", "")),
+                                               "summary": n.get("summary", n.get("description", "")),
+                                               "source": n.get("source", "Finnhub"),
+                                               "date": n.get("datetime", n.get("publishedAt", ""))}
+                                              for n in items[:10]]
+                        except ImportError:
+                            pass
+                        except Exception:
+                            pass
+
+                        result = ai_analysis.analyze_news(
+                            news_ticker, news_items=news_items, force_refresh=force_refresh
+                        )
+                        st.markdown(_ai_section_header(), unsafe_allow_html=True)
+                        st.markdown(result)
+                        st.markdown(_ai_section_footer(), unsafe_allow_html=True)
+
+                        # Visa rånyheter
+                        if news_items:
+                            st.markdown("---")
+                            st.caption(f"📋 Senaste {len(news_items)} nyheterna för {news_ticker}")
+                            for item in news_items:
+                                st.markdown(f"- **{item['title']}** ({item.get('source', '?')})")
+                    except Exception as e:
+                        st.error(f"❌ Nyhetsanalys misslyckades: {e}")
+
+            # Visa senaste nyheter i en expander
+            with st.expander("Visa senaste nyheter utan AI-analys"):
+                try:
+                    from news_fetcher import fetch_company_news
+                    if 'news_ticker' in dir() and news_ticker:
+                        raw_news = fetch_company_news(news_ticker, days_back=3)
+                        if raw_news:
+                            for n in raw_news[:5]:
+                                title = n.get("headline", n.get("title", "—"))
+                                st.markdown(f"- {title}")
+                        else:
+                            st.caption("Inga nyheter hittade.")
+                    else:
+                        st.caption("Välj en ticker först.")
+                except Exception:
+                    st.caption("Kunde inte hämta nyheter (news_fetcher saknas eller API-nyckel ej konfigurerad).")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HJÄLPFUNKTIONER – FILHANTERING (lokal)
@@ -1355,7 +1847,7 @@ def _check_admin_access() -> bool:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SIDA 6 – ADMIN (Portfölj, Watchlist, GitHub Actions, Avanza-import)
+# SIDA 7 – ADMIN (Portfölj, Watchlist, GitHub Actions, Avanza-import)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def page_admin():
@@ -1765,6 +2257,9 @@ def main():
         if not df.empty and "sector" in df.columns:
             secs = sorted(df["sector"].dropna().unique().tolist())
         page_technical(df, filters)
+
+    elif page == "🤖 AI":
+        page_ai(df, sc_df, holdings)
 
     elif page == "🔧 Admin":
         page_admin()
