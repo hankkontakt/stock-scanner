@@ -34,6 +34,7 @@ from data_management import avanza_import
 from core import config
 from core import ai_analysis
 from portfolio import watchlist as wl
+from web.stock_detail import render_stock_detail, _provider_selector
 
 # ── Page-konfiguration ────────────────────────────────────────────────────────
 st.set_page_config(
@@ -221,6 +222,11 @@ def _entry_options(df: pd.DataFrame) -> list:
     return ["Alla"] + opts
 
 
+def _get_provider() -> str:
+    """Hämta vald AI-provider från sidebar/session state."""
+    return st.session_state.get("selected_provider", "auto")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SIDEBAR
 # ══════════════════════════════════════════════════════════════════════════════
@@ -314,6 +320,21 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                 placeholder="Alla signaler…",
             )
             filters["trend_tech"] = st.selectbox("Trend", ["Alla", "UPPTREND", "Övriga"])
+
+        # ── AI-provider selector ─────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("### 🤖 AI-provider")
+        ai_provider = st.selectbox(
+            "Välj AI-tjänst",
+            ["auto", "deepseek", "gemini"],
+            format_func=lambda k: {
+                "auto": f"Auto ({config.AI_PROVIDER})",
+                "deepseek": "DeepSeek (komplex, kostar)",
+                "gemini": "Gemini (enkel, gratis)",
+            }.get(k, k),
+            key="sidebar_ai_provider",
+        )
+        st.session_state["selected_provider"] = ai_provider
 
         # Sektorlistan fylls i av respektive page-funktion (de anropar sidebar_update_sectors)
         st.markdown("---")
@@ -535,19 +556,18 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
             st.switch_page("streamlit_app.py")  # Låter användaren navigera manuellt
 
     if st.button("🤖 Generera marknadssammanfattning", key="btn_ov_market_summary", use_container_width=True):
-        if config.DEEPSEEK_API_KEY:
-            with st.spinner("Analyserar marknaden..."):
-                try:
-                    result = ai_analysis.generate_market_summary(
-                        df=df if not df.empty else None,
-                        sc_df=sc_df if not sc_df.empty else None,
-                    )
-                    with st.container(border=True):
-                        st.markdown(result)
-                except Exception as e:
-                    st.error(f"❌ {e}")
-        else:
-            st.info("💡 DeepSeek API-nyckel krävs. Konfigurera i .env")
+        with st.spinner("Analyserar marknaden..."):
+            try:
+                provider = _get_provider()
+                result = ai_analysis.generate_market_summary(
+                    df=df if not df.empty else None,
+                    sc_df=sc_df if not sc_df.empty else None,
+                    provider=provider,
+                )
+                with st.container(border=True):
+                    st.markdown(result)
+            except Exception as e:
+                st.error(f"❌ {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -707,23 +727,19 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
         with c2:
             st.plotly_chart(score_distribution_chart(filt_df), use_container_width=True)
 
-        # ── AI-knapp: Analysera vald ticker ─────────────────────────────────
+        # ── Stock Detail Panel ──────────────────────────────────────────────
         st.markdown("---")
-        st.subheader("🤖 AI-analys av enskild aktie")
+        st.subheader("📈 Detaljvy")
         if not filt_df.empty and "ticker" in filt_df.columns:
-            ai_ticker = st.selectbox("Välj aktie", sorted(filt_df["ticker"].tolist()),
-                                     key="ws_ai_ticker")
-            if st.button("🤖 Analysera med AI", key="btn_ws_ai", use_container_width=True):
-                if config.DEEPSEEK_API_KEY:
-                    with st.spinner(f"Analyserar {ai_ticker}..."):
-                        try:
-                            result = ai_analysis.analyze_stock(ai_ticker, df=df)
-                            with st.container(border=True):
-                                st.markdown(result)
-                        except Exception as e:
-                            st.error(f"❌ {e}")
-                else:
-                    st.info("💡 DeepSeek API-nyckel krävs")
+            ws_ticker = st.selectbox("Välj aktie", sorted(filt_df["ticker"].tolist()),
+                                     key="ws_detail_ticker")
+            ws_row = df[df["ticker"] == ws_ticker]
+            if not ws_row.empty:
+                with st.expander("🔍 Visa detaljvy", expanded=False):
+                    render_stock_detail(
+                        ws_ticker, row=ws_row.iloc[0], df=df,
+                        show_ai=True, show_news=False, show_chart=True, show_detail_data=True,
+                    )
 
     with tab2:
         if filt_df.empty:
@@ -964,23 +980,19 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
             with c2:
                 st.plotly_chart(score_distribution_chart(filt, score_col), use_container_width=True)
 
-            # ── AI-knapp: Analysera smallcap-ticker ─────────────────────────
+            # ── Stock Detail Panel ──────────────────────────────────────────
             st.markdown("---")
-            st.subheader("🤖 AI-analys av smallcap")
+            st.subheader("📈 Detaljvy")
             if not filt.empty and "ticker" in filt.columns:
-                sc_ai_ticker = st.selectbox("Välj smallcap-aktie", sorted(filt["ticker"].tolist()),
-                                            key="sc_ai_ticker")
-                if st.button("🤖 Analysera med AI", key="btn_sc_ai", use_container_width=True):
-                    if config.DEEPSEEK_API_KEY:
-                        with st.spinner(f"Analyserar {sc_ai_ticker}..."):
-                            try:
-                                result = ai_analysis.analyze_stock(sc_ai_ticker, df=sc_df)
-                                with st.container(border=True):
-                                    st.markdown(result)
-                            except Exception as e:
-                                st.error(f"❌ {e}")
-                    else:
-                        st.info("💡 DeepSeek API-nyckel krävs")
+                sc_detail_ticker = st.selectbox("Välj smallcap-aktie", sorted(filt["ticker"].tolist()),
+                                                key="sc_detail_ticker")
+                sc_row = sc_df[sc_df["ticker"] == sc_detail_ticker]
+                if not sc_row.empty:
+                    with st.expander("🔍 Visa detaljvy", expanded=False):
+                        render_stock_detail(
+                            sc_detail_ticker, row=sc_row.iloc[0], df=sc_df,
+                            show_ai=True, show_news=False, show_chart=True, show_detail_data=True,
+                        )
 
     with tab2:
         if not filt.empty:
@@ -1156,18 +1168,17 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list):
         st.caption("Få AI-analys av din portfölj med förslag")
         if st.button("🤖 Analysera portfölj med AI", key="btn_portfolio_ai",
                      use_container_width=True, type="primary"):
-            if config.DEEPSEEK_API_KEY:
-                with st.spinner("Analyserar portfölj..."):
-                    try:
-                        result = ai_analysis.analyze_portfolio(
-                            holdings, df=df if not df.empty else None
-                        )
-                        with st.container(border=True):
-                            st.markdown(result)
-                    except Exception as e:
-                        st.error(f"❌ {e}")
-            else:
-                st.info("💡 DeepSeek API-nyckel krävs")
+            provider = _get_provider()
+            with st.spinner("Analyserar portfölj..."):
+                try:
+                    result = ai_analysis.analyze_portfolio(
+                        holdings, df=df if not df.empty else None,
+                        provider=provider,
+                    )
+                    with st.container(border=True):
+                        st.markdown(result)
+                except Exception as e:
+                    st.error(f"❌ {e}")
 
     # Bevakningslista
     st.markdown("---")
@@ -1357,27 +1368,26 @@ def page_technical(df: pd.DataFrame, filters: dict):
     st.markdown("---")
     st.subheader("🤖 AI-tolkning")
     if st.button("🤖 Tolka teknisk data med AI", key="btn_tech_ai", use_container_width=True):
-        if config.DEEPSEEK_API_KEY:
-            with st.spinner("Analyserar teknisk data..."):
-                try:
-                    # Skapa en prompt baserad på teknisk data
-                    tech_context = {
-                        "n_upptrend": n_upptrend,
-                        "n_over_ma200": n_over_ma,
-                        "avg_rsi": round(avg_rsi, 1),
-                        "n_overbought": n_overbought,
-                        "n_stocks": len(out),
-                    }
-                    result = ai_analysis.ai_chat(
-                        "Ge mig en teknisk analys av marknaden baserat på denna data",
-                        context=json.dumps(tech_context, ensure_ascii=False)
-                    )
-                    with st.container(border=True):
-                        st.markdown(result)
-                except Exception as e:
-                    st.error(f"❌ {e}")
-        else:
-            st.info("💡 DeepSeek API-nyckel krävs")
+        provider = _get_provider()
+        with st.spinner("Analyserar teknisk data..."):
+            try:
+                # Skapa en prompt baserad på teknisk data
+                tech_context = {
+                    "n_upptrend": n_upptrend,
+                    "n_over_ma200": n_over_ma,
+                    "avg_rsi": round(avg_rsi, 1),
+                    "n_overbought": n_overbought,
+                    "n_stocks": len(out),
+                }
+                result = ai_analysis.ai_chat(
+                    "Ge mig en teknisk analys av marknaden baserat på denna data",
+                    context=json.dumps(tech_context, ensure_ascii=False),
+                    provider=provider,
+                )
+                with st.container(border=True):
+                    st.markdown(result)
+            except Exception as e:
+                st.error(f"❌ {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1397,13 +1407,14 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
     """AI Dashboard – alla AI-funktioner samlade."""
     st.title("🤖 AI – MarketScan Intelligence")
 
-    api_key = config.DEEPSEEK_API_KEY
+    provider = _get_provider()
+    api_key = config.DEEPSEEK_API_KEY or config.GEMINI_API_KEY
     if not api_key:
-        st.warning("⚠️ DeepSeek API-nyckel saknas. Ställ in DEEPSEEK_API_KEY i .env för att använda AI-funktionerna.")
+        st.warning("⚠️ Ingen AI API-nyckel konfigurerad. Ställ in DEEPSEEK_API_KEY eller GEMINI_API_KEY i .env.")
         return
 
     # API-status
-    status = ai_analysis.test_api_key()
+    status = ai_analysis.test_api_key(provider=provider)
     if status.get("status") == "ok":
         st.caption(f"✅ {status['message']}")
     else:
@@ -1431,6 +1442,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                         df=df if not df.empty else None,
                         sc_df=sc_df if not sc_df.empty else None,
                         force_refresh=refresh_market,
+                        provider=provider,
                     )
                     st.markdown(_ai_section_header(), unsafe_allow_html=True)
                     st.markdown(result)
@@ -1473,7 +1485,8 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 with st.spinner(f"Analyserar {sel_ticker}..."):
                     try:
                         result = ai_analysis.analyze_stock(
-                            sel_ticker, df=df, force_refresh=force_refresh
+                            sel_ticker, df=df, force_refresh=force_refresh,
+                            provider=provider,
                         )
                         st.markdown(_ai_section_header(), unsafe_allow_html=True)
                         st.markdown(result)
@@ -1522,7 +1535,8 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 with st.spinner(f"Jämför {ticker_a} vs {ticker_b}..."):
                     try:
                         result = ai_analysis.compare_stocks(
-                            ticker_a, ticker_b, df=df, force_refresh=force_refresh
+                            ticker_a, ticker_b, df=df, force_refresh=force_refresh,
+                            provider=provider,
                         )
                         st.markdown(_ai_section_header(), unsafe_allow_html=True)
                         st.markdown(result)
@@ -1572,7 +1586,8 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 with st.spinner(f"Analyserar sektorn {sel_sector}..."):
                     try:
                         result = ai_analysis.analyze_sector(
-                            sel_sector, df=df, force_refresh=force_refresh
+                            sel_sector, df=df, force_refresh=force_refresh,
+                            provider=provider,
                         )
                         st.markdown(_ai_section_header(), unsafe_allow_html=True)
                         st.markdown(result)
@@ -1649,6 +1664,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                                 user_question,
                                 context=context_str if context_str else "",
                                 force_refresh=chat_refresh,
+                                provider=provider,
                             )
                             st.markdown(result)
                         except Exception as e:
@@ -1667,7 +1683,8 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 with st.spinner("Analyserar portfölj..."):
                     try:
                         result = ai_analysis.analyze_portfolio(
-                            holdings, df=df if not df.empty else None
+                            holdings, df=df if not df.empty else None,
+                            provider=provider,
                         )
                         st.markdown(_ai_section_header(), unsafe_allow_html=True)
                         st.markdown(result)
@@ -1731,7 +1748,8 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                             pass
 
                         result = ai_analysis.analyze_news(
-                            news_ticker, news_items=news_items, force_refresh=force_refresh
+                            news_ticker, news_items=news_items, force_refresh=force_refresh,
+                            provider=provider,
                         )
                         st.markdown(_ai_section_header(), unsafe_allow_html=True)
                         st.markdown(result)
