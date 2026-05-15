@@ -746,8 +746,8 @@ Skriv på svenska, använd emojis. Fokusera på dagens viktigaste insikter.""",
 
 def test_api_key() -> dict:
     """
-    Testa om DeepSeek API-nyckeln fungerar.
-    Returnerar dict med status och meddelande.
+    Testa om DeepSeek API-nyckeln fungerar genom att göra ett minimalt
+    chatt-anrop. Returnerar dict med status och meddelande.
     """
     api_key = config.DEEPSEEK_API_KEY or os.getenv("DEEPSEEK_API_KEY", "")
     if not api_key:
@@ -755,22 +755,38 @@ def test_api_key() -> dict:
 
     try:
         import requests
+        # Gör ett minimalt chatt-anrop för att verifiera nyckeln
+        # (endpointen /v1/chat/completions är den korrekta för DeepSeek)
         resp = requests.post(
-            "https://api.deepseek.com/v1/models",
+            "https://api.deepseek.com/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
+            json={
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 1,
+            },
             timeout=15,
         )
         if resp.status_code == 200:
-            return {"status": "ok", "message": f"API-nyckel fungerar! Modell: {config.AI_MODEL}"}
+            return {"status": "ok", "message": f"✅ API-nyckel fungerar! Modell: {config.AI_MODEL}"}
         elif resp.status_code == 401:
-            return {"status": "error", "message": "API-nyckel är ogiltig (401)"}
+            return {"status": "error", "message": "❌ API-nyckel är ogiltig (401)"}
+        elif resp.status_code == 402:
+            return {"status": "error", "message": "❌ API-nyckel är giltig men saldot är slut (402 Payment Required)"}
+        elif resp.status_code == 429:
+            return {"status": "warning", "message": "⚠️ API rate-limited (429), försök igen om en stund"}
         else:
-            return {"status": "warning", "message": f"API svarade med status {resp.status_code}"}
+            body = ""
+            try:
+                body = resp.text[:200]
+            except Exception:
+                pass
+            return {"status": "warning", "message": f"⚠️ API svarade med status {resp.status_code}: {body}"}
     except Exception as e:
-        return {"status": "error", "message": f"Kunde inte nå DeepSeek API: {e}"}
+        return {"status": "error", "message": f"❌ Kunde inte nå DeepSeek API: {e}"}
 
 
 def clear_cache():
