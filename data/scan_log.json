@@ -1,0 +1,78 @@
+[
+  {
+    "timestamp": "2026-05-14T10:57:05",
+    "scan_type": "morning",
+    "status": "OK",
+    "details": {
+      "scan_type": "morning",
+      "n_holdings": 0,
+      "n_prices": 0,
+      "n_crash": 0,
+      "n_surge": 0,
+      "n_opportunities": 0,
+      "report_path": "reports/morning_2026-05-14.md",
+      "elapsed_seconds": 0.0
+    }
+  },
+  {
+    "timestamp": "2026-05-14T11:58:15",
+    "scan_type": "morning",
+    "status": "OK",
+    "details": {
+      "scan_type": "morning",
+      "n_holdings": 0,
+      "n_prices": 0,
+      "n_crash": 0,
+      "n_surge": 0,
+      "n_opportunities": 0,
+      "report_path": "reports/morning_2026-05-14.md",
+      "elapsed_seconds": 1.7
+    }
+  },
+  {
+    "timestamp": "2026-05-15T11:02:22",
+    "scan_type": "morning",
+    "status": "OK",
+    "details": {
+      "scan_type": "morning",
+      "n_holdings": 1,
+      "n_prices": 1,
+      "n_stoploss": 1,
+      "n_crash": 0,
+      "n_surge": 0,
+      "n_opportunities": 0,
+      "report_path": "reports/morning_2026-05-15.md",
+      "elapsed_seconds": 9.9
+    }
+  },
+  {
+    "timestamp": "2026-05-15T11:59:53",
+    "scan_type": "morning",
+    "status": "OK",
+    "details": {
+      "scan_type": "morning",
+      "n_holdings": 1,
+      "n_prices": 1,
+      "n_stoploss": 1,
+      "n_crash": 0,
+      "n_surge": 0,
+      "n_opportunities": 0,
+      "report_path": "reports/morning_2026-05-15.md",
+      "elapsed_seconds": 3.8
+    }
+  },
+  {
+    "timestamp": "2026-05-15T18:01:19",
+    "scan_type": "evening",
+    "status": "OK",
+    "details": {
+      "scan_type": "evening",
+      "n_holdings": 1,
+      "n_prices": 1,
+      "n_sell_signals": 0,
+      "n_stoploss": 0,
+      "report_path": "reports/evening_2026-05-15.md",
+      "elapsed_seconds": 26.1
+    }
+  }
+]
