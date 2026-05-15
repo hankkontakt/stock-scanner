@@ -42,3 +42,11 @@ Thumbs.db
 # Claude Code worktrees (ska aldrig spåras av git)
 .claude/worktrees/
 .aider*
+
+# Test artifacts
+.pytest_cache/
+tests/__pycache__/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml

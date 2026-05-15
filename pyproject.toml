@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "stock-scanner"
+version = "1.0.0"
+description = "Multifaktor-aktiescanner med sentimentanalys och automatiserad rapportering"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Hank Kontakt"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+
+dependencies = [
+    "yfinance",
+    "curl-cffi>=0.6.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "requests>=2.31.0",
+    "tabulate>=0.9.0",
+    "python-dateutil>=2.8.2",
+    "flask>=3.0.0",
+    "python-dotenv>=1.0.0",
+    "PyNaCl>=1.5.0",
+    "streamlit>=1.32.0",
+    "plotly>=5.18.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.11.0",
+    "mypy>=1.15.0",
+    "pre-commit>=4.0",
+    "types-requests",
+    "types-python-dateutil",
+]
+
+[tool.ruff]
+# Ruff-konfiguration – snabb Python-linter
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "F",    # Pyflakes (fel)
+    "E",    # Pycodestyle (fel)
+    "W",    # Pycodestyle (varningar)
+    "I",    # Import-ordning
+    "N",    # Namngivning
+    "UP",   # Pyupgrade (modernare syntax)
+    "PL",   # Pylint
+    "RUF",  # Ruff-specifikt
+]
+ignore = [
+    "E501",  # line-too-long (hanteras av ruff-format)
+    "PLR0913", # too-many-arguments
+    "PLR0915", # too-many-statements
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+# Mypy-konfiguration – statisk typkontroll
+python_version = "3.11"
+ignore_missing_imports = true
+no_strict_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
