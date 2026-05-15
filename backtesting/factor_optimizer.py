@@ -31,8 +31,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-import config
-from backtest import fetch_all_prices, score_at_date
+from core import config
+from backtesting.backtest import fetch_all_prices, score_at_date
 
 RESULTS_DIR = Path("data/optimizer")
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)

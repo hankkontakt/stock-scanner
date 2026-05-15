@@ -31,14 +31,14 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 
-import config
-import alerts
-import logger
-import portfolio
-import paper_trading
-import earnings_calendar as ec
-import watchlist as wl
-import news_fetcher
+from core import config
+from core import alerts
+from core import logger
+from portfolio import portfolio
+from portfolio import paper_trading
+from core import earnings_calendar as ec
+from portfolio import watchlist as wl
+from core import news_fetcher
 
 OMXS30_PROXY = "XACTOMXS3.ST"
 SPY_TICKER   = "SPY"

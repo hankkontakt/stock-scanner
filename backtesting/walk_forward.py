@@ -26,9 +26,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yfinance as yf
-import currency
-import config
-from backtest import score_at_date, fetch_all_prices
+from core import currency
+from core import config
+from backtesting.backtest import score_at_date, fetch_all_prices
 
 REBALANCE_FREQ      = "ME"
 HOLDING_PERIOD_DAYS = 21

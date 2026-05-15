@@ -40,7 +40,7 @@ except ImportError:
 # Importera data_fetcher för att aktivera curl_cffi/timeout-patchar och
 # använda samma hämtningspipeline (caching, retry) som huvudskannern.
 try:
-    import data_fetcher as _df
+    from core import data_fetcher as _df
     _DF_AVAILABLE = True
 except ImportError:
     _df = None
@@ -54,7 +54,7 @@ from smallcap.report    import build_report, save_report, _sector_for
 from smallcap.history   import save_scores, load_prev_scores
 
 try:
-    import news_fetcher as _nf
+    from core import news_fetcher as _nf
     _NF_AVAILABLE = True
 except ImportError:
     _NF_AVAILABLE = False
@@ -216,7 +216,7 @@ def fetch_universe_data(tickers: list, delay: float = 0.4) -> pd.DataFrame:
 
     # Piotroski-beräkning: försök med piotroski.py, fallback till proxy
     try:
-        import piotroski as _piotroski
+        from core import piotroski as _piotroski
         scores = []
         for _, r in df.iterrows():
             try:

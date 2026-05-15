@@ -21,8 +21,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 import yfinance as yf
 
-import config
-import alerts
+from core import config
+from core import alerts
 
 
 

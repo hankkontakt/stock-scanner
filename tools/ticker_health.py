@@ -21,8 +21,8 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-import config
-import data_fetcher
+from core import config
+from core import data_fetcher
 
 
 def check_ticker_health(ticker: str, timeout: int = 15) -> dict:

@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
-import config
+from core import config
 
 
 def load_holdings(path: str = None) -> pd.DataFrame:

@@ -523,7 +523,7 @@ def _section_nasdaq_nordic(nasdaq_news: list) -> str:
         _root = Path(__file__).parent.parent
         if str(_root) not in sys.path:
             sys.path.insert(0, str(_root))
-        import news_fetcher as _nf
+        from core import news_fetcher as _nf
         return _nf.format_nasdaq_nordic_section_md(nasdaq_news, max_items=8)
     except Exception:
         return ""
