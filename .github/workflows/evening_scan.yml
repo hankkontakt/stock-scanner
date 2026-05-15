@@ -67,7 +67,9 @@ jobs:
           EMAIL_PASSWORD:  ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_TO:        ${{ secrets.EMAIL_TO }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
-        run: python evening_scan.py
+        run: |
+          cd scans
+          python evening_scan.py
 
       - name: 📤 Spara kvällsrapport
         uses: actions/upload-artifact@v4

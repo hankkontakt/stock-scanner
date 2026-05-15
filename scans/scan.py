@@ -18,13 +18,13 @@ from datetime import datetime
 from pathlib import Path
 import pandas as pd
 
-import config
-import data_fetcher
-import scoring
-import filters
-import sectors
-import watchlist as wl
-import news_fetcher
+from core import config
+from core import data_fetcher
+from core import scoring
+from core import filters
+from core import sectors
+from portfolio import watchlist as wl
+from core import news_fetcher
 
 # ── Auto-rensa felaktigt svartlistade kända aktier vid start ─────────────────
 def _auto_clean_blacklist():
@@ -46,13 +46,14 @@ def _auto_clean_blacklist():
         pass
 
 _auto_clean_blacklist()
-import portfolio, portfolio_analysis, extra_data
-import delta_tracker, macro_regime, earnings_calendar
-import sentiment as sentiment_module
-import piotroski
-import sector_momentum
-import paper_trading
-import alerts as alerts_module
+from portfolio import portfolio, portfolio_analysis
+from data_management import delta_tracker
+from core import macro_regime, earnings_calendar, extra_data
+from core import sentiment as sentiment_module
+from core import piotroski
+from core import sector_momentum
+from portfolio import paper_trading
+from core import alerts as alerts_module
 
 
 def fmt_pct(x, d=1):

@@ -10,25 +10,25 @@ Kör från projektets rotmapp: `D:\Trader\stock-scanner\`
 ### Morgonkoll (dagsbrev)
 ```bash
 # Standard – skickar alltid e-post
-python morning_scan.py
+python scans/morning_scan.py
 
 # Utan e-post (bara utskrift i terminalen)
-python morning_scan.py --no-email
+python scans/morning_scan.py --no-email
 
 # Tyst (minimalt output)
-python morning_scan.py --quiet
+python scans/morning_scan.py --quiet
 ```
 
 ### Kvällsrapport (portföljstatus + hold/sälj)
 ```bash
 # Standard
-python evening_scan.py
+python scans/evening_scan.py
 
 # Utan e-post
-python evening_scan.py --no-email
+python scans/evening_scan.py --no-email
 
 # Tyst
-python evening_scan.py --quiet
+python scans/evening_scan.py --quiet
 ```
 
 ---
@@ -37,16 +37,24 @@ python evening_scan.py --quiet
 
 ```bash
 # Full scan – hela universumet
-python scan.py
+python scans/scan.py
 
 # Bara specifika tickers
-python scan.py --tickers "AAPL,MSFT,NVDA"
+python scans/scan.py --tickers "AAPL,MSFT,NVDA"
 
 # Snabb körning (hoppar över extra data)
-python scan.py --quick
+python scans/scan.py --quick
 
 # Tyst
-python scan.py --quiet
+python scans/scan.py --quiet
+```
+
+---
+
+## Möjlighetsscan
+
+```bash
+python scans/opportunity_scan.py
 ```
 
 ---
@@ -92,10 +100,19 @@ python -m smallcap.scanner --market first_north --top 15 --output reports/ --ema
 
 ```bash
 # Starta webbservern (öppnar på http://localhost:5001)
-python app.py
+python web/app.py
 ```
 
 Funktioner: innehav, bevakningslista, Avanza CSV-import, GitHub-synk.
+
+---
+
+## Streamlit Dashboard
+
+```bash
+# Starta Streamlit-dashboarden
+streamlit run web/streamlit_app.py
+```
 
 ---
 
@@ -103,20 +120,20 @@ Funktioner: innehav, bevakningslista, Avanza CSV-import, GitHub-synk.
 
 ```bash
 # Importera från Avanza CSV-export
-python avanza_import.py import avanza_export.csv
+python data_management/avanza_import.py import avanza_export.csv
 
 # Förhandsgranska utan att spara
-python avanza_import.py import avanza_export.csv --dry-run
+python data_management/avanza_import.py import avanza_export.csv --dry-run
 
 # Importera utan interaktiva frågor
-python avanza_import.py import avanza_export.csv --no-interactive
+python data_management/avanza_import.py import avanza_export.csv --no-interactive
 
 # Lägg till en manuell ticker-mappning (bolagsnamn → ticker)
-python avanza_import.py map "Kinnevik B" KINV-B.ST
-python avanza_import.py map "Evolution" EVO.ST
+python data_management/avanza_import.py map "Kinnevik B" KINV-B.ST
+python data_management/avanza_import.py map "Evolution" EVO.ST
 
 # Visa alla sparade mappningar
-python avanza_import.py list
+python data_management/avanza_import.py list
 ```
 
 ---
@@ -125,18 +142,18 @@ python avanza_import.py list
 
 ```bash
 # Registrera ett köp
-python positions.py add-buy AAPL 10 185.50
-python positions.py add-buy AAPL 10 185.50 --fee 39 --date 2024-01-15
+python portfolio/positions.py add-buy AAPL 10 185.50
+python portfolio/positions.py add-buy AAPL 10 185.50 --fee 39 --date 2024-01-15
 
 # Registrera en försäljning
-python positions.py add-sell AAPL 5 210.00
-python positions.py add-sell AAPL 5 210.00 --fee 39 --date 2024-06-01
+python portfolio/positions.py add-sell AAPL 5 210.00
+python portfolio/positions.py add-sell AAPL 5 210.00 --fee 39 --date 2024-06-01
 
 # Visa performance-rapport
-python positions.py report
+python portfolio/positions.py report
 
 # Synka holdings.csv från transaktionsloggen
-python positions.py sync
+python portfolio/positions.py sync
 ```
 
 ---
@@ -145,16 +162,16 @@ python positions.py sync
 
 ```bash
 # Visa aktuell status och track record
-python paper_trading.py status
+python portfolio/paper_trading.py status
 
 # Uppdatera priser för öppna positioner
-python paper_trading.py update
+python portfolio/paper_trading.py update
 
 # Stäng positioner äldre än 6 veckor
-python paper_trading.py update --close-after 6
+python portfolio/paper_trading.py update --close-after 6
 
 # Generera detaljerad rapport
-python paper_trading.py report
+python portfolio/paper_trading.py report
 ```
 
 ---
@@ -164,34 +181,46 @@ python paper_trading.py report
 ### Enkel backtest
 ```bash
 # Standard (3 år, top-20, jämfört mot SPY)
-python backtest.py
+python backtesting/backtest.py
 
 # Anpassa
-python backtest.py --years 5
-python backtest.py --years 5 --top 15 --bench QQQ
+python backtesting/backtest.py --years 5
+python backtesting/backtest.py --years 5 --top 15 --bench QQQ
 ```
 
 ### Walk-forward backtest (mer tillförlitlig)
 ```bash
 # Standard (4 år totalt, 2 träning + 1 test)
-python walk_forward.py
+python backtesting/walk_forward.py
 
 # Anpassa
-python walk_forward.py --years 5 --train 2 --test 6
-python walk_forward.py --years 6 --top 15 --bench ^OMX
+python backtesting/walk_forward.py --years 5 --train 2 --test 6
+python backtesting/walk_forward.py --years 6 --top 15 --bench ^OMX
 ```
 
 ### Faktoroptimering (hitta bästa vikter)
 ```bash
 # Kör optimering – visa resultat utan att ändra
-python factor_optimizer.py
-python factor_optimizer.py --trials 500 --tickers 80
+python backtesting/factor_optimizer.py
+python backtesting/factor_optimizer.py --trials 500 --tickers 80
 
 # Applicera bästa vikter till config.py
-python factor_optimizer.py --apply
+python backtesting/factor_optimizer.py --apply
 
 # Förhandsgranska ändringar
-python factor_optimizer.py --apply --dry-run
+python backtesting/factor_optimizer.py --apply --dry-run
+```
+
+---
+
+## Verktyg
+
+```bash
+# Ticker-hälsokontroll
+python -m tools.ticker_health
+python -m tools.ticker_health --check AAPL MSFT INVALID.ST
+python -m tools.ticker_health --universe all --workers 4
+python -m tools.ticker_health --blacklist
 ```
 
 ---
@@ -200,11 +229,14 @@ python factor_optimizer.py --apply --dry-run
 
 | Vad | Kommando |
 |---|---|
-| Morgonkoll | `python morning_scan.py` |
-| Kvällsrapport | `python evening_scan.py` |
-| Söndagsskanning | `python scan.py` |
+| Morgonkoll | `python scans/morning_scan.py` |
+| Kvällsrapport | `python scans/evening_scan.py` |
+| Söndagsskanning | `python scans/scan.py` |
+| Möjlighetsscan | `python scans/opportunity_scan.py` |
 | Småbolag (snabb) | `python -m smallcap.scanner --no-insider` |
 | Småbolag (full) | `python -m smallcap.scanner --email` |
-| Portföljwebb | `python app.py` |
-| Avanza-import | `python avanza_import.py import fil.csv` |
-| Backtest | `python backtest.py --years 3` |
+| Portföljwebb | `python web/app.py` |
+| Streamlit | `streamlit run web/streamlit_app.py` |
+| Avanza-import | `python data_management/avanza_import.py import fil.csv` |
+| Ticker-hälsa | `python -m tools.ticker_health` |
+| Backtest | `python backtesting/backtest.py --years 3` |

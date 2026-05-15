@@ -24,7 +24,7 @@ class TestLogger:
 
     def test_log_event_ok(self):
         """log_event() måste spara OK-status."""
-        import logger
+        from core import logger
         logger.log_event("full", "OK", details={"n_tickers": 100})
         entries = logger._load_log()
         assert len(entries) == 1
@@ -33,7 +33,7 @@ class TestLogger:
 
     def test_log_event_with_error(self):
         """log_event() måste spara ERROR med felmeddelande."""
-        import logger
+        from core import logger
         logger.log_event("daily", "ERROR", details={}, error="Test error")
         entries = logger._load_log()
         assert len(entries) == 1
@@ -42,7 +42,7 @@ class TestLogger:
 
     def test_scan_logger_ok(self):
         """scan_logger context manager måste logga OK vid lyckad körning."""
-        import logger
+        from core import logger
         with logger.scan_logger("full", verbose=False) as meta:
             meta["n_tickers"] = 50
             meta["n_scored"] = 45
@@ -52,7 +52,7 @@ class TestLogger:
 
     def test_scan_logger_error(self):
         """scan_logger context manager måste logga ERROR vid exception."""
-        import logger
+        from core import logger
         try:
             with logger.scan_logger("full", verbose=False):
                 raise ValueError("Krasch!")
@@ -64,7 +64,7 @@ class TestLogger:
 
     def test_consecutive_failures(self):
         """get_consecutive_failures() måste räkna rätt."""
-        import logger
+        from core import logger
         # Logga 2 errors
         logger.log_event("full", "ERROR", error="err1")
         logger.log_event("full", "ERROR", error="err2")
@@ -75,7 +75,7 @@ class TestLogger:
 
     def test_clear_stale_cache(self, tmp_path):
         """clear_stale_cache() måste rensa gamla filer."""
-        import logger
+        from core import logger
         old_cache = logger.CACHE_DIR
         logger.CACHE_DIR = tmp_path / "cache"
         logger.CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -98,7 +98,7 @@ class TestLogger:
 
     def test_build_log_section(self):
         """build_log_section() måste returnera markdown."""
-        import logger
+        from core import logger
         logger.log_event("full", "OK", details={"n_scored": 100, "elapsed_seconds": 30.0})
         section = logger.build_log_section()
         assert isinstance(section, str)
@@ -106,7 +106,7 @@ class TestLogger:
 
     def test_auto_remediate_rate_limit(self):
         """auto_remediate måste identifiera 429 rate-limit."""
-        import logger
+        from core import logger
         # Simulera rate-limit error
         err = Exception("HTTP 429 Too Many Requests")
         remedy = logger.auto_remediate(err, "429 error occurred")

@@ -1,9 +1,10 @@
 """Quick test with mocked data to verify scoring + report generation works."""
 import pandas as pd
 import numpy as np
-import scoring
-import portfolio
-from scan import generate_report
+from core import scoring
+from portfolio import portfolio
+from scans.scan import build_report
+
 
 # Mock data simulating yfinance output
 np.random.seed(42)
@@ -94,13 +95,9 @@ for _, row in analysis.iterrows():
 
 # Test report generation
 print("\n5. Generating markdown report...")
-report = generate_report(scored, analysis, summary)
+report = build_report(scored, analysis, summary, sector_df=pd.DataFrame(), regime_info=None,
+                       earnings_df=pd.DataFrame(), holdings=pd.DataFrame(), benchmarks=None)
 print(f"   ✓ Report length: {len(report)} chars")
-
-# Save sample report for inspection
-with open("/tmp/sample_report.md", "w") as f:
-    f.write(report)
-print(f"   ✓ Saved to /tmp/sample_report.md")
 
 print("\n" + "=" * 60)
 print("✅ ALL TESTS PASSED - Pipeline works correctly!")

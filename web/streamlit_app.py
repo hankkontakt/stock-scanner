@@ -21,9 +21,9 @@ import plotly.graph_objects as go
 import requests
 import streamlit as st
 import yfinance as yf
-import avanza_import
-import config
-import watchlist as wl
+from data_management import avanza_import
+from core import config
+from portfolio import watchlist as wl
 
 # ── Sökvägar ──────────────────────────────────────────────────────────────────
 ROOT       = Path(__file__).parent

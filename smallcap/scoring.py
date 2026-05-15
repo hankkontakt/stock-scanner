@@ -29,7 +29,7 @@ from pathlib import Path
 # Tillåt import av piotroski.py från föräldramappen
 sys.path.insert(0, str(Path(__file__).parent.parent))
 try:
-    import piotroski as _piotroski
+    from core import piotroski as _piotroski
     _PIOTROSKI_AVAILABLE = True
 except ImportError:
     _PIOTROSKI_AVAILABLE = False
@@ -37,7 +37,7 @@ except ImportError:
 def _load_weights() -> dict:
     """Läser vikter från config.py SMALLCAP_CONFIG om tillgängligt."""
     try:
-        import config
+        from core import config
         w = config.SMALLCAP_CONFIG.get("scoring_weights", {})
         if w and abs(sum(w.values()) - 1.0) < 0.01:
             # Mappa "value" → "valuation" om config använder kortformen

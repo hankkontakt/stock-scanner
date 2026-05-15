@@ -9,7 +9,7 @@ import json
 from datetime import date
 from pathlib import Path
 
-import config
+from core import config
 
 WATCHLIST_FILE = getattr(config, "WATCHLIST_FILE", "data/watchlist.json")
 

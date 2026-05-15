@@ -21,7 +21,7 @@ import numpy as np
 def _cfg(key: str, default):
     """Läser värde från config.py SMALLCAP_CONFIG om tillgängligt."""
     try:
-        import config
+        from core import config
         return config.SMALLCAP_CONFIG.get(key, default)
     except (ImportError, AttributeError, KeyError):
         return default

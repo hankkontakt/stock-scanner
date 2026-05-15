@@ -76,6 +76,7 @@ jobs:
           EMAIL_TO:        ${{ secrets.EMAIL_TO }}
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
         run: |
+          cd scans
           if [ "${{ github.event.inputs.force_email }}" = "true" ]; then
             python morning_scan.py --force-email
           else

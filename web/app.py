@@ -27,8 +27,8 @@ from nacl import encoding, public
 import yfinance as yf
 from flask import Flask, jsonify, render_template, request
 
-import config
-import watchlist as wl
+from core import config
+from portfolio import watchlist as wl
 
 app = Flask(__name__)
 HOLDINGS_FILE = config.HOLDINGS_FILE

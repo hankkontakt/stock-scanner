@@ -35,13 +35,13 @@ from pathlib import Path
 import pandas as pd
 import yfinance as yf
 
-import config
-import alerts
-import logger
-import portfolio
-import earnings_calendar as ec
-import watchlist as wl
-import news_fetcher
+from core import config
+from core import alerts
+from core import logger
+from portfolio import portfolio
+from core import earnings_calendar as ec
+from portfolio import watchlist as wl
+from core import news_fetcher
 
 # ── Trösklar ──────────────────────────────────────────────────────────────
 CRASH_WARN_PCT    = -3.0   # % – varning (gult)
