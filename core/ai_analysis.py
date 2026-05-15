@@ -1,22 +1,17 @@
 """
-ai_analysis.py – MarketScan AI Engine
-======================================
-All-in-one AI-modul för DeepSeek-integrering i MarketScan.
+ai_analysis.py – MarketScan AI Engine (Multi-Provider)
+======================================================
+Stöder både DeepSeek (komplex, kostar) och Google Gemini (enkel, gratis).
 
 Användning:
     from core.ai_analysis import analyze_stock, analyze_portfolio, ai_chat, ...
-    
-    # One-click aktieanalys
-    result = analyze_stock("AAPL", df)       
-    
-    # Portföljoptimering
-    result = analyze_portfolio(holdings, df)  
-    
-    # Fritextchatt med AI
-    result = ai_chat("Vad tycker du om marknaden?")  
-    
-    # Veckorapport-generering
-    result = generate_weekly_ai_analysis(scored, regime_info, sector_mom, news)
+
+    # Auto-välj provider baserat på AI_PROVIDER i config
+    result = analyze_stock("AAPL", df)
+
+    # Tvinga en specifik provider
+    result = analyze_stock("AAPL", df, provider="gemini")
+    result = analyze_stock("AAPL", df, provider="deepseek")
 """
 
 import json
@@ -44,6 +39,12 @@ except OSError:
     AI_CACHE_DIR = Path(tempfile.gettempdir()) / "marketscan_ai_cache"
     AI_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 AI_CACHE_HOURS = 24  # Cachelagra AI-svar i 24h för samma fråga
+
+# Provider-namn för UI
+PROVIDER_LABELS = {
+    "deepseek": "DeepSeek (komplex, kostar)",
+    "gemini":   "Gemini (enkel, gratis)",
+}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SYSTEM PROMPTS – Anpassade för varje AI-funktion
@@ -144,6 +145,24 @@ Skriv på svenska. Max 250 ord per aktie."""
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# HJÄLPFUNKTIONER – Bestäm provider
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _resolve_provider(provider: str = "auto") -> str:
+    """Avgör vilken AI-provider som ska användas.
+    
+    Args:
+        provider: "auto" (läs från config), "deepseek", eller "gemini"
+    
+    Returns:
+        "deepseek" eller "gemini"
+    """
+    if provider == "auto":
+        return getattr(config, "AI_PROVIDER", "deepseek") or "deepseek"
+    return provider
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # KÄRN-FUNKTIONER
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -153,13 +172,13 @@ def _deepseek_call(messages: list, system_prompt: str = "",
     Anropa DeepSeek API med meddelanden.
     Returnerar svaret som sträng eller felmeddelande.
     """
-    api_key = config.DEEPSEEK_API_KEY or os.getenv("DEEPSEEK_API_KEY", "")
+    api_key = getattr(config, "DEEPSEEK_API_KEY", None) or os.getenv("DEEPSEEK_API_KEY", "")
     if not api_key:
-        return "❌ **DeepSeek API-nyckel saknas.**\n\nLägg till `DEEPSEEK_API_KEY` i din `.env`-fil eller i GitHub Secrets."
+        return "❌ **DeepSeek API-nyckel saknas.**\n\nLägg till `DEEPSEEK_API_KEY` i din `.env`-fil."
 
-    model = config.AI_MODEL
-    max_tokens = max_tokens or config.AI_MAX_TOKENS
-    temperature = temperature if temperature is not None else config.AI_TEMPERATURE
+    model = getattr(config, "AI_MODEL", "deepseek-chat")
+    max_tokens = max_tokens or getattr(config, "AI_MAX_TOKENS", 2048)
+    temperature = temperature if temperature is not None else getattr(config, "AI_TEMPERATURE", 0.3)
 
     payload = {
         "model": model,
@@ -187,7 +206,115 @@ def _deepseek_call(messages: list, system_prompt: str = "",
         data = resp.json()
         return data["choices"][0]["message"]["content"]
     except Exception as e:
-        return f"⚠️ **AI-anropet misslyckades:** {str(e)}"
+        return f"⚠️ **DeepSeek-anropet misslyckades:** {str(e)}"
+
+
+def _gemini_call(messages: list, system_prompt: str = "",
+                 max_tokens: int = None, temperature: float = None) -> str:
+    """
+    Anropa Google Gemini API med meddelanden via REST.
+    Returnerar svaret som sträng eller felmeddelande.
+    """
+    api_key = getattr(config, "GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        return "❌ **Gemini API-nyckel saknas.**\n\nLägg till `GEMINI_API_KEY` i din `.env`-fil."
+
+    model = getattr(config, "GEMINI_MODEL", "gemini-2.0-flash")
+    max_tokens = max_tokens or getattr(config, "AI_MAX_TOKENS", 2048)
+    temperature = temperature if temperature is not None else getattr(config, "AI_TEMPERATURE", 0.3)
+
+    # Gemini använder system-instruction separat och contents-format
+    contents = []
+    for msg in messages:
+        if msg.get("role") == "user":
+            contents.append({
+                "role": "user",
+                "parts": [{"text": msg.get("content", "")}]
+            })
+        elif msg.get("role") == "assistant":
+            contents.append({
+                "role": "model",
+                "parts": [{"text": msg.get("content", "")}]
+            })
+
+    payload = {
+        "contents": contents,
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "temperature": temperature,
+        }
+    }
+
+    if system_prompt:
+        payload["systemInstruction"] = {
+            "parts": [{"text": system_prompt}]
+        }
+
+    try:
+        import requests
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        resp = requests.post(
+            url,
+            params={"key": api_key},
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            timeout=60,
+        )
+
+        if resp.status_code == 403:
+            body = ""
+            try:
+                body = resp.text[:200]
+            except Exception:
+                pass
+            if "API_KEY_INVALID" in resp.text or "API key not valid" in resp.text:
+                return "❌ **Gemini API-nyckel är ogiltig (403).** Kontrollera din GEMINI_API_KEY."
+            return f"⚠️ **Gemini nekade åtkomst (403):** {body}"
+
+        if resp.status_code == 429:
+            return "⚠️ **Gemini rate-limited (429).** Försök igen om en stund."
+
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Extrahera text från Gemini-svar
+        candidates = data.get("candidates", [])
+        if not candidates:
+            return "⚠️ **Gemini returnerade inget svar.**"
+
+        parts = candidates[0].get("content", {}).get("parts", [])
+        if not parts:
+            return "⚠️ **Gemini returnerade tomt svar.**"
+
+        return parts[0].get("text", "")
+
+    except Exception as e:
+        return f"⚠️ **Gemini-anropet misslyckades:** {str(e)}"
+
+
+def _ai_call(messages: list, system_prompt: str = "",
+             max_tokens: int = None, temperature: float = None,
+             provider: str = "auto") -> str:
+    """
+    Anropa vald AI-provider med meddelanden.
+    Routar automatiskt till DeepSeek eller Gemini baserat på provider-parametern.
+
+    Args:
+        messages: Lista med dicts {"role": "user"/"assistant", "content": "..."}
+        system_prompt: System-prompt som sätter ton och instruktioner
+        max_tokens: Max tokens i svaret
+        temperature: Kreativitet (0.0 = deterministisk, 1.0 = slumpmässig)
+        provider: "auto", "deepseek" eller "gemini"
+
+    Returns:
+        AI-svar som formaterad text
+    """
+    resolved = _resolve_provider(provider)
+
+    if resolved == "gemini":
+        return _gemini_call(messages, system_prompt, max_tokens, temperature)
+    else:
+        return _deepseek_call(messages, system_prompt, max_tokens, temperature)
 
 
 def _make_cache_key(*args) -> str:
@@ -225,23 +352,26 @@ def _set_cache(cache_key: str, response: str):
 
 def _call_with_cache(system_prompt: str, messages: list, cache_key: str,
                      max_tokens: int = None, temperature: float = None,
-                     force_refresh: bool = False) -> str:
-    """Anropa DeepSeek med caching. Om force_refresh=True, hoppa över cache."""
+                     force_refresh: bool = False,
+                     provider: str = "auto") -> str:
+    """Anropa AI med caching. Om force_refresh=True, hoppa över cache."""
     if not force_refresh:
         cached = _get_cached(cache_key)
         if cached:
             return cached
 
-    response = _deepseek_call(messages, system_prompt, max_tokens, temperature)
+    response = _ai_call(messages, system_prompt, max_tokens, temperature, provider=provider)
     _set_cache(cache_key, response)
     return response
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 1. ONE-CLICK AKTIEANALYS (Feature 2b + 3)
+# 1. ONE-CLICK AKTIEANALYS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def analyze_stock(ticker: str, df: pd.DataFrame = None, force_refresh: bool = False) -> str:
+def analyze_stock(ticker: str, df: pd.DataFrame = None,
+                  force_refresh: bool = False,
+                  provider: str = "auto") -> str:
     """
     Analysera en enskild aktie.
     
@@ -249,6 +379,7 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None, force_refresh: bool = Fa
         ticker: Ticker-symbol (t.ex. "AAPL")
         df: DataFrame med scandata (scored_universe)
         force_refresh: Hoppa över cache
+        provider: "auto", "deepseek" eller "gemini"
     
     Returns:
         AI-analys som formaterad text
@@ -261,7 +392,6 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None, force_refresh: bool = Fa
         match = df[df["ticker"] == ticker]
         if not match.empty:
             row = match.iloc[0]
-            # Samla all relevant data för analys
             factor_fields = {
                 "score_total": "Total Score",
                 "score_value": "Value", "score_quality": "Quality",
@@ -296,21 +426,23 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None, force_refresh: bool = Fa
     data_str = json.dumps(stock_data, indent=2, ensure_ascii=False) if stock_data else "Ingen data tillgänglig för denna aktie."
     user_message = f"Analysera aktien **{ticker}**.\n\nTillgänglig data:\n```json\n{data_str}\n```"
 
-    cache_key = _make_cache_key("analyze_stock", ticker, data_str[:500] if stock_data else "no_data")
+    cache_key = _make_cache_key("analyze_stock", ticker, data_str[:500] if stock_data else "no_data", _resolve_provider(provider))
     return _call_with_cache(
         SYSTEM_PROMPT_STOCK_ANALYSIS,
         [{"role": "user", "content": user_message}],
         cache_key,
         force_refresh=force_refresh,
+        provider=provider,
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 2. PORTFÖLJOPTIMERING (Feature 4)
+# 2. PORTFÖLJOPTIMERING
 # ══════════════════════════════════════════════════════════════════════════════
 
 def analyze_portfolio(holdings: pd.DataFrame, df: pd.DataFrame = None,
-                      force_refresh: bool = False) -> str:
+                      force_refresh: bool = False,
+                      provider: str = "auto") -> str:
     """
     Analysera och optimera portföljen.
     
@@ -318,6 +450,7 @@ def analyze_portfolio(holdings: pd.DataFrame, df: pd.DataFrame = None,
         holdings: DataFrame med portföljinnehav (ticker, shares, cost_basis)
         df: DataFrame med scandata (för aktuella scores)
         force_refresh: Hoppa över cache
+        provider: "auto", "deepseek" eller "gemini"
     
     Returns:
         AI-analys med rekommendationer
@@ -376,21 +509,24 @@ def analyze_portfolio(holdings: pd.DataFrame, df: pd.DataFrame = None,
     }
 
     data_str = json.dumps(portfolio_summary, indent=2, ensure_ascii=False)
-    cache_key = _make_cache_key("analyze_portfolio", str(holdings.shape), str(df.shape) if df is not None else "none")
+    resolved = _resolve_provider(provider)
+    cache_key = _make_cache_key("analyze_portfolio", str(holdings.shape), str(df.shape) if df is not None else "none", resolved)
 
     return _call_with_cache(
         SYSTEM_PROMPT_PORTFOLIO,
         [{"role": "user", "content": f"Analysera min portfölj och föreslå förbättringar.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
         force_refresh=force_refresh,
+        provider=provider,
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 3. FREE-TEXT AI CHATT (Feature 2a)
+# 3. FREE-TEXT AI CHATT
 # ══════════════════════════════════════════════════════════════════════════════
 
-def ai_chat(question: str, context: str = "", force_refresh: bool = False) -> str:
+def ai_chat(question: str, context: str = "", force_refresh: bool = False,
+            provider: str = "auto") -> str:
     """
     Fritextfråga till AI:n.
     
@@ -398,6 +534,7 @@ def ai_chat(question: str, context: str = "", force_refresh: bool = False) -> st
         question: Användarens fråga
         context: Extra kontext (t.ex. aktuell scandata i JSON)
         force_refresh: Hoppa över cache
+        provider: "auto", "deepseek" eller "gemini"
     
     Returns:
         AI-svar
@@ -407,22 +544,23 @@ def ai_chat(question: str, context: str = "", force_refresh: bool = False) -> st
         user_message = f"{question}\n\nKontextdata:\n```json\n{context}\n```"
 
     # Ingen cache för chatt - varje fråga är unik
-    return _deepseek_call(
+    return _ai_call(
         [{"role": "user", "content": user_message}],
         SYSTEM_PROMPT_CHAT,
+        provider=provider,
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 4. VECKORAPPORT-AI (Feature 1)
+# 4. VECKORAPPORT-AI
 # ══════════════════════════════════════════════════════════════════════════════
 
 def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
                                  sector_momentum: dict = None, news: dict = None,
-                                 force_refresh: bool = False) -> str:
+                                 force_refresh: bool = False,
+                                 provider: str = "auto") -> str:
     """
     Skapa AI-analyssektion för veckorapporten.
-    Anropas från scan.py -> build_report().
     """
     if scored_df.empty:
         return ""
@@ -461,11 +599,12 @@ def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
         "vix": vix,
         "top_5": top5_data,
         "sectors": {str(k): v for k, v in sector_info.items()},
-        "factor_weights": config.FACTOR_WEIGHTS,
+        "factor_weights": getattr(config, "FACTOR_WEIGHTS", {}),
     }
 
     data_str = json.dumps(data_summary, indent=2, ensure_ascii=False)
-    cache_key = _make_cache_key("weekly_ai", datetime.now().strftime("%Y-%m-%d"))
+    resolved = _resolve_provider(provider)
+    cache_key = _make_cache_key("weekly_ai", datetime.now().strftime("%Y-%m-%d"), resolved)
 
     result = _call_with_cache(
         SYSTEM_PROMPT_WEEKLY_REPORT,
@@ -473,15 +612,18 @@ def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
         cache_key,
         max_tokens=2048,
         force_refresh=True,  # Alltid fräsch data för veckorapport
+        provider=provider,
     )
     return result
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 5. NYHETSANALYS (Feature 5)
+# 5. NYHETSANALYS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def analyze_news(ticker: str, news_items: list = None, force_refresh: bool = False) -> str:
+def analyze_news(ticker: str, news_items: list = None,
+                 force_refresh: bool = False,
+                 provider: str = "auto") -> str:
     """
     Analysera nyheter för en aktie.
     
@@ -489,6 +631,7 @@ def analyze_news(ticker: str, news_items: list = None, force_refresh: bool = Fal
         ticker: Ticker-symbol
         news_items: Lista med nyheter (dict med titel, url, datum, sammanfattning)
         force_refresh: Hoppa över cache
+        provider: "auto", "deepseek" eller "gemini"
     
     Returns:
         AI-sammanfattning av nyheter
@@ -497,28 +640,30 @@ def analyze_news(ticker: str, news_items: list = None, force_refresh: bool = Fal
         return f"ℹ️ Inga nyheter tillgängliga för **{ticker}**."
 
     news_text = json.dumps(news_items[:10], indent=2, ensure_ascii=False)
-    cache_key = _make_cache_key("analyze_news", ticker, str(len(news_items)))
+    resolved = _resolve_provider(provider)
+    cache_key = _make_cache_key("analyze_news", ticker, str(len(news_items)), resolved)
 
     return _call_with_cache(
         SYSTEM_PROMPT_NEWS_ANALYSIS,
         [{"role": "user", "content": f"Analysera nyheterna för {ticker}.\n\nNyheter:\n{news_text}"}],
         cache_key,
         force_refresh=force_refresh,
+        provider=provider,
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 6. MORGONBRIEF (Feature 6)
+# 6. MORGONBRIEF
 # ══════════════════════════════════════════════════════════════════════════════
 
 def generate_morning_brief(market_data: dict = None,
                             portfolio_data: dict = None,
                             alerts_list: list = None,
                             opportunities: list = None,
-                            force_refresh: bool = False) -> str:
+                            force_refresh: bool = False,
+                            provider: str = "auto") -> str:
     """
     Skapa AI-genererad morgonbrief.
-    Anropas från morning_scan.py.
     """
     brief_data = {
         "date": datetime.now().strftime("%Y-%m-%d"),
@@ -529,7 +674,8 @@ def generate_morning_brief(market_data: dict = None,
     }
     
     data_str = json.dumps(brief_data, indent=2, ensure_ascii=False)
-    cache_key = _make_cache_key("morning_brief", datetime.now().strftime("%Y-%m-%d"))
+    resolved = _resolve_provider(provider)
+    cache_key = _make_cache_key("morning_brief", datetime.now().strftime("%Y-%m-%d"), resolved)
 
     return _call_with_cache(
         SYSTEM_PROMPT_MORNING_BRIEF,
@@ -537,15 +683,17 @@ def generate_morning_brief(market_data: dict = None,
         cache_key,
         max_tokens=1024,
         force_refresh=True,  # Alltid fräsch
+        provider=provider,
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 7. SEKTORANALYS (Feature 2d)
+# 7. SEKTORANALYS
 # ══════════════════════════════════════════════════════════════════════════════
 
 def analyze_sector(sector_name: str, df: pd.DataFrame = None,
-                   force_refresh: bool = False) -> str:
+                   force_refresh: bool = False,
+                   provider: str = "auto") -> str:
     """
     Analysera en specifik sektor.
     
@@ -553,6 +701,7 @@ def analyze_sector(sector_name: str, df: pd.DataFrame = None,
         sector_name: Sektornamn (t.ex. "Technology")
         df: DataFrame med scandata
         force_refresh: Hoppa över cache
+        provider: "auto", "deepseek" eller "gemini"
     
     Returns:
         AI-sektoranalys
@@ -582,23 +731,26 @@ def analyze_sector(sector_name: str, df: pd.DataFrame = None,
         return f"⚠️ Ingen data för sektorn **{sector_name}**."
 
     data_str = json.dumps(sector_data, indent=2, ensure_ascii=False)
-    cache_key = _make_cache_key("analyze_sector", sector_name, str(df.shape) if df is not None else "none")
+    resolved = _resolve_provider(provider)
+    cache_key = _make_cache_key("analyze_sector", sector_name, str(df.shape) if df is not None else "none", resolved)
 
     return _call_with_cache(
         SYSTEM_PROMPT_SECTOR_ANALYSIS,
         [{"role": "user", "content": f"Analysera sektorn {sector_name}.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
         force_refresh=force_refresh,
+        provider=provider,
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 8. MÖJLIGHETSANALYS (Feature 7)
+# 8. MÖJLIGHETSANALYS
 # ══════════════════════════════════════════════════════════════════════════════
 
 def analyze_opportunity(ticker: str, signal_type: str,
                          stock_data: dict = None,
-                         force_refresh: bool = False) -> str:
+                         force_refresh: bool = False,
+                         provider: str = "auto") -> str:
     """
     Analysera en opportunity-signal.
     
@@ -607,6 +759,7 @@ def analyze_opportunity(ticker: str, signal_type: str,
         signal_type: "dip", "breakout", "oversold"
         stock_data: Dict med relevant data
         force_refresh: Hoppa över cache
+        provider: "auto", "deepseek" eller "gemini"
     
     Returns:
         AI-analys av möjligheten
@@ -617,7 +770,8 @@ def analyze_opportunity(ticker: str, signal_type: str,
         "data": stock_data or {},
     }
     data_str = json.dumps(data, indent=2, ensure_ascii=False)
-    cache_key = _make_cache_key("analyze_opportunity", ticker, signal_type)
+    resolved = _resolve_provider(provider)
+    cache_key = _make_cache_key("analyze_opportunity", ticker, signal_type, resolved)
 
     return _call_with_cache(
         SYSTEM_PROMPT_OPPORTUNITY,
@@ -625,15 +779,17 @@ def analyze_opportunity(ticker: str, signal_type: str,
         cache_key,
         max_tokens=1024,
         force_refresh=force_refresh,
+        provider=provider,
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 9. JÄMFÖR TVÅ AKTIER (Feature 2c)
+# 9. JÄMFÖR TVÅ AKTIER
 # ══════════════════════════════════════════════════════════════════════════════
 
 def compare_stocks(ticker_a: str, ticker_b: str, df: pd.DataFrame = None,
-                   force_refresh: bool = False) -> str:
+                   force_refresh: bool = False,
+                   provider: str = "auto") -> str:
     """
     Jämför två aktier sida vid sida.
     
@@ -642,6 +798,7 @@ def compare_stocks(ticker_a: str, ticker_b: str, df: pd.DataFrame = None,
         ticker_b: Andra ticker
         df: DataFrame med scandata
         force_refresh: Hoppa över cache
+        provider: "auto", "deepseek" eller "gemini"
     
     Returns:
         AI-jämförelse
@@ -665,8 +822,9 @@ def compare_stocks(ticker_a: str, ticker_b: str, df: pd.DataFrame = None,
                         comparison[key][f] = round(val, 2) if isinstance(val, float) else val
 
     data_str = json.dumps(comparison, indent=2, ensure_ascii=False)
+    resolved = _resolve_provider(provider)
     cache_key = _make_cache_key("compare_stocks", ticker_a, ticker_b,
-                                 str(df.shape) if df is not None else "none")
+                                 str(df.shape) if df is not None else "none", resolved)
 
     user_msg = f"Jämför aktierna **{ticker_a}** och **{ticker_b}**.\n\nData:\n```json\n{data_str}\n```"
     sys_prompt = """Du jämför två aktier. Ge ett tydligt svar om:
@@ -682,16 +840,18 @@ Skriv på svenska. Max 300 ord."""
         [{"role": "user", "content": user_msg}],
         cache_key,
         force_refresh=force_refresh,
+        provider=provider,
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 10. MARKNADSSAMMANFATTNING (Feature 8)
+# 10. MARKNADSSAMMANFATTNING
 # ══════════════════════════════════════════════════════════════════════════════
 
 def generate_market_summary(df: pd.DataFrame = None, sc_df: pd.DataFrame = None,
                              regime_info: dict = None,
-                             force_refresh: bool = False) -> str:
+                             force_refresh: bool = False,
+                             provider: str = "auto") -> str:
     """
     Skapa en kort marknadssammanfattning för dashboard.
     
@@ -700,6 +860,7 @@ def generate_market_summary(df: pd.DataFrame = None, sc_df: pd.DataFrame = None,
         sc_df: DataFrame med smallcap scandata
         regime_info: Dict med marknadsregim-info
         force_refresh: Hoppa över cache
+        provider: "auto", "deepseek" eller "gemini"
     
     Returns:
         AI-marknadssammanfattning (kort)
@@ -728,7 +889,8 @@ def generate_market_summary(df: pd.DataFrame = None, sc_df: pd.DataFrame = None,
         }
 
     data_str = json.dumps(summary, indent=2, ensure_ascii=False)
-    cache_key = _make_cache_key("market_summary", datetime.now().strftime("%Y-%m-%d"))
+    resolved = _resolve_provider(provider)
+    cache_key = _make_cache_key("market_summary", datetime.now().strftime("%Y-%m-%d"), resolved)
 
     return _call_with_cache(
         """Du är MarketScan AI-assistent. Skapa en KORT marknadssammanfattning (max 150 ord).
@@ -737,26 +899,40 @@ Skriv på svenska, använd emojis. Fokusera på dagens viktigaste insikter.""",
         cache_key,
         max_tokens=512,
         force_refresh=force_refresh,
+        provider=provider,
     )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 10. VALIDERING – Testa API-nyckeln
+# 11. VALIDERING – Testa API-nyckeln
 # ══════════════════════════════════════════════════════════════════════════════
 
-def test_api_key() -> dict:
+def test_api_key(provider: str = "auto") -> dict:
     """
-    Testa om DeepSeek API-nyckeln fungerar genom att göra ett minimalt
-    chatt-anrop. Returnerar dict med status och meddelande.
+    Testa om vald AI-providers API-nyckel fungerar.
+    
+    Args:
+        provider: "auto", "deepseek" eller "gemini"
+    
+    Returns:
+        dict med status och meddelande
     """
-    api_key = config.DEEPSEEK_API_KEY or os.getenv("DEEPSEEK_API_KEY", "")
+    resolved = _resolve_provider(provider)
+
+    if resolved == "gemini":
+        return _test_gemini_key()
+    else:
+        return _test_deepseek_key()
+
+
+def _test_deepseek_key() -> dict:
+    """Testa DeepSeek API-nyckel."""
+    api_key = getattr(config, "DEEPSEEK_API_KEY", None) or os.getenv("DEEPSEEK_API_KEY", "")
     if not api_key:
-        return {"status": "error", "message": "API-nyckel saknas"}
+        return {"status": "error", "message": "🔴 DeepSeek API-nyckel saknas"}
 
     try:
         import requests
-        # Gör ett minimalt chatt-anrop för att verifiera nyckeln
-        # (endpointen /v1/chat/completions är den korrekta för DeepSeek)
         resp = requests.post(
             "https://api.deepseek.com/v1/chat/completions",
             headers={
@@ -771,22 +947,69 @@ def test_api_key() -> dict:
             timeout=15,
         )
         if resp.status_code == 200:
-            return {"status": "ok", "message": f"✅ API-nyckel fungerar! Modell: {config.AI_MODEL}"}
+            return {"status": "ok", "message": "✅ DeepSeek API fungerar!"}
         elif resp.status_code == 401:
-            return {"status": "error", "message": "❌ API-nyckel är ogiltig (401)"}
+            return {"status": "error", "message": "❌ DeepSeek API-nyckel är ogiltig (401)"}
         elif resp.status_code == 402:
-            return {"status": "error", "message": "❌ API-nyckel är giltig men saldot är slut (402 Payment Required)"}
+            return {"status": "error", "message": "❌ DeepSeek-saldo är slut (402)"}
         elif resp.status_code == 429:
-            return {"status": "warning", "message": "⚠️ API rate-limited (429), försök igen om en stund"}
+            return {"status": "warning", "message": "⚠️ DeepSeek rate-limited (429)"}
         else:
             body = ""
             try:
                 body = resp.text[:200]
             except Exception:
                 pass
-            return {"status": "warning", "message": f"⚠️ API svarade med status {resp.status_code}: {body}"}
+            return {"status": "warning", "message": f"⚠️ DeepSeek svarade med status {resp.status_code}: {body}"}
     except Exception as e:
-        return {"status": "error", "message": f"❌ Kunde inte nå DeepSeek API: {e}"}
+        return {"status": "error", "message": f"❌ Kunde inte nå DeepSeek: {e}"}
+
+
+def _test_gemini_key() -> dict:
+    """Testa Gemini API-nyckel."""
+    api_key = getattr(config, "GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        return {"status": "error", "message": "🔴 Gemini API-nyckel saknas"}
+
+    try:
+        import requests
+        model = getattr(config, "GEMINI_MODEL", "gemini-2.0-flash")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        resp = requests.post(
+            url,
+            params={"key": api_key},
+            headers={"Content-Type": "application/json"},
+            json={
+                "contents": [{"role": "user", "parts": [{"text": "ping"}]}],
+                "generationConfig": {"maxOutputTokens": 1},
+            },
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            return {"status": "ok", "message": "✅ Gemini API fungerar!"}
+        elif resp.status_code == 403:
+            return {"status": "error", "message": "❌ Gemini API-nyckel är ogiltig (403)"}
+        elif resp.status_code == 429:
+            return {"status": "warning", "message": "⚠️ Gemini rate-limited (429)"}
+        else:
+            body = ""
+            try:
+                body = resp.text[:200]
+            except Exception:
+                pass
+            return {"status": "warning", "message": f"⚠️ Gemini svarade med status {resp.status_code}: {body}"}
+    except Exception as e:
+        return {"status": "error", "message": f"❌ Kunde inte nå Gemini: {e}"}
+
+
+def test_all_keys() -> dict:
+    """Testa båda API-nycklarna och returnera status för båda."""
+    deepseek_status = _test_deepseek_key()
+    gemini_status = _test_gemini_key()
+    return {
+        "deepseek": deepseek_status,
+        "gemini": gemini_status,
+    }
 
 
 def clear_cache():
