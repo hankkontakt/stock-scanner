@@ -27,7 +27,7 @@ from core import ai_analysis
 from portfolio import watchlist as wl
 
 # ── Sökvägar ──────────────────────────────────────────────────────────────────
-ROOT       = Path(__file__).parent
+ROOT       = Path(__file__).resolve().parent.parent
 REPORT_DIR = ROOT / "reports"
 DATA_DIR   = ROOT / "data"
 sys.path.insert(0, str(ROOT))
