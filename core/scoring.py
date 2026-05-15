@@ -14,7 +14,7 @@ Scoring philosophy:
 import pandas as pd
 import numpy as np
 
-import config
+from core import config
 
 def get_dynamic_weights(regime: str, base_weights: dict) -> dict:
     """

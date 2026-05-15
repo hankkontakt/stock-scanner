@@ -76,7 +76,7 @@ def fetch_insider_signal(ticker: str) -> float:
         return cached
 
     try:
-        from data_fetcher import _with_timeout
+        from core.data_fetcher import _with_timeout
         time.sleep(0.4)
         stock  = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=8)
         trades = _with_timeout(lambda: stock.insider_transactions, timeout_sec=15)
@@ -164,7 +164,7 @@ def fetch_earnings_surprise_signal(ticker: str) -> float:
         return cached
 
     try:
-        from data_fetcher import _with_timeout
+        from core.data_fetcher import _with_timeout
         time.sleep(0.4)
         stock = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=8)
         hist  = _with_timeout(lambda: stock.earnings_history, timeout_sec=15)
@@ -281,7 +281,7 @@ def fetch_analyst_revision_signal(ticker: str, finnhub_key: str = None) -> float
 
     # yfinance fallback
     try:
-        from data_fetcher import _with_timeout
+        from core.data_fetcher import _with_timeout
         time.sleep(0.3)
         stock    = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=8)
         info     = _with_timeout(lambda: stock.info, timeout_sec=15)

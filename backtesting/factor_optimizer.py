@@ -113,7 +113,7 @@ def score_with_weights(df: pd.DataFrame, weights: dict, regime: str = "OSÄKER")
     Scorar universumet med givna vikter istället för config-vikterna.
     Återanvänder scoring-modulens delscores.
     """
-    import scoring as sc
+    from core import scoring as sc
 
     scored = df.copy()
 

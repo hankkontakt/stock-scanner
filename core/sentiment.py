@@ -16,7 +16,7 @@ import threading
 from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import config  # För parallella inställningar
+from core import config  # För parallella inställningar
 
 CACHE_DIR = "data/cache"
 SENTIMENT_CACHE_HOURS = 12  # Nyheter kan cachas kortare än fundamenta

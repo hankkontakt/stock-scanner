@@ -16,7 +16,7 @@ class TestLogger:
     @pytest.fixture(autouse=True)
     def _temp_log(self, tmp_path):
         """Använder temporär loggfil."""
-        import logger as _logger
+        from core import logger as _logger
         self._orig_log = _logger.LOG_FILE
         _logger.LOG_FILE = tmp_path / "scan_log.json"
         yield
