@@ -1,0 +1,1 @@
+# Testpaket för stock-scanner

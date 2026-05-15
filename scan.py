@@ -1,12 +1,28 @@
 """
 scan.py – Huvudscript. Kör varje söndag: python scan.py
+
+Användning:
+  python scan.py                        # Full scan (700+ aktier)
+  python scan.py --quick                # Hoppa extra data
+  python scan.py --quiet                # Minimal output
+  python scan.py --tickers AAPL,MSFT    # Specifika tickers
+  python scan.py --validate-config      # Validera konfigurationen
 """
-import argparse, sys, os, time, threading
+import argparse
+import sys
+import os
+import time
+import threading
+import json as _json
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
 
-import config, data_fetcher, scoring, filters, sectors
+import config
+import data_fetcher
+import scoring
+import filters
+import sectors
 import watchlist as wl
 import news_fetcher
 
@@ -819,6 +835,64 @@ def build_report(scored, analysis, summary, sector_df, regime_info, earnings_df,
     return "\n".join(parts)
 
 
+# ── Validering ─────────────────────────────────────────────────────────────────
+
+def _validate_config() -> list:
+    """
+    Validerar att konfigurationen är korrekt.
+    Returnerar en lista med felmeddelanden (tom lista = giltig).
+    """
+    errors = []
+
+    # 1. API-nycklar
+    if not config.FMP_API_KEY:
+        errors.append("FMP_API_KEY saknas – krävs för fundamental data")
+    if not config.FINNHUB_API_KEY:
+        errors.append("FINNHUB_API_KEY saknas – sentiment hoppas över (OK)")
+
+    # 2. Universumstorlek
+    n_tickers = len(config.UNIVERSE)
+    if n_tickers < 10:
+        errors.append(f"UNIVERSE har bara {n_tickers} tickers (minimum 10)")
+    elif n_tickers > 5000:
+        errors.append(f"UNIVERSE har {n_tickers} tickers – kan orsaka timeout i GitHub Actions")
+
+    # 3. Faktorvikter summerar till ~1.0
+    w = config.FACTOR_WEIGHTS
+    total = sum(w.values())
+    if abs(total - 1.0) > 0.01:
+        errors.append(f"FACTOR_WEIGHTS summerar till {total:.3f} (ska vara 1.0)")
+
+    # 4. Scoringvikter för smallcap
+    sc_w = config.SMALLCAP_CONFIG.get("scoring_weights", {})
+    sc_total = sum(sc_w.values())
+    if abs(sc_total - 1.0) > 0.01:
+        errors.append(f"SMALLCAP_CONFIG scoring_weights summerar till {sc_total:.3f} (ska vara 1.0)")
+
+    # 5. Parallel workers sanity
+    if config.PARALLEL_WORKERS < 1:
+        errors.append(f"PARALLEL_WORKERS={config.PARALLEL_WORKERS} (måste vara ≥ 1)")
+    if config.PARALLEL_WORKERS > 32:
+        errors.append(f"PARALLEL_WORKERS={config.PARALLEL_WORKERS} (kan orsaka rate limiting)")
+
+    if config.FINNHUB_PARALLEL_WORKERS < 1:
+        errors.append(f"FINNHUB_PARALLEL_WORKERS={config.FINNHUB_PARALLEL_WORKERS} (måste vara ≥ 1)")
+    if config.FINNHUB_CALLS_PER_MINUTE > 60:
+        errors.append(f"FINNHUB_CALLS_PER_MINUTE={config.FINNHUB_CALLS_PER_MINUTE} (max 60 för gratisnivån)")
+
+    # 6. Trilsklar bör vara i rimligt intervall
+    if not (0 < config.MIN_DATA_QUALITY <= 1):
+        errors.append(f"MIN_DATA_QUALITY={config.MIN_DATA_QUALITY} (måste vara 0–1)")
+
+    # 7. Kataloger som måste finnas
+    for required_dir in ["data", "reports"]:
+        p = Path(required_dir)
+        if not p.exists():
+            errors.append(f"Katalog '{required_dir}' finns inte")
+
+    return errors
+
+
 # ── Huvudpipeline ──────────────────────────────────────────────────────────────
 
 def main():
@@ -830,12 +904,29 @@ def main():
         os._exit(1)
     threading.Thread(target=_watchdog, daemon=True, name="ScanWatchdog").start()
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--tickers", help="Komma-separerade tickers")
-    parser.add_argument("--quick",   action="store_true", help="Hoppa över extra data")
-    parser.add_argument("--quiet",   action="store_true", help="Minimal output")
+    parser = argparse.ArgumentParser(
+        description="MarketScan – multfaktor-aktiescanner",
+        epilog="Exempel: python scan.py --quick --quiet"
+    )
+    parser.add_argument("--tickers",        help="Komma-separerade tickers")
+    parser.add_argument("--quick",          action="store_true", help="Hoppa över extra data")
+    parser.add_argument("--quiet",          action="store_true", help="Minimal output")
+    parser.add_argument("--validate-config", action="store_true",
+                        help="Validera konfigurationen och avsluta")
     args = parser.parse_args()
     v = not args.quiet
+
+    # --validate-config: validera och avsluta
+    if args.validate_config:
+        errors = _validate_config()
+        if errors:
+            print("❌ Konfigurationsfel:")
+            for err in errors:
+                print(f"   • {err}")
+            sys.exit(1)
+        else:
+            print("✅ Konfigurationen är giltig")
+            sys.exit(0)
 
     tickers = [t.strip().upper() for t in args.tickers.split(",")] \
               if args.tickers else config.UNIVERSE

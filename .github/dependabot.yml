@@ -1,0 +1,45 @@
+# Dependabot – automatiska dependency-uppdateringar
+# https://docs.github.com/en/code-security/dependabot
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Stockholm"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    # Groups mindre uppdateringar för att minska PR-spam
+    groups:
+      test-dependencies:
+        patterns:
+          - "pytest*"
+        update-types:
+          - "minor"
+          - "patch"
+      lint-dependencies:
+        patterns:
+          - "ruff"
+          - "mypy"
+          - "pre-commit"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      time: "06:00"
+      timezone: "Europe/Stockholm"
+    labels:
+      - "ci"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
