@@ -1714,7 +1714,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                         # Försök hämta nyheter via Finnhub
                         news_items = None
                         try:
-                            from news_fetcher import fetch_company_news
+                            from core.news_fetcher import fetch_company_news
                             items = fetch_company_news(news_ticker, days_back=7)
                             if items:
                                 news_items = [{"title": n.get("headline", n.get("title", "")),
@@ -1746,7 +1746,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
             # Visa senaste nyheter i en expander
             with st.expander("Visa senaste nyheter utan AI-analys"):
                 try:
-                    from news_fetcher import fetch_company_news
+                    from core.news_fetcher import fetch_company_news
                     if 'news_ticker' in dir() and news_ticker:
                         raw_news = fetch_company_news(news_ticker, days_back=3)
                         if raw_news:

@@ -36,7 +36,7 @@ def _get_email_config() -> tuple[str, str, str]:
     """Hämtar email-inställningar från config.py eller environment."""
     import os
     try:
-        import config
+        from core import config
         sender   = getattr(config, "EMAIL_SENDER",   None) or os.getenv("EMAIL_SENDER",   "")
         password = getattr(config, "EMAIL_PASSWORD", None) or os.getenv("EMAIL_PASSWORD", "")
         to       = getattr(config, "EMAIL_TO",       None) or os.getenv("EMAIL_TO",       sender)

@@ -25,7 +25,7 @@ import pandas as pd
 import numpy as np
 
 
-import config
+from core import config
 
 import requests
 import requests.sessions
