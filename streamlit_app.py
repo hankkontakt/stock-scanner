@@ -1330,10 +1330,65 @@ def _search_ticker_yfinance(query: str) -> list:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# ADMIN-LÖSENORDSSKYDD
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _check_admin_access() -> bool:
+    """Kontrollera om användaren är admin (lösenordsskyddat).
+    
+    Lösenordet hämtas från:
+    1. Streamlit Secrets: ADMIN_PASSWORD
+    2. Om ej satt → alla är admin (lokalt)
+    """
+    admin_pw = st.secrets.get("ADMIN_PASSWORD", "") if hasattr(st, "secrets") else os.getenv("ADMIN_PASSWORD", "")
+    
+    # Inget lösenord satt → öppen admin (t.ex. lokalt)
+    if not admin_pw:
+        return True
+    
+    # Kolla session
+    if st.session_state.get("admin_authenticated", False):
+        return True
+    
+    # Visa inloggningsruta
+    st.title("🔒 Admin – Lösenordsskyddad sida")
+    st.info(
+        "Den här sidan kräver administratörsbehörighet. "
+        "Kontakta administratören för lösenordet."
+    )
+    
+    pw_input = st.text_input(
+        "Ange admin-lösenord",
+        type="password",
+        key="admin_pw_input",
+        placeholder="••••••••",
+    )
+    
+    if st.button("🔓 Lås upp", key="btn_admin_unlock", use_container_width=True):
+        if pw_input == admin_pw:
+            st.session_state["admin_authenticated"] = True
+            st.rerun()
+        else:
+            st.error("❌ Fel lösenord!")
+    return False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # SIDA 6 – ADMIN (Portfölj, Watchlist, GitHub Actions, Avanza-import)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def page_admin():
+    """Admin-sida – kräver lösenord."""
+    
+    # Kolla admin-åtkomst först
+    if not _check_admin_access():
+        # Lås upp-knapp för utloggning (om man vill logga ut)
+        if st.session_state.get("admin_authenticated", False):
+            if st.button("🚪 Logga ut från admin", key="btn_admin_logout"):
+                st.session_state["admin_authenticated"] = False
+                st.rerun()
+        return
+    
     st.title("🔧 Admin – Hantera portfölj, bevakning & scannar")
 
     tab_wl, tab_hold, tab_scan, tab_import = st.tabs([
