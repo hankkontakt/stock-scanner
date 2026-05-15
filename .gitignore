@@ -38,3 +38,6 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code worktrees (ska aldrig spåras av git)
+.claude/worktrees/
