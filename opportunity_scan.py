@@ -196,8 +196,7 @@ def main():
     # 3. Benchmark
     print("🌍 Hämtar benchmark...")
     try:
-        from daily_scan import fetch_benchmark_performance
-        benchmarks = fetch_benchmark_performance()
+        benchmarks = data_fetcher.fetch_benchmark_performance()
     except Exception:
         benchmarks = {}
 

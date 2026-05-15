@@ -252,8 +252,8 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     df["score_size"]      = calc_size_score(df)
     df["score_dividend"]  = calc_dividend_score(df)
     
-    # Kör sentiment bara om funktionen finns i din fil
-    if "calc_sentiment_score" in globals():
+    # Beräkna sentimentpoäng om sentiment_raw finns i datan
+    if "sentiment_raw" in df.columns and df["sentiment_raw"].notna().any():
         df["score_sentiment"] = calc_sentiment_score(df)
 
     # ---------------------------------------------------------
@@ -369,71 +369,3 @@ def calc_sentiment_score(df: pd.DataFrame) -> pd.Series:
 
     return linear
 
-
-def score_universe_with_sentiment(df: pd.DataFrame, sentiment_scores: dict) -> pd.DataFrame:
-    """
-    Full scoring including Finnhub sentiment.
-    sentiment_scores: dict of {ticker: float (-1 to 1)} from fetch_sentiment_batch()
-    """
-    df = df.copy()
-
-    # Add sentiment raw scores
-    if sentiment_scores:
-        df["sentiment_raw"] = df["ticker"].map(sentiment_scores)
-    else:
-        df["sentiment_raw"] = None
-
-    # All standard factors
-    df["score_value"]     = calc_value_score(df)
-    df["score_quality"]   = calc_quality_score(df)
-    df["score_momentum"]  = calc_momentum_score(df)
-    df["score_growth"]    = calc_growth_score(df)
-    df["score_risk"]      = calc_risk_score(df)
-    df["score_size"]      = calc_size_score(df)
-    df["score_dividend"]  = calc_dividend_score(df)
-    df["score_sentiment"] = calc_sentiment_score(df)
-
-    # Composite score
-    w = config.FACTOR_WEIGHTS
-    df["score_total"] = (
-        w["value"]     * df["score_value"]     +
-        w["quality"]   * df["score_quality"]   +
-        w["momentum"]  * df["score_momentum"]  +
-        w["growth"]    * df["score_growth"]    +
-        w["risk"]      * df["score_risk"]      +
-        w["size"]      * df["score_size"]      +
-        w["dividend"]  * df["score_dividend"]  +
-        w.get("sentiment", 0.10) * df["score_sentiment"]
-    )
-
-    # ── Holdingbolag & råvarubolag: score-rabatt (samma som score_universe) ──
-    if "industry" in df.columns:
-        ind_lower = df["industry"].fillna("").str.lower()
-        HOLDING_INDUSTRIES = {
-            "asset management", "diversified investments", "investment trusts",
-            "closed-end fund", "exchange traded fund", "capital markets",
-        }
-        COMMODITY_INDUSTRIES = {
-            "gold", "silver", "copper", "other precious metals & mining",
-            "steel", "aluminum", "uranium", "oil & gas e&p",
-        }
-        is_holding   = ind_lower.apply(lambda i: any(h in i for h in HOLDING_INDUSTRIES))
-        is_commodity = ind_lower.apply(lambda i: any(c in i for c in COMMODITY_INDUSTRIES))
-        df.loc[is_holding,                    "score_total"] = (df.loc[is_holding,                    "score_total"] * 0.85).clip(0, 100)
-        df.loc[is_commodity & ~is_holding,    "score_total"] = (df.loc[is_commodity & ~is_holding,    "score_total"] * 0.90).clip(0, 100)
-        df["company_type"] = "standard"
-        df.loc[is_holding,                    "company_type"] = "holding"
-        df.loc[is_commodity & ~is_holding,    "company_type"] = "commodity"
-    else:
-        df["company_type"] = "standard"
-
-    df["rank"] = df["score_total"].rank(ascending=False, method="min").astype("Int64")
-
-    metric_cols = [
-        "pe_trailing", "price_to_book", "roe", "profit_margin",
-        "revenue_growth", "debt_to_equity", "return_12m", "beta"
-    ]
-    available_cols = [c for c in metric_cols if c in df.columns]
-    df["data_quality"] = df[available_cols].notna().sum(axis=1) / len(available_cols)
-
-    return df.sort_values("score_total", ascending=False).reset_index(drop=True)

@@ -24,18 +24,11 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+from .scoring import _stars
 from .universe import SECTOR_GROUPS
 
 # ── Konstanter ────────────────────────────────────────────────────────────────
-_STAR_THRESHOLDS = [(80, "★★★★★"), (65, "★★★★"), (50, "★★★"), (35, "★★"), (0, "★")]
 _RANK_MEDALS     = ["🥇", "🥈", "🥉", "4.", "5."]
-
-
-def _stars(score: float) -> str:
-    for threshold, label in _STAR_THRESHOLDS:
-        if score > threshold:
-            return label
-    return "★"
 
 
 def _fmt_pct(v, decimals: int = 1) -> str:

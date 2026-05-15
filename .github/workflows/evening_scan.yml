@@ -42,16 +42,14 @@ jobs:
       - name: 📁 Skapa mappar
         run: mkdir -p data/cache data/history reports
 
-      - name: 📋 Ladda innehav (holdings.csv)
+      # holdings.csv finns redan i repot – använd den
+      - name: ✅ Verifiera holdings.csv
         run: |
-          if [ -n "$HOLDINGS_CSV" ]; then
-            echo "$HOLDINGS_CSV" > holdings.csv
-            echo "✓ holdings.csv laddad ($(wc -l < holdings.csv) rader)"
+          if [ -f holdings.csv ]; then
+            echo "✓ holdings.csv finns i repot ($(wc -l < holdings.csv) rader)"
           else
-            echo "ℹ HOLDINGS_CSV ej satt – kör utan portföljdata"
+            echo "ℹ holdings.csv saknas – kör utan portföljdata"
           fi
-        env:
-          HOLDINGS_CSV: ${{ secrets.HOLDINGS_CSV }}
 
       - name: ⭐ Ladda bevakningslista
         run: |
