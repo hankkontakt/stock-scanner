@@ -213,13 +213,17 @@ def _gemini_call(messages: list, system_prompt: str = "",
                  max_tokens: int = None, temperature: float = None) -> str:
     """
     Anropa Google Gemini API med meddelanden via REST.
-    Returnerar svaret som sträng eller felmeddelande.
+    Innehåller retry-logik med exponential backoff vid 429 rate-limit.
+    Returnerar svaret som sträng, "" (tomt = fallback till DeepSeek),
+    eller felmeddelande som börjar med "⚠️".
     """
     api_key = getattr(config, "GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY", "")
     if not api_key:
-        return "❌ **Gemini API-nyckel saknas.**\n\nLägg till `GEMINI_API_KEY` i din `.env`-fil."
+        return ""
 
-    model = getattr(config, "GEMINI_MODEL", "gemini-2.0-flash")
+    # gemini-1.5-flash är stabil och tillgänglig i alla regioner på free tier.
+    # gemini-2.0-flash kräver ibland betalkonto.
+    model = getattr(config, "GEMINI_MODEL", "gemini-1.5-flash")
     max_tokens = max_tokens or getattr(config, "AI_MAX_TOKENS", 2048)
     temperature = temperature if temperature is not None else getattr(config, "AI_TEMPERATURE", 0.3)
 
@@ -250,46 +254,117 @@ def _gemini_call(messages: list, system_prompt: str = "",
             "parts": [{"text": system_prompt}]
         }
 
-    try:
-        import requests
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        resp = requests.post(
-            url,
-            params={"key": api_key},
-            headers={"Content-Type": "application/json"},
-            json=payload,
-            timeout=60,
-        )
+    import time
+    import requests
 
-        if resp.status_code == 403:
-            body = ""
-            try:
-                body = resp.text[:200]
-            except Exception:
-                pass
-            if "API_KEY_INVALID" in resp.text or "API key not valid" in resp.text:
-                return "❌ **Gemini API-nyckel är ogiltig (403).** Kontrollera din GEMINI_API_KEY."
-            return f"⚠️ **Gemini nekade åtkomst (403):** {body}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    max_retries = 3
+    last_error = ""
 
-        if resp.status_code == 429:
-            return "⚠️ **Gemini rate-limited (429).** Försök igen om en stund."
+    for attempt in range(max_retries):
+        try:
+            resp = requests.post(
+                url,
+                params={"key": api_key},
+                headers={"Content-Type": "application/json"},
+                json=payload,
+                timeout=60,
+            )
 
-        resp.raise_for_status()
-        data = resp.json()
+            if resp.status_code == 200:
+                data = resp.json()
 
-        # Extrahera text från Gemini-svar
-        candidates = data.get("candidates", [])
-        if not candidates:
-            return "⚠️ **Gemini returnerade inget svar.**"
+                # Kolla om prompten blockerades (t.ex. SAFETY)
+                prompt_feedback = data.get("promptFeedback", {})
+                block_reason = prompt_feedback.get("blockReason", "")
+                if block_reason:
+                    return f"⚠️ **Gemini blockerade frågan ({block_reason}).** Försök omformulera."
 
-        parts = candidates[0].get("content", {}).get("parts", [])
-        if not parts:
-            return "⚠️ **Gemini returnerade tomt svar.**"
+                candidates = data.get("candidates", [])
+                if not candidates:
+                    # Tomt svar utan blockeringsorsak – troligtvis tillfälligt
+                    last_error = "⚠️ **Gemini: tomt svar (inga kandidater).** Försök igen."
+                    time.sleep(1)
+                    continue
 
-        return parts[0].get("text", "")
+                candidate = candidates[0]
+                # Kontrollera finishReason (SAFETY, RECITATION, etc. = inget innehåll)
+                finish_reason = candidate.get("finishReason", "STOP")
+                if finish_reason not in ("STOP", "MAX_TOKENS", ""):
+                    return f"⚠️ **Gemini avbröt svaret ({finish_reason}).** Försök igen."
 
-    except Exception as e:
-        return f"⚠️ **Gemini-anropet misslyckades:** {str(e)}"
+                parts = candidate.get("content", {}).get("parts", [])
+                if not parts:
+                    last_error = "⚠️ **Gemini: tomt svar (inga delar).** Försök igen."
+                    time.sleep(1)
+                    continue
+
+                text = parts[0].get("text", "").strip()
+                if not text:
+                    last_error = "⚠️ **Gemini: tomt svar.** Försök igen."
+                    time.sleep(1)
+                    continue
+
+                return text
+
+            elif resp.status_code == 400:
+                # Ogiltig förfrågan – försök inte igen
+                try:
+                    body = resp.json().get("error", {}).get("message", resp.text[:200])
+                except Exception:
+                    body = resp.text[:200]
+                return f"⚠️ **Gemini: ogiltig förfrågan (400):** {body}"
+
+            elif resp.status_code == 403:
+                try:
+                    body = resp.json().get("error", {}).get("message", resp.text[:200])
+                except Exception:
+                    body = resp.text[:200]
+                # Ogiltig nyckel → tomt svar → fallback till DeepSeek
+                if "API_KEY_INVALID" in body or "API key not valid" in body:
+                    return ""
+                return f"⚠️ **Gemini nekade åtkomst (403):** {body}"
+
+            elif resp.status_code == 404:
+                # Modellen finns inte – troligen fel modellnamn
+                return f"⚠️ **Gemini: modell '{model}' hittades inte (404).** Kontrollera GEMINI_MODEL i config."
+
+            elif resp.status_code == 429:
+                # Rate-limit – vänta längre och försök igen
+                delay = 5.0 * (2 ** attempt)  # 5s, 10s, 20s
+                last_error = f"⚠️ **Gemini rate-limit (429)** – väntar {delay:.0f}s..."
+                if attempt < max_retries - 1:
+                    time.sleep(delay)
+                    continue
+                # Alla retries uttömda → tomt → fallback till DeepSeek
+                return ""
+
+            else:
+                try:
+                    body = resp.text[:200]
+                except Exception:
+                    body = ""
+                last_error = f"⚠️ **Gemini svarade {resp.status_code}:** {body}"
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                    continue
+                return last_error
+
+        except requests.exceptions.Timeout:
+            last_error = "⚠️ **Gemini timeout – försök igen.**"
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            return last_error
+        except Exception as e:
+            last_error = f"⚠️ **Gemini-anropet misslyckades:** {str(e)}"
+            if attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            return last_error
+
+    # Loopen avslutades utan lyckad return – returnera senaste felmeddelandet
+    return last_error or "⚠️ **Gemini: inget svar efter flera försök.** Försök igen."
 
 
 def _ai_call(messages: list, system_prompt: str = "",
@@ -298,6 +373,9 @@ def _ai_call(messages: list, system_prompt: str = "",
     """
     Anropa vald AI-provider med meddelanden.
     Routar automatiskt till DeepSeek eller Gemini baserat på provider-parametern.
+
+    Om Gemini är rate-limited (429) eller returnerar tomt svar,
+    faller den automatiskt tillbaka till DeepSeek om nyckeln finns.
 
     Args:
         messages: Lista med dicts {"role": "user"/"assistant", "content": "..."}
@@ -312,7 +390,23 @@ def _ai_call(messages: list, system_prompt: str = "",
     resolved = _resolve_provider(provider)
 
     if resolved == "gemini":
-        return _gemini_call(messages, system_prompt, max_tokens, temperature)
+        result = _gemini_call(messages, system_prompt, max_tokens, temperature)
+        # Fallback till DeepSeek om Gemini misslyckas:
+        #   - tomt svar ""  (ogiltig nyckel, 429 uttömd, 403)
+        #   - felmeddelande som börjar med "⚠️" (rate-limit, timeout, blockering)
+        gemini_failed = not result or result.startswith("⚠️")
+        if gemini_failed:
+            deepseek_key = getattr(config, "DEEPSEEK_API_KEY", None) or os.getenv("DEEPSEEK_API_KEY", "")
+            if deepseek_key:
+                ds_result = _deepseek_call(messages, system_prompt, max_tokens, temperature)
+                if not ds_result.startswith("⚠️") and not ds_result.startswith("❌"):
+                    gemini_reason = result if result else "ingen nyckel/tomt svar"
+                    return ds_result + f"\n\n---\n*ℹ️ Gemini ej tillgänglig ({gemini_reason[:60]}) – svar från DeepSeek (fallback)*"
+                # DeepSeek misslyckades också – visa Geminis ursprungliga fel
+                return result or "⚠️ **Varken Gemini eller DeepSeek svarade.** Kontrollera dina API-nycklar."
+            # Ingen DeepSeek-nyckel – visa Geminis fel direkt
+            return result or "⚠️ **Gemini ej tillgänglig.** Kontrollera GEMINI_API_KEY i Streamlit Secrets."
+        return result
     else:
         return _deepseek_call(messages, system_prompt, max_tokens, temperature)
 

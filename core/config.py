@@ -87,52 +87,74 @@ US_LARGE_CAP = [
     "VTR", "EXR", "AVB", "EQR", "MAA", "UDR", "NNN", "ADC", "STAG", "COLD",
 ]
 
-# ════════════════ SVERIGE ════════════════
-OMX_SE = [
-    # Industri & Verkstad
-    "VOLV-B.ST", "ATCO-A.ST", "ATCO-B.ST", "SAND.ST", "SKF-B.ST", "ABB.ST",
-    "ALFA.ST", "EPI-A.ST", "EPI-B.ST", "INDU-C.ST", "INDU-A.ST",
-    "TREL-B.ST", "HEXA-B.ST", "AXFO.ST", "NIBE-B.ST", "ASSA-B.ST", 
-    "HMSN.ST", "SYSR.ST", "MYCR.ST", "GARO.ST", "AFCO-B.ST", "FAG.ST", 
-    "NOTE.ST", "AQ.ST", "BUFAB.ST", "MIPS.ST", "NCAB.ST", "OEM-B.ST", "IVSO.ST",
-    "MILDEF.ST", "INSTAL.ST", "BEIJ-B.ST", "TROAX.ST", "BERG-B.ST",
+# ════════════════ STORBRITANNIEN / UK MID-LARGE CAP ════════════════
+UK = [
+    # Banks & Financial Services
+    "HSBA.L", "BARC.L", "LLOY.L", "NWG.L", "STAN.L", "PRU.L", "LSEG.L", "HICL.L",
+    "III.L", "MNG.L", "PHNX.L", "AV.L", "LGEN.L",
+    # Mining & Materials
+    "RIO.L", "GLEN.L", "AAL.L", "ANTO.L", "FRES.L", "JMAT.L", "CRH.L", "BLND.L",
+    # Consumer & Retail
+    "DGE.L", "ULVR.L", "BATS.L", "IMB.L", "TSCO.L", "SBRY.L", "NXT.L",
+    "JD.L", "MKS.L", "CCH.L", "ABF.L", "SPD.L",
+    # Industrials & Engineering
+    "RR.L", "BA.L", "IMI.L", "WEIR.L", "SMIN.L", "SPX.L", "RTO.L", "MGGT.L",
+    "COB.L", "GAW.L", "GKN.L", "MRO.L",
+    # Tech & Software
+    "SMT.L", "REL.L", "EXPN.L", "AUTO.L", "SGE.L", "DARK.L", "BME.L",
+    "MONY.L", "RWI.L", "MSY.L",
+    # Healthcare
+    "AZN.L", "GSK.L", "SHG.L", "SN.L",
+    # Energy
+    "SHEL.L", "BP.L", "TLW.L", "HBR.L", "EME.L",
+    # Utilities
+    "SSE.L", "NG.L", "UU.L", "SV.L", "CNA.L",
+    # REITs & Property
+    "LAND.L", "PSN.L", "BDEV.L",
+]
 
-    # Finans & Investmentbolag
-    "SEB-A.ST", "SHB-A.ST", "SWED-A.ST", "NDA-SE.ST", "INVE-A.ST", "INVE-B.ST",
-    "LATO-B.ST", "KINV-B.ST", "LIFCO-B.ST", "EQT.ST", "BURE.ST", "INDT.ST",
-    "SVOL-B.ST", "CRED-A.ST", "CATE.ST", "VNV.ST", "NOBI.ST", "RATO-B.ST", 
-    "INTRUM.ST", "RESURS.ST", "HOFI.ST", "KFAB.ST",
+# ════════════════ TYSKLAND (utökad) ════════════════
+GERMANY = [
+    # Industri & Engineering
+    "SIE.DE", "RHM.DE", "MTX.DE", "HEI.DE", "SHL.DE", "G1A.DE", "DUE.DE",
+    "MAN.DE", "SKB.DE", "KCO.DE", "STM.DE", "TKA.DE", "LEO.DE",
+    # Finance
+    "ALV.DE", "MUV2.DE", "DBK.DE", "DB1.DE", "CBK.DE", "HNR1.DE", "WKN.DE",
+    # Tech & Software
+    "SAP.DE", "IFX.DE", "AIXA.DE", "GFT.DE", "WAF.DE", "SMHN.DE", "NEM.DE",
+    "QBY.DE", "UTDI.DE", "PNE.DE", "BC8.DE",
+    # Healthcare
+    "BAYN.DE", "FRE.DE", "EVT.DE", "SRT.DE", "MOR.DE",
+    # Consumer
+    "BMW.DE", "MBG.DE", "VOW3.DE", "ADS.DE", "PUM.DE", "ZAL.DE", "P911.DE",
+    "BOSS.DE", "HEN3.DE", "BEI.DE", "DIC.DE", "TTE.DE",
+    # Utilities & Energy
+    "RWE.DE", "EOAN.DE", "ENR.DE", "UN01.DE", "S92.DE",
+    # Materials
+    "BAS.DE", "1COV.DE", "SY1.DE", "WCH.DE", "LXS.DE",
+    # Logistics & Transport
+    "DHL.DE", "MRN.DE", "FMG.DE", "HHFA.DE",
+    # Media & Telecom
+    "DTE.DE", "FNTN.DE",
+]
 
-    # Tech / IT / Mjukvara
-    "ERIC-B.ST", "SINCH.ST", "ENEA.ST", "CINT.ST", "IAR-B.ST", "KNOW.ST",
-    "BTS-B.ST", "ALIV-SDB.ST", "PRIC-B.ST", "ADDT-B.ST", "VIT-B.ST",
-    "FNOX.ST", "PNDX-B.ST", "TRUE-B.ST",
-
-    # Telecom & Media
-    "TELIA.ST", "TEL2-B.ST", "MTG-B.ST",
-
-    # Healthcare / Medtech / Biotech
-    "AZN.ST", "GETI-B.ST", "ESSITY-B.ST", "ARJO-B.ST", "XVIVO.ST",
-    "VITR.ST", "BICO.ST", "BIOT.ST", "RAY-B.ST", "CTM.ST", "EKTA-B.ST",
-    "CAMX.ST", "VIMIAN.ST", "LINC.ST", "SECT-B.ST", "MCAP.ST", "MNTC.ST", "ALIG.ST",
-
-    # Consumer / Gaming / Handel
-    "HM-B.ST", "EVO.ST", "EMBRAC-B.ST", "BETS-B.ST", "G5EN.ST", "PDX.ST",
-    "CLAS-B.ST", "MEKO.ST", "BILI-A.ST", "BHG.ST", "SKIS-B.ST", "DUNI.ST", 
-    "RVRC.ST", "KDEV.ST", "BINV.ST", "VOLCAR-B.ST", "AAK.ST", "THULE.ST", 
-    "LOOMIS.ST", "DOM.ST",
-
-    # Material & Skog
-    "BOL.ST", "SSAB-A.ST", "SSAB-B.ST", "SCA-B.ST", "HOLM-B.ST", "BMAX.ST", "HPOL-B.ST",
-
-    # Fastighet & Bygg
-    "BALD-B.ST", "CAST.ST", "FABG.ST", "SAGA-B.ST", "WIHL.ST", "DIOS.ST",
-    "JM.ST", "PEAB-B.ST", "NCC-B.ST", "SKA-B.ST", "CIBUS.ST", "KFAST-B.ST",
-    "NP3.ST", "SBB-B.ST", "CORE-B.ST", "NYF.ST", "FPAR-A.ST", "SLP-B.ST", "PLAT.ST",
-    "HEBA-B.ST", "NIV.ST", "HTRO.ST", "MTRS.ST", "BONAV-B.ST", "SDIP-B.ST",
-
-    # Energi
-    "ARISE.ST", "GRNG.ST", "EPRO-B.ST", "ELCG.ST"
+# ════════════════ NORDEN (exkl. Sverige) ════════════════
+NORDIC = [
+    # Danmark
+    "NOVO-B.CO", "MAERSK-A.CO", "MAERSK-B.CO", "DSV.CO", "CARL-B.CO", "CARL-A.CO",
+    "GMAB.CO", "DEMANT.CO", "ZEAL.CO", "PANDORA.CO", "ORSTED.CO", "ALK-B.CO",
+    "AMBU-B.CO", "ROCK-A.CO", "FLS.CO", "GN.CO", "NZYM-B.CO", "HHS.CO",
+    "TOP.CO", "ISS.CO", "JYSK.CO", "SYDB.CO", "DANSKE.CO", "COLO-B.CO",
+    # Norge
+    "EQNR.OL", "DNB.OL", "TOM.OL", "AKSO.OL", "MOWI.OL", "ORK.OL",
+    "SALM.OL", "YAR.OL", "KOG.OL", "NHY.OL", "TEL.OL", "BOUV.OL",
+    "FLNG.OL", "FRO.OL", "BWLPG.OL", "GJF.OL", "GOGL.OL",
+    "SUBC.OL", "AUSS.OL", "SCATC.OL", "NOD.OL", "BWO.OL",
+    # Finland
+    "NOKIA.HE", "SAMPO.HE", "UPM.HE", "NESTE.HE", "FORTUM.HE",
+    "KEMIRA.HE", "METSB.HE", "VALMT.HE", "METSO.HE", "TOKMAN.HE",
+    "KAMUX.HE", "ELISA.HE", "STORA.HE", "ORION-B.HE", "QTCOM.HE",
+    "RELAIS.HE", "PUUILO.HE", "HARVIA.HE", "MARIMEKKO.HE",
 ]
 
 # ════════════════ EUROPA (Uppdelad i Sektorer) ════════════════
@@ -180,34 +202,57 @@ EUROPE = [
 
     # Telekom & Media
     "DTE.DE", "PUB.PA", "VOD.L", "REL.L", "EXPN.L", "WKL.AS", "TEF.MC", "TEL.OL", 
-    "ELISA.HE", "UMG.AS", "KPN.AS", "VIV.PA"
+    "ELISA.HE", "UMG.AS", "KPN.AS", "VIV.PA",
 ]
 
-# ════════════════ ASIEN / STILLA HAVET ════════════════
+# ════════════════ ASIEN / STILLA HAVET (utökad) ════════════════
 ASIA_PACIFIC = [
-    # Japan
+    # Japan - Large Cap
     "TM", "SONY", "HMC", "NTDOY", "MUFG", "SMFG",
     "7203.T", "6758.T", "9984.T", "6501.T", "6902.T",
     "6954.T", "7751.T", "8306.T", "8316.T", "9433.T", "9432.T",
     "8031.T", "8053.T", "8058.T", "8002.T", "7974.T", "6861.T", "6594.T", "6098.T", 
     "4661.T", "4502.T", "4519.T", "4568.T", "4063.T", "3382.T", "2914.T",
+    # Japan - Mid Cap (utökad)
+    "4507.T", "4523.T", "4578.T", "4631.T", "4901.T", "4911.T", "4922.T",
+    "5108.T", "5201.T", "5301.T", "5332.T", "5333.T", "5401.T", "5411.T",
+    "5713.T", "5714.T", "5801.T", "5802.T", "5901.T", "6103.T", "6113.T",
+    "6135.T", "6141.T", "6201.T", "6301.T", "6367.T", "6383.T", "6395.T",
+    "6406.T", "6457.T", "6471.T", "6479.T", "6506.T", "6586.T", "6592.T",
+    "6645.T", "6674.T", "6701.T", "6714.T", "6723.T", "6728.T", "6770.T",
+    "6841.T", "6857.T", "6871.T", "6952.T", "6963.T", "6971.T", "6976.T",
+    "7004.T", "7011.T", "7012.T", "7013.T", "7014.T", "7022.T", "7105.T",
+    "7148.T", "7167.T", "7186.T", "7564.T", "8001.T", "8015.T", "8028.T",
     # Taiwan
     "2330.TW", "2317.TW", "2412.TW", "3008.TW", "2454.TW", "2308.TW", "2881.TW",
+    "2379.TW", "2303.TW", "2409.TW", "2395.TW", "2347.TW", "2382.TW",
     # Sydkorea
     "005930.KS", "000660.KS", "035420.KS", "005380.KS", "051910.KS",
-    "035720.KS", "207940.KS",
+    "035720.KS", "207940.KS", "068270.KS", "028260.KS", "086790.KS",
+    "105560.KS", "012330.KS", "006400.KS", "011070.KS", "000270.KS",
     # Kina / Hong Kong
     "9988.HK", "9618.HK", "0700.HK", "1810.HK", "3690.HK", "9999.HK",
     "0941.HK", "2318.HK", "1398.HK", "3968.HK", "1299.HK", "0001.HK", "0002.HK", 
     "0003.HK", "0016.HK", "0066.HK", "0386.HK", "0883.HK",
-    # Indien
-    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "SBIN.NS", "ADANIENT.NS", "BHARTIARTL.NS", 
-    "LTIM.NS", "HCLTECH.NS", "MARUTI.NS",
+    "0939.HK", "2388.HK", "0011.HK", "0005.HK", "0012.HK", "0027.HK",
+    "0083.HK", "0101.HK", "0268.HK", "0708.HK", "0762.HK", "0836.HK",
+    "0968.HK", "1024.HK", "1211.HK", "1818.HK", "1833.HK", "1928.HK",
+    "2269.HK", "2333.HK", "2382.HK", "2628.HK", "2800.HK",
+    # Indien (utökad)
+    "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS", "ICICIBANK.NS",
+    "SBIN.NS", "ADANIENT.NS", "BHARTIARTL.NS", "KOTAKBANK.NS", "WIPRO.NS",
+    "LTIM.NS", "HCLTECH.NS", "MARUTI.NS", "TATAMOTORS.NS", "TITAN.NS",
+    "AXISBANK.NS", "BAJFINANCE.NS", "HINDUNILVR.NS", "SUNPHARMA.NS", "ITC.NS",
+    "ULTRACEMCO.NS", "NTPC.NS", "POWERGRID.NS", "M&M.NS", "ASIANPAINT.NS",
+    "TATASTEEL.NS", "JSWSTEEL.NS", "TRENT.NS", "BAJAJFINSV.NS", "ADANIPORTS.NS",
+    "CIPLA.NS", "DIVISLAB.NS", "DRREDDY.NS", "EICHERMOT.NS", "GRASIM.NS",
+    "HEROMOTOCO.NS", "HINDALCO.NS", "SBILIFE.NS", "TATACONSUM.NS", "TECHM.NS",
     # Australien
     "BHP", "RIO", "CSL", "MQG.AX", "ANZ.AX", "CBA.AX", "WBC.AX", "NAB.AX",
-    "FMG.AX", "ALL.AX", "REA.AX", "WES.AX",
+    "FMG.AX", "ALL.AX", "REA.AX", "WES.AX", "GMG.AX", "WOW.AX", "COL.AX",
+    "TLS.AX", "RMD.AX", "XRO.AX", "SHL.AX", "COH.AX",
     # Singapore
-    "D05.SI", "O39.SI", "U11.SI", "C6L.SI",
+    "D05.SI", "O39.SI", "U11.SI", "C6L.SI", "Z74.SI", "S58.SI",
 ]
 
 # ════════════════ KANADA (Med Rätt .TO Suffix) ════════════════
@@ -218,19 +263,38 @@ CANADA = [
     "WN.TO", "EMP-A.TO", "MRU.TO", "SAP.TO", "GIB-A.TO", "CSU.TO", "KXS.TO", "DSG.TO", 
     "TIH.TO", "TFII.TO", "WSP.TO", "STN.TO", "NTR.TO", "AGI.TO", "OSK.TO", "IMG.TO", 
     "LSPD.TO", "REAL.TO", "DND.TO", "CIGI.TO", "FSV.TO", "MEG.TO", "BTE.TO", 
-    "NXE.TO", "LUN.TO"
+    "NXE.TO", "LUN.TO",
 ]
 
-# ════════════════ EMERGING / LATINAMERIKA ════════════════
-EMERGING = [
+# ════════════════ BRASILIEN / LATINAMERIKA (utökad) ════════════════
+BRAZIL = [
     "VALE", "ITUB", "BBD", "MELI", "ARCO", "SE", "GRAB",
-    "AMX", "FMX",
+    "AMX", "FMX", "ABEV", "B3SA3.SA", "PETR4.SA", "BBAS3.SA", "ITSA4.SA",
+    "WEGE3.SA", "LREN3.SA", "RENT3.SA", "SUZB3.SA", "CSNA3.SA",
+    "JBSS3.SA", "BRFS3.SA", "GGBR4.SA", "CMIG4.SA", "EGIE3.SA",
+    "EQTL3.SA", "EMBR3.SA", "AZUL4.SA", "BOOM", "MGLU3.SA",
+    "UGPA3.SA", "RADL3.SA", "HAPV3.SA", "FLRY3.SA", "TOTS3.SA",
+    # Mexico & Other LATAM
+    "WALMEX.MX", "CEMEX.MX", "FEMSA.MX", "GFNORTEO.MX", "TLEVISACPO.MX",
+    "AC.MX", "LABB.MX", "KIMBERA.MX",
 ]
+
+EMERGING = BRAZIL  # Behåller EMERGING alias för bakåtkompabilitet
 
 # ════════════════ KOMBINERA ════════════════
 UNIVERSE = list(dict.fromkeys(
-    US_LARGE_CAP + OMX_SE + EUROPE + ASIA_PACIFIC + CANADA + EMERGING
+    US_LARGE_CAP + UK + GERMANY + NORDIC + OMX_SE + EUROPE +
+    ASIA_PACIFIC + CANADA + EMERGING
 ))
+
+
+# ════════════════ NYA FAKTORER – viktaberedskap ════════════════
+# Dessa vikter läggs till om short_interest/seasonality/options_flow integreras
+EXTRA_FACTOR_WEIGHTS = {
+    "short_interest": 0.03,  # Blankningsgrad – låg blankning = positivt
+    "seasonality":    0.03,  # Säsongsmönster – stark månad = positivt
+    "options_flow":   0.02,  # Optionsflöde – puts/calls ratio
+}
 
 # ════════════════ FAKTORVIKTER ════════════════
 FACTOR_WEIGHTS = {
@@ -243,18 +307,37 @@ FACTOR_WEIGHTS = {
     "dividend":  0.05,
     "sentiment": 0.10,
 }
+# Om EXTRA_FACTOR_WEIGHTS läggs till, justeras FACTOR_WEIGHTS proportionellt
+# Detta görs i scoring.py med en helper-funktion
+
 assert abs(sum(FACTOR_WEIGHTS.values()) - 1.0) < 0.001
 
+# ════════════════ STREAMLIT SECRETS (fallback om .env inte finns) ════════════
+# Streamlit Cloud injicerar secrets som miljövariabler, men vi läser även
+# direkt från st.secrets för säkerhets skull.
+def _get_secret(key: str, default: str = "") -> str:
+    """Läs från miljövariabel. Fallback till st.secrets om tillgängligt."""
+    val = os.getenv(key)
+    if val:
+        return val
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+    return default
+
 # ════════════════ API-NYCKLAR ════════════════
-FMP_API_KEY      = os.getenv("FMP_API_KEY", "")
-FINNHUB_API_KEY  = os.getenv("FINNHUB_API_KEY", "")
+FMP_API_KEY      = _get_secret("FMP_API_KEY", "")
+FINNHUB_API_KEY  = _get_secret("FINNHUB_API_KEY", "")
 
 # ════════════════ AI / MULTI-PROVIDER ════════════════
-AI_PROVIDER       = os.getenv("AI_PROVIDER", "deepseek")  # "deepseek" (komplex, kostar) eller "gemini" (enkel, gratis)
-DEEPSEEK_API_KEY  = os.getenv("DEEPSEEK_API_KEY", "")
+AI_PROVIDER       = _get_secret("AI_PROVIDER", "deepseek")  # "deepseek" (komplex, kostar) eller "gemini" (enkel, gratis)
+DEEPSEEK_API_KEY  = _get_secret("DEEPSEEK_API_KEY", "")
 AI_MODEL          = "deepseek-chat"          # deepseek-chat eller deepseek-reasoner
-GEMINI_API_KEY    = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL      = "gemini-2.0-flash"       # gratis från Google
+GEMINI_API_KEY    = _get_secret("GEMINI_API_KEY", "")
+GEMINI_MODEL      = "gemini-1.5-flash"       # stabil & gratis i alla regioner (2.0-flash kräver ibland betalkonto)
 AI_MAX_TOKENS     = 2048                     # Max tokens per svar
 AI_TEMPERATURE    = 0.3                      # Låg temperatur = mer deterministiska svar
 
