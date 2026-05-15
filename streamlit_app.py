@@ -7,16 +7,23 @@ Kör lokalt : streamlit run streamlit_app.py
 Deploya    : anslut GitHub-repo till streamlit.io/cloud
 """
 
+import csv
+import io
 import json
+import os
 import sys
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import requests
 import streamlit as st
+import yfinance as yf
+import config
+import watchlist as wl
 
 # ── Sökvägar ──────────────────────────────────────────────────────────────────
 ROOT       = Path(__file__).parent
@@ -105,7 +112,7 @@ def load_smallcap_reports() -> dict:
 def load_portfolio() -> pd.DataFrame:
     """Laddar holdings.csv och berikar med senaste scan-data."""
     try:
-        holdings = pd.read_csv(DATA_DIR / "holdings.csv")
+        holdings = pd.read_csv(ROOT / "holdings.csv")
         holdings["ticker"] = holdings["ticker"].str.upper()
         return holdings
     except Exception:
@@ -223,7 +230,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
         page = st.radio(
             "Navigering",
             ["📊 Översikt", "🔍 Veckoscanner", "🏦 Småbolag",
-             "💼 Portfölj", "📈 Teknisk analys"],
+             "💼 Portfölj", "📈 Teknisk analys", "🔧 Admin"],
             label_visibility="collapsed",
         )
 
@@ -1263,10 +1270,434 @@ def page_technical(df: pd.DataFrame, filters: dict):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# HJÄLPFUNKTIONER – FILHANTERING (lokal)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _load_holdings_df() -> pd.DataFrame:
+    """Ladda holdings.csv som DataFrame."""
+    path = ROOT / "holdings.csv"
+    try:
+        df = pd.read_csv(path)
+        df["ticker"] = df["ticker"].str.upper()
+        return df
+    except Exception:
+        return pd.DataFrame(columns=["ticker", "shares", "cost_basis"])
+
+
+def _save_holdings_df(df: pd.DataFrame) -> bool:
+    """Spara holdings.csv."""
+    try:
+        path = ROOT / "holdings.csv"
+        df.to_csv(path, index=False)
+        return True
+    except Exception as e:
+        st.error(f"Kunde inte spara: {e}")
+        return False
+
+
+def _load_watchlist_data() -> list:
+    path = DATA_DIR / "watchlist.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def _save_watchlist_data(items: list):
+    path = DATA_DIR / "watchlist.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _search_ticker_yfinance(query: str) -> list:
+    """Sök ticker via yfinance. Returnerar lista med {ticker, name}."""
+    if not query or len(query) < 1:
+        return []
+    try:
+        results = yf.Search(query, max_results=8).quotes or []
+        hits = []
+        for r in results:
+            qtype = r.get("quoteType", "")
+            if qtype in ("EQUITY", "ETF", "MUTUALFUND", "INDEX"):
+                hits.append({
+                    "ticker": r.get("symbol", ""),
+                    "name":   r.get("shortname") or r.get("longname") or "",
+                    "exchange": r.get("exchange", ""),
+                })
+        return hits
+    except Exception:
+        return []
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SIDA 6 – ADMIN (Portfölj, Watchlist, GitHub Actions, Avanza-import)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def page_admin():
+    st.title("🔧 Admin – Hantera portfölj, bevakning & scannar")
+
+    tab_wl, tab_hold, tab_scan, tab_import = st.tabs([
+        "⭐ Bevakningslista", "💼 Portfölj", "🚀 Starta scan", "📥 Avanza-import"
+    ])
+
+    # ── St1: Bevakningslista ────────────────────────────────────────────────
+    with tab_wl:
+        st.subheader("⭐ Bevakningslista")
+
+        # Ladda nuvarande
+        items = _load_watchlist_data()
+
+        # Visa nuvarande lista
+        if items:
+            wl_df = pd.DataFrame(items)
+            st.dataframe(wl_df, use_container_width=True, hide_index=True)
+
+            # Ta bort ticker
+            remove_ticker = st.selectbox(
+                "Ta bort ticker", [""] + [i["ticker"] for i in items],
+                key="wl_remove"
+            )
+            if remove_ticker and st.button("🗑️ Ta bort", key="btn_wl_remove"):
+                items = [i for i in items if i["ticker"] != remove_ticker]
+                _save_watchlist_data(items)
+                st.success(f"`{remove_ticker}` borttagen från bevakningslistan!")
+                st.rerun()
+        else:
+            st.info("Bevakningslistan är tom.")
+
+        st.markdown("---")
+        st.markdown("### Lägg till ny ticker")
+
+        search_q = st.text_input("Sök aktie (ticker eller namn)", key="wl_search",
+                                 placeholder="t.ex. AAPL, VOLV-B.ST, Investor")
+        if search_q:
+            hits = _search_ticker_yfinance(search_q.upper())
+            if hits:
+                options = {f"{h['ticker']} — {h['name'][:40]}": h for h in hits}
+                selected = st.selectbox("Välj från sökresultat", list(options.keys()),
+                                        key="wl_hit")
+                if selected:
+                    h = options[selected]
+                    col1, col2 = st.columns([2, 1])
+                    if col1.button("✅ Lägg till i bevakningslistan", key="btn_wl_add"):
+                        new_ticker = h["ticker"]
+                        exists = any(i["ticker"] == new_ticker for i in items)
+                        if not exists:
+                            items.append({
+                                "ticker": new_ticker,
+                                "name": h["name"],
+                                "added": str(date.today()),
+                            })
+                            _save_watchlist_data(items)
+                            st.success(f"`{new_ticker}` tillagd i bevakningslistan!")
+                            st.rerun()
+                        else:
+                            st.info(f"`{new_ticker}` finns redan i bevakningslistan.")
+            else:
+                st.caption("Inga sökresultat. Prova med annat sökord.")
+
+        # Snabb inmatning manuellt
+        with st.expander("Eller lägg till manuellt (ticker)"):
+            manual_ticker = st.text_input("Ticker (t.ex. AAPL)", key="wl_manual",
+                                          placeholder="Ticker-symbol").upper().strip()
+            manual_name = st.text_input("Namn (valfritt)", key="wl_manual_name")
+            if st.button("➕ Lägg till", key="btn_wl_manual"):
+                if manual_ticker:
+                    exists = any(i["ticker"] == manual_ticker for i in items)
+                    if not exists:
+                        items.append({
+                            "ticker": manual_ticker,
+                            "name": manual_name or manual_ticker,
+                            "added": str(date.today()),
+                        })
+                        _save_watchlist_data(items)
+                        st.success(f"`{manual_ticker}` tillagd!")
+                        st.rerun()
+                    else:
+                        st.info(f"`{manual_ticker}` finns redan.")
+                else:
+                    st.warning("Ange en ticker.")
+
+    # ── Flik 2: Portfölj ──────────────────────────────────────────────────
+    with tab_hold:
+        st.subheader("💼 Portfölj (holdings.csv)")
+
+        holdings = _load_holdings_df()
+
+        if not holdings.empty:
+            st.dataframe(holdings, use_container_width=True, hide_index=True)
+
+            # Ta bort innehav
+            remove_h = st.selectbox(
+                "Ta bort innehav",
+                [""] + holdings["ticker"].tolist(),
+                key="hold_remove"
+            )
+            if remove_h and st.button("🗑️ Ta bort innehav", key="btn_hold_remove"):
+                holdings = holdings[holdings["ticker"] != remove_h]
+                _save_holdings_df(holdings)
+                st.success(f"`{remove_h}` borttagen från portföljen!")
+                st.rerun()
+        else:
+            st.info("Portföljen är tom.")
+
+        st.markdown("---")
+        st.markdown("### Lägg till / uppdatera innehav")
+
+        search_h = st.text_input("Sök aktie (ticker eller namn)", key="hold_search",
+                                 placeholder="t.ex. AAPL, VOLV-B.ST")
+        ticker_map = {}
+        if search_h:
+            hits = _search_ticker_yfinance(search_h.upper())
+            if hits:
+                options = {f"{h['ticker']} — {h['name'][:40]}": h for h in hits}
+                selected = st.selectbox("Välj aktie", list(options.keys()), key="hold_hit")
+                if selected:
+                    ticker_map = options[selected]
+        else:
+            # Manuell inmatning
+            ticker_map = {"ticker": "", "name": ""}
+
+        with st.form(key="hold_form"):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                t_val = ticker_map.get("ticker", "") if isinstance(ticker_map, dict) else ""
+                ticker = st.text_input("Ticker *", value=t_val, key="hold_ticker",
+                                       placeholder="AAPL").upper().strip()
+            with col2:
+                shares = st.number_input("Antal aktier", min_value=0.0, step=1.0,
+                                         format="%.2f", key="hold_shares")
+            with col3:
+                cost = st.number_input("Inköpspris (SEK)", min_value=0.0, step=1.0,
+                                       format="%.2f", key="hold_cost")
+
+            submitted = st.form_submit_button("💾 Spara")
+            if submitted and ticker and shares > 0 and cost > 0:
+                # Kolla om ticker redan finns
+                if ticker in holdings["ticker"].values:
+                    holdings.loc[holdings["ticker"] == ticker, "shares"] = shares
+                    holdings.loc[holdings["ticker"] == ticker, "cost_basis"] = cost
+                    msg = f"`{ticker}` uppdaterad!"
+                else:
+                    new_row = pd.DataFrame([{"ticker": ticker, "shares": shares,
+                                              "cost_basis": cost}])
+                    holdings = pd.concat([holdings, new_row], ignore_index=True)
+                    msg = f"`{ticker}` tillagd i portföljen!"
+                _save_holdings_df(holdings)
+                st.success(msg)
+                st.rerun()
+            elif submitted:
+                st.warning("Fyll i ticker, antal och inköpspris.")
+
+    # ── Flik 3: GitHub Actions – starta scannar ─────────────────────────────
+    with tab_scan:
+        st.subheader("🚀 Starta scanning via GitHub Actions")
+        st.caption("Triggar en scanning i GitHub. Scannern körs i molnet (även när din dator är avstängd).")
+
+        # Läs GITHUB_TOKEN från miljövariabel eller session state
+        gh_token = os.getenv("GITHUB_TOKEN") or st.session_state.get("gh_token", "")
+        gh_owner = os.getenv("GITHUB_OWNER") or "hankkontakt"
+        gh_repo  = os.getenv("GITHUB_REPO")  or "stock-scanner"
+
+        if not gh_token:
+            gh_token = st.text_input(
+                "GitHub token (krävs för att starta scannar)",
+                type="password",
+                key="gh_token_input",
+                placeholder="ghp_...",
+            )
+            st.session_state["gh_token"] = gh_token
+        else:
+            st.success("✅ GitHub token läst från miljövariabel")
+
+        col_a, col_b = st.columns(2)
+
+        with col_a:
+            st.markdown("**🌅 Morgonscan (vardagar)**")
+            if st.button("▶️ Starta morgonscan", key="btn_morning",
+                         disabled=not gh_token, use_container_width=True):
+                _trigger_gh_workflow(gh_token, gh_owner, gh_repo,
+                                     "morning_scan.yml", "Morgonscan")
+                st.toast("Morgonscan startad! ⏳", icon="🌅")
+
+            st.markdown("**🌆 Kvällsscan (vardagar)**")
+            if st.button("▶️ Starta kvällsscan", key="btn_evening",
+                         disabled=not gh_token, use_container_width=True):
+                _trigger_gh_workflow(gh_token, gh_owner, gh_repo,
+                                     "evening_scan.yml", "Kvällsscan")
+                st.toast("Kvällsscan startad! ⏳", icon="🌆")
+
+        with col_b:
+            st.markdown("**📊 Veckoscan (söndagar)**")
+            if st.button("▶️ Starta veckoscan", key="btn_weekly",
+                         disabled=not gh_token, use_container_width=True):
+                _trigger_gh_workflow(gh_token, gh_owner, gh_repo,
+                                     "weekly_scan.yml", "Veckoscan",
+                                     inputs={"send_email": "true"})
+                st.toast("Veckoscan startad! ⏳", icon="📊")
+
+            st.markdown("**🏆 Småbolagsscan (måndagar)**")
+            col_c, col_d = st.columns(2)
+            with col_c:
+                market = st.selectbox("Marknad", ["all", "first_north", "small_cap", "spotlight"],
+                                      key="sc_market", label_visibility="collapsed")
+            with col_d:
+                top_n = st.number_input("Topp N", min_value=5, max_value=50, value=20,
+                                        key="sc_top", label_visibility="collapsed")
+            if st.button("▶️ Starta småbolagsscan", key="btn_smallcap",
+                         disabled=not gh_token, use_container_width=True):
+                _trigger_gh_workflow(gh_token, gh_owner, gh_repo,
+                                     "smallcap_scan.yml", "Småbolagsscan",
+                                     inputs={"market": market, "top_n": str(top_n),
+                                             "send_email": "true"})
+                st.toast("Småbolagsscan startad! ⏳", icon="🏆")
+
+        st.markdown("---")
+        st.info(
+            "Scan-resultaten visas här när GitHub Actions har kört klart och "
+            "committat tillbaka CSV-filerna (tar 2–10 min beroende på scannern). "
+            "Uppdatera sidan för att se nya resultat."
+        )
+
+    # ── Flik 4: Avanza-import ──────────────────────────────────────────────
+    with tab_import:
+        st.subheader("📥 Importera portfölj från Avanza CSV")
+        st.caption("Exportera din portfölj från Avanza som CSV och ladda upp här.")
+
+        uploaded = st.file_uploader("Välj Avanza CSV-fil", type=["csv"],
+                                    key="avanza_csv")
+        if uploaded is not None:
+            try:
+                content = uploaded.read().decode("utf-8-sig")
+                rows = _parse_avanza_csv(content)
+
+                if not rows:
+                    st.error(
+                        "Kunde inte läsa filen. Kontrollera att det är en "
+                        "Avanza-export (kolumner: namn, antal, inköpspris)."
+                    )
+                else:
+                    st.success(f"Läste {len(rows)} rader från Avanza-filen.")
+                    st.caption("Granska och bekräfta importen nedan.")
+
+                    import_data = []
+                    for i, row in enumerate(rows):
+                        hits = _search_ticker_yfinance(row["name"])
+                        suggested = hits[0]["ticker"] if hits else ""
+                        with st.container(border=True):
+                            cc1, cc2, cc3, cc4, cc5 = st.columns([3, 1, 1, 2, 2])
+                            with cc1:
+                                st.markdown(f"**{row['name']}**")
+                            with cc2:
+                                st.markdown(f"Antal: {row['shares']}")
+                            with cc3:
+                                st.markdown(f"Pris: {row['cost_basis']}")
+                            with cc4:
+                                ticker_val = st.text_input(
+                                    "Ticker", value=suggested,
+                                    key=f"import_ticker_{i}",
+                                    label_visibility="collapsed",
+                                ).upper().strip()
+                            with cc5:
+                                import_me = st.checkbox("Importera", value=True,
+                                                        key=f"import_ok_{i}")
+                            import_data.append({
+                                "row": row,
+                                "ticker": ticker_val,
+                                "import": import_me,
+                            })
+
+                    if st.button("✅ Bekräfta import", type="primary",
+                                 use_container_width=True):
+                        holdings = _load_holdings_df()
+                        n_add = 0
+                        n_upd = 0
+                        for item in import_data:
+                            if not item["import"] or not item["ticker"]:
+                                continue
+                            t = item["ticker"]
+                            s = float(item["row"]["shares"])
+                            c = item["row"]["cost_basis"]
+                            if t in holdings["ticker"].values:
+                                holdings.loc[holdings["ticker"] == t, "shares"] = s
+                                holdings.loc[holdings["ticker"] == t, "cost_basis"] = c
+                                n_upd += 1
+                            else:
+                                new_row = pd.DataFrame([{
+                                    "ticker": t, "shares": s, "cost_basis": c
+                                }])
+                                holdings = pd.concat([holdings, new_row], ignore_index=True)
+                                n_add += 1
+                        _save_holdings_df(holdings)
+                        st.success(f"Import klar! {n_add} tillagda, {n_upd} uppdaterade.")
+                        st.rerun()
+            except Exception as e:
+                st.error(f"Fel vid läsning av fil: {e}")
+
+
+def _trigger_gh_workflow(token: str, owner: str, repo: str,
+                         workflow: str, label: str, inputs: dict = None):
+    """Trigga en GitHub Actions workflow_dispatch."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow}/dispatches"
+    payload = {"ref": "main"}
+    if inputs:
+        payload["inputs"] = inputs
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "MarketScan-Streamlit",
+    }
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        if resp.status_code in (204, 201, 200):
+            st.success(f"✅ **{label}** startad via GitHub Actions!")
+        else:
+            st.error(f"❌ Kunde inte starta {label}: HTTP {resp.status_code}"
+                     f"\n{resp.text[:200]}")
+    except Exception as e:
+        st.error(f"❌ Nätverksfel: {e}")
+
+
+def _parse_avanza_csv(content: str) -> list:
+    """Parse Avanza CSV och returnera lista med dicts: {name, shares, cost_basis}."""
+    lines = content.strip().splitlines()
+    if not lines:
+        return []
+    reader = csv.DictReader(io.StringIO("\n".join(lines)))
+
+    # Hitta relevanta kolumner (Avanza-exporter har olika kolumnnamn)
+    rows = []
+    for row in reader:
+        # Testa olika vanliga kolumnnamn
+        name = (row.get("Namn") or row.get("name") or row.get("Instrument") or
+                row.get("isin") or "").strip()
+        shares_str = (row.get("Antal") or row.get("antal") or
+                      row.get("Quantity") or row.get("volume") or "0").strip()
+        cost_str = (row.get("Inköpspris") or row.get("inköpspris") or
+                    row.get("Cost basis") or row.get("cost_basis") or "0").strip()
+
+        if not name:
+            continue
+        try:
+            shares = float(shares_str.replace(",", ".").replace(" ", ""))
+        except ValueError:
+            shares = 0
+        try:
+            cost = float(cost_str.replace(",", ".").replace(" ", "").replace("kr", ""))
+        except ValueError:
+            cost = 0
+
+        if shares > 0:
+            rows.append({"name": name, "shares": shares, "cost_basis": cost})
+    return rows
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # HUVUD / ROUTING
 # ══════════════════════════════════════════════════════════════════════════════
 
 def main():
+
     # Ladda all data
     scan_reports  = load_scan_reports()
     sc_reports    = load_smallcap_reports()
@@ -1318,6 +1749,10 @@ def main():
             secs = sorted(df["sector"].dropna().unique().tolist())
         page_technical(df, filters)
 
+    elif page == "🔧 Admin":
+        page_admin()
+
 
 if __name__ == "__main__":
+
     main()
