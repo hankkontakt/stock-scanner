@@ -14,6 +14,15 @@ import tempfile
 from datetime import datetime, date
 from pathlib import Path
 
+# ── Sökvägar – MÅSTE komma INNAN projekt-importer ────────────────────────────
+# Streamlit Cloud kör filen från web/-mappen; projektroten måste läggas till
+# explicit annars hittas inte core/, data_management/, portfolio/.
+ROOT       = Path(__file__).resolve().parent.parent
+REPORT_DIR = ROOT / "reports"
+DATA_DIR   = ROOT / "data"
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -25,12 +34,6 @@ from data_management import avanza_import
 from core import config
 from core import ai_analysis
 from portfolio import watchlist as wl
-
-# ── Sökvägar ──────────────────────────────────────────────────────────────────
-ROOT       = Path(__file__).resolve().parent.parent
-REPORT_DIR = ROOT / "reports"
-DATA_DIR   = ROOT / "data"
-sys.path.insert(0, str(ROOT))
 
 # ── Page-konfiguration ────────────────────────────────────────────────────────
 st.set_page_config(
