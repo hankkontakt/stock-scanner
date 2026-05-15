@@ -254,7 +254,7 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
                 ".VI": "EURSEK=X",  ".LS": "EURSEK=X",  ".WA": "PLNSEK=X",
                 ".SW": "CHFSEK=X",  ".TO": "CADSEK=X",  ".AX": "AUDSEK=X",
                 ".HK": "HKDSEK=X",  ".T":  "JPYSEK=X",  ".TW": "TWDSEK=X",
-                ".KS": "KRWSEK=X",  ".NS": "INRSEK=X",  ".SI": "SGDSEK=X",
+                ".KS": "KRWSEK=X",  ".NS": "USDSEK=X",  ".SI": "SGDSEK=X",
                 ".SA": "BRLSEK=X",
             }
 
@@ -529,6 +529,24 @@ class _RateLimiter:
 # Med 8 workers kör vi sammanlagt ~8 anrop/sek → säkert.
 _YAHOO_RATE_LIMITER = _RateLimiter(calls_per_sec=config.PARALLEL_WORKERS)
 
+# Rate-limit detection state
+_RATE_LIMIT_COUNTER = {"consecutive_failures": 0, "last_rate_limit_time": 0.0}
+_RATE_LIMIT_LOCK = threading.Lock()
+
+def _is_rate_limited(failed_tickers_n: int, total_tickers: int) -> bool:
+    """
+    Detektera rate-limiting-mönster:
+    1. ≥3 tickers i rad misslyckas med TIMEOUT/ERROR → trolig rate-limit
+    2. ≥30% av tickers hittills har misslyckats → trolig rate-limit
+    """
+    consecutive = _RATE_LIMIT_COUNTER["consecutive_failures"]
+    if consecutive >= 3:
+        return True
+    # Om många av totalen har misslyckats, bromsa
+    if total_tickers > 10 and (failed_tickers_n / total_tickers) > 0.30:
+        return True
+    return False
+
 
 def _fetch_single_ticker(
     ticker: str,
@@ -547,6 +565,12 @@ def _fetch_single_ticker(
         # Rate-limit före varje tickers anrop totalt (info + history)
         _YAHOO_RATE_LIMITER.acquire()
 
+        # Rate-limit detection: om ≥3 tickers i rad har misslyckats,
+        # lägg på extra fördröjning för att ge Yahoo API tid att återhämta sig
+        with _RATE_LIMIT_LOCK:
+            if _RATE_LIMIT_COUNTER["consecutive_failures"] >= 3:
+                time.sleep(5.0)
+
         info = fetch_stock_info(ticker)
 
         # Try FMP fallback if yfinance returned nothing useful
@@ -558,14 +582,23 @@ def _fetch_single_ticker(
         history = fetch_price_history(ticker, period="1y")
 
         if not info and history.empty:
+            with _RATE_LIMIT_LOCK:
+                _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
             return (ticker, None, "FAILED")
 
+        # Success – reset consecutive failure counter
+        with _RATE_LIMIT_LOCK:
+            _RATE_LIMIT_COUNTER["consecutive_failures"] = 0
         metrics = extract_metrics(ticker, info, history)
         return (ticker, metrics, "OK")
 
     except TimeoutError:
+        with _RATE_LIMIT_LOCK:
+            _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
         return (ticker, None, "TIMEOUT")
     except Exception as e:
+        with _RATE_LIMIT_LOCK:
+            _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
         return (ticker, None, f"ERROR: {e}")
 
 
@@ -772,40 +805,51 @@ def search_stocks(query: str, max_results: int = 8) -> list:
 
 def fetch_benchmark_performance() -> dict:
     """
-    Hämtar OMXS30 (via ETF-proxy XACTOMXS3.ST) och SPY.
+    Hämtar OMXS30 (försök ^OMX först, fallback till XACTOMXS3.ST) och SPY.
     Returnerar {name: {change_1d, change_1m, change_ytd}} eller {} vid fel.
     """
-    result = {}
-    benchmarks = [
-        ("OMXS30", config.BENCHMARK_OMXS30),
-        ("SPY",    config.BENCHMARK_SPY),
-    ]
-    for name, ticker in benchmarks:
+    def _fetch_one(ticker: str) -> pd.DataFrame | None:
+        """Hämta historik för en benchmark-ticker med timeout-skydd."""
         try:
-            hist = yf.Ticker(ticker).history(period="1y", auto_adjust=True)
-            if hist.empty or len(hist) < 2:
-                continue
-            close = hist["Close"]
-            curr  = float(close.iloc[-1])
-            prev  = float(close.iloc[-2])
-            chg_1d = (curr / prev - 1) * 100
-
-            # 1 mån (~21 börsdagar)
-            if len(close) >= 22:
-                m1 = float(close.iloc[-22])
-                chg_1m = (curr / m1 - 1) * 100
-            else:
-                chg_1m = None
-
-            # YTD
-            ytd_start = float(close.iloc[0])
-            chg_ytd   = (curr / ytd_start - 1) * 100
-
-            result[name] = {
-                "change_1d":  round(chg_1d, 2),
-                "change_1m":  round(chg_1m, 2) if chg_1m is not None else None,
-                "change_ytd": round(chg_ytd, 2),
-            }
+            hist = _with_timeout(
+                lambda: yf.Ticker(ticker).history(period="1y", auto_adjust=True),
+                timeout_sec=15,
+            )
+            if hist is not None and not hist.empty and len(hist) >= 2:
+                return hist
         except Exception:
-            continue
+            pass
+        return None
+
+    def _calc(close) -> dict:
+        curr = float(close.iloc[-1])
+        prev = float(close.iloc[-2])
+        chg_1d = (curr / prev - 1) * 100
+        if len(close) >= 22:
+            m1 = float(close.iloc[-22])
+            chg_1m = (curr / m1 - 1) * 100
+        else:
+            chg_1m = None
+        ytd = float(close.iloc[0])
+        chg_ytd = (curr / ytd - 1) * 100
+        return {
+            "change_1d":  round(chg_1d, 2),
+            "change_1m":  round(chg_1m, 2) if chg_1m is not None else None,
+            "change_ytd": round(chg_ytd, 2),
+        }
+
+    result = {}
+
+    # OMXS30: försök ^OMX först (om index-data finns), fallback till ETF-proxyn
+    omx_hist = _fetch_one("^OMX")
+    if omx_hist is None:
+        omx_hist = _fetch_one(config.BENCHMARK_OMXS30)
+    if omx_hist is not None:
+        result["OMXS30"] = _calc(omx_hist["Close"])
+
+    # SPY
+    spy_hist = _fetch_one(config.BENCHMARK_SPY)
+    if spy_hist is not None:
+        result["SPY"] = _calc(spy_hist["Close"])
+
     return result

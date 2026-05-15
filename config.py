@@ -17,9 +17,9 @@ US_LARGE_CAP = [
     "ABNB", "DASH", "SPOT", "ADSK", "CDNS", "SNPS", "VRSN", "CTSH", "GLW",
     "HPQ", "HPE", "DELL", "WDC", "STX", "PSTG", "NTAP", "AKAM", "CDW", "ZBRA",
     "ARM", "SMCI", "ACN", "EPAM", "GLOB", "APP", "FLUT", "ANET", "VRT", "NTNX", 
-    "CHKP", "CYBR", "TOST", "FOUR", "ASAN", "ESTC", "SMTS", "DOCS", "LAW", "AMPL", 
+    "CHKP", "CYBR", "TOST", "FOUR", "ASAN", "ESTC", "DOCS", "LAW", "AMPL", 
     "COUR", "UDEMY", "ZM", "DBX", "BOX", "FSLY", "WOLF", "ON", "COHR", "AEHR", 
-    "RMBS", "AMKR", "ALGM", "SWKS", "QRVO", "JNPR", "FFIV", "IONQ", "RGTI", "QBTS", 
+    "RMBS", "AMKR", "ALGM", "SWKS", "QRVO", "FFIV", "IONQ", "RGTI", "QBTS", 
     "ARQQ", "RKLB", "ASTS", "JOBY", "ACHR", "AI", "PATH", "SOUN", "BBAI", "OPEN",
     
     # Finans
@@ -27,12 +27,12 @@ US_LARGE_CAP = [
     "BRK-B", "SCHW", "PYPL", "COIN", "BX", "KKR", "ICE", "CME", "SPGI", "MCO",
     "PGR", "TRV", "AIG", "MET", "PRU", "ALL", "AFL", "HIG", "RNR", "EG",
     "CBOE", "NDAQ", "IVZ", "BEN", "TROW", "STT", "NTRS", "FDS", "MKTX",
-    "SQ", "AFRM", "SOFI", "HOOD", "UPST", "NU", "ALLY", "SYF", "DFS", "COF", 
+    "SQ", "AFRM", "SOFI", "HOOD", "UPST", "NU", "ALLY", "SYF", "COF", 
     "CACC", "OMF", "NAVI", "SLM", "PRAA", "ENVA",
     
     # Krypto / High Beta (Ny)
-    "MSTR", "MARA", "RIOT", "CLEU", "HUT", "HIVE", "BITF", "IREN", "CORZ", "MIGI", 
-    "WULF", "SDIG", "BTBT", "ARBK",
+    "MSTR", "MARA", "RIOT", "HUT", "HIVE", "BITF", "IREN", "CORZ", "MIGI", 
+    "WULF", "BTBT", "ARBK",
 
     # Healthcare / Biotech
     "JNJ", "UNH", "LLY", "PFE", "ABBV", "MRK", "TMO", "ABT", "DHR", "BMY",
@@ -41,7 +41,7 @@ US_LARGE_CAP = [
     "CNC", "DGX", "LH", "HOLX", "EXAS", "VEEV", "RMD", "BAX", "BDX", "WAT",
     "MTD", "TECH", "PODD", "ACAD", "BEAM", "CRSP", "EDIT", "NTLA", "RXRX", "NUVL",
     "VKTX", "ALNY", "EXEL", "SRPT", "IOVA", "ROIV", "CPRX", "NBIX", "INCY", "UTHR", 
-    "UTMD", "MDGL", "BMRN", "BNTX", "PRGO", "CTLT", "CRL", "ICON", "ALGN", "MASI", 
+    "UTMD", "MDGL", "BMRN", "BNTX", "PRGO", "CRL", "ICON", "ALGN", "MASI", 
     "PEN", "GMED", "LMAT", "HALO", "GH", "NTRA", "TMDX",
 
     # Consumer Staples
@@ -61,16 +61,16 @@ US_LARGE_CAP = [
     "EMR", "ETN", "ITW", "PH", "ROK", "GD", "NOC", "TDG", "WM", "CSX",
     "UNP", "NSC", "LUV", "DAL", "UAL", "AAL", "PCAR", "CMI", "AGCO", "TEX",
     "HII", "KTOS", "BWXT", "TXT", "DRS", "MRCY", "HEI", "TDY", "WWD",
-    "MANT", "CACI", "LDOS", "SAIC", "BAH", "LHX", "HWM", "WNC", "GBX", "ALG", 
-    "GGG", "NDSN", "DOV", "AME", "ROIC", "FIX", "EME", "PWR", "MYRG", "TTC", "MIDD",
+    "CACI", "LDOS", "SAIC", "BAH", "LHX", "HWM", "WNC", "GBX", "ALG", 
+    "GGG", "NDSN", "DOV", "AME", "FIX", "EME", "PWR", "MYRG", "TTC", "MIDD",
 
     # Energi / Förnybart / Utilities / Kärnkraft
     "XOM", "CVX", "COP", "EOG", "SLB", "FANG", "MPC", "PSX", "VLO", "OXY",
     "APA", "DVN", "WMB", "KMI", "ENB", "NEE", "FSLR", "ENPH", "SEDG", "RUN",
     "PLUG", "FLNC", "BE", "ARRY", "DUK", "SO", "AEP", "EXC", "XEL", "SRE", "ED", 
     "ETR", "WEC", "EIX", "ES", "PPL", "FE", "NI", "AES", "D", "CEG", "VST", "CCJ", 
-    "NRG", "TLN", "LEU", "SMR", "OKLO", "FLR", "CW", "BPC", "TRN", "AR", "RRC", 
-    "CHK", "SWN", "EQT", "CNX", "MUR", "MRO", "PR", "MTDR", "PEG", "AEE", 
+    "NRG", "TLN", "LEU", "SMR", "OKLO", "FLR", "CW", "TRN", "AR", "RRC", 
+    "CHK", "EQT", "CNX", "MUR", "PR", "MTDR", "PEG", "AEE", 
     "AWK", "PNW", "OGE",
 
     # Material / Guld
@@ -95,7 +95,7 @@ OMX_SE = [
     "TREL-B.ST", "HEXA-B.ST", "AXFO.ST", "NIBE-B.ST", "ASSA-B.ST", 
     "HMSN.ST", "SYSR.ST", "MYCR.ST", "GARO.ST", "AFCO-B.ST", "FAG.ST", 
     "NOTE.ST", "AQ.ST", "BUFAB.ST", "MIPS.ST", "NCAB.ST", "OEM-B.ST", "IVSO.ST",
-    "MILDEF.ST", "INSTAL.ST", "BEIJ-B.ST", "TROAX.ST", "BERG-B.ST", "COIC.ST",
+    "MILDEF.ST", "INSTAL.ST", "BEIJ-B.ST", "TROAX.ST", "BERG-B.ST",
 
     # Finans & Investmentbolag
     "SEB-A.ST", "SHB-A.ST", "SWED-A.ST", "NDA-SE.ST", "INVE-A.ST", "INVE-B.ST",
@@ -105,11 +105,11 @@ OMX_SE = [
 
     # Tech / IT / Mjukvara
     "ERIC-B.ST", "SINCH.ST", "ENEA.ST", "CINT.ST", "IAR-B.ST", "KNOW.ST",
-    "BTS-B.ST", "VNE-SDB.ST", "ALIV-SDB.ST", "PRIC-B.ST", "ADDT-B.ST", "VIT-B.ST",
+    "BTS-B.ST", "ALIV-SDB.ST", "PRIC-B.ST", "ADDT-B.ST", "VIT-B.ST",
     "FNOX.ST", "PNDX-B.ST", "TRUE-B.ST",
 
     # Telecom & Media
-    "TELIA.ST", "TEL2-B.ST", "NENT-B.ST", "MTG-B.ST",
+    "TELIA.ST", "TEL2-B.ST", "MTG-B.ST",
 
     # Healthcare / Medtech / Biotech
     "AZN.ST", "GETI-B.ST", "ESSITY-B.ST", "ARJO-B.ST", "XVIVO.ST",
@@ -119,7 +119,7 @@ OMX_SE = [
     # Consumer / Gaming / Handel
     "HM-B.ST", "EVO.ST", "EMBRAC-B.ST", "BETS-B.ST", "G5EN.ST", "PDX.ST",
     "CLAS-B.ST", "MEKO.ST", "BILI-A.ST", "BHG.ST", "SKIS-B.ST", "DUNI.ST", 
-    "RVRC.ST", "CARY.ST", "KDEV.ST", "BINV.ST", "VOLCAR-B.ST", "AAK.ST", "THULE.ST", 
+    "RVRC.ST", "KDEV.ST", "BINV.ST", "VOLCAR-B.ST", "AAK.ST", "THULE.ST", 
     "LOOMIS.ST", "DOM.ST",
 
     # Material & Skog
@@ -151,7 +151,7 @@ EUROPE = [
 
     # Tech & Mjukvara
     "SAP.DE", "IFX.DE", "AIXA.DE", "GFT.DE", "WAF.DE", "SMHN.DE", "STMPA.PA", "CAP.PA", 
-    "TEP.PA", "ASML.AS", "PRX.AS", "BESI.AS", "STM.MI", "BOUV.OL", "OPRA", 
+    "TEP.PA", "ASML.AS", "PRX.AS", "BESI.AS", "BOUV.OL", "OPRA", 
     "NOKIA.HE", "ADYEN.AS", "NEM.DE",
 
     # Healthcare / Läkemedel
@@ -210,14 +210,14 @@ ASIA_PACIFIC = [
     "D05.SI", "O39.SI", "U11.SI", "C6L.SI",
 ]
 
-# ════════════════ KANADA (Med Rätta .TO Suffix) ════════════════
+# ════════════════ KANADA (Med Rätt .TO Suffix) ════════════════
 CANADA = [
     "ENB.TO", "TD.TO", "BNS.TO", "RY.TO", "CP.TO", "CNR.TO", "BCE.TO", "TRP.TO", "SU.TO", "CVE.TO",
     "IMO.TO", "PPL.TO", "WFG.TO", "CCO.TO", "FM.TO", "ABX.TO", "G.TO", "WPM.TO", "FNV.TO",
     "SHOP.TO", "BAM.TO", "BN.TO", "MFC.TO", "SLF.TO", "POW.TO", "FFH.TO", "DOL.TO", "ATD.TO", "L.TO",
     "WN.TO", "EMP-A.TO", "MRU.TO", "SAP.TO", "GIB-A.TO", "CSU.TO", "KXS.TO", "DSG.TO", 
-    "TIH.TO", "TFII.TO", "WSP.TO", "STN.TO", "NTR.TO", "AGI.TO", "OSK.TO", "IMG.TO", "YRI.TO", 
-    "LSPD.TO", "NVEI.TO", "REAL.TO", "DND.TO", "CIGI.TO", "FSV.TO", "ERF.TO", "MEG.TO", "BTE.TO", 
+    "TIH.TO", "TFII.TO", "WSP.TO", "STN.TO", "NTR.TO", "AGI.TO", "OSK.TO", "IMG.TO", 
+    "LSPD.TO", "REAL.TO", "DND.TO", "CIGI.TO", "FSV.TO", "MEG.TO", "BTE.TO", 
     "NXE.TO", "LUN.TO"
 ]
 
@@ -267,14 +267,14 @@ MIN_DATA_QUALITY          = 0.5  # 0.5 = accepterar 4/8 fält (investmentbolag, 
 
 # ════════════════ DATA-INSTÄLLNINGAR ════════════════
 CACHE_DIR             = "data/cache"
-CACHE_HOURS           = 720  # Statisk fundamental data – cachas 30 dagar (ändras bara vid kvartalsrapport)
-DYNAMIC_CACHE_HOURS   = 170  # Dynamisk data – cachas 7 dagar (P/E, analytikermål, blankning, beta)
-PRICE_CACHE_HOURS     = 24   # Prishistorik – alltid färsk (RSI, MACD, marknadsvärde)
+CACHE_HOURS           = 720  # Statisk fundamental data - cachas 30 dagar (ändras bara vid kvartalsrapport)
+DYNAMIC_CACHE_HOURS   = 170  # Dynamisk data - cachas 7 dagar (P/E, analytikermål, blankning, beta)
+PRICE_CACHE_HOURS     = 24   # Prishistorik - alltid färsk (RSI, MACD, marknadsvärde)
 MIN_DATA_QUALITY      = 0.5  # 0.5 = accepterar 4/8 fält (investmentbolag, råvarubolag etc.)
 
 
 # ════════════════ RAPPORT ════════════════
-TOP_N_RECOMMENDATIONS   = 10        # Topp 10 – läsbart och fokuserat
+TOP_N_RECOMMENDATIONS   = 10        # Topp 10 - läsbart och fokuserat
 REPORT_DIR              = "reports"
 REPORT_FILENAME_PATTERN = "weekly_report_{date}.md"
 
@@ -315,11 +315,11 @@ SMALLCAP_CONFIG = {
     "scoring_weights": {
         "insider":    0.18,  # Insynsägande & -handel (skin in the game)
         "fcf_yield":  0.16,  # Fritt kassaflöde / börsvärde
-        "piotroski":  0.15,  # Piotroski F-Score (redovisningskvalitet 0–9)
+        "piotroski":  0.15,  # Piotroski F-Score (redovisningskvalitet 0-9)
         "growth":     0.13,  # Omsättningstillväxt YoY
         "balance":    0.12,  # Balansräkning (D/E + current ratio)
         "value":      0.12,  # Värdering (EV/EBITDA eller P/B)
-        "momentum":   0.09,  # Relativ styrka 6–12 månader
+        "momentum":   0.09,  # Relativ styrka 6-12 månader
         "liquidity":  0.05,  # Daglig handelsvolym (exit-möjlighet)
     },
 
