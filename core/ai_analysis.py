@@ -46,6 +46,16 @@ PROVIDER_LABELS = {
     "gemini":   "Gemini (enkel, gratis)",
 }
 
+# Gemini-modeller att prova i ordning vid 404 (deprecation eller regionsbegränsning).
+# Free-tier-tillgängliga modeller per 2026. gemini-1.5-flash deprecated okt 2024.
+GEMINI_FALLBACK_MODELS = [
+    "gemini-2.5-flash",          # nyaste stable
+    "gemini-2.0-flash",          # föregående stable
+    "gemini-flash-latest",       # alias för senaste flash
+    "gemini-2.5-flash-lite",     # ännu lättare variant
+    "gemini-pro-latest",         # legacy fallback
+]
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SYSTEM PROMPTS – Anpassade för varje AI-funktion
 # ══════════════════════════════════════════════════════════════════════════════
@@ -213,6 +223,7 @@ def _gemini_call(messages: list, system_prompt: str = "",
                  max_tokens: int = None, temperature: float = None) -> str:
     """
     Anropa Google Gemini API med meddelanden via REST.
+    Vid 404 (deprecation) provas automatiskt nästa modell i GEMINI_FALLBACK_MODELS.
     Innehåller retry-logik med exponential backoff vid 429 rate-limit.
     Returnerar svaret som sträng, "" (tomt = fallback till DeepSeek),
     eller felmeddelande som börjar med "⚠️".
@@ -221,9 +232,9 @@ def _gemini_call(messages: list, system_prompt: str = "",
     if not api_key:
         return ""
 
-    # gemini-1.5-flash är stabil och tillgänglig i alla regioner på free tier.
-    # gemini-2.0-flash kräver ibland betalkonto.
-    model = getattr(config, "GEMINI_MODEL", "gemini-1.5-flash")
+    # Bygg modellista: konfigurerad modell först, sedan fallback-kandidater.
+    configured = getattr(config, "GEMINI_MODEL", "gemini-2.5-flash")
+    models_to_try = [configured] + [m for m in GEMINI_FALLBACK_MODELS if m != configured]
     max_tokens = max_tokens or getattr(config, "AI_MAX_TOKENS", 2048)
     temperature = temperature if temperature is not None else getattr(config, "AI_TEMPERATURE", 0.3)
 
@@ -257,114 +268,124 @@ def _gemini_call(messages: list, system_prompt: str = "",
     import time
     import requests
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     max_retries = 3
     last_error = ""
+    tried_models = []
 
-    for attempt in range(max_retries):
-        try:
-            resp = requests.post(
-                url,
-                params={"key": api_key},
-                headers={"Content-Type": "application/json"},
-                json=payload,
-                timeout=60,
-            )
+    # Yttre loop: iterera över modeller (byt vid 404).
+    for model in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        tried_models.append(model)
+        model_got_404 = False
 
-            if resp.status_code == 200:
-                data = resp.json()
+        # Inre loop: retry vid 429/timeout/etc för aktuell modell.
+        for attempt in range(max_retries):
+            try:
+                resp = requests.post(
+                    url,
+                    params={"key": api_key},
+                    headers={"Content-Type": "application/json"},
+                    json=payload,
+                    timeout=60,
+                )
 
-                # Kolla om prompten blockerades (t.ex. SAFETY)
-                prompt_feedback = data.get("promptFeedback", {})
-                block_reason = prompt_feedback.get("blockReason", "")
-                if block_reason:
-                    return f"⚠️ **Gemini blockerade frågan ({block_reason}).** Försök omformulera."
+                if resp.status_code == 200:
+                    data = resp.json()
 
-                candidates = data.get("candidates", [])
-                if not candidates:
-                    # Tomt svar utan blockeringsorsak – troligtvis tillfälligt
-                    last_error = "⚠️ **Gemini: tomt svar (inga kandidater).** Försök igen."
-                    time.sleep(1)
-                    continue
+                    # Kolla om prompten blockerades (t.ex. SAFETY)
+                    prompt_feedback = data.get("promptFeedback", {})
+                    block_reason = prompt_feedback.get("blockReason", "")
+                    if block_reason:
+                        return f"⚠️ **Gemini blockerade frågan ({block_reason}).** Försök omformulera."
 
-                candidate = candidates[0]
-                # Kontrollera finishReason (SAFETY, RECITATION, etc. = inget innehåll)
-                finish_reason = candidate.get("finishReason", "STOP")
-                if finish_reason not in ("STOP", "MAX_TOKENS", ""):
-                    return f"⚠️ **Gemini avbröt svaret ({finish_reason}).** Försök igen."
+                    candidates = data.get("candidates", [])
+                    if not candidates:
+                        last_error = "⚠️ **Gemini: tomt svar (inga kandidater).** Försök igen."
+                        time.sleep(1)
+                        continue
 
-                parts = candidate.get("content", {}).get("parts", [])
-                if not parts:
-                    last_error = "⚠️ **Gemini: tomt svar (inga delar).** Försök igen."
-                    time.sleep(1)
-                    continue
+                    candidate = candidates[0]
+                    finish_reason = candidate.get("finishReason", "STOP")
+                    if finish_reason not in ("STOP", "MAX_TOKENS", ""):
+                        return f"⚠️ **Gemini avbröt svaret ({finish_reason}).** Försök igen."
 
-                text = parts[0].get("text", "").strip()
-                if not text:
-                    last_error = "⚠️ **Gemini: tomt svar.** Försök igen."
-                    time.sleep(1)
-                    continue
+                    parts = candidate.get("content", {}).get("parts", [])
+                    if not parts:
+                        last_error = "⚠️ **Gemini: tomt svar (inga delar).** Försök igen."
+                        time.sleep(1)
+                        continue
 
-                return text
+                    text = parts[0].get("text", "").strip()
+                    if not text:
+                        last_error = "⚠️ **Gemini: tomt svar.** Försök igen."
+                        time.sleep(1)
+                        continue
 
-            elif resp.status_code == 400:
-                # Ogiltig förfrågan – försök inte igen
-                try:
-                    body = resp.json().get("error", {}).get("message", resp.text[:200])
-                except Exception:
-                    body = resp.text[:200]
-                return f"⚠️ **Gemini: ogiltig förfrågan (400):** {body}"
+                    # Notera vilken modell som faktiskt fungerade om vi var tvungna att byta
+                    if model != configured:
+                        text += f"\n\n---\n*ℹ️ Använde Gemini-modell `{model}` (konfigurerad `{configured}` ej tillgänglig)*"
+                    return text
 
-            elif resp.status_code == 403:
-                try:
-                    body = resp.json().get("error", {}).get("message", resp.text[:200])
-                except Exception:
-                    body = resp.text[:200]
-                # Ogiltig nyckel → tomt svar → fallback till DeepSeek
-                if "API_KEY_INVALID" in body or "API key not valid" in body:
-                    return ""
-                return f"⚠️ **Gemini nekade åtkomst (403):** {body}"
+                elif resp.status_code == 400:
+                    try:
+                        body = resp.json().get("error", {}).get("message", resp.text[:200])
+                    except Exception:
+                        body = resp.text[:200]
+                    return f"⚠️ **Gemini: ogiltig förfrågan (400):** {body}"
 
-            elif resp.status_code == 404:
-                # Modellen finns inte – troligen fel modellnamn
-                return f"⚠️ **Gemini: modell '{model}' hittades inte (404).** Kontrollera GEMINI_MODEL i config."
+                elif resp.status_code == 403:
+                    try:
+                        body = resp.json().get("error", {}).get("message", resp.text[:200])
+                    except Exception:
+                        body = resp.text[:200]
+                    if "API_KEY_INVALID" in body or "API key not valid" in body:
+                        return ""
+                    return f"⚠️ **Gemini nekade åtkomst (403):** {body}"
 
-            elif resp.status_code == 429:
-                # Rate-limit – vänta längre och försök igen
-                delay = 5.0 * (2 ** attempt)  # 5s, 10s, 20s
-                last_error = f"⚠️ **Gemini rate-limit (429)** – väntar {delay:.0f}s..."
+                elif resp.status_code == 404:
+                    # Modellen finns inte → bryt inre loop, gå till nästa modell.
+                    last_error = f"⚠️ **Gemini: modell '{model}' hittades inte (404).**"
+                    model_got_404 = True
+                    break
+
+                elif resp.status_code == 429:
+                    delay = 5.0 * (2 ** attempt)  # 5s, 10s, 20s
+                    last_error = f"⚠️ **Gemini rate-limit (429)** – väntar {delay:.0f}s..."
+                    if attempt < max_retries - 1:
+                        time.sleep(delay)
+                        continue
+                    return ""  # uttömda retries → fallback till DeepSeek
+
+                else:
+                    try:
+                        body = resp.text[:200]
+                    except Exception:
+                        body = ""
+                    last_error = f"⚠️ **Gemini svarade {resp.status_code}:** {body}"
+                    if attempt < max_retries - 1:
+                        time.sleep(2)
+                        continue
+                    return last_error
+
+            except requests.exceptions.Timeout:
+                last_error = "⚠️ **Gemini timeout – försök igen.**"
                 if attempt < max_retries - 1:
-                    time.sleep(delay)
+                    time.sleep(1)
                     continue
-                # Alla retries uttömda → tomt → fallback till DeepSeek
-                return ""
-
-            else:
-                try:
-                    body = resp.text[:200]
-                except Exception:
-                    body = ""
-                last_error = f"⚠️ **Gemini svarade {resp.status_code}:** {body}"
+                return last_error
+            except Exception as e:
+                last_error = f"⚠️ **Gemini-anropet misslyckades:** {str(e)}"
                 if attempt < max_retries - 1:
-                    time.sleep(2)
+                    time.sleep(0.5)
                     continue
                 return last_error
 
-        except requests.exceptions.Timeout:
-            last_error = "⚠️ **Gemini timeout – försök igen.**"
-            if attempt < max_retries - 1:
-                time.sleep(1)
-                continue
-            return last_error
-        except Exception as e:
-            last_error = f"⚠️ **Gemini-anropet misslyckades:** {str(e)}"
-            if attempt < max_retries - 1:
-                time.sleep(0.5)
-                continue
-            return last_error
+        # Om vi inte fick 404, sluta prova fler modeller (felet är inte modellrelaterat).
+        if not model_got_404:
+            break
 
-    # Loopen avslutades utan lyckad return – returnera senaste felmeddelandet
-    return last_error or "⚠️ **Gemini: inget svar efter flera försök.** Försök igen."
+    # Alla modeller gav 404 (eller annat fatalt)
+    return last_error or f"⚠️ **Gemini: ingen av modellerna fungerade.** Provade: {', '.join(tried_models)}"
 
 
 def _ai_call(messages: list, system_prompt: str = "",
