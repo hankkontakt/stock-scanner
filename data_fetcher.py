@@ -706,3 +706,48 @@ def search_stocks(query: str, max_results: int = 8) -> list:
         return results[:max_results]
     except Exception as e:
         return []
+
+
+# ══════════════════════════════════════════════════════════════
+# BENCHMARK DATA (OMXS30 + SPY) – ersätter daily_scan.fetch_benchmark_performance()
+# ══════════════════════════════════════════════════════════════
+
+def fetch_benchmark_performance() -> dict:
+    """
+    Hämtar OMXS30 (via ETF-proxy XACTOMXS3.ST) och SPY.
+    Returnerar {name: {change_1d, change_1m, change_ytd}} eller {} vid fel.
+    """
+    result = {}
+    benchmarks = [
+        ("OMXS30", config.BENCHMARK_OMXS30),
+        ("SPY",    config.BENCHMARK_SPY),
+    ]
+    for name, ticker in benchmarks:
+        try:
+            hist = yf.Ticker(ticker).history(period="1y", auto_adjust=True)
+            if hist.empty or len(hist) < 2:
+                continue
+            close = hist["Close"]
+            curr  = float(close.iloc[-1])
+            prev  = float(close.iloc[-2])
+            chg_1d = (curr / prev - 1) * 100
+
+            # 1 mån (~21 börsdagar)
+            if len(close) >= 22:
+                m1 = float(close.iloc[-22])
+                chg_1m = (curr / m1 - 1) * 100
+            else:
+                chg_1m = None
+
+            # YTD
+            ytd_start = float(close.iloc[0])
+            chg_ytd   = (curr / ytd_start - 1) * 100
+
+            result[name] = {
+                "change_1d":  round(chg_1d, 2),
+                "change_1m":  round(chg_1m, 2) if chg_1m is not None else None,
+                "change_ytd": round(chg_ytd, 2),
+            }
+        except Exception:
+            continue
+    return result

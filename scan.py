@@ -855,8 +855,7 @@ def main():
     # 1.6. Benchmark-data (OMXS30 + SPY)
     print("📊 Hämtar benchmark...")
     try:
-        from daily_scan import fetch_benchmark_performance
-        benchmarks = fetch_benchmark_performance()
+        benchmarks = data_fetcher.fetch_benchmark_performance()
         omx = benchmarks.get("OMXS30", {})
         if omx:
             print(f"   OMXS30: {omx.get('change_1d',0):+.1f}% idag, {omx.get('change_ytd',0):+.1f}% YTD")

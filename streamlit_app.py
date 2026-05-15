@@ -7,11 +7,10 @@ Kör lokalt : streamlit run streamlit_app.py
 Deploya    : anslut GitHub-repo till streamlit.io/cloud
 """
 
-import csv
-import io
 import json
 import os
 import sys
+import tempfile
 from datetime import datetime, date
 from pathlib import Path
 
@@ -22,6 +21,7 @@ import plotly.graph_objects as go
 import requests
 import streamlit as st
 import yfinance as yf
+import avanza_import
 import config
 import watchlist as wl
 
@@ -1273,17 +1273,6 @@ def page_technical(df: pd.DataFrame, filters: dict):
 # HJÄLPFUNKTIONER – FILHANTERING (lokal)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _load_holdings_df() -> pd.DataFrame:
-    """Ladda holdings.csv som DataFrame."""
-    path = ROOT / "holdings.csv"
-    try:
-        df = pd.read_csv(path)
-        df["ticker"] = df["ticker"].str.upper()
-        return df
-    except Exception:
-        return pd.DataFrame(columns=["ticker", "shares", "cost_basis"])
-
-
 def _save_holdings_df(df: pd.DataFrame) -> bool:
     """Spara holdings.csv."""
     try:
@@ -1293,14 +1282,6 @@ def _save_holdings_df(df: pd.DataFrame) -> bool:
     except Exception as e:
         st.error(f"Kunde inte spara: {e}")
         return False
-
-
-def _load_watchlist_data() -> list:
-    path = DATA_DIR / "watchlist.json"
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return []
 
 
 def _save_watchlist_data(items: list):
@@ -1400,7 +1381,7 @@ def page_admin():
         st.subheader("⭐ Bevakningslista")
 
         # Ladda nuvarande
-        items = _load_watchlist_data()
+        items = load_watchlist()
 
         # Visa nuvarande lista
         if items:
@@ -1477,7 +1458,7 @@ def page_admin():
     with tab_hold:
         st.subheader("💼 Portfölj (holdings.csv)")
 
-        holdings = _load_holdings_df()
+        holdings = load_portfolio()
 
         if not holdings.empty:
             st.dataframe(holdings, use_container_width=True, hide_index=True)
@@ -1489,6 +1470,7 @@ def page_admin():
                 key="hold_remove"
             )
             if remove_h and st.button("🗑️ Ta bort innehav", key="btn_hold_remove"):
+                holdings = load_portfolio()
                 holdings = holdings[holdings["ticker"] != remove_h]
                 _save_holdings_df(holdings)
                 st.success(f"`{remove_h}` borttagen från portföljen!")
@@ -1623,17 +1605,32 @@ def page_admin():
                                     key="avanza_csv")
         if uploaded is not None:
             try:
-                content = uploaded.read().decode("utf-8-sig")
-                rows = _parse_avanza_csv(content)
+                # Skriv till temporär fil för att kunna använda avanza_import.parse_avanza_csv()
+                with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
+                    tmp.write(uploaded.getvalue())
+                    tmp_path = tmp.name
+                try:
+                    df_avanza = avanza_import.parse_avanza_csv(tmp_path)
+                finally:
+                    os.unlink(tmp_path)
 
-                if not rows:
+                if df_avanza.empty:
                     st.error(
                         "Kunde inte läsa filen. Kontrollera att det är en "
                         "Avanza-export (kolumner: namn, antal, inköpspris)."
                     )
                 else:
-                    st.success(f"Läste {len(rows)} rader från Avanza-filen.")
+                    st.success(f"Läste {len(df_avanza)} rader från Avanza-filen.")
                     st.caption("Granska och bekräfta importen nedan.")
+
+                    # Konvertera DataFrame till listan av dicts som resten av flödet förväntar sig
+                    rows = []
+                    for _, r in df_avanza.iterrows():
+                        rows.append({
+                            "name": r.get("name", ""),
+                            "shares": r.get("shares", 0),
+                            "cost_basis": r.get("cost_basis", 0),
+                        })
 
                     import_data = []
                     for i, row in enumerate(rows):
@@ -1664,7 +1661,7 @@ def page_admin():
 
                     if st.button("✅ Bekräfta import", type="primary",
                                  use_container_width=True):
-                        holdings = _load_holdings_df()
+                        holdings = load_portfolio()
                         n_add = 0
                         n_upd = 0
                         for item in import_data:
@@ -1711,41 +1708,6 @@ def _trigger_gh_workflow(token: str, owner: str, repo: str,
                      f"\n{resp.text[:200]}")
     except Exception as e:
         st.error(f"❌ Nätverksfel: {e}")
-
-
-def _parse_avanza_csv(content: str) -> list:
-    """Parse Avanza CSV och returnera lista med dicts: {name, shares, cost_basis}."""
-    lines = content.strip().splitlines()
-    if not lines:
-        return []
-    reader = csv.DictReader(io.StringIO("\n".join(lines)))
-
-    # Hitta relevanta kolumner (Avanza-exporter har olika kolumnnamn)
-    rows = []
-    for row in reader:
-        # Testa olika vanliga kolumnnamn
-        name = (row.get("Namn") or row.get("name") or row.get("Instrument") or
-                row.get("isin") or "").strip()
-        shares_str = (row.get("Antal") or row.get("antal") or
-                      row.get("Quantity") or row.get("volume") or "0").strip()
-        cost_str = (row.get("Inköpspris") or row.get("inköpspris") or
-                    row.get("Cost basis") or row.get("cost_basis") or "0").strip()
-
-        if not name:
-            continue
-        try:
-            shares = float(shares_str.replace(",", ".").replace(" ", ""))
-        except ValueError:
-            shares = 0
-        try:
-            cost = float(cost_str.replace(",", ".").replace(" ", "").replace("kr", ""))
-        except ValueError:
-            cost = 0
-
-        if shares > 0:
-            rows.append({"name": name, "shares": shares, "cost_basis": cost})
-    return rows
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HUVUD / ROUTING
