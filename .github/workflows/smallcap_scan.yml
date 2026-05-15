@@ -94,5 +94,18 @@ jobs:
         if: always()
         with:
           name: smallcap-report-${{ github.run_number }}
-          path: reports/smallcap_report_*.md
+          path: |
+            reports/smallcap_report_*.md
+            reports/smallcap_scored_*.csv
           retention-days: 90
+
+      # ── Commit CSV tillbaka till repo (krävs av Streamlit-dashboarden) ────────
+      - name: 🔄 Commit smallcap CSV till repo
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "MarketScan Bot"
+          git add reports/smallcap_scored_*.csv || true
+          git diff --staged --quiet || git commit -m "🤖 Auto: Småbolagsdata $(date +%Y-%m-%d)"
+          git push || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
