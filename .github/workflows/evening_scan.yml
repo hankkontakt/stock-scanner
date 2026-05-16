@@ -43,11 +43,11 @@ jobs:
       - name: 📁 Skapa mappar
         run: mkdir -p data/cache data/history reports
 
-      # holdings.csv finns redan i repot – använd den
+      # holdings.csv finns i data/holdings.csv (efter flytten)
       - name: ✅ Verifiera holdings.csv
         run: |
-          if [ -f holdings.csv ]; then
-            echo "✓ holdings.csv finns i repot ($(wc -l < holdings.csv) rader)"
+          if [ -f data/holdings.csv ]; then
+            echo "✓ holdings.csv finns ($(wc -l < data/holdings.csv) rader)"
           else
             echo "ℹ holdings.csv saknas – kör utan portföljdata"
           fi
@@ -69,8 +69,7 @@ jobs:
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          cd scans
-          python evening_scan.py
+          python scans/evening_scan.py
 
       - name: 📤 Spara kvällsrapport
         uses: actions/upload-artifact@v4
