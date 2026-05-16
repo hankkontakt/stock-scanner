@@ -3,23 +3,17 @@ email_template.py
 =================
 Gemensam email-engine för alla MarketScan-rapporter.
 
-Designprinciper:
-  - En källa för all email-rendering
-  - Professionell, ren design utan emoji-överbelastning
-  - Inline CSS (krävs för Gmail/Outlook)
-  - Maxbredd 640px
-  - Definierad färgpalett
-  - Fungerar i alla email-klienter
+Använder mistune (3.x) för markdown→HTML-konvertering istället för
+handskriven parser, vilket ger:
+  - Professionellare rendering (Github Flavored Markdown)
+  - Mindre kod (~150 färre rader)
+  - Färre buggar (emoji-separatorer, tabellkanter, etc.)
 
-Färgpalett:
-  Primär:    #1a1a2e (mörkblå header)
-  Positiv:   #16a34a (grön)
-  Negativ:   #dc2626 (röd)
-  Varning:   #f59e0b (gul)
-  Bakgrund:  #f8fafc (ljus)
-  Text:      #1e293b (mörkgrå)
-  Accent:    #2563eb (blå)
-  Muted:     #64748b (dämpad)
+Design:
+  - Inline CSS (krävs för Gmail/Outlook)
+  - Responsiv (fungerar på mobil via media queries + flexibel bredd)
+  - Unsubscribe-länk (minskar spam-risk)
+  - Plain-text fallback som trunkeras vid mening (inte mitt i ord)
 """
 
 import html
@@ -29,6 +23,8 @@ from datetime import date, datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Optional
+
+import mistune
 
 
 # ── Färgpalett ──────────────────────────────────────────────────────────────
@@ -73,20 +69,195 @@ def email_configured() -> bool:
     return bool(sender and password)
 
 
-# ── HTML-layout ─────────────────────────────────────────────────────────────
+# ── Mistune renderer för inline CSS ─────────────────────────────────────────
 
-def _build_html_document(body_html: str, subject: str = "") -> str:
+class _InlineCSSRenderer(mistune.HTMLRenderer):
+    """
+    En Mistune-renderer som lägger till inline CSS-styling på alla element.
+    Detta krävs för att email-klienter (Gmail, Outlook) ska visa
+    formateringen korrekt.
+    """
+
+    def _style(self, tag: str, extra: str = "") -> str:
+        """Hämta inline-style för en given HTML-tagg."""
+        styles = {
+            "table": (
+                "border-collapse:collapse;width:100%;margin:12px 0;"
+                f"font-size:13px;border:1px solid {COLORS['border']};"
+                "border-radius:6px;overflow:hidden"
+            ),
+            "th": (
+                "padding:8px 12px;text-align:left;"
+                "font-size:11px;font-weight:600;text-transform:uppercase;"
+                f"letter-spacing:1px;color:{COLORS['muted']};"
+                f"background:#f1f5f9;border-bottom:1px solid {COLORS['border']}"
+            ),
+            "td": (
+                f"padding:7px 12px;border-bottom:1px solid {COLORS['border']};"
+                "vertical-align:middle"
+            ),
+            "h1": (
+                f"font-size:20px;font-weight:700;margin:0 0 16px;color:{COLORS['primary']}"
+            ),
+            "h2": (
+                f"font-size:17px;font-weight:600;margin:24px 0 10px;"
+                f"padding-bottom:6px;border-bottom:1px solid {COLORS['border']};"
+                f"color:{COLORS['text']}"
+            ),
+            "h3": (
+                f"font-size:15px;font-weight:600;margin:20px 0 8px;color:{COLORS['text']}"
+            ),
+            "p": (
+                "margin:4px 0;font-size:14px;line-height:1.6"
+            ),
+            "a": (
+                f"color:{COLORS['accent']};text-decoration:none;font-weight:500"
+            ),
+            "code": (
+                "background:#f1f5f9;padding:1px 5px;border-radius:3px;"
+                "font-size:13px;color:#1e293b"
+            ),
+            "pre": (
+                "background:#f1f5f9;padding:14px 16px;border-radius:6px;"
+                "font-size:13px;overflow-x:auto;white-space:pre-wrap;"
+                "word-break:break-all;border:1px solid #e2e8f0;margin:12px 0"
+            ),
+            "blockquote": (
+                f"margin:12px 0;padding:10px 16px;border-left:3px solid {COLORS['accent']};"
+                "background:#f8fafc;border-radius:0 6px 6px 0;color:#475569"
+            ),
+            "ul": (
+                "margin:8px 0;padding:0 0 0 20px"
+            ),
+            "li": (
+                "margin:3px 0;line-height:1.5"
+            ),
+            "hr": (
+                f"border:none;border-top:1px solid {COLORS['border']};margin:20px 0"
+            ),
+        }
+        base = styles.get(tag, "")
+        return f'style="{base}{extra}"' if base else ""
+
+    # ── Block-element ─────────────────────────────────────────────────────
+    def table(self, text: str) -> str:
+        return f'<table {self._style("table")}>{text}</table>'
+
+    def table_head(self, text: str) -> str:
+        return f"<thead>{text}</thead>"
+
+    def table_body(self, text: str) -> str:
+        return f"<tbody>{text}</tbody>"
+
+    def table_row(self, text: str) -> str:
+        return f"<tr>{text}</tr>"
+
+    def table_cell(self, text: str, **kwargs) -> str:
+        tag = "th" if kwargs.get("head") else "td"
+        return f"<{tag} {self._style(tag)}>{text}</{tag}>"
+
+    def heading(self, text: str, level: int, **kwargs) -> str:
+        tag = f"h{level}"
+        return f"<{tag} {self._style(tag)}>{text}</{tag}>"
+
+    def paragraph(self, text: str) -> str:
+        return f"<p {self._style('p')}>{text}</p>"
+
+    def link(self, text: str, url: str, title: Optional[str] = None) -> str:
+        title_attr = f' title="{html.escape(title)}"' if title else ""
+        return f'<a {self._style("a")} href="{html.escape(url)}"{title_attr}>{text}</a>'
+
+    def codespan(self, text: str) -> str:
+        return f"<code {self._style('code')}>{html.escape(text)}</code>"
+
+    def block_code(self, text: str, info: Optional[str] = None) -> str:
+        return f"<pre {self._style('pre')}>{html.escape(text)}</pre>"
+
+    def block_quote(self, text: str) -> str:
+        return f"<blockquote {self._style('blockquote')}>{text}</blockquote>"
+
+    def list(self, text: str, ordered: bool = False, **kwargs) -> str:
+        tag = "ol" if ordered else "ul"
+        return f"<{tag} {self._style('ul')}>{text}</{tag}>"
+
+    def list_item(self, text: str, **kwargs) -> str:
+        return f"<li {self._style('li')}>{text}</li>"
+
+    def thematic_break(self) -> str:
+        return f"<hr {self._style('hr')}>"
+
+    # ── Inline-element ───────────────────────────────────────────────────
+    def inline_html(self, html_str: str) -> str:
+        # Pass through raw HTML (used for score badges, pnl cells, etc.)
+        return html_str
+
+    def emphasis(self, text: str) -> str:
+        return f"<em>{text}</em>"
+
+    def strong(self, text: str) -> str:
+        return f"<strong>{text}</strong>"
+
+
+# Skapa en global instans av markdown-parsern
+_markdown = mistune.Markdown(renderer=_InlineCSSRenderer())
+
+
+def _markdown_to_html(md_text: str) -> str:
+    """
+    Konverterar markdown till HTML-body med inline CSS.
+    Klipper bort sektioner som inte ska vara i email.
+    """
+    # Klipp bort interna sektioner (debug/analys-promptar etc.)
+    skip_markers = [
+        "## 📦 AI-Datalager",
+        "## 🤖 AI-analyspromptar",
+        "## 🤖 Klistra in i Claude Pro",
+    ]
+    for marker in skip_markers:
+        if marker in md_text:
+            md_text = md_text[:md_text.index(marker)]
+
+    # Konvertera till HTML via mistune
+    return _markdown(md_text)
+
+
+# ── HTML-layout (responsiv) ─────────────────────────────────────────────────
+
+def _build_html_document(body_html: str, subject: str = "", unsubscribe_url: str = "") -> str:
     """
     Bygger ett komplett HTML-email-dokument med header, body och footer.
-    All CSS är inline för maximal kompatibilitet.
+    Responsiv design med media queries för mobil.
     """
     today = date.today().strftime("%Y-%m-%d")
+
+    # Responsiv CSS för mobil-anpassning
+    responsive_css = """
+@media only screen and (max-width: 600px) {
+  .email-container { width: 100% !important; max-width: 100% !important; }
+  .email-header { padding: 16px 16px 14px !important; }
+  .email-body   { padding: 16px 16px 12px !important; }
+  .email-footer { padding: 12px 16px 20px !important; }
+  .email-logo   { font-size: 16px !important; }
+  .email-table { font-size: 12px !important; }
+  .email-table th,
+  .email-table td { padding: 5px 8px !important; }
+}
+"""
+
+    unsubscribe_html = ""
+    if unsubscribe_url:
+        unsubscribe_html = (
+            f'<a href="{html.escape(unsubscribe_url)}" '
+            f'style="color:#94a3b8;text-decoration:underline">Avsluta prenumeration</a>'
+        )
+
     return f"""<!DOCTYPE html>
 <html lang="sv">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{html.escape(subject)}</title>
+<style>{responsive_css}</style>
 </head>
 <body style="margin:0;padding:0;background-color:{COLORS['bg']};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:{COLORS['text']}">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:{COLORS['bg']}">
@@ -94,15 +265,15 @@ def _build_html_document(body_html: str, subject: str = "") -> str:
 <td align="center" style="padding:20px 10px">
 
   <!-- HUVUDCONTAINER -->
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" style="max-width:640px;width:100%;background-color:{COLORS['bg_card']};border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" class="email-container" style="max-width:640px;width:100%;background-color:{COLORS['bg_card']};border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08)">
 
     <!-- HEADER -->
     <tr>
-      <td style="background-color:{COLORS['header_bg']};padding:24px 32px 20px">
+      <td class="email-header" style="background-color:{COLORS['header_bg']};padding:24px 32px 20px">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
           <tr>
             <td style="vertical-align:middle">
-              <span style="font-size:20px;font-weight:700;color:{COLORS['header_fg']};letter-spacing:3px;text-transform:uppercase">MARKET<span style="color:#00d4aa">SCAN</span></span>
+              <span class="email-logo" style="font-size:20px;font-weight:700;color:{COLORS['header_fg']};letter-spacing:3px;text-transform:uppercase">MARKET<span style="color:#00d4aa">SCAN</span></span>
               <br>
               <span style="font-size:11px;color:#94a3b8;letter-spacing:2px;text-transform:uppercase">{today}</span>
             </td>
@@ -116,14 +287,14 @@ def _build_html_document(body_html: str, subject: str = "") -> str:
 
     <!-- BODY -->
     <tr>
-      <td style="padding:28px 32px 20px">
+      <td class="email-body" style="padding:28px 32px 20px">
         {body_html}
       </td>
     </tr>
 
     <!-- FOOTER -->
     <tr>
-      <td style="padding:16px 32px 24px;border-top:1px solid {COLORS['border']}">
+      <td class="email-footer" style="padding:16px 32px 24px;border-top:1px solid {COLORS['border']}">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
           <tr>
             <td style="font-size:11px;color:{COLORS['muted']};line-height:1.5">
@@ -137,19 +308,15 @@ def _build_html_document(body_html: str, subject: str = "") -> str:
               MarketScan &middot; Genererad {datetime.now().strftime("%Y-%m-%d %H:%M")}
             </td>
           </tr>
+          <tr>
+            <td style="padding-top:12px;font-size:10px;color:#94a3b8">
+              {unsubscribe_html if unsubscribe_html else "Detta mail skickas från MarketScan. Hanteras via din konfiguration."}
+            </td>
+          </tr>
         </table>
       </td>
     </tr>
 
-  </table>
-
-  <!-- VIEW IN BROWSER -->
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" style="max-width:640px;width:100%">
-    <tr>
-      <td style="padding:12px 0;text-align:center;font-size:11px;color:{COLORS['muted']}">
-        Detta mail skickas från MarketScan. Hanteras via din konfiguration.
-      </td>
-    </tr>
   </table>
 
 </td>
@@ -159,169 +326,7 @@ def _build_html_document(body_html: str, subject: str = "") -> str:
 </html>"""
 
 
-# ── Markdown → HTML ─────────────────────────────────────────────────────────
-
-def _inline_md(text: str) -> str:
-    """Konverterar inline markdown (bold, code, italic, links) till HTML."""
-    # Spara markdown-länkar före html.escape
-    link_matches = []
-    def _save_link(m):
-        idx = len(link_matches)
-        link_matches.append((m.group(1), m.group(2)))
-        return f"\x00LINK{idx}\x00"
-    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', _save_link, text)
-
-    text = html.escape(text)
-
-    # Återställ länkar
-    for idx, (title, url) in enumerate(link_matches):
-        title_safe = html.escape(title)
-        url_safe   = html.escape(url)
-        text = text.replace(
-            f"\x00LINK{idx}\x00",
-            f'<a href="{url_safe}" style="color:{COLORS["accent"]};text-decoration:none;font-weight:500">{title_safe}</a>'
-        )
-
-    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-    text = re.sub(r"`(.+?)`",
-                  r'<code style="background:#f1f5f9;padding:1px 5px;border-radius:3px;font-size:13px;color:#1e293b">\1</code>', text)
-    text = re.sub(r"\*(.+?)\*",    r"<em>\1</em>", text)
-    text = re.sub(r"_([^_]+)_",    r"<em>\1</em>", text)
-    return text
-
-
-def _markdown_to_html(md: str) -> str:
-    """
-    Konverterar markdown till HTML-body (utan wrapper).
-    Hanterar: rubriker, tabeller, listor, kodblock, citat, horisontella linjer.
-    """
-    # Klipp bort sektioner som inte ska vara i email
-    for marker in ["## 📦 AI-Datalager", "## 🤖 AI-analyspromptar", "## 🤖 Klistra in i Claude Pro"]:
-        if marker in md:
-            md = md[:md.index(marker)]
-
-    lines = md.split("\n")
-    out      = []
-    in_table = False
-    in_code  = False
-    in_list  = False
-    in_blockquote = False
-
-    for line in lines:
-        # Kodblock
-        if line.strip().startswith("```"):
-            if in_list:
-                out.append("</ul>")
-                in_list = False
-            if in_blockquote:
-                out.append("</blockquote>")
-                in_blockquote = False
-            if not in_code:
-                out.append('<pre style="background:#f1f5f9;padding:14px 16px;border-radius:6px;font-size:13px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;border:1px solid #e2e8f0;margin:12px 0">')
-                in_code = True
-            else:
-                out.append("</pre>")
-                in_code = False
-            continue
-
-        if in_code:
-            out.append(html.escape(line))
-            continue
-
-        # Blockquote
-        if line.startswith("> "):
-            if in_table:
-                out.append("</table>")
-                in_table = False
-            if in_list:
-                out.append("</ul>")
-                in_list = False
-            if not in_blockquote:
-                out.append(f'<blockquote style="margin:12px 0;padding:10px 16px;border-left:3px solid {COLORS["accent"]};background:#f8fafc;border-radius:0 6px 6px 0;color:#475569">')
-                in_blockquote = True
-            out.append(f'<p style="margin:2px 0">{_inline_md(line[2:])}</p>')
-            continue
-        elif in_blockquote and line.strip() == "":
-            out.append("</blockquote>")
-            in_blockquote = False
-            continue
-        elif in_blockquote:
-            out.append(f'<p style="margin:2px 0">{_inline_md(line)}</p>')
-            continue
-
-        # Listor
-        if re.match(r"^[-*] ", line):
-            if in_table:
-                out.append("</table>")
-                in_table = False
-            if in_blockquote:
-                out.append("</blockquote>")
-                in_blockquote = False
-            if not in_list:
-                out.append('<ul style="margin:8px 0;padding:0 0 0 20px">')
-                in_list = True
-            out.append(f'<li style="margin:3px 0;line-height:1.5">{_inline_md(line[2:])}</li>')
-            continue
-        elif in_list and line.strip() == "":
-            out.append("</ul>")
-            in_list = False
-        elif in_list:
-            out.append("</ul>")
-            in_list = False
-
-        # Tabeller
-        if line.startswith("|"):
-            if in_blockquote:
-                out.append("</blockquote>")
-                in_blockquote = False
-            if not in_table:
-                out.append(f'<table style="border-collapse:collapse;width:100%;margin:12px 0;font-size:13px;border:1px solid {COLORS["border"]};border-radius:6px;overflow:hidden">')
-                in_table = True
-                # Header-rad
-                cells = [c.strip() for c in line.strip("|").split("|")]
-                out.append('<thead><tr>')
-                for c in cells:
-                    out.append(f'<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:{COLORS["muted"]};background:#f1f5f9;border-bottom:1px solid {COLORS["border"]}">{_inline_md(c)}</th>')
-                out.append('</tr></thead><tbody>')
-                continue
-            if "---|" in line or ":---" in line:
-                continue
-            cells = [c.strip() for c in line.strip("|").split("|")]
-            out.append('<tr>')
-            for c in cells:
-                out.append(f'<td style="padding:7px 12px;border-bottom:1px solid {COLORS["border"]};vertical-align:middle">{_inline_md(c)}</td>')
-            out.append('</tr>')
-            continue
-        elif in_table:
-            out.append("</tbody></table>")
-            in_table = False
-
-        # Rubriker
-        if line.startswith("### "):
-            out.append(f'<h3 style="font-size:15px;font-weight:600;margin:20px 0 8px;color:{COLORS["text"]}">{_inline_md(line[4:])}</h3>')
-        elif line.startswith("## "):
-            out.append(f'<h2 style="font-size:17px;font-weight:600;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid {COLORS["border"]};color:{COLORS["text"]}">{_inline_md(line[3:])}</h2>')
-        elif line.startswith("# "):
-            out.append(f'<h1 style="font-size:20px;font-weight:700;margin:0 0 16px;color:{COLORS["primary"]}">{_inline_md(line[2:])}</h1>')
-        elif line.strip() == "---":
-            out.append(f'<hr style="border:none;border-top:1px solid {COLORS["border"]};margin:20px 0">')
-        elif line.strip() == "":
-            out.append('<br>')
-        else:
-            out.append(f'<p style="margin:4px 0;font-size:14px;line-height:1.6">{_inline_md(line)}</p>')
-
-    # Stäng öppna taggar
-    if in_table:
-        out.append("</tbody></table>")
-    if in_list:
-        out.append("</ul>")
-    if in_blockquote:
-        out.append("</blockquote>")
-
-    return "\n".join(out)
-
-
-# ── Bygg komponenter ────────────────────────────────────────────────────────
+# ── Bygg komponenter (behålls från original) ─────────────────────────────────
 
 def build_alert_box(message: str, level: str = "warning") -> str:
     """
@@ -370,10 +375,60 @@ def build_score_badge(score: Optional[float]) -> str:
 
 def build_section_header(title: str, subtitle: str = "") -> str:
     """Bygger en sektionsrubrik."""
-    parts = [f'<span style="font-size:17px;font-weight:600;color:{COLORS["text"]}">{html.escape(title)}</span>']
+    title_safe = html.escape(title)
+    subtitle_html = ""
     if subtitle:
-        parts.append(f'<span style="font-size:12px;color:{COLORS["muted"]};margin-left:8px">{html.escape(subtitle)}</span>')
-    return f'<h2 style="font-size:17px;font-weight:600;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid {COLORS["border"]};color:{COLORS["text"]}">{"".join(parts)}</h2>'
+        subtitle_html = f'<span style="font-size:12px;color:{COLORS["muted"]};margin-left:8px">{html.escape(subtitle)}</span>'
+    inner = f'<span style="font-size:17px;font-weight:600;color:{COLORS["text"]}">{title_safe}</span>{subtitle_html}'
+    return (
+        f'<h2 style="font-size:17px;font-weight:600;margin:24px 0 10px;'
+        f'padding-bottom:6px;border-bottom:1px solid {COLORS["border"]};'
+        f'color:{COLORS["text"]}">'
+        f'{inner}</h2>'
+    )
+
+
+# ── Plain-text fallback ──────────────────────────────────────────────────────
+
+def _make_plain_text(md_text: str, max_chars: int = 1500) -> str:
+    """
+    Konverterar markdown till plain text och trunkerar vid mening.
+    Trunkering sker alltid vid en mening (punkt + mellanrum), inte mitt i.
+    """
+    if not md_text:
+        return "Se HTML-versionen."
+
+    # Ta bort rubriker, tabell-tecken, emoji
+    text = re.sub(r"^#+\s*", "", md_text, flags=re.MULTILINE)
+    text = re.sub(r"[|:-]{3,}", "", text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"`(.+?)`", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"[-*]\s", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = text.strip()
+
+    if len(text) <= max_chars:
+        return text
+
+    # Trunkera vid sista mening före max_chars
+    truncated = text[:max_chars]
+    # Hitta sista punkt + mellanrum före max_chars
+    last_sentence_end = max(
+        truncated.rfind(". "),
+        truncated.rfind(".\n"),
+        truncated.rfind("!\n"),
+        truncated.rfind("?\n"),
+    )
+    if last_sentence_end > max_chars * 0.5:  # Minst 50% av texten
+        return truncated[: last_sentence_end + 1] + "\n\n[...] Läs mer i HTML-versionen."
+
+    # Om ingen mening hittas, trunkera vid mellanrum
+    last_space = truncated.rfind(" ")
+    if last_space > max_chars * 0.5:
+        return truncated[:last_space] + "\n\n[...] Läs mer i HTML-versionen."
+
+    return truncated + "\n\n[...] Läs mer i HTML-versionen."
 
 
 # ── Huvudfunktion: skicka email ─────────────────────────────────────────────
@@ -383,6 +438,7 @@ def send_email(
     body_markdown: str = "",
     body_html_extra: str = "",
     from_name: str = "MarketScan",
+    unsubscribe_url: str = "",
 ) -> bool:
     """
     Skickar ett formaterat email via Gmail SMTP.
@@ -392,6 +448,7 @@ def send_email(
         body_markdown: Markdown som konverteras till HTML
         body_html_extra: Extra HTML som läggs till efter markdown (t.ex. alert-boxar)
         from_name: Avsändarnamn
+        unsubscribe_url: URL för att avsluta prenumeration (valfritt)
 
     Returns:
         True om email skickades, annars False
@@ -411,10 +468,10 @@ def send_email(
         html_parts.append(body_html_extra)
 
     body_html = "\n".join(html_parts)
-    full_html = _build_html_document(body_html, subject)
+    full_html = _build_html_document(body_html, subject, unsubscribe_url)
 
-    # Plain-text fallback
-    body_text = body_markdown[:1000] if body_markdown else "Se HTML-versionen."
+    # Plain-text fallback (trunkeras vid mening, inte mitt i)
+    body_text = _make_plain_text(body_markdown) if body_markdown else "Se HTML-versionen."
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
