@@ -223,6 +223,65 @@ def _entry_options(df: pd.DataFrame) -> list:
     return ["Alla"] + opts
 
 
+FX_PAIRS = {
+    "EUR/SEK": "EURSEK=X",
+    "USD/SEK": "USDSEK=X",
+    "NOK/SEK": "NOKSEK=X",
+    "GBP/SEK": "GBPSEK=X",
+    "DKK/SEK": "DKKSEK=X",
+}
+
+RATE_TICKERS = {
+    "🇺🇸 US 10Y (Fed proxy)":      "^TNX",
+    "🇩🇪 Tysk 10Y (ECB proxy)":    "DE10Y.DE",
+    "🇸🇪 Svensk 10Y (Riksbanken)": "SE10Y.ST",
+    "🇬🇧 UK 10Y (BOE proxy)":      "UK10Y.L",
+    "🇳🇴 Norsk 10Y":               "NO10Y.OL",
+}
+
+
+@st.cache_data(ttl=300)
+def fetch_fx_rows() -> list:
+    """Hämtar FX-rader (1 anrop per par, rate-limited). Cachas 5 min."""
+    import time as _t
+    rows = []
+    for name, ticker in FX_PAIRS.items():
+        try:
+            hist = yf.Ticker(ticker).history(period="5d", auto_adjust=True)
+            if not hist.empty and len(hist) >= 2:
+                curr = float(hist["Close"].iloc[-1])
+                prev = float(hist["Close"].iloc[-2])
+                chg = ((curr / prev) - 1) * 100 if prev else 0.0
+                arrow = "🟢" if chg >= 0 else "🔴"
+                rows.append({"Par": name, "Kurs": f"{curr:.4f}",
+                             "Förändring": f"{arrow} {chg:+.2f}%"})
+        except Exception:
+            pass
+        _t.sleep(0.3)
+    return rows
+
+
+@st.cache_data(ttl=300)
+def fetch_rate_rows() -> list:
+    """Hämtar ränte-rader (1 anrop per land, rate-limited). Cachas 5 min."""
+    import time as _t
+    rows = []
+    for name, ticker in RATE_TICKERS.items():
+        try:
+            hist = yf.Ticker(ticker).history(period="5d", auto_adjust=True)
+            if not hist.empty and len(hist) >= 2:
+                curr = float(hist["Close"].iloc[-1])
+                prev = float(hist["Close"].iloc[-2])
+                chg = curr - prev
+                arrow = "⬆️" if chg >= 0 else "⬇️"
+                rows.append({"Ränta": name, "Nivå": f"{curr:.2f}%",
+                             "Δ": f"{arrow} {chg:+.2f}%"})
+        except Exception:
+            pass
+        _t.sleep(0.3)
+    return rows
+
+
 def _get_provider() -> str:
     """Hämta vald AI-provider från sidebar/session state."""
     return st.session_state.get("selected_provider", "auto")
@@ -550,30 +609,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
     with tab_fx:
         with st.spinner("Hämtar valutakurser..."):
             try:
-                import yfinance as yf
-                fx_pairs = {
-                    "EUR/SEK": "EURSEK=X",
-                    "USD/SEK": "USDSEK=X",
-                    "NOK/SEK": "NOKSEK=X",
-                    "GBP/SEK": "GBPSEK=X",
-                    "DKK/SEK": "DKKSEK=X",
-                }
-                fx_rows = []
-                for name, ticker in fx_pairs.items():
-                    try:
-                        hist = yf.Ticker(ticker).history(period="5d", auto_adjust=True)
-                        if not hist.empty and len(hist) >= 2:
-                            curr = float(hist["Close"].iloc[-1])
-                            prev = float(hist["Close"].iloc[-2])
-                            chg = ((curr / prev) - 1) * 100 if prev else 0.0
-                            arrow = "🟢" if chg >= 0 else "🔴"
-                            fx_rows.append({
-                                "Par": name,
-                                "Kurs": f"{curr:.4f}",
-                                "Förändring": f"{arrow} {chg:+.2f}%",
-                            })
-                    except Exception:
-                        pass
+                fx_rows = fetch_fx_rows()
                 if fx_rows:
                     st.dataframe(pd.DataFrame(fx_rows), use_container_width=True,
                                  hide_index=True, height=200)
@@ -585,8 +621,8 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
         # Visa FX-graf
         with st.expander("📈 Visa FX-historik (senaste månaden)", expanded=False):
             try:
-                fx_ticker = st.selectbox("Välj valutapar", list(fx_pairs.keys()), key="fx_chart")
-                fx_hist = yf.download(fx_pairs[fx_ticker], period="1mo", auto_adjust=True, progress=False)
+                fx_ticker = st.selectbox("Välj valutapar", list(FX_PAIRS.keys()), key="fx_chart")
+                fx_hist = yf.download(FX_PAIRS[fx_ticker], period="1mo", auto_adjust=True, progress=False)
                 if not fx_hist.empty:
                     fig_fx = go.Figure()
                     fig_fx.add_trace(go.Scatter(
@@ -607,30 +643,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
     with tab_rates:
         with st.spinner("Hämtar räntor..."):
             try:
-                import yfinance as yf
-                rate_tickers = {
-                    "🇺🇸 US 10Y (Fed proxy)": "^TNX",
-                    "🇩🇪 Tysk 10Y (ECB proxy)": "DE10Y.DE",
-                    "🇸🇪 Svensk 10Y (Riksbanken)": "SE10Y.ST",
-                    "🇬🇧 UK 10Y (BOE proxy)": "UK10Y.L",
-                    "🇳🇴 Norsk 10Y": "NO10Y.OL",
-                }
-                rate_rows = []
-                for name, ticker in rate_tickers.items():
-                    try:
-                        hist = yf.Ticker(ticker).history(period="5d", auto_adjust=True)
-                        if not hist.empty and len(hist) >= 2:
-                            curr = float(hist["Close"].iloc[-1])
-                            prev = float(hist["Close"].iloc[-2])
-                            chg = curr - prev
-                            arrow = "⬆️" if chg >= 0 else "⬇️"
-                            rate_rows.append({
-                                "Ränta": name,
-                                "Nivå": f"{curr:.2f}%",
-                                "Δ": f"{arrow} {chg:+.2f}%",
-                            })
-                    except Exception:
-                        pass
+                rate_rows = fetch_rate_rows()
                 if rate_rows:
                     st.dataframe(pd.DataFrame(rate_rows), use_container_width=True,
                                  hide_index=True, height=250)
