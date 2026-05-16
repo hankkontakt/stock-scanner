@@ -2290,23 +2290,59 @@ def _save_watchlist_data(items: list):
 
 
 def _search_ticker_yfinance(query: str) -> list:
-    """Sök ticker via yfinance. Returnerar lista med {ticker, name}."""
+    """Sök ticker via yfinance. Returnerar lista med {ticker, name}.
+    
+    Forbattrad version:
+    - Okar sökresultat till 20 for att hitta svenska aktier
+    - Direkt ticker-koll om fragan ser ut som en ticker
+    - Prioriterar aktier (EQUITY) framfor ETFer
+    """
     if not query or len(query) < 1:
         return []
+    
+    hits = []
     try:
-        results = yf.Search(query, max_results=8).quotes or []
-        hits = []
+        # Steg 1: Om fragan ser ut som en ticker (kort, versaler, punkter), kolla direkt
+        clean_q = query.strip().upper()
+        is_ticker_like = (
+            len(clean_q) <= 15 and
+            (clean_q.isalpha() or "." in clean_q or "-" in clean_q)
+        )
+        
+        if is_ticker_like:
+            try:
+                ticker_info = yf.Ticker(clean_q).info or {}
+                if ticker_info.get("quoteType") in ("EQUITY", "ETF", "MUTUALFUND", "INDEX"):
+                    hits.append({
+                        "ticker": clean_q,
+                        "name": ticker_info.get("shortName") or ticker_info.get("longName") or clean_q,
+                        "exchange": ticker_info.get("exchange", ""),
+                    })
+            except Exception:
+                pass
+        
+        # Steg 2: Sok fritt med Yahoo Search (okad till 20 resultat)
+        results = yf.Search(query, max_results=20).quotes or []
+        seen_tickers = {h["ticker"] for h in hits}
         for r in results:
+            ticker = r.get("symbol", "")
+            if ticker in seen_tickers:
+                continue
             qtype = r.get("quoteType", "")
             if qtype in ("EQUITY", "ETF", "MUTUALFUND", "INDEX"):
                 hits.append({
-                    "ticker": r.get("symbol", ""),
-                    "name":   r.get("shortname") or r.get("longname") or "",
+                    "ticker": ticker,
+                    "name": r.get("shortname") or r.get("longname") or "",
                     "exchange": r.get("exchange", ""),
                 })
-        return hits
+                seen_tickers.add(ticker)
+        
+        # Sortera: aktier forst, sen ETFer
+        hits.sort(key=lambda h: (0 if h.get("exchange") in ("STO", "OMX", "HE", "CO", "OL", "DE", "PA", "L", "SW") else 1))
+        
+        return hits[:15]  # Max 15 resultat
     except Exception:
-        return []
+        return hits if hits else []
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2407,7 +2443,7 @@ def page_admin():
         search_q = st.text_input("Sök aktie (ticker eller namn)", key="wl_search",
                                  placeholder="t.ex. AAPL, VOLV-B.ST, Investor")
         if search_q:
-            hits = _search_ticker_yfinance(search_q.upper())
+            hits = _search_ticker_yfinance(search_q)
             if hits:
                 options = {f"{h['ticker']} — {h['name'][:40]}": h for h in hits}
                 selected = st.selectbox("Välj från sökresultat", list(options.keys()),
@@ -2485,7 +2521,7 @@ def page_admin():
                                  placeholder="t.ex. AAPL, VOLV-B.ST")
         ticker_map = {}
         if search_h:
-            hits = _search_ticker_yfinance(search_h.upper())
+            hits = _search_ticker_yfinance(search_h)
             if hits:
                 options = {f"{h['ticker']} — {h['name'][:40]}": h for h in hits}
                 selected = st.selectbox("Välj aktie", list(options.keys()), key="hold_hit")
