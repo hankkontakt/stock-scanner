@@ -239,7 +239,14 @@ def _resolve_provider(provider: str = "auto", task_type: str = "light") -> str:
 def _deepseek_call(messages: list, system_prompt: str = "",
                    max_tokens: int = None, temperature: float = None) -> str:
     """
-    Anropa DeepSeek API med meddelanden.
+    Anropa DeepSeek API med meddelanden och exponential backoff retry.
+    
+    Retry-logik:
+      - 429 (rate-limit):   vänta 5s, 10s, 20s
+      - 5xx (server error): vänta 2s, 4s, 8s
+      - timeout:            vänta 1s, 2s, 4s
+      - 401/403:            ge upp direkt (nyckelproblem)
+      
     Returnerar svaret som sträng eller felmeddelande.
     """
     api_key = getattr(config, "DEEPSEEK_API_KEY", None) or os.getenv("DEEPSEEK_API_KEY", "")
@@ -261,22 +268,92 @@ def _deepseek_call(messages: list, system_prompt: str = "",
         payload["messages"].append({"role": "system", "content": system_prompt})
     payload["messages"].extend(messages)
 
-    try:
-        import requests
-        resp = requests.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=60,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        return data["choices"][0]["message"]["content"]
-    except Exception as e:
-        return f"⚠️ **DeepSeek-anropet misslyckades:** {str(e)}"
+    import time
+    import requests
+
+    max_retries = 3
+    last_error = ""
+
+    for attempt in range(max_retries):
+        try:
+            resp = requests.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=60,
+            )
+
+            # ✅ Success
+            if resp.status_code == 200:
+                data = resp.json()
+                content = data["choices"][0]["message"]["content"]
+                return content
+
+            # ❌ 401/403 – nyckelproblem, ge upp direkt
+            if resp.status_code in (401, 403):
+                try:
+                    body = resp.json().get("error", {}).get("message", resp.text[:200])
+                except Exception:
+                    body = resp.text[:200]
+                return f"❌ **DeepSeek nekade åtkomst ({resp.status_code}):** {body}"
+
+            # ❌ 429 – rate-limit, vänta längre (exponential backoff)
+            if resp.status_code == 429:
+                delay = 5.0 * (2 ** attempt)  # 5s, 10s, 20s
+                last_error = f"⚠️ DeepSeek rate-limit (429) – väntar {delay:.0f}s (försök {attempt+1}/{max_retries})"
+                if attempt < max_retries - 1:
+                    time.sleep(delay)
+                    continue
+                # Om sista retryn också är 429, returnera DeepSeek-fel och låt _ai_call falla tillbaka
+                return f"⚠️ **DeepSeek rate-limited efter {max_retries} försök.** Försök igen senare."
+
+            # ❌ 5xx – server error, retry med kort backoff
+            if 500 <= resp.status_code < 600:
+                delay = 2.0 * (2 ** attempt)  # 2s, 4s, 8s
+                last_error = f"⚠️ DeepSeek server error ({resp.status_code}) – väntar {delay:.0f}s"
+                if attempt < max_retries - 1:
+                    time.sleep(delay)
+                    continue
+                return f"⚠️ **DeepSeek svarade {resp.status_code} efter {max_retries} försök.** Försök igen senare."
+
+            # ❌ Övriga statuskoder
+            try:
+                body = resp.text[:200]
+            except Exception:
+                body = ""
+            last_error = f"⚠️ **DeepSeek svarade {resp.status_code}:** {body}"
+            if attempt < max_retries - 1:
+                time.sleep(1)
+                continue
+            return last_error
+
+        except requests.exceptions.Timeout:
+            delay = 1.0 * (2 ** attempt)  # 1s, 2s, 4s
+            last_error = f"⚠️ DeepSeek timeout – väntar {delay:.0f}s"
+            if attempt < max_retries - 1:
+                time.sleep(delay)
+                continue
+            return f"⚠️ **DeepSeek timeout efter {max_retries} försök.** Kontrollera anslutningen."
+
+        except requests.exceptions.ConnectionError:
+            last_error = "⚠️ DeepSeek anslutningsfel (ConnectionError)"
+            if attempt < max_retries - 1:
+                time.sleep(3)
+                continue
+            return f"⚠️ **DeepSeek anslutningsfel efter {max_retries} försök.** Kolla internet/din API-endpoint."
+
+        except Exception as e:
+            last_error = f"⚠️ **DeepSeek-anropet misslyckades:** {str(e)}"
+            if attempt < max_retries - 1:
+                time.sleep(0.5)
+                continue
+            return last_error
+
+    # Borde inte nå hit, men fallback
+    return last_error or "⚠️ **DeepSeek: okänt fel.** Försök igen."
 
 
 def _gemini_call(messages: list, system_prompt: str = "",
