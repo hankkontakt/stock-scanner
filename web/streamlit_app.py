@@ -2516,47 +2516,71 @@ def page_admin():
 
         holdings = load_portfolio()
 
+        # --- Ta bort innehav ---
+        col_del_left, col_del_right = st.columns([3, 1])
+        with col_del_left:
+            if not holdings.empty:
+                remove_h = st.selectbox(
+                    "Välj innehav att ta bort",
+                    [""] + holdings["ticker"].tolist(),
+                    key="hold_remove"
+                )
+            else:
+                remove_h = ""
+        with col_del_right:
+            if remove_h and st.button("🗑️ Ta bort", key="btn_hold_remove",
+                                      use_container_width=True):
+                holdings = load_portfolio()
+                if remove_h in holdings["ticker"].values:
+                    holdings = holdings[holdings["ticker"] != remove_h]
+                    ok = _save_holdings_df(holdings)
+                    if ok:
+                        st.cache_data.clear()
+                        st.success(f"`{remove_h}` borttagen från portföljen!")
+                        st.rerun()
+                    else:
+                        st.error("Kunde inte spara. Kontrollera filrättigheter.")
+                else:
+                    st.info(f"`{remove_h}` finns inte i portföljen.")
+
         if not holdings.empty:
             st.dataframe(holdings, use_container_width=True, hide_index=True)
-
-            # Ta bort innehav
-            remove_h = st.selectbox(
-                "Ta bort innehav",
-                [""] + holdings["ticker"].tolist(),
-                key="hold_remove"
-            )
-            if remove_h and st.button("🗑️ Ta bort innehav", key="btn_hold_remove"):
-                holdings = load_portfolio()
-                holdings = holdings[holdings["ticker"] != remove_h]
-                _save_holdings_df(holdings)
-                st.success(f"`{remove_h}` borttagen från portföljen!")
-                st.rerun()
         else:
-            st.info("Portföljen är tom.")
+            st.info("Portföljen är tom. Lägg till innehav nedan.")
 
         st.markdown("---")
         st.markdown("### Lägg till / uppdatera innehav")
 
-        search_h = st.text_input("Sök aktie (ticker eller namn)", key="hold_search",
-                                 placeholder="t.ex. AAPL, VOLV-B.ST")
-        ticker_map = {}
+        # Sök ticker (valfritt) – fyller i ticker-fältet automatiskt
+        search_h = st.text_input("Sök aktie (ticker eller namn) – valfritt", key="hold_search",
+                                 placeholder="t.ex. AAPL, VOLV-B.ST, Investor")
+        suggested_ticker = ""
         if search_h:
             hits = _search_ticker_yfinance(search_h)
             if hits:
                 options = {f"{h['ticker']} — {h['name'][:40]}": h for h in hits}
-                selected = st.selectbox("Välj aktie", list(options.keys()), key="hold_hit")
+                selected = st.selectbox("Välj från sökresultat", [""] + list(options.keys()),
+                                        key="hold_hit")
                 if selected:
-                    ticker_map = options[selected]
-        else:
-            # Manuell inmatning
-            ticker_map = {"ticker": "", "name": ""}
+                    suggested_ticker = options[selected]["ticker"]
+
+        # Formulär – ticker, antal, pris (använd en separat session_state för att hålla ticker)
+        if "hold_form_ticker" not in st.session_state:
+            st.session_state["hold_form_ticker"] = ""
+
+        # Uppdatera session_state om användaren valde från sök
+        if suggested_ticker:
+            st.session_state["hold_form_ticker"] = suggested_ticker
 
         with st.form(key="hold_form"):
             col1, col2, col3 = st.columns(3)
             with col1:
-                t_val = ticker_map.get("ticker", "") if isinstance(ticker_map, dict) else ""
-                ticker = st.text_input("Ticker *", value=t_val, key="hold_ticker",
-                                       placeholder="AAPL").upper().strip()
+                ticker = st.text_input(
+                    "Ticker *",
+                    value=st.session_state.get("hold_form_ticker", ""),
+                    key="hold_ticker_input",
+                    placeholder="AAPL"
+                ).upper().strip()
             with col2:
                 shares = st.number_input("Antal aktier", min_value=0.0, step=1.0,
                                          format="%.2f", key="hold_shares")
@@ -2564,23 +2588,36 @@ def page_admin():
                 cost = st.number_input("Inköpspris (SEK)", min_value=0.0, step=1.0,
                                        format="%.2f", key="hold_cost")
 
-            submitted = st.form_submit_button("💾 Spara")
-            if submitted and ticker and shares > 0 and cost > 0:
-                # Kolla om ticker redan finns
-                if ticker in holdings["ticker"].values:
-                    holdings.loc[holdings["ticker"] == ticker, "shares"] = shares
-                    holdings.loc[holdings["ticker"] == ticker, "cost_basis"] = cost
-                    msg = f"`{ticker}` uppdaterad!"
+            submitted = st.form_submit_button("💾 Spara i portföljen",
+                                              use_container_width=True)
+            if submitted:
+                if not ticker:
+                    st.warning("Ange en ticker.")
+                elif shares <= 0:
+                    st.warning("Ange antal aktier (> 0).")
+                elif cost <= 0:
+                    st.warning("Ange inköpspris (> 0).")
                 else:
-                    new_row = pd.DataFrame([{"ticker": ticker, "shares": shares,
-                                              "cost_basis": cost}])
-                    holdings = pd.concat([holdings, new_row], ignore_index=True)
-                    msg = f"`{ticker}` tillagd i portföljen!"
-                _save_holdings_df(holdings)
-                st.success(msg)
-                st.rerun()
-            elif submitted:
-                st.warning("Fyll i ticker, antal och inköpspris.")
+                    # Ladda om senaste portföljdata
+                    holdings = load_portfolio()
+                    if ticker in holdings["ticker"].values:
+                        holdings.loc[holdings["ticker"] == ticker, "shares"] = shares
+                        holdings.loc[holdings["ticker"] == ticker, "cost_basis"] = cost
+                        msg = f"`{ticker}` uppdaterad i portföljen!"
+                    else:
+                        new_row = pd.DataFrame([{"ticker": ticker, "shares": shares,
+                                                  "cost_basis": cost}])
+                        holdings = pd.concat([holdings, new_row], ignore_index=True)
+                        msg = f"`{ticker}` tillagd i portföljen!"
+                    ok = _save_holdings_df(holdings)
+                    if ok:
+                        st.cache_data.clear()
+                        st.success(msg)
+                        # Nollställ ticker-fältet efter lyckad sparning
+                        st.session_state["hold_form_ticker"] = ""
+                        st.rerun()
+                    else:
+                        st.error("Kunde inte spara portföljen. Se felmeddelandet ovan.")
 
     # ── Flik 3: GitHub Actions – starta scannar ─────────────────────────────
     with tab_scan:
