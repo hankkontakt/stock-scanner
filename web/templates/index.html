@@ -599,9 +599,18 @@
             <label>Köpkurs (snitt)</label>
             <input type="number" id="costInput" placeholder="t.ex. 210.50" min="0" step="0.01">
           </div>
-          <button class="btn btn-primary" onclick="addHolding()">Lägg till i portfölj</button>
+        <button class="btn btn-primary" onclick="addHolding()">Lägg till i portfölj</button>
           <button class="btn btn-secondary" onclick="closeForm()">Avbryt</button>
         </div>
+      </div>
+
+      <!-- TradingView widget container (hidden by default) -->
+      <div id="tvWidgetContainer" style="display:none;margin-top:24px;background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:11px;color:var(--accent);letter-spacing:1.5px;font-weight:600" id="tvWidgetLabel">📈 TRADINGVIEW – LASTAD</div>
+          <button class="form-close" onclick="closeTvWidget()">✕</button>
+        </div>
+        <div id="tvChartContainer" style="height:420px;border-radius:3px;overflow:hidden"></div>
       </div>
 
       <!-- Watchlist mode: one-click -->
@@ -692,6 +701,7 @@
           <span class="count-badge" id="countBadge">0</span>
         </div>
         <button class="refresh-btn" onclick="loadHoldings()">↻ Uppdatera priser</button>
+        <button class="refresh-btn" onclick="exportToExcel()" style="margin-left:6px;">⬇ Excel</button>
       </div>
 
       <div class="table-wrap">
@@ -1345,6 +1355,82 @@
       loadHoldings();
     } catch (err) {
       showToast('Serverfel', 'error');
+    }
+  }
+
+  // ── TradingView widget ────────────────────────────────────────────────
+  let tvWidget = null;
+
+  function openTvWidget(ticker) {
+    const container = document.getElementById('tvWidgetContainer');
+    const chartEl   = document.getElementById('tvChartContainer');
+    container.style.display = 'block';
+    document.getElementById('tvWidgetLabel').textContent = `📈 TRADINGVIEW – ${ticker}`;
+
+    // Ladda TradingView widget-script om inte redan laddat
+    if (typeof TradingView === 'undefined') {
+      const script = document.createElement('script');
+      script.src = 'https://s3.tradingview.com/tv.js';
+      script.async = true;
+      script.onload = () => initTvWidget(ticker, chartEl);
+      document.head.appendChild(script);
+    } else {
+      initTvWidget(ticker, chartEl);
+    }
+  }
+
+  function initTvWidget(ticker, containerEl) {
+    // Rensa tidigare widget
+    containerEl.innerHTML = '';
+    try {
+      new TradingView.widget({
+        container_id: 'tvChartContainer',
+        symbol:       ticker,
+        interval:     'D',
+        timezone:     'Europe/Stockholm',
+        theme:        'dark',
+        style:        '1',
+        locale:       'sv',
+        toolbar_bg:   '#0b1520',
+        enable_publishing: false,
+        hide_side_toolbar: false,
+        allow_symbol_change: true,
+        save_image: false,
+        width: '100%',
+        height: 420,
+        studies: [
+          'RSI@tv-basicstudies',
+          'MASimple@tv-basicstudies',
+          'MACD@tv-basicstudies',
+        ],
+      });
+    } catch (e) {
+      containerEl.innerHTML = `<div style="color:var(--red);padding:40px;text-align:center">Kunde inte ladda TradingView: ${e.message}</div>`;
+    }
+  }
+
+  function closeTvWidget() {
+    document.getElementById('tvWidgetContainer').style.display = 'none';
+    document.getElementById('tvChartContainer').innerHTML = '';
+  }
+
+  // ── Excel-export ───────────────────────────────────────────────────────
+  async function exportToExcel() {
+    try {
+      const res = await fetch('/api/holdings/export/excel');
+      if (!res.ok) { showToast('Export misslyckades', 'error'); return; }
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `holdings_${new Date().toISOString().slice(0,10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Excel exporterad ✓', 'success');
+    } catch (err) {
+      showToast('Serverfel vid export', 'error');
     }
   }
 

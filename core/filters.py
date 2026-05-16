@@ -271,8 +271,95 @@ def apply_quality_filter(df: pd.DataFrame) -> tuple:
     return clean, eliminated
 
 
+
 # ═══════════════════════════════════════════════════════════════
-# 6. KOMBINERAD PIPELINE
+# 6. EXTRA INDIKATORER (VWAP, Anomaly, Market Breadth)
+# ═══════════════════════════════════════════════════════════════
+
+def calc_vwap(high: pd.Series, low: pd.Series, close: pd.Series,
+              volume: pd.Series) -> pd.Series:
+    """
+    Beräknar Volume-Weighted Average Price.
+    VWAP = Σ(volume_i * typical_price_i) / Σ(volume_i)
+    typical_price = (high + low + close) / 3
+
+    Används för att detektera om dagens pris är över/under VWAP.
+    Över VWAP = bullish intraday, under VWAP = bearish.
+    """
+    typical_price = (high + low + close) / 3
+    vwap = (volume * typical_price).cumsum() / volume.cumsum()
+    return vwap
+
+
+def detect_anomaly(series: pd.Series, window: int = 20,
+                   zscore_threshold: float = 2.5) -> pd.Series:
+    """
+    Detekterar anomalier i en tidsserie med rullande z-score.
+    Används för att flagga volym-spikes eller pris-extremer.
+
+    Args:
+        series: Tidsserie (t.ex. daglig volym eller avkastning)
+        window: Rullande fönster för medelvärde/std
+        zscore_threshold: Gräns för vad som räknas som anomali
+
+    Returns:
+        pd.Series med True/False för varje datapunkt
+    """
+    rolling_mean = series.rolling(window=window).mean()
+    rolling_std  = series.rolling(window=window).std()
+    zscores = (series - rolling_mean) / rolling_std
+    return zscores.abs() > zscore_threshold
+
+
+def calc_market_breadth(df_universe: pd.DataFrame) -> dict:
+    """
+    Beräknar marknadsbredd baserat på universum-data.
+    Kräver kolumn 'price_vs_ma200' eller 'return_12m' i DataFrame.
+
+    Returnerar dict med:
+    - advancers: antal aktier med positiv avkastning (eller över MA200)
+    - decliners: antal aktier med negativ avkastning (eller under MA200)
+    - ratio: advancers / (advancers + decliners)
+    - breadth_signal: POSITIV / NEUTRAL / NEGATIV
+    """
+    df = df_universe.copy()
+    
+    # Försök använd price_vs_ma200, fallback till return_12m
+    if "price_vs_ma200" in df.columns:
+        above_ma200 = (df["price_vs_ma200"].fillna(0) > 0).sum()
+        below_ma200 = (df["price_vs_ma200"].fillna(0) <= 0).sum()
+        advancers   = above_ma200
+        decliners   = below_ma200
+    elif "return_12m" in df.columns:
+        advancers = (df["return_12m"].fillna(0) > 0).sum()
+        decliners = (df["return_12m"].fillna(0) <= 0).sum()
+    else:
+        return {
+            "advancers": 0, "decliners": 0, "ratio": 0.5,
+            "total": len(df), "breadth_signal": "OKÄND"
+        }
+
+    total = advancers + decliners
+    ratio = advancers / total if total > 0 else 0.5
+
+    if ratio > 0.6:
+        signal = "POSITIV"
+    elif ratio < 0.4:
+        signal = "NEGATIV"
+    else:
+        signal = "NEUTRAL"
+
+    return {
+        "advancers":      int(advancers),
+        "decliners":      int(decliners),
+        "ratio":          round(ratio, 3),
+        "total":          total,
+        "breadth_signal": signal,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+# 7. KOMBINERAD PIPELINE
 # ═══════════════════════════════════════════════════════════════
 
 def apply_all_filters(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:

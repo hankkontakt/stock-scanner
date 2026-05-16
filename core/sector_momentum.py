@@ -288,3 +288,218 @@ def build_sector_momentum_section(sector_momentum: dict) -> str:
         )
 
     return "\n".join(lines)
+
+
+# ══════════════════════════════════════════════════════════════
+# SEKTOR-ROTATIONSDETEKTOR
+# ══════════════════════════════════════════════════════════════
+
+def detect_sector_rotation(sector_momentum: dict = None,
+                           lookback_months: int = 3,
+                           min_momentum_change: float = 0.05,
+                           verbose: bool = True) -> dict:
+    """
+    Detekterar sektorrotation genom att jämföra momentumförändring över tid.
+
+    Princip: Om en sektor som tidigare var i bottenkvartilen plötsligt
+    klättrar till toppkvartilen på 1m-basis, signalerar det rotation in.
+    Om en sektor som var i toppen faller till botten, signalerar det rotation ut.
+
+    Args:
+        sector_momentum: Dict från fetch_sector_momentum() eller None för auto-fetch
+        lookback_months: Historik för att beräkna momentumförändring (3 månader)
+        min_momentum_change: Minsta förändring i rang för att räknas som rotation
+        verbose: Skriv ut sammanfattning
+
+    Returns:
+        dict med:
+        - rotating_in: [sektorer som rotar in i favör]
+        - rotating_out: [sektorer som rotar ur favör]
+        - top_sectors: [nuvarande topp 3 sektorer]
+        - bottom_sectors: [nuvarande botten 3 sektorer]
+        - momentum_changes: {sektor: {current_rank, prev_rank, rank_change, direction}}
+        - rotation_intensity: "STARK" / "MÅTTLIG" / "SVAG"
+    """
+    if sector_momentum is None:
+        sector_momentum = fetch_sector_momentum(verbose=verbose)
+
+    if not sector_momentum:
+        return {
+            "rotating_in": [], "rotating_out": [],
+            "top_sectors": [], "bottom_sectors": [],
+            "momentum_changes": {},
+            "rotation_intensity": "OKÄND",
+        }
+
+    # Beräkna momentum-score för varje sektor baserat på 1m/3m + signal
+    def _momentum_score(data: dict) -> float:
+        """Beräknar en numerisk momentum-score 0-100 för en sektor."""
+        ret_1m = data.get("return_1m") or 0.0
+        ret_3m = data.get("return_3m") or 0.0
+        signal = data.get("signal", "NEUTRAL")
+
+        # Baspoäng från signal
+        signal_base = {
+            "STARK UPPTREND": 85,
+            "UPPTREND":       65,
+            "NEUTRAL":        45,
+            "NEDTREND":       25,
+            "STARK NEDTREND": 10,
+        }.get(signal, 45)
+
+        # Lägg till momentum-komponent (viktad 60% signal, 40% avkastning)
+        momentum_contrib = (ret_1m * 100 * 0.6 + ret_3m * 100 * 0.4)
+        score = signal_base * 0.6 + max(-30, min(30, momentum_contrib))
+        return max(0, min(100, score))
+
+    # Beräkna scores och ranka
+    scored_sectors = []
+    for sector, data in sector_momentum.items():
+        score = _momentum_score(data)
+        scored_sectors.append((sector, score, data))
+
+    # Sortera efter score (fallande)
+    scored_sectors.sort(key=lambda x: x[1], reverse=True)
+    n_sectors = len(scored_sectors)
+
+    # Bestäm nuvarande rang för varje sektor
+    current_ranks = {}
+    for i, (sector, score, data) in enumerate(scored_sectors):
+        current_ranks[sector] = i + 1  # 1 = bäst
+
+    # För tidigare rang: använd 3m-avkastning som proxy för tidigare momentum
+    # Sektorer med hög 3m-avkastning som nu har svag 1m = rotation ut
+    # Sektorer med låg 3m-avkastning som nu har stark 1m = rotation in
+    prev_order = sorted(
+        sector_momentum.items(),
+        key=lambda x: x[1].get("return_3m") or 0,
+        reverse=True
+    )
+    prev_ranks = {}
+    for i, (sector, data) in enumerate(prev_order):
+        prev_ranks[sector] = i + 1
+
+    # Beräkna rangförändring och detektera rotation
+    momentum_changes = {}
+    rotating_in = []
+    rotating_out = []
+
+    for sector in sector_momentum:
+        curr_rank = current_ranks.get(sector, n_sectors)
+        prev_rank = prev_ranks.get(sector, n_sectors)
+        rank_change = prev_rank - curr_rank  # Positivt = förbättring
+
+        # Bestäm riktning
+        if rank_change >= 2:
+            direction = "ROTATION IN"  # Klättrat i rang
+            rotating_in.append(sector)
+        elif rank_change <= -2:
+            direction = "ROTATION UT"  # Fallit i rang
+            rotating_out.append(sector)
+        else:
+            direction = "STABIL"
+
+        momentum_changes[sector] = {
+            "current_rank": curr_rank,
+            "prev_rank": prev_rank,
+            "rank_change": rank_change,
+            "direction": direction,
+            "signal": sector_momentum[sector].get("signal", "NEUTRAL"),
+            "return_1m": sector_momentum[sector].get("return_1m"),
+            "return_3m": sector_momentum[sector].get("return_3m"),
+        }
+
+    # Topp/botten sektorer
+    top_sectors = [s for s, _, _ in scored_sectors[:min(3, n_sectors)]]
+    bottom_sectors = [s for s, _, _ in scored_sectors[-min(3, n_sectors):]]
+
+    # Rotationsintensitet
+    n_rotating = len(rotating_in) + len(rotating_out)
+    total = n_sectors
+    if total > 0:
+        rotation_pct = n_rotating / total
+        if rotation_pct >= 0.4:
+            intensity = "STARK"
+        elif rotation_pct >= 0.2:
+            intensity = "MÅTTLIG"
+        else:
+            intensity = "SVAG"
+    else:
+        intensity = "OKÄND"
+
+    if verbose:
+        print(f"  🔄 Sektorrotation: {len(rotating_in)} rotar in, {len(rotating_out)} rotar ut")
+        print(f"     Intensitet: {intensity}")
+        if rotating_in:
+            print(f"     Rotar in: {', '.join(rotating_in)}")
+        if rotating_out:
+            print(f"     Rotar ut: {', '.join(rotating_out)}")
+
+    return {
+        "rotating_in": rotating_in,
+        "rotating_out": rotating_out,
+        "top_sectors": top_sectors,
+        "bottom_sectors": bottom_sectors,
+        "momentum_changes": momentum_changes,
+        "rotation_intensity": intensity,
+    }
+
+
+def build_rotation_section(rotation_data: dict) -> str:
+    """Markdown-rapportsektion för sektorrotation."""
+    if not rotation_data or not rotation_data.get("momentum_changes"):
+        return ""
+
+    lines = ["\n## 🔄 Sektorrotation\n"]
+    lines.append("_Sektorer som byter favör – tidig signal för omallokering._\n")
+
+    intensity = rotation_data.get("rotation_intensity", "OKÄND")
+    intensity_icon = {"STARK": "🔴", "MÅTTLIG": "🟡", "SVAG": "🟢", "OKÄND": "⚪"}
+    lines.append(f"**Rotationsintensitet:** {intensity_icon.get(intensity, '⚪')} {intensity}\n")
+
+    # Roterar in
+    rotating_in = rotation_data.get("rotating_in", [])
+    if rotating_in:
+        lines.append("### ⬆️ Roterar IN\n")
+        for sector in rotating_in:
+            info = rotation_data["momentum_changes"].get(sector, {})
+            r1m = info.get("return_1m")
+            r3m = info.get("return_3m")
+            r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "—"
+            r3m_s = f"{r3m*100:+.1f}%" if r3m is not None else "—"
+            chg = info.get("rank_change", 0)
+            lines.append(f"- **{sector}**: Rangförändring +{chg} | 1m: {r1m_s} | 3m: {r3m_s}")
+
+    # Roterar ut
+    rotating_out = rotation_data.get("rotating_out", [])
+    if rotating_out:
+        lines.append("\n### ⬇️ Roterar UT\n")
+        for sector in rotating_out:
+            info = rotation_data["momentum_changes"].get(sector, {})
+            r1m = info.get("return_1m")
+            r3m = info.get("return_3m")
+            r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "—"
+            r3m_s = f"{r3m*100:+.1f}%" if r3m is not None else "—"
+            chg = info.get("rank_change", 0)
+            lines.append(f"- **{sector}**: Rangförändring {chg} | 1m: {r1m_s} | 3m: {r3m_s}")
+
+    # Topp/botten
+    tops = rotation_data.get("top_sectors", [])
+    bottoms = rotation_data.get("bottom_sectors", [])
+    lines.append("\n### 🏆 Topp 3 sektorer\n")
+    for i, s in enumerate(tops, 1):
+        info = rotation_data["momentum_changes"].get(s, {})
+        sig = info.get("signal", "—")
+        r1m = info.get("return_1m")
+        r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "—"
+        lines.append(f"{i}. **{s}** – {sig} (1m: {r1m_s})")
+
+    lines.append("\n### 🗑️ Botten 3 sektorer\n")
+    for i, s in enumerate(bottoms, 1):
+        info = rotation_data["momentum_changes"].get(s, {})
+        sig = info.get("signal", "—")
+        r1m = info.get("return_1m")
+        r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "—"
+        lines.append(f"{i}. **{s}** – {sig} (1m: {r1m_s})")
+
+    return "\n".join(lines)

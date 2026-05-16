@@ -22,9 +22,50 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 
 from . import config
+
+
+# ── Depth-nivå → max_tokens mapping ──────────────────────────────────────────
+DEPTH_MAP = {
+    "Snabb":      256,
+    "Normal":     1024,
+    "Djup":       2048,
+    "Extra djup": 4096,
+}
+
+def _resolve_depth(depth: str = "Normal") -> int:
+    """Mappa användarens depth-val til max_tokens.
+
+    Args:
+        depth: "Snabb", "Normal", "Djup" eller "Extra djup"
+
+    Returns:
+        max_tokens-värde (int)
+    """
+    return DEPTH_MAP.get(depth, 1024)
+
+
+# ── Numpy/pandas-safe JSON-serialisering ─────────────────────────────────────
+def _safe_json(obj: dict, **kwargs) -> str:
+    """json.dumps som hanterar numpy.int64, numpy.float64, pd.Timestamp m.fl."""
+    def _convert(v):
+        if isinstance(v, (np.integer,)):
+            return int(v)
+        if isinstance(v, (np.floating,)):
+            return float(v)
+        if isinstance(v, (np.bool_,)):
+            return bool(v)
+        if isinstance(v, np.ndarray):
+            return v.tolist()
+        if isinstance(v, pd.Timestamp):
+            return v.isoformat()
+        if isinstance(v, (pd.Series, pd.DataFrame)):
+            return v.to_dict() if isinstance(v, pd.Series) else v.to_dict(orient="records")
+        return v
+    return json.dumps(obj, default=_convert, **kwargs)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # KONSTANTER
@@ -486,7 +527,8 @@ def _call_with_cache(system_prompt: str, messages: list, cache_key: str,
 
 def analyze_stock(ticker: str, df: pd.DataFrame = None,
                   force_refresh: bool = False,
-                  provider: str = "auto") -> str:
+                  provider: str = "auto",
+                  depth: str = "Normal") -> str:
     """
     Analysera en enskild aktie.
     
@@ -495,6 +537,7 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None,
         df: DataFrame med scandata (scored_universe)
         force_refresh: Hoppa över cache
         provider: "auto", "deepseek" eller "gemini"
+        depth: "Snabb", "Normal", "Djup" eller "Extra djup"
     
     Returns:
         AI-analys som formaterad text
@@ -538,7 +581,7 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None,
                         stock_data[label] = val
 
     # Bygg prompt
-    data_str = json.dumps(stock_data, indent=2, ensure_ascii=False) if stock_data else "Ingen data tillgänglig för denna aktie."
+    data_str = _safe_json(stock_data, indent=2, ensure_ascii=False) if stock_data else "Ingen data tillgänglig för denna aktie."
     user_message = f"Analysera aktien **{ticker}**.\n\nTillgänglig data:\n```json\n{data_str}\n```"
 
     cache_key = _make_cache_key("analyze_stock", ticker, data_str[:500] if stock_data else "no_data", _resolve_provider(provider))
@@ -546,6 +589,7 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None,
         SYSTEM_PROMPT_STOCK_ANALYSIS,
         [{"role": "user", "content": user_message}],
         cache_key,
+        max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
     )
@@ -557,7 +601,8 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None,
 
 def analyze_portfolio(holdings: pd.DataFrame, df: pd.DataFrame = None,
                       force_refresh: bool = False,
-                      provider: str = "auto") -> str:
+                      provider: str = "auto",
+                      depth: str = "Normal") -> str:
     """
     Analysera och optimera portföljen.
     
@@ -566,6 +611,7 @@ def analyze_portfolio(holdings: pd.DataFrame, df: pd.DataFrame = None,
         df: DataFrame med scandata (för aktuella scores)
         force_refresh: Hoppa över cache
         provider: "auto", "deepseek" eller "gemini"
+        depth: "Snabb", "Normal", "Djup" eller "Extra djup"
     
     Returns:
         AI-analys med rekommendationer
@@ -623,7 +669,7 @@ def analyze_portfolio(holdings: pd.DataFrame, df: pd.DataFrame = None,
         "top_candidates": top_candidates,
     }
 
-    data_str = json.dumps(portfolio_summary, indent=2, ensure_ascii=False)
+    data_str = _safe_json(portfolio_summary, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
     cache_key = _make_cache_key("analyze_portfolio", str(holdings.shape), str(df.shape) if df is not None else "none", resolved)
 
@@ -631,6 +677,7 @@ def analyze_portfolio(holdings: pd.DataFrame, df: pd.DataFrame = None,
         SYSTEM_PROMPT_PORTFOLIO,
         [{"role": "user", "content": f"Analysera min portfölj och föreslå förbättringar.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
+        max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
     )
@@ -641,7 +688,8 @@ def analyze_portfolio(holdings: pd.DataFrame, df: pd.DataFrame = None,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def ai_chat(question: str, context: str = "", force_refresh: bool = False,
-            provider: str = "auto") -> str:
+            provider: str = "auto",
+            depth: str = "Normal") -> str:
     """
     Fritextfråga till AI:n.
     
@@ -650,6 +698,7 @@ def ai_chat(question: str, context: str = "", force_refresh: bool = False,
         context: Extra kontext (t.ex. aktuell scandata i JSON)
         force_refresh: Hoppa över cache
         provider: "auto", "deepseek" eller "gemini"
+        depth: "Snabb", "Normal", "Djup" eller "Extra djup"
     
     Returns:
         AI-svar
@@ -662,6 +711,7 @@ def ai_chat(question: str, context: str = "", force_refresh: bool = False,
     return _ai_call(
         [{"role": "user", "content": user_message}],
         SYSTEM_PROMPT_CHAT,
+        max_tokens=_resolve_depth(depth),
         provider=provider,
     )
 
@@ -673,9 +723,19 @@ def ai_chat(question: str, context: str = "", force_refresh: bool = False,
 def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
                                  sector_momentum: dict = None, news: dict = None,
                                  force_refresh: bool = False,
-                                 provider: str = "auto") -> str:
+                                 provider: str = "auto",
+                                 depth: str = "Normal") -> str:
     """
     Skapa AI-analyssektion för veckorapporten.
+
+    Args:
+        scored_df: DataFrame med scandata
+        regime_info: Dict med marknadsregim-info
+        sector_momentum: Dict med sektormomentum
+        news: Dict med nyhetsdata
+        force_refresh: Hoppa över cache
+        provider: "auto", "deepseek" eller "gemini"
+        depth: "Snabb", "Normal", "Djup" eller "Extra djup"
     """
     if scored_df.empty:
         return ""
@@ -717,7 +777,7 @@ def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
         "factor_weights": getattr(config, "FACTOR_WEIGHTS", {}),
     }
 
-    data_str = json.dumps(data_summary, indent=2, ensure_ascii=False)
+    data_str = _safe_json(data_summary, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
     cache_key = _make_cache_key("weekly_ai", datetime.now().strftime("%Y-%m-%d"), resolved)
 
@@ -725,7 +785,7 @@ def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
         SYSTEM_PROMPT_WEEKLY_REPORT,
         [{"role": "user", "content": f"Generera veckoanalys för dagens scan.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
-        max_tokens=2048,
+        max_tokens=_resolve_depth(depth),
         force_refresh=True,  # Alltid fräsch data för veckorapport
         provider=provider,
     )
@@ -738,7 +798,8 @@ def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
 
 def analyze_news(ticker: str, news_items: list = None,
                  force_refresh: bool = False,
-                 provider: str = "auto") -> str:
+                 provider: str = "auto",
+                 depth: str = "Normal") -> str:
     """
     Analysera nyheter för en aktie.
     
@@ -747,6 +808,7 @@ def analyze_news(ticker: str, news_items: list = None,
         news_items: Lista med nyheter (dict med titel, url, datum, sammanfattning)
         force_refresh: Hoppa över cache
         provider: "auto", "deepseek" eller "gemini"
+        depth: "Snabb", "Normal", "Djup" eller "Extra djup"
     
     Returns:
         AI-sammanfattning av nyheter
@@ -762,6 +824,7 @@ def analyze_news(ticker: str, news_items: list = None,
         SYSTEM_PROMPT_NEWS_ANALYSIS,
         [{"role": "user", "content": f"Analysera nyheterna för {ticker}.\n\nNyheter:\n{news_text}"}],
         cache_key,
+        max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
     )
@@ -776,9 +839,19 @@ def generate_morning_brief(market_data: dict = None,
                             alerts_list: list = None,
                             opportunities: list = None,
                             force_refresh: bool = False,
-                            provider: str = "auto") -> str:
+                            provider: str = "auto",
+                            depth: str = "Normal") -> str:
     """
     Skapa AI-genererad morgonbrief.
+
+    Args:
+        market_data: Dict med marknadsdata
+        portfolio_data: Dict med portföljdata
+        alerts_list: Lista med varningar
+        opportunities: Lista med opportunities
+        force_refresh: Hoppa över cache
+        provider: "auto", "deepseek" eller "gemini"
+        depth: "Snabb", "Normal", "Djup" eller "Extra djup"
     """
     brief_data = {
         "date": datetime.now().strftime("%Y-%m-%d"),
@@ -788,7 +861,7 @@ def generate_morning_brief(market_data: dict = None,
         "opportunities": opportunities or [],
     }
     
-    data_str = json.dumps(brief_data, indent=2, ensure_ascii=False)
+    data_str = _safe_json(brief_data, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
     cache_key = _make_cache_key("morning_brief", datetime.now().strftime("%Y-%m-%d"), resolved)
 
@@ -796,7 +869,7 @@ def generate_morning_brief(market_data: dict = None,
         SYSTEM_PROMPT_MORNING_BRIEF,
         [{"role": "user", "content": f"Skapa dagens morgonbrief.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
-        max_tokens=1024,
+        max_tokens=_resolve_depth(depth),
         force_refresh=True,  # Alltid fräsch
         provider=provider,
     )
@@ -808,7 +881,8 @@ def generate_morning_brief(market_data: dict = None,
 
 def analyze_sector(sector_name: str, df: pd.DataFrame = None,
                    force_refresh: bool = False,
-                   provider: str = "auto") -> str:
+                   provider: str = "auto",
+                   depth: str = "Normal") -> str:
     """
     Analysera en specifik sektor.
     
@@ -817,6 +891,7 @@ def analyze_sector(sector_name: str, df: pd.DataFrame = None,
         df: DataFrame med scandata
         force_refresh: Hoppa över cache
         provider: "auto", "deepseek" eller "gemini"
+        depth: "Snabb", "Normal", "Djup" eller "Extra djup"
     
     Returns:
         AI-sektoranalys
@@ -845,7 +920,7 @@ def analyze_sector(sector_name: str, df: pd.DataFrame = None,
     if not sector_data:
         return f"⚠️ Ingen data för sektorn **{sector_name}**."
 
-    data_str = json.dumps(sector_data, indent=2, ensure_ascii=False)
+    data_str = _safe_json(sector_data, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
     cache_key = _make_cache_key("analyze_sector", sector_name, str(df.shape) if df is not None else "none", resolved)
 
@@ -853,6 +928,7 @@ def analyze_sector(sector_name: str, df: pd.DataFrame = None,
         SYSTEM_PROMPT_SECTOR_ANALYSIS,
         [{"role": "user", "content": f"Analysera sektorn {sector_name}.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
+        max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
     )
@@ -865,7 +941,8 @@ def analyze_sector(sector_name: str, df: pd.DataFrame = None,
 def analyze_opportunity(ticker: str, signal_type: str,
                          stock_data: dict = None,
                          force_refresh: bool = False,
-                         provider: str = "auto") -> str:
+                         provider: str = "auto",
+                         depth: str = "Normal") -> str:
     """
     Analysera en opportunity-signal.
     
@@ -875,6 +952,7 @@ def analyze_opportunity(ticker: str, signal_type: str,
         stock_data: Dict med relevant data
         force_refresh: Hoppa över cache
         provider: "auto", "deepseek" eller "gemini"
+        depth: "Snabb", "Normal", "Djup" eller "Extra djup"
     
     Returns:
         AI-analys av möjligheten
@@ -884,7 +962,7 @@ def analyze_opportunity(ticker: str, signal_type: str,
         "signal_type": signal_type,
         "data": stock_data or {},
     }
-    data_str = json.dumps(data, indent=2, ensure_ascii=False)
+    data_str = _safe_json(data, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
     cache_key = _make_cache_key("analyze_opportunity", ticker, signal_type, resolved)
 
@@ -892,7 +970,7 @@ def analyze_opportunity(ticker: str, signal_type: str,
         SYSTEM_PROMPT_OPPORTUNITY,
         [{"role": "user", "content": f"Analysera denna möjlighet.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
-        max_tokens=1024,
+        max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
     )
@@ -904,7 +982,8 @@ def analyze_opportunity(ticker: str, signal_type: str,
 
 def compare_stocks(ticker_a: str, ticker_b: str, df: pd.DataFrame = None,
                    force_refresh: bool = False,
-                   provider: str = "auto") -> str:
+                   provider: str = "auto",
+                   depth: str = "Normal") -> str:
     """
     Jämför två aktier sida vid sida.
     
@@ -914,6 +993,7 @@ def compare_stocks(ticker_a: str, ticker_b: str, df: pd.DataFrame = None,
         df: DataFrame med scandata
         force_refresh: Hoppa över cache
         provider: "auto", "deepseek" eller "gemini"
+        depth: "Snabb", "Normal", "Djup" eller "Extra djup"
     
     Returns:
         AI-jämförelse
@@ -936,7 +1016,7 @@ def compare_stocks(ticker_a: str, ticker_b: str, df: pd.DataFrame = None,
                     if val is not None and not pd.isna(val):
                         comparison[key][f] = round(val, 2) if isinstance(val, float) else val
 
-    data_str = json.dumps(comparison, indent=2, ensure_ascii=False)
+    data_str = _safe_json(comparison, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
     cache_key = _make_cache_key("compare_stocks", ticker_a, ticker_b,
                                  str(df.shape) if df is not None else "none", resolved)
@@ -954,6 +1034,7 @@ Skriv på svenska. Max 300 ord."""
         sys_prompt,
         [{"role": "user", "content": user_msg}],
         cache_key,
+        max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
     )
@@ -966,7 +1047,8 @@ Skriv på svenska. Max 300 ord."""
 def generate_market_summary(df: pd.DataFrame = None, sc_df: pd.DataFrame = None,
                              regime_info: dict = None,
                              force_refresh: bool = False,
-                             provider: str = "auto") -> str:
+                             provider: str = "auto",
+                             depth: str = "Normal") -> str:
     """
     Skapa en kort marknadssammanfattning för dashboard.
     
@@ -976,6 +1058,7 @@ def generate_market_summary(df: pd.DataFrame = None, sc_df: pd.DataFrame = None,
         regime_info: Dict med marknadsregim-info
         force_refresh: Hoppa över cache
         provider: "auto", "deepseek" eller "gemini"
+        depth: "Snabb", "Normal", "Djup" eller "Extra djup"
     
     Returns:
         AI-marknadssammanfattning (kort)
@@ -1003,16 +1086,23 @@ def generate_market_summary(df: pd.DataFrame = None, sc_df: pd.DataFrame = None,
             "avg_score": round(sc_df[score_col].mean(), 1) if score_col in sc_df.columns else "N/A",
         }
 
-    data_str = json.dumps(summary, indent=2, ensure_ascii=False)
+    data_str = _safe_json(summary, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
     cache_key = _make_cache_key("market_summary", datetime.now().strftime("%Y-%m-%d"), resolved)
 
     return _call_with_cache(
-        """Du är MarketScan AI-assistent. Skapa en KORT marknadssammanfattning (max 150 ord).
-Skriv på svenska, använd emojis. Fokusera på dagens viktigaste insikter.""",
-        [{"role": "user", "content": f"Skapa en kort marknadssammanfattning.\n\nData:\n```json\n{data_str}\n```"}],
+        """Du är MarketScan AI-assistent. Skapa en marknadssammanfattning baserad på dagens scandata.
+
+Analysera datan och inkludera:
+1. Marknadsregim och övergripande sentiment
+2. Sektor- och breddsanalys (vilka sektorer leder, bredd mm)
+3. Starka kontra svaga aktier – mönster i faktorscorer
+4. Konkreta takeaways för investeraren
+
+Skriv på svenska, använd emojis. 150-300 ord beroende på datatillgång.""",
+        [{"role": "user", "content": f"Skapa en marknadssammanfattning.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
-        max_tokens=512,
+        max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
     )

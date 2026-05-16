@@ -1,18 +1,21 @@
 """
 extra_data.py
 =============
-Hämtar tre extra datakällor som ger starkare signaler:
+Hämtar extra datakällor som ger starkare signaler:
 
 1. Insider-transaktioner  – faktiska köp/sälj från VD/styrelse
 2. Earnings surprise      – slår bolaget estimat konsekvent?
 3. Analytiker-revisioner  – förbättras eller försämras konsensus?
+4. Short Interest         – blankningsgrad (låg blankning = positivt)
+5. Seasonality            – säsongsmönster (stark månad = positivt)
+6. Options Flow           – puts/calls ratio (lågt P/C = bullish)
 
-Alla tre returnerar ett signal-värde 0.0–1.0:
+Alla returnerar ett signal-värde 0.0–1.0:
   0.0–0.3 = negativt / bearish
   0.4–0.6 = neutralt
   0.7–1.0 = positivt / bullish
 
-Cachelagrade separat (48-72h) för att inte överbelasta API:er.
+Cachelagrade separat (24-72h) för att inte överbelasta API:er.
 """
 
 import time
@@ -20,6 +23,7 @@ import pickle
 import hashlib
 import requests
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -27,6 +31,9 @@ CACHE_DIR        = "data/cache"
 INSIDER_CACHE_H  = 48
 EARNINGS_CACHE_H = 72
 ANALYST_CACHE_H  = 24
+SHORT_CACHE_H    = 24
+SEASONALITY_CACHE_H = 720  # 30 dagar – säsongsmönster ändras långsamt
+OPTIONS_CACHE_H  = 24
 
 Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
 
@@ -59,15 +66,6 @@ def _wc(key: str, data):
 def fetch_insider_signal(ticker: str) -> float:
     """
     Hämtar faktiska insider-transaktioner och beräknar netto-köpsignal.
-
-    Logik:
-    - Tittar på köp/sälj senaste 90 dagarna
-    - Netto-köpare (VD/styrelse köper mer än de säljer) = bullish signal
-    - Automatiska försäljningar (planerade) räknas ned
-    - Returnerar 0.5 om ingen data finns
-
-    OBS: Fungerar bäst för US-aktier (SEC-data).
-         Svenska aktier har begränsad data i yfinance.
     """
     import yfinance as yf
 
@@ -147,15 +145,6 @@ def fetch_insider_signal(ticker: str) -> float:
 def fetch_earnings_surprise_signal(ticker: str) -> float:
     """
     Beräknar hur konsekvent bolaget slår analytikernas EPS-estimat.
-
-    Logik:
-    - Tittar på senaste 8 kvartal
-    - Beat rate (andel kvartal med positivt surprise) = primär signal
-    - Genomsnittlig surprise-storlek = sekundär signal
-    - Bolag som konsekvent slår estimat tenderar fortsätta
-
-    Akademisk grund: Post-earnings announcement drift (PEAD) – ett av
-    de mest robusta anomalierna i finansforskning.
     """
     import yfinance as yf
 
@@ -229,16 +218,6 @@ def fetch_earnings_surprise_signal(ticker: str) -> float:
 def fetch_analyst_revision_signal(ticker: str, finnhub_key: str = None) -> float:
     """
     Detekterar om analytiker uppgraderar eller nedgraderar aktien.
-
-    Logik (Finnhub):
-    - Hämtar månatlig buy/sell/hold-fördelning senaste 3 månader
-    - Beräknar nuvarande bullish-% och om det förbättras
-
-    Logik (yfinance fallback):
-    - Använder recommendation_mean (1=Strong Buy, 5=Strong Sell)
-    - Tittar på trend i recommendations DataFrame
-
-    Signal: uppgraderande trend = 0.7-0.9, nedgraderande = 0.1-0.3
     """
     import yfinance as yf
 
@@ -297,7 +276,6 @@ def fetch_analyst_revision_signal(ticker: str, finnhub_key: str = None) -> float
                 recs = _with_timeout(lambda: stock.recommendations, timeout_sec=10)
                 if recs is not None and not recs.empty and len(recs) >= 4:
                     recs = recs.tail(8).copy()
-                    # Räkna buy/strong buy vs sell/strong sell
                     grade_col = next(
                         (c for c in recs.columns if "grade" in c.lower() or
                          "action" in c.lower() or "to_grade" in c.lower()), None
@@ -322,7 +300,269 @@ def fetch_analyst_revision_signal(ticker: str, finnhub_key: str = None) -> float
 
 
 # ══════════════════════════════════════════════════════════════
-# BATCH-FUNKTION (kör alla tre för hela universumet)
+# 4. SHORT INTEREST (blankningsgrad)
+# ══════════════════════════════════════════════════════════════
+
+def fetch_short_interest_signal(ticker: str, finnhub_key: str = None) -> float:
+    """
+    Beräknar signal baserat på blankningsgrad (Short Interest).
+    
+    Logik:
+    - Låg blankning (SI < 3% av float) = positiv signal (0.7-0.9)
+    - Hög blankning (SI > 15% av float) = negativ signal (0.1-0.3)
+    - Ingen data = neutral (0.5)
+    
+    Källa: Finnhub /api/v1/stock/short-interest eller yfinance fallback
+    """
+    cached = _rc(f"short:{ticker}", SHORT_CACHE_H)
+    if cached is not None:
+        return cached
+
+    # Försök Finnhub
+    if finnhub_key:
+        try:
+            time.sleep(0.3)
+            clean = ticker.split(".")[0]
+            resp = requests.get(
+                "https://finnhub.io/api/v1/stock/short-interest",
+                params={"symbol": clean, "token": finnhub_key},
+                timeout=8
+            )
+            if resp.status_code == 200:
+                data = resp.json().get("data", [])
+                if data and len(data) > 0:
+                    latest = data[0]
+                    si_pct = latest.get("shortInterestPercent")
+                    if si_pct is not None:
+                        si_pct = float(si_pct)
+                        if si_pct < 3.0:
+                            signal = round(0.5 + (3.0 - si_pct) / 3.0 * 0.4, 3)  # 0.5-0.9
+                        elif si_pct > 15.0:
+                            signal = round(max(0.1, 0.5 - (si_pct - 15.0) / 15.0 * 0.4), 3)  # 0.1-0.5
+                        else:
+                            signal = round(0.5 - (si_pct - 3.0) / 12.0 * 0.2, 3)  # 0.3-0.7
+                        signal = max(0.1, min(0.9, signal))
+                        _wc(f"short:{ticker}", signal)
+                        return signal
+        except Exception:
+            pass
+
+    # yfinance fallback – försök via info
+    try:
+        import yfinance as yf
+        from core.data_fetcher import _with_timeout
+        time.sleep(0.3)
+        stock = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=8)
+        info = _with_timeout(lambda: stock.info, timeout_sec=15)
+        if info:
+            si_pct = info.get("shortPercentOfFloat")
+            if si_pct is not None:
+                si_pct = float(si_pct) * 100  # Konvertera från decimal till procent
+                if si_pct < 3.0:
+                    signal = round(0.5 + (3.0 - si_pct) / 3.0 * 0.4, 3)
+                elif si_pct > 15.0:
+                    signal = round(max(0.1, 0.5 - (si_pct - 15.0) / 15.0 * 0.4), 3)
+                else:
+                    signal = round(0.5 - (si_pct - 3.0) / 12.0 * 0.2, 3)
+                signal = max(0.1, min(0.9, signal))
+                _wc(f"short:{ticker}", signal)
+                return signal
+
+            # Alternative: shortRatio
+            si_ratio = info.get("shortRatio")
+            if si_ratio is not None:
+                si_ratio = float(si_ratio)
+                if si_ratio < 1.0:
+                    signal = round(0.5 + (1.0 - si_ratio) / 1.0 * 0.3, 3)
+                elif si_ratio > 5.0:
+                    signal = round(max(0.1, 0.5 - (si_ratio - 5.0) / 5.0 * 0.3), 3)
+                else:
+                    signal = round(0.5, 3)
+                signal = max(0.1, min(0.9, signal))
+                _wc(f"short:{ticker}", signal)
+                return signal
+    except Exception:
+        pass
+
+    _wc(f"short:{ticker}", 0.5)
+    return 0.5
+
+
+# ══════════════════════════════════════════════════════════════
+# 5. SEASONALITY (säsongsmönster)
+# ══════════════════════════════════════════════════════════════
+
+def fetch_seasonality_signal(ticker: str) -> float:
+    """
+    Beräknar säsongssignal baserat på historiskt månadsmönster.
+    
+    Logik:
+    - Hämtar 5-10 års prishistorik
+    - Beräknar genomsnittlig avkastning för innevarande månad
+    - Jämför med aktiens övergripande medelavkastning
+    - Stark månad (över snittet) = positiv signal
+    
+    Använder yfinance historik.
+    """
+    import yfinance as yf
+
+    cached = _rc(f"seasonality:{ticker}", SEASONALITY_CACHE_H)
+    if cached is not None:
+        return cached
+
+    try:
+        from core.data_fetcher import _with_timeout
+        time.sleep(0.3)
+        stock = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=8)
+        hist = _with_timeout(
+            lambda: stock.history(period="10y", auto_adjust=True),
+            timeout_sec=20
+        )
+
+        if hist.empty or len(hist) < 252:  # Behöver minst ~1 år
+            _wc(f"seasonality:{ticker}", 0.5)
+            return 0.5
+
+        close = hist["Close"]
+        
+        # Beräkna månatlig avkastning
+        monthly_returns = close.resample("ME").ffill().pct_change().dropna()
+        
+        if len(monthly_returns) < 12:
+            _wc(f"seasonality:{ticker}", 0.5)
+            return 0.5
+
+        # Genomsnittlig avkastning per månad
+        current_month = datetime.now().month
+        month_returns = monthly_returns[monthly_returns.index.month == current_month]
+        avg_month_ret = month_returns.mean()
+        overall_avg   = monthly_returns.mean()
+        median_month  = monthly_returns.groupby(monthly_returns.index.month).mean().median()
+
+        if pd.isna(avg_month_ret) or pd.isna(overall_avg):
+            _wc(f"seasonality:{ticker}", 0.5)
+            return 0.5
+
+        # Jämför månadsgenomsnitt med övergripande genomsnitt
+        # Positiv = månaden är bättre än snittet
+        diff = avg_month_ret - overall_avg
+        
+        # Konvertera till signal på 0-1 skala
+        # Normalisera: diff på ±2% = signal ±0.3
+        signal = 0.5 + (diff / 0.02) * 0.3
+        signal = round(max(0.1, min(0.9, signal)), 3)
+
+        # Styrka: om månaden har varit konsekvent (högt antal observationer)
+        if len(month_returns) >= 5:
+            win_rate = (month_returns > 0).mean()
+            if win_rate > 0.65:
+                signal = min(0.9, signal + 0.05)
+            elif win_rate < 0.35:
+                signal = max(0.1, signal - 0.05)
+
+        _wc(f"seasonality:{ticker}", signal)
+        return signal
+
+    except Exception:
+        return 0.5
+
+
+# ══════════════════════════════════════════════════════════════
+# 6. OPTIONS FLOW (put/call ratio)
+# ══════════════════════════════════════════════════════════════
+
+def fetch_options_flow_signal(ticker: str) -> float:
+    """
+    Beräknar signal baserat på optionsflöde (put/call ratio).
+    
+    Logik:
+    - Hämtar optionskedjan för närmaste utgångsdatum
+    - Beräknar total open interest för puts vs calls
+    - Lågt P/C-ratio = bullish sentiment (0.6-0.9)
+    - Högt P/C-ratio = bearish sentiment (0.1-0.4)
+    
+    Använder yfinance options chain.
+    """
+    import yfinance as yf
+
+    cached = _rc(f"options:{ticker}", OPTIONS_CACHE_H)
+    if cached is not None:
+        return cached
+
+    try:
+        from core.data_fetcher import _with_timeout
+        time.sleep(0.3)
+        stock = _with_timeout(lambda: yf.Ticker(ticker), timeout_sec=8)
+
+        # Hämta tillgängliga utgångsdatum
+        try:
+            expirations = _with_timeout(lambda: stock.options, timeout_sec=10)
+        except Exception:
+            _wc(f"options:{ticker}", 0.5)
+            return 0.5
+
+        if not expirations or len(expirations) == 0:
+            _wc(f"options:{ticker}", 0.5)
+            return 0.5
+
+        # Använd närmaste utgångsdatum med minst 7 dagar kvar
+        today = datetime.now().date()
+        nearest_exp = None
+        for exp in sorted(expirations):
+            exp_date = datetime.strptime(exp, "%Y-%m-%d").date()
+            days_until = (exp_date - today).days
+            if 7 <= days_until <= 60:
+                nearest_exp = exp
+                break
+        if not nearest_exp:
+            nearest_exp = expirations[0]
+
+        # Hämta optionskedja
+        opt_chain = _with_timeout(
+            lambda: stock.option_chain(nearest_exp), timeout_sec=15
+        )
+
+        calls = opt_chain.calls
+        puts  = opt_chain.puts
+
+        call_oi = calls["openInterest"].sum() if "openInterest" in calls else 0
+        put_oi  = puts["openInterest"].sum()  if "openInterest" in puts  else 0
+
+        total_oi = call_oi + put_oi
+        if total_oi == 0 or call_oi == 0 or put_oi == 0:
+            _wc(f"options:{ticker}", 0.5)
+            return 0.5
+
+        pc_ratio = put_oi / call_oi
+
+        # Konvertera P/C-ratio till signal
+        # P/C < 0.5 = starkt bullish → signal 0.7-0.9
+        # P/C 0.5-0.8 = måttligt bullish → signal 0.6-0.7
+        # P/C 0.8-1.2 = neutral → signal 0.45-0.55
+        # P/C 1.2-2.0 = måttligt bearish → signal 0.3-0.45
+        # P/C > 2.0 = starkt bearish → signal 0.1-0.3
+
+        if pc_ratio < 0.5:
+            signal = round(0.7 + (0.5 - pc_ratio) / 0.5 * 0.2, 3)
+        elif pc_ratio < 0.8:
+            signal = round(0.55 + (0.8 - pc_ratio) / 0.3 * 0.15, 3)
+        elif pc_ratio < 1.2:
+            signal = round(0.5 - (pc_ratio - 0.8) / 0.4 * 0.05, 3)
+        elif pc_ratio < 2.0:
+            signal = round(0.45 - (pc_ratio - 1.2) / 0.8 * 0.15, 3)
+        else:
+            signal = round(max(0.1, 0.3 - (pc_ratio - 2.0) / 3.0 * 0.2), 3)
+
+        signal = max(0.1, min(0.9, signal))
+        _wc(f"options:{ticker}", signal)
+        return signal
+
+    except Exception:
+        return 0.5
+
+
+# ══════════════════════════════════════════════════════════════
+# BATCH-FUNKTION (kör alla 6 för hela universumet)
 # ══════════════════════════════════════════════════════════════
 
 def fetch_extra_data_batch(
@@ -331,9 +571,11 @@ def fetch_extra_data_batch(
     verbose:      bool = True,
 ) -> pd.DataFrame:
     """
-    Hämtar insider, earnings surprise och analytiker-revision för alla tickers.
+    Hämtar alla extra signaler för alla tickers.
     Returnerar DataFrame med kolumner:
-        ticker, insider_signal, earnings_signal, analyst_signal, extra_composite
+        ticker, insider_signal, earnings_signal, analyst_signal,
+        short_interest_signal, seasonality_signal, options_flow_signal,
+        extra_composite
     """
     rows = []
     total = len(tickers)
@@ -345,16 +587,25 @@ def fetch_extra_data_batch(
         insider  = fetch_insider_signal(ticker)
         earnings = fetch_earnings_surprise_signal(ticker)
         analyst  = fetch_analyst_revision_signal(ticker, finnhub_key)
+        short    = fetch_short_interest_signal(ticker, finnhub_key)
+        season   = fetch_seasonality_signal(ticker)
+        options  = fetch_options_flow_signal(ticker)
 
         # Kombinerad extra-signal (viktat snitt)
-        composite = insider * 0.30 + earnings * 0.40 + analyst * 0.30
+        # Grundsignaler: 0.75, Nya signaler: 0.25 (lägre initial vikt tills bevisade)
+        composite_base = insider * 0.30 + earnings * 0.40 + analyst * 0.30
+        composite_new  = short * 0.40 + season * 0.35 + options * 0.25
+        composite      = composite_base * 0.75 + composite_new * 0.25
 
         rows.append({
-            "ticker":          ticker,
-            "insider_signal":  insider,
-            "earnings_signal": earnings,
-            "analyst_signal":  analyst,
-            "extra_composite": round(composite, 3),
+            "ticker":                ticker,
+            "insider_signal":        insider,
+            "earnings_signal":       earnings,
+            "analyst_signal":        analyst,
+            "short_interest_signal": short,
+            "seasonality_signal":    season,
+            "options_flow_signal":   options,
+            "extra_composite":       round(composite, 3),
         })
 
     df = pd.DataFrame(rows)
