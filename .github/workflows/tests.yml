@@ -1,0 +1,42 @@
+name: 🧪 Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "core/**"
+      - "tests/**"
+      - "web/**"
+      - "scans/**"
+      - "smallcap/**"
+      - "requirements.txt"
+      - "pyproject.toml"
+      - ".github/workflows/tests.yml"
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: .
+
+    steps:
+      - name: 📥 Hämta kod
+        uses: actions/checkout@v4
+
+      - name: 🐍 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 📦 Installera beroenden
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+
+      - name: 🧪 Kör tester
+        run: pytest tests/ -v --tb=short
