@@ -442,6 +442,26 @@ Skriv på svenska, max 300 ord. Använd emojis. Var konkret.
 # HUVUDFUNKTION: run_pipeline
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _cleanup_old_reports(max_days: int = 60) -> int:
+    """Raderar rapportfiler äldre än max_days. Returnerar antalet raderade filer."""
+    import time as _t
+    cutoff = _t.time() - max_days * 86400
+    patterns = ["scored_universe_*.csv", "smallcap_scored_*.csv",
+                "*.md", "*.txt"]
+    removed = 0
+    for pat in patterns:
+        for f in REPORT_DIR.glob(pat):
+            try:
+                if f.stat().st_mtime < cutoff:
+                    f.unlink()
+                    removed += 1
+            except Exception:
+                pass
+    if removed:
+        logger.info(f"🧹 Raderade {removed} gamla rapportfiler (> {max_days} dagar)")
+    return removed
+
+
 def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     """
     Kör dagliga pipeline: hämta data, skapa rapport, skicka mail.
@@ -453,6 +473,9 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     start_time = time.time()
     date_str = date.today().strftime("%Y-%m-%d")
     day_name = datetime.now().strftime("%A")
+
+    # Städa gamla rapporter (en gång per körning är OK – snabbt)
+    _cleanup_old_reports(max_days=60)
 
     logger.info(f"\n{'='*50}")
     logger.info(f"🚀 MarketScan Pipeline – mode={mode} – {date_str}")
