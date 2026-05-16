@@ -296,6 +296,16 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
 
         page = st.session_state["nav_page"]
 
+        # ── Datumval (alltid synligt) ───────────────────────────────────────
+        st.markdown("---")
+        with st.expander("📅 Datum", expanded=False):
+            scan_date = st.selectbox("Scan", scan_dates if scan_dates else ["Ingen data"], key="scan_date", label_visibility="collapsed")
+            sc_date = st.selectbox("Småbolag", sc_dates if sc_dates else ["Ingen data"], key="sc_date", label_visibility="collapsed")
+
+        # ── Filters per page ────────────────────────────────────────────────
+        filters = {}
+        _show_filters = page in ("🔍 Veckoscanner", "🏦 Småbolag", "📈 Teknisk analys")
+
         if _show_filters:
             with st.expander("🎛️ Filter", expanded=False):
                 if page == "🔍 Veckoscanner":
