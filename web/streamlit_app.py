@@ -401,9 +401,17 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             ai_depth = st.selectbox("Djup", ["Snabb","Normal","Djup","Extra djup"], index=1, key="sidebar_ai_depth")
             st.session_state["selected_depth"] = ai_depth
 
-        # ── Statusfot ───────────────────────────────────────────────────────
+        # ── Statusfot med exakt klockslag ────────────────────────────────────
         st.markdown("---")
-        st.caption(f"🟢 {len(scan_dates) if scan_dates else 0} datum · Senast: {max(scan_dates) if scan_dates else '—'}")
+        _latest_scan_file = None
+        if scan_dates:
+            _latest_scan_file = max(REPORT_DIR.glob("scored_universe_*.csv"), key=lambda f: f.stat().st_mtime, default=None)
+        _time_str = "—"
+        if _latest_scan_file:
+            _mt = datetime.fromtimestamp(_latest_scan_file.stat().st_mtime)
+            _tz = datetime.now().astimezone().tzinfo
+            _time_str = _mt.astimezone(_tz).strftime("%Y-%m-%d %H:%M")
+        st.caption(f"🟢 {len(scan_dates) if scan_dates else 0} datum · Senast: {max(scan_dates) if scan_dates else '—'} [{_time_str}]")
 
     return page, scan_date, sc_date, filters
 
