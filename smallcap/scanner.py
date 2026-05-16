@@ -15,11 +15,8 @@ GitHub Actions: se smallcap_scan.yml
 import argparse
 import os
 import sys
-import smtplib
 import traceback
 from datetime import datetime
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from pathlib import Path
 
 # Se till att föräldramappen finns i sys.path (för data_fetcher, piotroski m.m.)
@@ -237,39 +234,44 @@ def fetch_universe_data(tickers: list, delay: float = 0.4) -> pd.DataFrame:
 
 # ── E-post ─────────────────────────────────────────────────────────────────────
 
-def send_email(subject: str, body: str) -> bool:
-    """Skickar rapporten via e-post. Returnerar True vid framgång."""
-    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    # Stöd både EMAIL_USER/EMAIL_PASS (lokalt) och EMAIL_SENDER/EMAIL_PASSWORD (GitHub Actions)
-    smtp_user = (os.environ.get("EMAIL_USER") or
-                 os.environ.get("EMAIL_SENDER", ""))
-    smtp_pass = (os.environ.get("EMAIL_PASS") or
-                 os.environ.get("EMAIL_PASSWORD", ""))
-    to_addr   = (os.environ.get("EMAIL_TO") or
-                 os.environ.get("EMAIL_RECIPIENT") or
-                 smtp_user)
-
-    if not smtp_user or not smtp_pass:
-        print("⚠️  E-post ej konfigurerat (EMAIL_USER/EMAIL_SENDER eller EMAIL_PASS/EMAIL_PASSWORD saknas)")
-        return False
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"]    = smtp_user
-    msg["To"]      = to_addr
-    msg.attach(MIMEText(body, "plain", "utf-8"))
-
+def send_email(subject: str, body_markdown: str) -> bool:
+    """Skickar rapporten via den gemensamma email-engine (core/email_template.py).
+    
+    Konverterar markdown till responsiv HTML via mistune, skickar både HTML
+    och plain-text version.
+    """
     try:
-        with smtplib.SMTP(smtp_host, smtp_port) as srv:
-            srv.ehlo(); srv.starttls(); srv.ehlo()
-            srv.login(smtp_user, smtp_pass)
-            srv.sendmail(smtp_user, to_addr, msg.as_string())
-        print(f"  ✉️  Rapport skickad till {to_addr}")
-        return True
-    except Exception as e:
-        print(f"  ✗  E-post misslyckades: {e}", file=sys.stderr)
-        return False
+        from core.email_template import send_email as _send, _markdown_to_html
+    except ImportError:
+        print("⚠️  core.email_template kunde inte importeras – fallback till plain text")
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        import smtplib
+        user  = os.getenv("EMAIL_SENDER", os.getenv("EMAIL_USER", ""))
+        pw    = os.getenv("EMAIL_PASSWORD", os.getenv("EMAIL_PASS", ""))
+        to    = os.getenv("EMAIL_TO", os.getenv("EMAIL_RECIPIENT", user))
+        if not user or not pw:
+            print("⚠️  E-post ej konfigurerat")
+            return False
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject; msg["From"] = user; msg["To"] = to
+        msg.attach(MIMEText(body_markdown, "plain", "utf-8"))
+        try:
+            with smtplib.SMTP("smtp.gmail.com", 587) as srv:
+                srv.ehlo(); srv.starttls(); srv.ehlo(); srv.login(user, pw)
+                srv.sendmail(user, [to], msg.as_string())
+            print(f"  ✉️  (fallback) Rapport skickad till {to}")
+            return True
+        except Exception as e:
+            print(f"  ✗  E-post misslyckades: {e}"); return False
+
+    # Anropa den gemensamma email_template.send_email()
+    from_name = f"MarketScan Småbolag"
+    return _send(
+        subject=subject,
+        body_markdown=body_markdown,
+        from_name=from_name,
+    )
 
 
 # ── Huvud ─────────────────────────────────────────────────────────────────────
