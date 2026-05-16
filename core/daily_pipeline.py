@@ -32,6 +32,7 @@ from core.global_markets import (
     fetch_global_indices, format_index_summary_short, get_global_market_narrative,
 )
 from core.email_template import send_email, build_section_header, build_pnl_cell
+from core.data_fetcher import fetch_prices_only, update_scored_with_prices
 from core import ai_analysis
 
 # ── Sökvägar ─────────────────────────────────────────────────────────────────
@@ -465,6 +466,32 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         scored = _load_latest_scored("smallcap_scored_*.csv")
     else:
         scored = pd.DataFrame()
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # 1b. DAGLIG RE-SCORING (endast för morning/evening)
+    #     Hämta nya priser för alla tickers → uppdatera scores
+    # ═══════════════════════════════════════════════════════════════════════
+    if mode in ("morning", "evening") and not scored.empty and "ticker" in scored.columns:
+        logger.info("📡 Hämtar nya priser för re-scoring...")
+        try:
+            tickers = scored["ticker"].dropna().unique().tolist()
+            # Begränsa till max 100 för att inte överbelasta yfinance
+            price_tickers = [t for t in tickers if not t.startswith("^")][:100]
+            
+            price_data = fetch_prices_only(price_tickers, period="6mo", max_workers=12)
+            if price_data:
+                n_prices = len(price_data)
+                scored = update_scored_with_prices(scored, price_data)
+                logger.info(f"  ✅ Priser hämtade för {n_prices} tickers – scores uppdaterade")
+                
+                # Spara den uppdaterade CSV:n
+                csv_path = REPORT_DIR / f"scored_universe_{date_str}.csv"
+                scored.to_csv(csv_path, index=False)
+                logger.info(f"  💾 Sparade uppdaterad CSV: {csv_path.name}")
+            else:
+                logger.warning("  ⚠ Inga priser kunde hämtas – använder gårdagens data")
+        except Exception as e:
+            logger.warning(f"  ⚠ Re-scoring misslyckades: {e} – använder gårdagens data")
 
     # Portfölj & watchlist
     holdings = _load_portfolio()
