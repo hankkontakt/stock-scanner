@@ -800,6 +800,153 @@ def search_stocks(query: str, max_results: int = 8) -> list:
 
 
 # ══════════════════════════════════════════════════════════════
+# PRICE-ONLY FETCH – snabb hämtning av ENDAST priser (ingen fundamental data)
+# Används för daglig re-scoring i daily_pipeline.py
+# ══════════════════════════════════════════════════════════════
+
+def fetch_prices_only(tickers: list, period: str = "6mo",
+                      max_workers: int = 12, timeout: int = 30) -> dict:
+    """
+    Hämta ENDAST priser för en lista med tickers – INGEN fundamental data.
+    Mycket snabbare än fetch_stock_info eftersom vi bara hämtar history, inte info.
+
+    Args:
+        tickers: Lista med ticker-symboler
+        period: t.ex. "6mo", "1y", "3mo"
+        max_workers: Trådar för parallell hämtning
+        timeout: Max sekunder per anrop
+
+    Returns:
+        dict: {ticker: {"current_price": float, "close": pd.Series, ...}}
+              eller {} om tickern inte kunde hämtas
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import yfinance as yf
+
+    def _fetch(ticker: str) -> tuple[str, dict | None]:
+        try:
+            t = yf.Ticker(ticker)
+            hist = t.history(period=period, auto_adjust=True, timeout=timeout)
+            if hist.empty:
+                return ticker, None
+
+            close = hist["Close"]
+            current = float(close.iloc[-1])
+            prev_close = float(close.iloc[-2]) if len(close) >= 2 else current
+
+            # Beräkna momentum
+            r1m = float(close.iloc[-1] / close.iloc[max(0, len(close)-21)] - 1) if len(close) >= 21 else None
+            r3m = float(close.iloc[-1] / close.iloc[max(0, len(close)-63)] - 1) if len(close) >= 63 else None
+            r6m = float(close.iloc[-1] / close.iloc[max(0, len(close)-126)] - 1) if len(close) >= 126 else None
+            r12m = float(close.iloc[-1] / close.iloc[0] - 1) if len(close) >= 252 else None
+
+            # 52-week high/low
+            high_52w = float(close.iloc[-252:].max()) if len(close) >= 252 else float(close.max())
+            low_52w = float(close.iloc[-252:].min()) if len(close) >= 252 else float(close.min())
+            pct_from_high = ((current - high_52w) / high_52w) * 100 if high_52w > 0 else 0
+
+            # RSI (14)
+            delta = close.diff()
+            gain = delta.where(delta > 0, 0).rolling(14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+            rs = gain / loss.replace(0, float("nan"))
+            rsi = float((100 - (100 / (1 + rs))).iloc[-1]) if not rs.empty and len(rs) >= 14 else None
+
+            # Volatilitet (daglig, 252 dagar)
+            daily_returns = close.pct_change().dropna()
+            vol = float(daily_returns.std() * (252 ** 0.5)) if len(daily_returns) > 10 else None
+
+            # Price vs MA50/MA200
+            ma50 = float(close.rolling(50).mean().iloc[-1]) if len(close) >= 50 else None
+            ma200 = float(close.rolling(200).mean().iloc[-1]) if len(close) >= 200 else None
+            vs_ma50 = ((current - ma50) / ma50) * 100 if ma50 else None
+            vs_ma200 = ((current - ma200) / ma200) * 100 if ma200 else None
+
+            # Volume ratio (dagens volym / snitt 10d)
+            vol_series = hist.get("Volume", pd.Series([0] * len(hist)))
+            avg_vol_10d = float(vol_series.tail(10).mean()) if len(vol_series) >= 10 else 0
+            current_vol = float(vol_series.iloc[-1]) if len(vol_series) > 0 else 0
+            vol_ratio = current_vol / avg_vol_10d if avg_vol_10d > 0 else None
+
+            # 3-dagars retur
+            r3d = float(close.iloc[-1] / close.iloc[max(0, len(close)-4)] - 1) if len(close) >= 4 else None
+
+            return ticker, {
+                "current_price": current,
+                "prev_close": prev_close,
+                "change_pct": ((current / prev_close) - 1) * 100,
+                "high_52w": high_52w,
+                "low_52w": low_52w,
+                "pct_from_52w_high": round(pct_from_high, 2),
+                "rsi_14": round(rsi, 1) if rsi is not None else None,
+                "volatility": round(vol, 4) if vol is not None else None,
+                "price_vs_ma50": round(vs_ma50, 2) if vs_ma50 is not None else None,
+                "price_vs_ma200": round(vs_ma200, 2) if vs_ma200 is not None else None,
+                "volume": int(current_vol),
+                "avg_volume_10d": int(avg_vol_10d),
+                "volume_ratio": round(vol_ratio, 2) if vol_ratio is not None else None,
+                "return_1m": round(r1m * 100, 2) if r1m is not None else None,
+                "return_3m": round(r3m * 100, 2) if r3m is not None else None,
+                "return_6m": round(r6m * 100, 2) if r6m is not None else None,
+                "return_12m": round(r12m * 100, 2) if r12m is not None else None,
+                "return_3d": round(r3d * 100, 2) if r3d is not None else None,
+            }
+        except Exception:
+            return ticker, None
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_fetch, t): t for t in tickers}
+        for future in as_completed(futures):
+            ticker, data = future.result()
+            if data:
+                results[ticker] = data
+
+    return results
+
+
+def update_scored_with_prices(scored_df: pd.DataFrame, price_data: dict) -> pd.DataFrame:
+    """
+    Uppdatera en scored_universe DataFrame med nya prisberoende värden.
+    Anropar score_universe() efter uppdatering för att få nya scores.
+
+    Args:
+        scored_df: Senaste scored_universe DataFrame
+        price_data: Output från fetch_prices_only()
+
+    Returns:
+        Uppdaterad DataFrame med nya priser, momentum, RSI, scores
+    """
+    df = scored_df.copy()
+    if "ticker" not in df.columns:
+        return df
+
+    # Sätt ticker som index för snabb lookup
+    df = df.set_index("ticker")
+
+    for ticker, prices in price_data.items():
+        if ticker not in df.index:
+            continue
+
+        # Uppdatera prisberoende kolumner
+        for col, val in prices.items():
+            if col in df.columns:
+                df.at[ticker, col] = val
+
+    # Återställ index
+    df = df.reset_index()
+
+    # Re-scora med nya priser (momentum, risk, size uppdateras)
+    try:
+        from core.scoring import score_universe
+        df = score_universe(df)
+    except Exception:
+        pass
+
+    return df
+
+
+# ══════════════════════════════════════════════════════════════
 # BENCHMARK DATA (OMXS30 + SPY) – ersätter daily_scan.fetch_benchmark_performance()
 # ══════════════════════════════════════════════════════════════
 
