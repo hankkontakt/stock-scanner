@@ -2998,7 +2998,108 @@ def _trigger_gh_workflow(token: str, owner: str, repo: str,
 # HUVUD / ROUTING
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _check_site_access() -> bool:
+    """Kräver lösenord för att överhuvudtaget komma in på sidan.
+    
+    Lösenordet hämtas från:
+    1. Streamlit Secrets: SITE_PASSWORD (prioriteras)
+    2. Miljövariabel: SITE_PASSWORD
+    3. Fallback: STREAMLIT_APP_PASSWORD
+    4. Om inget är satt → fri åtkomst (lokalt/utveckling)
+    
+    Användaren måste autentisera en gång per session.
+    """
+    # Hämta lösenord från secrets eller miljövariabel
+    pw = ""
+    try:
+        import streamlit as st
+        pw = st.secrets.get("SITE_PASSWORD", "") or \
+             st.secrets.get("STREAMLIT_APP_PASSWORD", "")
+    except Exception:
+        pass
+    if not pw:
+        import os
+        pw = os.getenv("SITE_PASSWORD", "") or \
+             os.getenv("STREAMLIT_APP_PASSWORD", "")
+    
+    # Inget lösenord satt → öppen åtkomst (t.ex. lokalt eller om användaren
+    # explicit vill ha öppen site)
+    if not pw:
+        return True
+    
+    # Kolla om redan autentiserad i denna session
+    if st.session_state.get("site_authenticated", False):
+        return True
+    
+    # Visa inloggningsruta
+    st.markdown("""
+    <style>
+    .login-wrapper {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 80vh;
+    }
+    .login-box {
+        background: #1e2230;
+        border: 1px solid #2d3250;
+        border-radius: 12px;
+        padding: 40px 36px;
+        max-width: 380px;
+        width: 100%;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .login-logo {
+        text-align: center;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: 4px;
+        color: #e8eaf0;
+        margin-bottom: 4px;
+    }
+    .login-logo span { color: #00d4aa; }
+    .login-sub {
+        text-align: center;
+        font-size: 12px;
+        color: #64748b;
+        margin-bottom: 28px;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+    }
+    </style>
+    <div class="login-wrapper">
+    <div class="login-box">
+        <div class="login-logo">MARKET<span>SCAN</span></div>
+        <div class="login-sub">Inloggning krävs</div>
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    pw_input = st.text_input(
+        "Lösenord",
+        type="password",
+        key="site_pw_input",
+        placeholder="Ange lösenord",
+        label_visibility="collapsed",
+    )
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🔓 Lås upp", key="btn_site_unlock", use_container_width=True, type="primary"):
+            if pw_input == pw:
+                st.session_state["site_authenticated"] = True
+                st.rerun()
+            else:
+                st.error("❌ Fel lösenord!")
+    
+    return False
+
+
 def main():
+
+    # Global lösenordsskydd – körs innan allt annat
+    if not _check_site_access():
+        st.stop()
 
     # Ladda all data
     scan_reports  = load_scan_reports()
