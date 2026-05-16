@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import requests
 import streamlit as st
 import yfinance as yf
@@ -227,6 +228,11 @@ def _get_provider() -> str:
     return st.session_state.get("selected_provider", "auto")
 
 
+def _get_depth() -> str:
+    """Hämta valt AI-djup från sidebar/session state."""
+    return st.session_state.get("selected_depth", "Normal")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SIDEBAR
 # ══════════════════════════════════════════════════════════════════════════════
@@ -335,6 +341,16 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             key="sidebar_ai_provider",
         )
         st.session_state["selected_provider"] = ai_provider
+
+        # ── AI-djup selector ───────────────────────────────────────────────
+        st.markdown("### 🎯 AI-djup")
+        ai_depth = st.selectbox(
+            "Välj analytiskt djup",
+            ["Snabb", "Normal", "Djup", "Extra djup"],
+            index=1,  # Normal som default
+            key="sidebar_ai_depth",
+        )
+        st.session_state["selected_depth"] = ai_depth
 
         # Sektorlistan fylls i av respektive page-funktion (de anropar sidebar_update_sectors)
         st.markdown("---")
@@ -449,6 +465,80 @@ def holdings_pie(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
+# ── Phase 2d: Sektor-nätverksgraf (spindelnät) ────────────────────────────────
+def sector_network_graph(df: pd.DataFrame) -> go.Figure:
+    """Bygger en Plotly-nätverksgraf som visar relationer mellan sektorer
+    baserat på genomsnittlig score-korrelation."""
+    if "sector" not in df.columns or "score_total" not in df.columns:
+        return go.Figure()
+
+    sec_avg = df.groupby("sector")["score_total"].mean().sort_values(ascending=False)
+    sectors = sec_avg.index.tolist()
+    n = len(sectors)
+    if n < 2:
+        return go.Figure()
+
+    import math
+    angles = [2 * math.pi * i / n for i in range(n)]
+    pos_x = [math.cos(a) for a in angles]
+    pos_y = [math.sin(a) for a in angles]
+
+    sizes = sec_avg.values
+    norm_sizes = 20 + (sizes - sizes.min()) / (sizes.max() - sizes.min() + 1e-6) * 40
+
+    colors = []
+    for v in sizes:
+        if v >= 60: colors.append("#00c853")
+        elif v >= 45: colors.append("#ffd600")
+        else: colors.append("#ef5350")
+
+    fig = go.Figure()
+
+    for i in range(n):
+        j = (i + 1) % n
+        fig.add_trace(go.Scatter(
+            x=[pos_x[i], pos_x[j], None],
+            y=[pos_y[i], pos_y[j], None],
+            mode="lines",
+            line=dict(color="rgba(255,255,255,0.15)", width=1),
+            showlegend=False, hoverinfo="skip",
+        ))
+
+    for i in range(n):
+        fig.add_trace(go.Scatter(
+            x=[0, pos_x[i], None],
+            y=[0, pos_y[i], None],
+            mode="lines",
+            line=dict(color="rgba(255,255,255,0.06)", width=1),
+            showlegend=False, hoverinfo="skip",
+        ))
+
+    fig.add_trace(go.Scatter(
+        x=pos_x, y=pos_y,
+        mode="markers+text",
+        marker=dict(size=norm_sizes, color=colors, line=dict(color="white", width=1)),
+        text=sectors,
+        textposition="middle center",
+        textfont=dict(size=10, color="white"),
+        hovertemplate="<b>%{text}</b><br>Snittscore: %{customdata:.1f}<extra></extra>",
+        customdata=sizes,
+        showlegend=False,
+    ))
+
+    fig.update_layout(
+        title=dict(text="🕸️ Sektornätverk – styrka & relationer", font=dict(size=14)),
+        template="plotly_dark",
+        paper_bgcolor="#131722",
+        plot_bgcolor="#131722",
+        height=450,
+        margin=dict(t=40, b=16, l=16, r=16),
+        xaxis=dict(showgrid=False, zeroline=False, visible=False),
+        yaxis=dict(showgrid=False, zeroline=False, visible=False),
+        hovermode="closest",
+    )
+    return fig
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # SIDA 1 – ÖVERSIKT
 # ══════════════════════════════════════════════════════════════════════════════
@@ -559,15 +649,129 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
         with st.spinner("Analyserar marknaden..."):
             try:
                 provider = _get_provider()
+                depth = _get_depth()
                 result = ai_analysis.generate_market_summary(
                     df=df if not df.empty else None,
                     sc_df=sc_df if not sc_df.empty else None,
                     provider=provider,
+                    depth=depth,
                 )
                 with st.container(border=True):
                     st.markdown(result)
             except Exception as e:
                 st.error(f"❌ {e}")
+
+    # ── Phase 2c: Earnings Calendar ─────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("📅 Earnings-kalender – kommande rapporter")
+    st.caption("Topp-50 aktier som rapporterar inom 14 dagar. Var försiktig med köp precis innan rapport.")
+    if not df.empty and "ticker" in df.columns:
+        try:
+            from core.earnings_calendar import upcoming_in_top
+            top_n = st.selectbox("Antal toppaktier att kolla", [20, 30, 50, 100], index=2,
+                                  key="ov_earnings_top")
+            cal_df = upcoming_in_top(df, top_n=top_n, days_ahead=14)
+            if not cal_df.empty:
+                # Färgkoda dagar kvar
+                def _days_color(d):
+                    if d <= 3: return "🔴"
+                    if d <= 7: return "🟡"
+                    return "🟢"
+                cal_df["_urgency"] = cal_df["days_until"].apply(_days_color)
+                cal_df["Dagar"] = cal_df.apply(
+                    lambda r: f"{r['_urgency']} {r['days_until']}d", axis=1
+                )
+                display_cal = cal_df[["earnings_date", "Dagar", "ticker", "name", "score_total"]].copy()
+                display_cal.columns = ["Rapportdag", "Kvar", "Ticker", "Bolag", "Score"]
+                display_cal["Score"] = display_cal["Score"].apply(
+                    lambda v: f"{v:.0f}" if pd.notna(v) else "—"
+                )
+                col_cfg_cal = {}
+                st.dataframe(display_cal, use_container_width=True, hide_index=True,
+                             column_config=col_cfg_cal)
+                st.caption(f"{len(display_cal)} kommande rapporter inom 14 dagar")
+            else:
+                st.info("Inga kommande rapporter inom 14 dagar för toppaktierna.")
+        except Exception as e:
+            st.caption(f"Earnings-kalender ej tillgänglig: {e}")
+    else:
+        st.info("Ladda scandata för att se earnings-kalender.")
+
+    # ── Phase 2e: Interactive top list ────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("🏆 Topplista – sök & filtrera")
+    st.caption("Välj top-N, sök på ticker/namn och klicka för detaljvy.")
+    col_top_n, col_search = st.columns([1, 3])
+    with col_top_n:
+        top_n = st.selectbox("Visa topp", [50, 100, 200, 500], index=1,
+                             key="ov_toplists_topn")
+    with col_search:
+        search_q = st.text_input("🔍 Sök ticker eller bolagsnamn", "",
+                                 key="ov_toplists_search",
+                                 placeholder="T.ex. AAPL, Investor, ...")
+
+    if df is not None and not df.empty:
+        display_df = df.head(top_n).copy()
+        if search_q.strip():
+            q = search_q.strip().lower()
+            mask = (
+                display_df["ticker"].str.lower().str.contains(q, na=False)
+                | display_df["name"].str.lower().str.contains(q, na=False)
+            )
+            display_df = display_df[mask]
+        if display_df.empty:
+            st.info("Inga sökresultat.")
+        else:
+            # Förbered kolumner
+            cols_avail = [c for c in ["ticker", "name", "sector", "score_total",
+                                        "price", "change_pct", "volume",
+                                        "score_value", "score_momentum",
+                                        "score_quality", "score_growth"]
+                          if c in display_df.columns]
+            shown = display_df[cols_avail].copy()
+            # Formatera change_pct
+            if "change_pct" in shown.columns:
+                shown["change_pct"] = shown["change_pct"].apply(
+                    lambda v: f"{v:+.1f}%" if pd.notna(v) else "—"
+                )
+            # Progress bar för score
+            col_config = {
+                "score_total": st.column_config.ProgressColumn(
+                    "Score", min_value=0, max_value=100, format="%.0f"
+                ),
+            }
+            # Kolumnetiketter
+            col_rename = {
+                "ticker": "Ticker", "name": "Bolag",
+                "sector": "Sektor", "price": "Pris",
+                "change_pct": "Förändring", "volume": "Volym",
+                "score_value": "Värde", "score_momentum": "Momentum",
+                "score_quality": "Kvalitet", "score_growth": "Tillväxt",
+            }
+            shown.rename(columns={k: v for k, v in col_rename.items()
+                                  if k in shown.columns}, inplace=True)
+            event = st.dataframe(
+                shown, use_container_width=True, hide_index=True,
+                column_config=col_config,
+                on_select="rerun", selection_mode="single-row",
+                key="ov_toplists_table",
+            )
+            # Klickbar rad → visa detaljvy
+            if event and event.selection and event.selection.rows:
+                selected_idx = event.selection.rows[0]
+                sel_ticker = display_df.iloc[selected_idx]["ticker"]
+                price_col = "price" if "price" in df.columns else "close"
+                row = df[df["ticker"] == sel_ticker]
+                if not row.empty:
+                    with st.expander(f"🔍 Detaljvy: {sel_ticker}",
+                                     expanded=True):
+                        render_stock_detail(
+                            sel_ticker, row=row.iloc[0], df=df,
+                            show_ai=True, show_news=False,
+                        )
+        st.caption(f"{len(display_df)} aktier visas")
+    else:
+        st.info("Ladda scandata för att visa topplistan.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -681,6 +885,24 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         hide_index=True,
     )
     st.caption(f"Visar {len(display)} bolag")
+
+    # ── "Fråga AI om denna aktie" per rad ──────────────────────────────────
+    st.markdown("---")
+    st.subheader("🤖 Fråga AI om en aktie")
+    ticker_list = df["ticker"].tolist()
+    col_q1, col_q2 = st.columns([3, 1])
+    with col_q1:
+        ai_ticker = st.selectbox("Välj aktie att analysera", ticker_list, key="ranking_ai_ticker")
+    with col_q2:
+        ai_go = st.button("🤖 Analysera", key="btn_ranking_ai", use_container_width=True)
+    if ai_go and ai_ticker:
+        row = df[df["ticker"] == ai_ticker]
+        if not row.empty:
+            with st.expander("🔍 Visa detaljvy + AI-analys", expanded=True):
+                render_stock_detail(
+                    ai_ticker, row=row.iloc[0], df=df,
+                    show_ai=True, show_news=False, show_chart=True, show_detail_data=True,
+                )
 
 
 def page_weekly_scan(df: pd.DataFrame, filters: dict,
@@ -1169,11 +1391,13 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list):
         if st.button("🤖 Analysera portfölj med AI", key="btn_portfolio_ai",
                      use_container_width=True, type="primary"):
             provider = _get_provider()
+            depth = _get_depth()
             with st.spinner("Analyserar portfölj..."):
                 try:
                     result = ai_analysis.analyze_portfolio(
                         holdings, df=df if not df.empty else None,
                         provider=provider,
+                        depth=depth,
                     )
                     with st.container(border=True):
                         st.markdown(result)
@@ -1270,7 +1494,7 @@ def page_technical(df: pd.DataFrame, filters: dict):
         ("Snitt RSI / >70",  f"{avg_rsi:.0f} / {n_overbought}", None),
     ])
 
-    tab1, tab2 = st.tabs(["📋 Tabell", "📊 Diagram"])
+    tab1, tab2, tab3 = st.tabs(["📋 Tabell", "📊 Diagram", "📉 MACD/RSI"])
 
     with tab1:
         tech_show = [c for c in [
@@ -1364,11 +1588,141 @@ def page_technical(df: pd.DataFrame, filters: dict):
                     "return_12m": "12m", "return_3m": "3m", "score_total": "Score"
                 }), use_container_width=True, hide_index=True)
 
+    with tab3:
+        """MACD/RSI-diagram för vald aktie."""
+        st.subheader("📉 MACD & RSI – realtidsdiagram")
+        st.caption("Välj en aktie för att visa MACD (histogram + signal) och RSI (14) baserat på 6 månaders data.")
+
+        if not out.empty and "ticker" in out.columns:
+            tickers_sorted = sorted(out["ticker"].tolist())
+            col_a, col_b = st.columns([3, 1])
+            with col_a:
+                tech_ticker = st.selectbox("Välj aktie", tickers_sorted, key="tech_macd_ticker")
+            with col_b:
+                period = st.selectbox("Period", ["3mo", "6mo", "1y"], index=1, key="tech_macd_period")
+
+            if tech_ticker:
+                with st.spinner("Hämtar data..."):
+                    try:
+                        yf_ticker = yf.Ticker(tech_ticker)
+                        hist = yf_ticker.history(period=period, auto_adjust=True)
+                        if hist.empty or len(hist) < 20:
+                            st.info("Otillräcklig data för diagram.")
+                        else:
+                            close = hist["Close"]
+                            low   = hist.get("Low", close)
+                            high  = hist.get("High", close)
+                            vol   = hist.get("Volume", pd.Series(0, index=hist.index))
+
+                            # Beräkna MACD
+                            ema12 = close.ewm(span=12, adjust=False).mean()
+                            ema26 = close.ewm(span=26, adjust=False).mean()
+                            macd_line   = ema12 - ema26
+                            signal_line = macd_line.ewm(span=9, adjust=False).mean()
+                            macd_hist   = macd_line - signal_line
+
+                            # Beräkna RSI (14)
+                            delta = close.diff()
+                            gain  = delta.where(delta > 0, 0).rolling(14).mean()
+                            loss  = (-delta.where(delta < 0, 0)).rolling(14).mean()
+                            rs    = gain / loss.replace(0, float("nan"))
+                            rsi   = 100 - (100 / (1 + rs))
+
+                            # Subplots: MACD + RSI
+                            fig_macd_rsi = make_subplots(
+                                rows=2, cols=1,
+                                shared_xaxes=True,
+                                vertical_spacing=0.08,
+                                row_heights=[0.55, 0.45],
+                            )
+
+                            # MACD Line
+                            fig_macd_rsi.add_trace(
+                                go.Scatter(x=close.index, y=macd_line,
+                                           name="MACD", line=dict(color="#42a5f5", width=1.5)),
+                                row=1, col=1,
+                            )
+                            # Signal Line
+                            fig_macd_rsi.add_trace(
+                                go.Scatter(x=close.index, y=signal_line,
+                                           name="Signal", line=dict(color="#ff7043", width=1.5)),
+                                row=1, col=1,
+                            )
+                            # MACD Histogram
+                            hist_colors = ["#4caf50" if v >= 0 else "#ef5350" for v in macd_hist]
+                            fig_macd_rsi.add_trace(
+                                go.Bar(x=close.index, y=macd_hist,
+                                       name="MACD Hist", marker_color=hist_colors,
+                                       opacity=0.6),
+                                row=1, col=1,
+                            )
+
+                            # RSI Line
+                            fig_macd_rsi.add_trace(
+                                go.Scatter(x=close.index, y=rsi,
+                                           name="RSI (14)", line=dict(color="#ab47bc", width=2)),
+                                row=2, col=1,
+                            )
+                            # RSI nivåer
+                            fig_macd_rsi.add_hline(y=70, line_dash="dash", line_color="#ef5350",
+                                                   annotation_text="Överköpt 70", row=2, col=1)
+                            fig_macd_rsi.add_hline(y=30, line_dash="dash", line_color="#4caf50",
+                                                   annotation_text="Översålt 30", row=2, col=1)
+                            fig_macd_rsi.add_hline(y=50, line_dash="dot", line_color="#8892a4",
+                                                   annotation_text="50", row=2, col=1)
+
+                            # Layout
+                            fig_macd_rsi.update_layout(
+                                title=dict(
+                                    text=f"{tech_ticker} – MACD & RSI ({period})",
+                                    font=dict(size=14),
+                                ),
+                                template="plotly_dark",
+                                paper_bgcolor="#131722",
+                                plot_bgcolor="#1e2230",
+                                height=550,
+                                margin=dict(t=40, b=16, l=16, r=16),
+                                hovermode="x unified",
+                                showlegend=True,
+                                legend=dict(
+                                    orientation="h", y=1.12, x=0.5, xanchor="center",
+                                    font=dict(size=10),
+                                ),
+                            )
+
+                            # Y-axis labels
+                            fig_macd_rsi.update_yaxes(title_text="MACD", row=1, col=1,
+                                                      color="#8892a4")
+                            fig_macd_rsi.update_yaxes(title_text="RSI", row=2, col=1,
+                                                      range=[0, 100], color="#8892a4")
+                            fig_macd_rsi.update_xaxes(color="#8892a4")
+
+                            st.plotly_chart(fig_macd_rsi, use_container_width=True)
+
+                            # Visa senaste värdet som metrics
+                            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                            with col_m1:
+                                st.metric("MACD", f"{macd_line.iloc[-1]:.3f}" if not macd_line.empty else "—")
+                            with col_m2:
+                                st.metric("Signal", f"{signal_line.iloc[-1]:.3f}" if not signal_line.empty else "—")
+                            with col_m3:
+                                rsi_val = rsi.iloc[-1]
+                                rsi_str = f"{rsi_val:.1f}" if not pd.isna(rsi_val) else "—"
+                                rsi_color = "🟢" if (not pd.isna(rsi_val) and 30 <= rsi_val <= 70) else ("🔴" if not pd.isna(rsi_val) else "⚪")
+                                st.metric("RSI (14)", f"{rsi_color} {rsi_str}")
+                            with col_m4:
+                                macd_sig = "🟢 Bullish" if (not macd_line.empty and not signal_line.empty and macd_line.iloc[-1] > signal_line.iloc[-1]) else "🔴 Bearish"
+                                st.metric("Signal", macd_sig)
+
+                    except Exception as e:
+                        st.error(f"Kunde inte hämta data för {tech_ticker}: {e}")
+
     # ── AI-knapp: AI tolkning av teknisk data (Feature 3) ───────────────────
     st.markdown("---")
     st.subheader("🤖 AI-tolkning")
     if st.button("🤖 Tolka teknisk data med AI", key="btn_tech_ai", use_container_width=True):
         provider = _get_provider()
+        depth = _get_depth()
         with st.spinner("Analyserar teknisk data..."):
             try:
                 # Skapa en prompt baserad på teknisk data
@@ -1381,8 +1735,9 @@ def page_technical(df: pd.DataFrame, filters: dict):
                 }
                 result = ai_analysis.ai_chat(
                     "Ge mig en teknisk analys av marknaden baserat på denna data",
-                    context=json.dumps(tech_context, ensure_ascii=False),
+                    context=ai_analysis._safe_json(tech_context, ensure_ascii=False),
                     provider=provider,
+                    depth=depth,
                 )
                 with st.container(border=True):
                     st.markdown(result)
@@ -1438,11 +1793,13 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                      type="primary", use_container_width=True):
             with st.spinner("Analyserar marknaden..."):
                 try:
+                    depth = _get_depth()
                     result = ai_analysis.generate_market_summary(
                         df=df if not df.empty else None,
                         sc_df=sc_df if not sc_df.empty else None,
                         force_refresh=refresh_market,
                         provider=provider,
+                        depth=depth,
                     )
                     st.markdown(_ai_section_header(), unsafe_allow_html=True)
                     st.markdown(result)
@@ -1467,6 +1824,69 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                     top = df.nlargest(1, "score_total").iloc[0]
                     st.metric("Topp", f"{top['ticker']} ({top['score_total']:.0f}p)")
 
+        # ── AI Ticker Search med ett-klick-lägg-till ────────────────────────
+        st.markdown("---")
+        st.subheader("🔍 Sök och lägg till aktie")
+        st.caption("Sök efter ticker/bolag via yfinance och lägg till i bevakningslista eller portfölj med ett klick.")
+
+        col_search, col_target = st.columns([3, 1])
+        with col_search:
+            ai_search_q = st.text_input(
+                "Sök ticker eller bolagsnamn",
+                key="ai_market_ticker_search",
+                placeholder="t.ex. AAPL, TSLA, NVDA...",
+            )
+        with col_target:
+            target = st.selectbox(
+                "Lägg till i",
+                ["Bevakningslista", "Portfölj"],
+                key="ai_market_add_target",
+            )
+
+        if ai_search_q:
+            hits = _search_ticker_yfinance(ai_search_q.upper().strip())
+            if hits:
+                st.success(f"Hittade {len(hits)} träffar")
+                for h in hits:
+                    cols = st.columns([2, 3, 1, 1])
+                    with cols[0]:
+                        st.markdown(f"**{h['ticker']}**")
+                    with cols[1]:
+                        st.markdown(f"{h['name'][:50]}")
+                    with cols[2]:
+                        st.markdown(f"`{h.get('exchange', '?')}`")
+                    with cols[3]:
+                        if st.button("➕ Lägg till", key=f"ai_mkt_add_{h['ticker']}"):
+                            if target == "Bevakningslista":
+                                items = load_watchlist()
+                                if not any(i["ticker"] == h["ticker"] for i in items):
+                                    items.append({
+                                        "ticker": h["ticker"],
+                                        "name": h["name"],
+                                        "added": str(date.today()),
+                                    })
+                                    _save_watchlist_data(items)
+                                    st.success(f"`{h['ticker']}` tillagd i bevakningslistan!")
+                                    st.rerun()
+                                else:
+                                    st.info(f"`{h['ticker']}` finns redan i bevakningslistan.")
+                            else:  # Portfölj
+                                holdings = load_portfolio()
+                                if h["ticker"] not in holdings["ticker"].values:
+                                    new_row = pd.DataFrame([{
+                                        "ticker": h["ticker"],
+                                        "shares": 0,
+                                        "cost_basis": 0,
+                                    }])
+                                    holdings = pd.concat([holdings, new_row], ignore_index=True)
+                                    _save_holdings_df(holdings)
+                                    st.success(f"`{h['ticker']}` tillagd i portföljen! Fyll i antal och pris i Admin.")
+                                    st.rerun()
+                                else:
+                                    st.info(f"`{h['ticker']}` finns redan i portföljen.")
+            else:
+                st.caption("Inga sökresultat. Prova med annat sökord.")
+
     # ── Flik 2: One-click Stock Analysis (Feature 2b) ───────────────────────
     with tab_stock:
         st.subheader("📈 AI-aktieanalys")
@@ -1484,9 +1904,11 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                          type="primary", use_container_width=True):
                 with st.spinner(f"Analyserar {sel_ticker}..."):
                     try:
+                        depth = _get_depth()
                         result = ai_analysis.analyze_stock(
                             sel_ticker, df=df, force_refresh=force_refresh,
                             provider=provider,
+                            depth=depth,
                         )
                         st.markdown(_ai_section_header(), unsafe_allow_html=True)
                         st.markdown(result)
@@ -1534,9 +1956,11 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                          type="primary", use_container_width=True):
                 with st.spinner(f"Jämför {ticker_a} vs {ticker_b}..."):
                     try:
+                        depth = _get_depth()
                         result = ai_analysis.compare_stocks(
                             ticker_a, ticker_b, df=df, force_refresh=force_refresh,
                             provider=provider,
+                            depth=depth,
                         )
                         st.markdown(_ai_section_header(), unsafe_allow_html=True)
                         st.markdown(result)
@@ -1585,9 +2009,11 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                          type="primary", use_container_width=True):
                 with st.spinner(f"Analyserar sektorn {sel_sector}..."):
                     try:
+                        depth = _get_depth()
                         result = ai_analysis.analyze_sector(
                             sel_sector, df=df, force_refresh=force_refresh,
                             provider=provider,
+                            depth=depth,
                         )
                         st.markdown(_ai_section_header(), unsafe_allow_html=True)
                         st.markdown(result)
@@ -1660,11 +2086,13 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 with st.chat_message("assistant"):
                     with st.spinner("🤖 AI tänker..."):
                         try:
+                            depth = _get_depth()
                             result = ai_analysis.ai_chat(
                                 user_question,
                                 context=context_str if context_str else "",
                                 force_refresh=chat_refresh,
                                 provider=provider,
+                                depth=depth,
                             )
                             st.markdown(result)
                         except Exception as e:
@@ -1682,9 +2110,11 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                          type="primary", use_container_width=True):
                 with st.spinner("Analyserar portfölj..."):
                     try:
+                        depth = _get_depth()
                         result = ai_analysis.analyze_portfolio(
                             holdings, df=df if not df.empty else None,
                             provider=provider,
+                            depth=depth,
                         )
                         st.markdown(_ai_section_header(), unsafe_allow_html=True)
                         st.markdown(result)
@@ -1747,9 +2177,11 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                         except Exception:
                             pass
 
+                        depth = _get_depth()
                         result = ai_analysis.analyze_news(
                             news_ticker, news_items=news_items, force_refresh=force_refresh,
                             provider=provider,
+                            depth=depth,
                         )
                         st.markdown(_ai_section_header(), unsafe_allow_html=True)
                         st.markdown(result)
@@ -1885,8 +2317,9 @@ def page_admin():
     
     st.title("🔧 Admin – Hantera portfölj, bevakning & scannar")
 
-    tab_wl, tab_hold, tab_scan, tab_import = st.tabs([
-        "⭐ Bevakningslista", "💼 Portfölj", "🚀 Starta scan", "📥 Avanza-import"
+    tab_wl, tab_hold, tab_scan, tab_import, tab_health = st.tabs([
+        "⭐ Bevakningslista", "💼 Portfölj", "🚀 Starta scan", "📥 Avanza-import",
+        "🩺 Universe Health"
     ])
 
     # ── St1: Bevakningslista ────────────────────────────────────────────────
@@ -2197,10 +2630,200 @@ def page_admin():
                         st.success(f"Import klar! {n_add} tillagda, {n_upd} uppdaterade.")
                         st.rerun()
             except Exception as e:
-                st.error(f"Fel vid läsning av fil: {e}")
+                    st.error(f"Fel vid läsning av fil: {e}")
+
+    # ── Flik 5: Universe Health ────────────────────────────────────────────
+    with tab_health:
+        st.subheader("🩺 Universe Health – underhåll av aktieuniversum")
+        st.caption(
+            "Upptäck avnoterade/ogiltiga tickers, hantera svartlista "
+            "och hitta nya intressanta aktier med AI-hjälp."
+        )
+
+        try:
+            from core.universe_health import (
+                detect_invalid_tickers, suggest_replacements,
+                find_new_stocks, run_health_check,
+                load_blacklist, add_to_blacklist, remove_from_blacklist,
+            )
+        except ImportError as e:
+            st.error(f"Kunde inte ladda universe_health-modulen: {e}")
+            return
+
+        # -- Blacklist overview --
+        blacklist = load_blacklist()
+        st.markdown(f"**Svartlista:** {len(blacklist)} tickers")
+
+        with st.expander("📋 Visa svartlista", expanded=False):
+            if blacklist:
+                st.dataframe(pd.DataFrame(blacklist), use_container_width=True, hide_index=True)
+
+                # Remove from blacklist
+                remove_bl = st.selectbox(
+                    "Ta bort från svartlistan",
+                    [""] + [i.get("ticker", "") for i in blacklist],
+                    key="bl_remove",
+                )
+                if remove_bl and st.button("🗑️ Ta bort", key="btn_bl_remove"):
+                    if remove_from_blacklist(remove_bl):
+                        st.success(f"`{remove_bl}` borttagen från svartlistan!")
+                        st.rerun()
+            else:
+                st.info("Svartlistan är tom.")
+
+        # Manual add to blacklist
+        with st.expander("➕ Lägg till i svartlistan manuellt", expanded=False):
+            col_bl_t, col_bl_r = st.columns([2, 3])
+            with col_bl_t:
+                bl_ticker = st.text_input("Ticker", key="bl_add_ticker",
+                                          placeholder="AAPL").upper().strip()
+            with col_bl_r:
+                bl_reason = st.text_input("Anledning", key="bl_add_reason",
+                                          placeholder="t.ex. avnoterad")
+            if st.button("➕ Lägg till i svartlistan", key="btn_bl_add"):
+                if bl_ticker:
+                    if add_to_blacklist(bl_ticker, bl_reason or "manuell"):
+                        st.success(f"`{bl_ticker}` tillagd i svartlistan!")
+                        st.rerun()
+                    else:
+                        st.info(f"`{bl_ticker}` finns redan i svartlistan.")
+                else:
+                    st.warning("Ange en ticker.")
+
+        st.markdown("---")
+
+        # -- Run Health Check --
+        st.markdown("### 🔍 Kör hälsokontroll")
+        st.caption("Kontrollerar alla tickers i senaste scandatan mot yfinance.")
+
+        health_provider = st.selectbox(
+            "AI-provider för nya aktieförslag",
+            ["auto", "deepseek", "gemini"],
+            format_func=lambda k: {
+                "auto": f"Auto ({config.AI_PROVIDER})",
+                "deepseek": "DeepSeek (komplex, kostar)",
+                "gemini": "Gemini (enkel, gratis)",
+            }.get(k, k),
+            key="health_provider",
+        )
+
+        if st.button("🩺 Kör hälsokontroll", key="btn_health_check",
+                     type="primary", use_container_width=True):
+            with st.spinner("Kör hälsokontroll (kan ta några minuter)..."):
+                try:
+                    # Ladda senaste scandata
+                    reports = sorted(REPORT_DIR.glob("scored_universe_*.csv"), reverse=True)
+                    if not reports:
+                        st.warning("Ingen scandata hittad. Kör en scan först.")
+                    else:
+                        df_health = pd.read_csv(reports[0], low_memory=False)
+                        df_health.columns = df_health.columns.str.strip()
+
+                        result = run_health_check(df=df_health, provider=health_provider)
+                        st.success("✅ Hälsokontroll klar!")
+
+                        # Visa resultat
+                        col_h1, col_h2, col_h3 = st.columns(3)
+                        with col_h1:
+                            st.metric("Ogiltiga tickers", len(result.get("invalid_tickers", [])))
+                        with col_h2:
+                            st.metric("Svartlistade", result.get("blacklist_count", 0))
+                        with col_h3:
+                            st.metric("Nya AI-förslag", len(result.get("new_stocks", [])))
+
+                        # Invalid tickers
+                        invalid = result.get("invalid_tickers", [])
+                        if invalid:
+                            st.markdown("---")
+                            st.error(f"⚠️ Hittade {len(invalid)} ogiltiga/avnoterade tickers!")
+                            inv_df = pd.DataFrame(invalid)
+                            st.dataframe(inv_df, use_container_width=True, hide_index=True)
+
+                            # Ersättningsförslag
+                            st.markdown("### 💡 Ersättningsförslag")
+                            suggestions = result.get("suggestions", {})
+                            for bad_ticker, replacements in suggestions.items():
+                                with st.expander(f"`{bad_ticker}` → ersättningsförslag", expanded=True):
+                                    if replacements:
+                                        rep_df = pd.DataFrame(replacements)
+                                        st.dataframe(rep_df, use_container_width=True, hide_index=True)
+                                        if st.button(f"➕ Lägg till `{replacements[0]['ticker']}` i bevakningslistan",
+                                                     key=f"health_add_{bad_ticker}"):
+                                            items = load_watchlist()
+                                            if not any(i["ticker"] == replacements[0]["ticker"] for i in items):
+                                                items.append({
+                                                    "ticker": replacements[0]["ticker"],
+                                                    "name": replacements[0].get("name", ""),
+                                                    "added": str(date.today()),
+                                                })
+                                                _save_watchlist_data(items)
+                                                st.success(f"{replacements[0]['ticker']} tillagd i bevakningslistan!")
+                                                st.rerun()
+                                            else:
+                                                st.info("Finns redan i bevakningslistan.")
+                                    else:
+                                        st.caption("Inga ersättningsförslag tillgängliga.")
+                        else:
+                            st.success("✅ Alla tickers verkar vara giltiga!")
+
+                        # New stock suggestions
+                        new_stocks = result.get("new_stocks", [])
+                        if new_stocks:
+                            st.markdown("---")
+                            st.subheader("🚀 AI-förslag: nya intressanta aktier")
+                            st.caption("AI-genererade förslag på aktier att titta närmare på.")
+                            for s in new_stocks:
+                                ticker_s = s.get("ticker", "?")
+                                name_s = s.get("name", "")
+                                reason_s = s.get("reason", "")
+                                with st.container(border=True):
+                                    col_s1, col_s2 = st.columns([3, 1])
+                                    with col_s1:
+                                        st.markdown(f"**{ticker_s}** – {name_s}")
+                                        if reason_s:
+                                            st.caption(reason_s)
+                                    with col_s2:
+                                        if st.button("➕ Lägg till", key=f"health_new_{ticker_s}"):
+                                            items = load_watchlist()
+                                            if not any(i["ticker"] == ticker_s for i in items):
+                                                items.append({
+                                                    "ticker": ticker_s,
+                                                    "name": name_s or ticker_s,
+                                                    "added": str(date.today()),
+                                                })
+                                                _save_watchlist_data(items)
+                                                st.success(f"{ticker_s} tillagd i bevakningslistan!")
+                                                st.rerun()
+                                            else:
+                                                st.info("Finns redan i bevakningslistan.")
+
+                except Exception as e:
+                    st.error(f"❌ Hälsokontroll misslyckades: {e}")
+
+        # -- Quick check: detect invalid tickers only --
+        st.markdown("---")
+        st.markdown("### ⚡ Snabbkontroll")
+        st.caption("Kontrollera om specifika tickers är ogiltiga (utan AI-förslag).")
+        if st.button("🔍 Kör snabbkontroll", key="btn_health_quick",
+                     use_container_width=True):
+            with st.spinner("Kontrollerar tickers..."):
+                try:
+                    reports = sorted(REPORT_DIR.glob("scored_universe_*.csv"), reverse=True)
+                    if reports:
+                        df_quick = pd.read_csv(reports[0], low_memory=False)
+                        df_quick.columns = df_quick.columns.str.strip()
+                        invalid = detect_invalid_tickers(df_quick)
+                        if invalid:
+                            st.error(f"⚠️ Hittade {len(invalid)} ogiltiga tickers")
+                            st.dataframe(pd.DataFrame(invalid), use_container_width=True, hide_index=True)
+                        else:
+                            st.success("✅ Alla tickers verkar giltiga!")
+                except Exception as e:
+                    st.error(f"❌ {e}")
 
 
 def _trigger_gh_workflow(token: str, owner: str, repo: str,
+
                          workflow: str, label: str, inputs: dict = None):
     """Trigga en GitHub Actions workflow_dispatch."""
     url = f"https://api.github.com/repos/{owner}/{repo}/actions/workflows/{workflow}/dispatches"

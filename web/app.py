@@ -25,7 +25,9 @@ import requests
 from nacl import encoding, public
 
 import yfinance as yf
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_file
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 from core import config
 from portfolio import watchlist as wl
@@ -480,6 +482,106 @@ def import_avanza_confirm():
 
     ok, msg = sync_holdings_to_github()
     return jsonify({"status": "ok", "added": n_added, "updated": n_updated, "github_sync": ok, "github_msg": msg})
+
+
+@app.route("/api/holdings/export/excel")
+def export_holdings_excel():
+    """Exportera innehav till .xlsx med live-priser och P&L."""
+    holdings = load_holdings()
+    enriched = []
+    for h in holdings:
+        live = get_live_price(h["ticker"])
+        price  = live["price"]
+        shares = h["shares"]
+        cost   = h.get("cost_basis")
+        market_value = round(shares * price, 2)  if price else None
+        cost_total   = round(shares * cost,  2)  if cost  else None
+        pnl          = round(market_value - cost_total, 2) if (market_value and cost_total) else None
+        pnl_pct      = round(pnl / cost_total * 100, 2)   if (pnl is not None and cost_total) else None
+        enriched.append({
+            "Ticker":         h["ticker"],
+            "Namn":           live["name"],
+            "Valuta":         live["currency"],
+            "Antal":          shares,
+            "Köpkurs (snitt)":cost if cost else 0,
+            "Senaste kurs":   price if price else 0,
+            "Marknadsvärde":  market_value if market_value else 0,
+            "P&L":            pnl if pnl else 0,
+            "P&L %":          pnl_pct if pnl_pct else 0,
+        })
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Portfölj"
+
+    # Stildefinitioner
+    header_font = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="0B1520", end_color="0B1520", fill_type="solid")
+    header_align = Alignment(horizontal="center", vertical="center")
+    cell_align = Alignment(horizontal="right", vertical="center")
+    left_align = Alignment(horizontal="left", vertical="center")
+    thin_border = Border(
+        left=Side(style="thin", color="182534"),
+        right=Side(style="thin", color="182534"),
+        top=Side(style="thin", color="182534"),
+        bottom=Side(style="thin", color="182534"),
+    )
+    pnl_green = Font(color="00D4AA")
+    pnl_red   = Font(color="FF4D6D")
+
+    # Skriv headers
+    headers = list(enriched[0].keys()) if enriched else []
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+
+    # Skriv data
+    for row_idx, item in enumerate(enriched, 2):
+        for col_idx, key in enumerate(headers, 1):
+            val = item[key]
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.border = thin_border
+            if col_idx == 1:
+                cell.alignment = left_align
+            else:
+                cell.alignment = cell_align
+            # Färgsätt P&L
+            if key == "P&L" and val is not None:
+                cell.font = pnl_green if val >= 0 else pnl_red
+                cell.number_format = '#,##0.00'
+            elif key == "P&L %" and val is not None:
+                if val >= 0:
+                    cell.font = pnl_green
+                else:
+                    cell.font = pnl_red
+                cell.number_format = '0.00"%"'
+            elif key in ("Marknadsvärde", "Köpkurs (snitt)", "Senaste kurs"):
+                cell.number_format = '#,##0.00'
+            elif key == "Antal":
+                cell.number_format = '#,##0'
+
+    # Auto-bredd på kolumner
+    for col_idx, header in enumerate(headers, 1):
+        max_len = len(str(header))
+        for row in ws.iter_rows(min_col=col_idx, max_col=col_idx, min_row=2, max_row=len(enriched)+1):
+            for cell in row:
+                if cell.value is not None:
+                    max_len = max(max_len, len(str(cell.value)))
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = min(max_len + 4, 30)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=f"holdings_{__import__('datetime').datetime.now().strftime('%Y-%m-%d')}.xlsx",
+    )
 
 
 # ── Start ───────────────────────────────────────────────────────────────────

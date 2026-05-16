@@ -19,8 +19,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-import json
-
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -59,6 +57,11 @@ def _safe_val(val, fmt: str = "num", default: str = "—"):
     if fmt == "ratio":
         return f"{float(val):.1f}/9"
     return str(val)
+
+
+def _get_depth() -> str:
+    """Hämta valt AI-djup från sidebar/session state."""
+    return st.session_state.get("selected_depth", "Normal")
 
 
 def _provider_selector(key: str = "provider_default") -> str:
@@ -491,11 +494,13 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame):
                         if v is not None and not pd.isna(v):
                             context[field] = float(v) if isinstance(v, (int, float)) else v
 
+                    depth = _get_depth()
                     result = ai_analysis.ai_chat(
                         custom_question,
-                        context=json.dumps(context, ensure_ascii=False),
+                        context=ai_analysis._safe_json(context, ensure_ascii=False),
                         force_refresh=force_refresh,
                         provider=provider,
+                        depth=depth,
                     )
                     with st.container(border=True):
                         st.markdown(result)
@@ -504,8 +509,10 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame):
         else:
             with st.spinner(f"🤖 AI (via {provider}) analyserar..."):
                 try:
+                    depth = _get_depth()
                     result = ai_analysis.analyze_stock(
                         ticker, df=df, force_refresh=force_refresh, provider=provider,
+                        depth=depth,
                     )
                     with st.container(border=True):
                         st.markdown(result)
@@ -533,9 +540,11 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame):
                     except Exception:
                         pass
 
+                depth = _get_depth()
                 result = ai_analysis.analyze_news(
                     ticker, news_items=news_items,
                     force_refresh=force_refresh, provider=provider,
+                    depth=depth,
                 )
                 with st.container(border=True):
                     st.markdown(result)
