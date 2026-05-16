@@ -2647,43 +2647,37 @@ def page_admin():
         col_a, col_b = st.columns(2)
 
         with col_a:
-            st.markdown("**🌅 Morgonscan (vardagar)**")
-            if st.button("▶️ Starta morgonscan", key="btn_morning",
+            st.markdown("**🌅 Morgonbrief (vardagar)**")
+            if st.button("▶️ Starta morgonbrief", key="btn_morning",
                          disabled=not gh_token, use_container_width=True):
                 _trigger_gh_workflow(gh_token, gh_owner, gh_repo,
-                                     "morning_scan.yml", "Morgonscan")
-                st.toast("Morgonscan startad! ⏳", icon="🌅")
+                                     "daily_scan.yml", "Morgonbrief",
+                                     inputs={"mode": "morning"})
+                st.toast("Morgonbrief startad! ⏳", icon="🌅")
 
-            st.markdown("**🌆 Kvällsscan (vardagar)**")
-            if st.button("▶️ Starta kvällsscan", key="btn_evening",
+            st.markdown("**🌆 Kvällsbrev (vardagar)**")
+            if st.button("▶️ Starta kvällsbrev", key="btn_evening",
                          disabled=not gh_token, use_container_width=True):
                 _trigger_gh_workflow(gh_token, gh_owner, gh_repo,
-                                     "evening_scan.yml", "Kvällsscan")
-                st.toast("Kvällsscan startad! ⏳", icon="🌆")
+                                     "daily_scan.yml", "Kvällsbrev",
+                                     inputs={"mode": "evening"})
+                st.toast("Kvällsbrev startad! ⏳", icon="🌆")
 
         with col_b:
-            st.markdown("**📊 Veckoscan (söndagar)**")
+            st.markdown("**📊 Veckoscan (lördagar)**")
             if st.button("▶️ Starta veckoscan", key="btn_weekly",
                          disabled=not gh_token, use_container_width=True):
                 _trigger_gh_workflow(gh_token, gh_owner, gh_repo,
-                                     "weekly_scan.yml", "Veckoscan",
-                                     inputs={"send_email": "true"})
+                                     "daily_scan.yml", "Veckoscan",
+                                     inputs={"mode": "weekly"})
                 st.toast("Veckoscan startad! ⏳", icon="📊")
 
             st.markdown("**🏆 Småbolagsscan (måndagar)**")
-            col_c, col_d = st.columns(2)
-            with col_c:
-                market = st.selectbox("Marknad", ["all", "first_north", "small_cap", "spotlight"],
-                                      key="sc_market", label_visibility="collapsed")
-            with col_d:
-                top_n = st.number_input("Topp N", min_value=5, max_value=50, value=20,
-                                        key="sc_top", label_visibility="collapsed")
             if st.button("▶️ Starta småbolagsscan", key="btn_smallcap",
                          disabled=not gh_token, use_container_width=True):
                 _trigger_gh_workflow(gh_token, gh_owner, gh_repo,
-                                     "smallcap_scan.yml", "Småbolagsscan",
-                                     inputs={"market": market, "top_n": str(top_n),
-                                             "send_email": "true"})
+                                     "daily_scan.yml", "Småbolagsscan",
+                                     inputs={"mode": "smallcap"})
                 st.toast("Småbolagsscan startad! ⏳", icon="🏆")
 
         st.markdown("---")
