@@ -1822,9 +1822,14 @@ def page_technical(df: pd.DataFrame, filters: dict):
                                 except:
                                     pass
                             if corr_data:
-                                corr_df = pd.DataFrame(corr_data).dropna()
-                                if len(corr_df) > 5 and len(corr_df.columns) > 1:
-                                    st.dataframe(corr_df.corr().round(3), use_container_width=True)
+                                corr_list = []
+                                for _k, _v in corr_data.items():
+                                    if _v is not None and len(_v) > 5:
+                                        corr_list.append(_v.rename(_k))
+                                if len(corr_list) > 1:
+                                    corr_df = pd.concat(corr_list, axis=1).dropna()
+                                    if len(corr_df) > 5 and len(corr_df.columns) > 1:
+                                        st.dataframe(corr_df.corr().round(3), use_container_width=True)
             else:
                 st.info("Välj minst 2 aktier för att visa diagram.")
         else:
