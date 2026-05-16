@@ -477,6 +477,11 @@ def send_email(
     msg["Subject"] = subject
     msg["From"]    = f"{from_name} <{sender}>"
     msg["To"]      = ", ".join(recipients)
+    
+    # List-Unsubscribe header – minskar spam-risk och krävs av många email-klienter
+    if unsubscribe_url:
+        msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
+        msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
     msg.attach(MIMEText(body_text, "plain", "utf-8"))
     msg.attach(MIMEText(full_html, "html", "utf-8"))
