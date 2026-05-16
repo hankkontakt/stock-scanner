@@ -499,3 +499,20 @@ def send_email(
     except Exception as e:
         print(f"  ❌ Email-fel: {e}")
         return False
+
+
+def send_failure_alert(workflow: str, run_id: str = "", repo: str = "") -> bool:
+    """Skickar varningsmail när en GitHub Actions-pipeline misslyckas."""
+    run_url = f"https://github.com/{repo}/actions/runs/{run_id}" if repo and run_id else ""
+    body = (
+        f"# 🚨 Pipeline-fel: `{workflow}`\n\n"
+        f"En automatisk körning av **{workflow}** misslyckades.\n\n"
+        + (f"- **Run-länk:** {run_url}\n" if run_url else "")
+        + (f"- **Run ID:** `{run_id}`\n" if run_id else "")
+        + "\nKolla GitHub Actions-loggar för detaljer."
+    )
+    return send_email(
+        subject=f"🚨 MarketScan: {workflow} misslyckades",
+        body_markdown=body,
+        from_name="MarketScan Alerts",
+    )

@@ -591,13 +591,19 @@ def _get_cached(cache_key: str, max_age_hours: int = AI_CACHE_HOURS) -> Optional
 
 
 def _set_cache(cache_key: str, response: str):
-    """Spara svar i cache."""
+    """Spara svar i cache med atomic write (tmp + rename) för att undvika
+    korrupt JSON vid parallella skrivningar."""
+    if response is None:
+        return
     try:
         cache_file = AI_CACHE_DIR / f"{cache_key}.json"
-        cache_file.write_text(json.dumps({
+        tmp_file = cache_file.with_suffix(".json.tmp")
+        tmp_file.write_text(json.dumps({
             "cached_at": datetime.now().isoformat(),
             "response": response,
         }, ensure_ascii=False), encoding="utf-8")
+        # os.replace är atomic på alla plattformar
+        os.replace(tmp_file, cache_file)
     except Exception:
         pass
 
