@@ -514,6 +514,141 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                 d_str or f"{sector[:18]}",
             )
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # GLOBALA MARKNADER & VALUTOR
+    # ═══════════════════════════════════════════════════════════════════════════
+    st.markdown("---")
+    st.subheader("🌍 Globala marknader & Valutor")
+    tab_global_idx, tab_fx, tab_rates = st.tabs(["📊 Index", "💱 Valutor", "📈 Räntor"])
+
+    with tab_global_idx:
+        with st.spinner("Hämtar globala index..."):
+            try:
+                from core.global_markets import fetch_global_indices
+                indices = fetch_global_indices()
+                if indices:
+                    # Sortera efter region: Asien först, Europa, USA sist
+                    asia_keys = ["^N225","^TOPX","^HSI","000001.SS","^KS11","^AXJO","^BSESN","^STI"]
+                    euro_keys = ["^GDAXI","^FTSE","^FCHI","^STOXX50E","^OMX"]
+                    us_keys   = ["^GSPC","^IXIC","^DJI","^VIX"]
+
+                    rows = []
+                    for k in asia_keys + euro_keys + us_keys:
+                        d = indices.get(k)
+                        if d:
+                            chg = d.get("change_pct", 0)
+                            arrow = "🟢" if chg >= 0 else "🔴"
+                            rows.append({
+                                "Index": f"{d['name']}",
+                                "Senast": f"{d.get('close', 0):,.0f}" if d.get('close') else "—",
+                                "Förändring": f"{arrow} {chg:+.2f}%",
+                            })
+                    df_idx = pd.DataFrame(rows)
+                    col_cfg_idx = {
+                        "Index": st.column_config.TextColumn("Index"),
+                        "Senast": st.column_config.TextColumn("Senast", width=80),
+                        "Förändring": st.column_config.TextColumn("Förändring", width=100),
+                    }
+                    st.dataframe(df_idx, use_container_width=True, hide_index=True,
+                                 column_config=col_cfg_idx, height=min(400, len(df_idx)*37+40))
+                    st.caption("Data från yfinance · uppdateras varje gång sidan laddas")
+                else:
+                    st.info("Kunde inte hämta indexdata just nu.")
+            except Exception as e:
+                st.caption(f"Globala index ej tillgängliga: {e}")
+
+    with tab_fx:
+        with st.spinner("Hämtar valutakurser..."):
+            try:
+                import yfinance as yf
+                fx_pairs = {
+                    "EUR/SEK": "EURSEK=X",
+                    "USD/SEK": "USDSEK=X",
+                    "NOK/SEK": "NOKSEK=X",
+                    "GBP/SEK": "GBPSEK=X",
+                    "DKK/SEK": "DKKSEK=X",
+                }
+                fx_rows = []
+                for name, ticker in fx_pairs.items():
+                    try:
+                        hist = yf.Ticker(ticker).history(period="5d", auto_adjust=True)
+                        if not hist.empty and len(hist) >= 2:
+                            curr = float(hist["Close"].iloc[-1])
+                            prev = float(hist["Close"].iloc[-2])
+                            chg = ((curr / prev) - 1) * 100
+                            arrow = "🟢" if chg >= 0 else "🔴"
+                            fx_rows.append({
+                                "Par": name,
+                                "Kurs": f"{curr:.4f}",
+                                "Förändring": f"{arrow} {chg:+.2f}%",
+                            })
+                    except:
+                        pass
+                if fx_rows:
+                    st.dataframe(pd.DataFrame(fx_rows), use_container_width=True,
+                                 hide_index=True, height=200)
+                else:
+                    st.info("Kunde inte hämta valutakurser.")
+            except Exception as e:
+                st.caption(f"Valutor ej tillgängliga: {e}")
+
+        # Visa FX-graf
+        with st.expander("📈 Visa FX-historik (senaste månaden)", expanded=False):
+            try:
+                fx_ticker = st.selectbox("Välj valutapar", list(fx_pairs.keys()), key="fx_chart")
+                fx_hist = yf.download(fx_pairs[fx_ticker], period="1mo", auto_adjust=True, progress=False)
+                if not fx_hist.empty:
+                    fig_fx = go.Figure()
+                    fig_fx.add_trace(go.Scatter(
+                        x=fx_hist.index, y=fx_hist["Close"],
+                        mode="lines", name=fx_ticker,
+                        line=dict(color="#42a5f5", width=2),
+                        fill="tozeroy", fillcolor="rgba(66,165,245,0.1)",
+                    ))
+                    fig_fx.update_layout(
+                        template="plotly_dark", paper_bgcolor="#131722",
+                        plot_bgcolor="#1e2230", height=250,
+                        margin=dict(t=16, b=16, l=16, r=16),
+                    )
+                    st.plotly_chart(fig_fx, use_container_width=True)
+            except:
+                pass
+
+    with tab_rates:
+        with st.spinner("Hämtar räntor..."):
+            try:
+                import yfinance as yf
+                rate_tickers = {
+                    "🇺🇸 US 10Y (Fed proxy)": "^TNX",
+                    "🇩🇪 Tysk 10Y (ECB proxy)": "DE10Y.DE",
+                    "🇸🇪 Svensk 10Y (Riksbanken)": "SE10Y.ST",
+                    "🇬🇧 UK 10Y (BOE proxy)": "UK10Y.L",
+                    "🇳🇴 Norsk 10Y": "NO10Y.OL",
+                }
+                rate_rows = []
+                for name, ticker in rate_tickers.items():
+                    try:
+                        hist = yf.Ticker(ticker).history(period="5d", auto_adjust=True)
+                        if not hist.empty and len(hist) >= 2:
+                            curr = float(hist["Close"].iloc[-1])
+                            prev = float(hist["Close"].iloc[-2])
+                            chg = curr - prev
+                            arrow = "⬆️" if chg >= 0 else "⬇️"
+                            rate_rows.append({
+                                "Ränta": name,
+                                "Nivå": f"{curr:.2f}%",
+                                "Δ": f"{arrow} {chg:+.2f}%",
+                            })
+                    except:
+                        pass
+                if rate_rows:
+                    st.dataframe(pd.DataFrame(rate_rows), use_container_width=True,
+                                 hide_index=True, height=250)
+                else:
+                    st.info("Kunde inte hämta räntor.")
+            except Exception as e:
+                st.caption(f"Räntor ej tillgängliga: {e}")
+
     st.markdown("---")
 
     # ── Diagram ───────────────────────────────────────────────────────────────
