@@ -4,11 +4,11 @@ alerts.py
 Skickar email-notifikationer via gemensam email-engine.
 
 Email-typer (delegeras till email_template):
-  send_weekly_report(rapport_md)   – Veckans fullständiga rapport
-  send_daily_update(portfolio_df)  – Daglig portföljuppdatering
-  send_alert(subject, body)        – Akuta notiser (SÄLJ-signal etc.)
+  send_weekly_report(rapport_md)   - Veckans fullstandiga rapport
+  send_daily_update(portfolio_df)  - Daglig portfoljuppdatering
+  send_alert(subject, body)        - Akuta notiser (SALJ-signal etc.)
 
-Bevarar bakåtkompatibilitet: _get_email_config(), email_configured(),
+Bevarar bakatkompatibilitet: _get_email_config(), email_configured(),
 _markdown_to_html() finns fortfarande men delegerar till email_template.
 """
 
@@ -19,8 +19,13 @@ import pandas as pd
 
 from core import email_template
 
+# Unicode-konstanter (maste vara variabler, inte escapes i f-strings for Python 3.11)
+EN_DASH = "\u2013"
+RIGHT_ARROW = "\u2192"
+EM_DASH = "\u2014"
 
-# ── Bevarade för bakåtkompatibilitet ─────────────────────────────────────────
+
+# ── Bevarade for bakatkompatibilitet ─────────────────────────────────────────
 
 def _get_email_config() -> tuple[str, str, str]:
     """Delegerar till email_template."""
@@ -41,9 +46,9 @@ def _markdown_to_html(md: str) -> str:
 
 def send_weekly_report(report_md: str, n_scanned: int = 0, n_top: int = 0) -> bool:
     """
-    Skickar veckans fullständiga rapport via gemensam email-engine.
+    Skickar veckans fullstandiga rapport via gemensam email-engine.
     """
-    subject = f"MarketScan Veckorapport – {date.today().strftime('%Y-%m-%d')}"
+    subject = f"MarketScan Veckorapport {EN_DASH} {date.today().strftime('%Y-%m-%d')}"
     return email_template.send_email(
         subject=subject,
         body_markdown=report_md,
@@ -58,14 +63,14 @@ def send_daily_update(
     spy_change:    Optional[float] = None,
 ) -> bool:
     """
-    Skickar daglig portföljuppdatering via gemensam email-engine.
-    Bygger en HTML-body med marknad, alerts och portfölj.
+    Skickar daglig portfoljuppdatering via gemensam email-engine.
+    Bygger en HTML-body med marknad, alerts och portfolj.
     """
     import html as html_mod
 
     html_parts = []
 
-    # Marknadsöversikt
+    # Marknadsoversikt
     if omxs30_change is not None or spy_change is not None:
         mkt_parts = []
         if omxs30_change is not None:
@@ -86,11 +91,11 @@ def send_daily_update(
             msg = html_mod.escape(str(alert.get("message", "")))
             action = html_mod.escape(str(alert.get("action", "")))
             html_parts.append(email_template.build_alert_box(
-                f"<strong>{ticker}</strong>: {msg} \u2192 <strong>{action}</strong>",
+                f"<strong>{ticker}</strong>: {msg} {RIGHT_ARROW} <strong>{action}</strong>",
                 level="critical"
             ))
 
-    # Portfölj-tabell
+    # Portfolj-tabell
     if portfolio_df is not None and not portfolio_df.empty:
         rows = []
         for _, row in portfolio_df.iterrows():
@@ -98,8 +103,8 @@ def send_daily_update(
             pnl_html = email_template.build_pnl_cell(pnl_pct)
             ticker = html_mod.escape(str(row.get("ticker", "")))
             name = html_mod.escape(str(row.get("name", ""))[:20])
-            price = str(row.get("current_price", "\u2014"))
-            rec = html_mod.escape(str(row.get("recommendation", "\u2014")))
+            price = str(row.get("current_price", EM_DASH))
+            rec = html_mod.escape(str(row.get("recommendation", EM_DASH)))
             rows.append(
                 f'<tr style="border-bottom:1px solid {email_template.COLORS["border"]}">'
                 f'<td style="padding:6px 10px"><strong>{ticker}</strong><br>'
@@ -110,7 +115,7 @@ def send_daily_update(
                 f'</tr>'
             )
 
-        html_parts.append(email_template.build_section_header("Din portfölj"))
+        html_parts.append(email_template.build_section_header("Din portfolj"))
         html_parts.append(
             f'<table style="border-collapse:collapse;width:100%;margin:12px 0;font-size:13px;'
             f'border:1px solid {email_template.COLORS["border"]};border-radius:6px;overflow:hidden">'
@@ -133,7 +138,8 @@ def send_daily_update(
         )
 
     has_alerts = bool(alerts)
-    subject = f"{'ALERT \u2013 ' if has_alerts else ''}MarketScan daglig \u2013 {date.today().strftime('%d %b')}"
+    prefix = f"ALERT {EN_DASH} " if has_alerts else ""
+    subject = f"{prefix}MarketScan daglig {EN_DASH} {date.today().strftime('%d %b')}"
     return email_template.send_email(
         subject=subject,
         body_html_extra="\n".join(html_parts),
@@ -142,10 +148,10 @@ def send_daily_update(
 
 
 def send_alert(ticker: str, message: str, action: str) -> bool:
-    """Skickar en akut notis för en enskild aktie."""
-    subject = f"MarketScan Alert: {ticker} \u2013 {action}"
+    """Skickar en akut notis for en enskild aktie."""
+    subject = f"MarketScan Alert: {ticker} {EN_DASH} {action}"
     body_html = email_template.build_alert_box(
-        f"<strong>{ticker}</strong>: {message} \u2192 <strong>{action}</strong>",
+        f"<strong>{ticker}</strong>: {message} {RIGHT_ARROW} <strong>{action}</strong>",
         level="critical"
     )
     body_html += f'<p style="color:#64748b;font-size:13px;margin-top:16px">Datum: {date.today()}</p>'
