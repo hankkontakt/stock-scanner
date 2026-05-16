@@ -263,6 +263,7 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     w = get_dynamic_weights(regime, config.FACTOR_WEIGHTS)
 
     # Composite score using the dynamic weights
+    # Alla faktorer (inklusive sentiment) ingår i vikterna – summan = 1.0
     df["score_total"] = (
         w.get("value", 0)    * df["score_value"]    +
         w.get("quality", 0)  * df["score_quality"]  +
@@ -270,15 +271,9 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
         w.get("growth", 0)   * df["score_growth"]   +
         w.get("risk", 0)     * df["score_risk"]     +
         w.get("size", 0)     * df["score_size"]     +
-        w.get("dividend", 0) * df["score_dividend"] 
+        w.get("dividend", 0) * df["score_dividend"] +
+        w.get("sentiment", 0) * df.get("score_sentiment", 0)
     )
-    
-    # Lägg till sentiment om det finns i vikterna
-    if "sentiment" in w and "score_sentiment" in df.columns:
-        df["score_total"] += w["sentiment"] * df["score_sentiment"]
-    elif "score_sentiment" in df.columns:
-        # Fallback om config har sentiment men inte get_dynamic_weights
-        df["score_total"] += config.FACTOR_WEIGHTS.get("sentiment", 0.10) * df["score_sentiment"]
 
     # ── Holdingbolag & råvarubolag: score-rabatt ────────────────────────
     # Dessa bolag ser "fantastiska" ut i en faktormodell men av fel skäl:
