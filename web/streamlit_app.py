@@ -2564,27 +2564,22 @@ def page_admin():
                 if selected:
                     suggested_ticker = options[selected]["ticker"]
 
-        # Ticker, antal, pris – använder session_state för att hålla vald ticker
-        if "hold_ticker_val" not in st.session_state:
-            st.session_state["hold_ticker_val"] = ""
+        # Ticker, antal, pris – använder text_inputs egna key som session_state
+        # (st.text_input med key="hold_ticker_input" lagrar sitt varde i
+        #  st.session_state["hold_ticker_input"] automatiskt)
 
-        # Uppdatera session_state om användaren valde från sök
+        # Uppdatera session_state om användaren valde från sök – använd SAMMA nyckel
         if suggested_ticker:
-            st.session_state["hold_ticker_val"] = suggested_ticker
-            st.session_state["hold_hit_made"] = True
+            st.session_state["hold_ticker_input"] = suggested_ticker
 
         # Vanliga widgets (INGET st.form – så value uppdateras korrekt)
         col1, col2, col3 = st.columns(3)
         with col1:
             ticker = st.text_input(
                 "Ticker *",
-                value=st.session_state.get("hold_ticker_val", ""),
                 key="hold_ticker_input",
                 placeholder="AAPL"
             ).upper().strip()
-            # Håll session_state i synk med vad användaren skriver
-            if ticker != st.session_state.get("hold_ticker_val", ""):
-                st.session_state["hold_ticker_val"] = ticker
         with col2:
             shares = st.number_input("Antal aktier", min_value=0.0, step=1.0,
                                      format="%.2f", key="hold_shares")
@@ -2596,7 +2591,7 @@ def page_admin():
                           use_container_width=True, type="primary")
 
         if saved:
-            ticker = st.session_state.get("hold_ticker_val", "").upper().strip()
+            ticker = st.session_state.get("hold_ticker_input", "").upper().strip()
             shares = st.session_state.get("hold_shares", 0)
             cost = st.session_state.get("hold_cost", 0)
 
@@ -2623,7 +2618,7 @@ def page_admin():
                     st.cache_data.clear()
                     st.success(msg)
                     # Nollställ fält
-                    st.session_state["hold_ticker_val"] = ""
+                    st.session_state["hold_ticker_input"] = ""
                     st.rerun()
                 else:
                     st.error("Kunde inte spara portföljen. Se felmeddelandet ovan.")
