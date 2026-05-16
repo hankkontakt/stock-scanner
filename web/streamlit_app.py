@@ -296,16 +296,6 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
 
         page = st.session_state["nav_page"]
 
-        # ── Datumval (alltid synligt) ───────────────────────────────────────
-        st.markdown("---")
-        with st.expander("📅 Datum", expanded=False):
-            scan_date = st.selectbox("Scan", scan_dates if scan_dates else ["Ingen data"], key="scan_date", label_visibility="collapsed")
-            sc_date = st.selectbox("Småbolag", sc_dates if sc_dates else ["Ingen data"], key="sc_date", label_visibility="collapsed")
-
-        # ── Filters per page ────────────────────────────────────────────────
-        filters = {}
-        _show_filters = page in ("🔍 Veckoscanner", "🏦 Småbolag", "📈 Teknisk analys")
-
         if _show_filters:
             with st.expander("🎛️ Filter", expanded=False):
                 if page == "🔍 Veckoscanner":
@@ -1822,14 +1812,9 @@ def page_technical(df: pd.DataFrame, filters: dict):
                                 except:
                                     pass
                             if corr_data:
-                                corr_list = []
-                                for _k, _v in corr_data.items():
-                                    if _v is not None and len(_v) > 5:
-                                        corr_list.append(_v.rename(_k))
-                                if len(corr_list) > 1:
-                                    corr_df = pd.concat(corr_list, axis=1).dropna()
-                                    if len(corr_df) > 5 and len(corr_df.columns) > 1:
-                                        st.dataframe(corr_df.corr().round(3), use_container_width=True)
+                                corr_df = pd.DataFrame(corr_data).dropna()
+                                if len(corr_df) > 5 and len(corr_df.columns) > 1:
+                                    st.dataframe(corr_df.corr().round(3), use_container_width=True)
             else:
                 st.info("Välj minst 2 aktier för att visa diagram.")
         else:
