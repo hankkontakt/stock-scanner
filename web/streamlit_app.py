@@ -2122,18 +2122,19 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 history_context = "\n".join(history_lines)
 
             # 6. Kombinera all kontext
+            # Anvander chat_history direkt som lista for battre AI-forstaelse
             full_context = context_str
-            if history_context:
-                full_context = f"Tidigare konversation:\n{history_context}\n\nAktuell data:\n{context_str}"
 
-            # 7. Anropa AI
+            # 7. Anropa AI med historik som lista
             with st.chat_message("assistant"):
                 with st.spinner("AI tanker..."):
                     try:
                         depth = _get_depth()
+                        history_data = st.session_state.get("chat_history", [])
                         result = ai_analysis.ai_chat(
                             prompt,
                             context=full_context,
+                            history=history_data,  # Skicka som lista, inte text
                             force_refresh=force_refresh,
                             provider=provider,
                             depth=depth,

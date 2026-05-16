@@ -708,9 +708,10 @@ def analyze_portfolio(holdings: pd.DataFrame, df: pd.DataFrame = None,
 
 def ai_chat(question: str, context: str = "", force_refresh: bool = False,
             provider: str = "auto",
-            depth: str = "Normal") -> str:
+            depth: str = "Normal",
+            history: list = None) -> str:
     """
-    Fritextfråga till AI:n.
+    Fritextfråga till AI:n med stöd för konversationshistorik.
     
     Args:
         question: Användarens fråga
@@ -718,6 +719,8 @@ def ai_chat(question: str, context: str = "", force_refresh: bool = False,
         force_refresh: Hoppa över cache
         provider: "auto", "deepseek" eller "gemini"
         depth: "Snabb", "Normal", "Djup" eller "Extra djup"
+        history: Lista med dicts {"role": "user"/"assistant", "content": "..."}
+                 från tidigare meddelanden i samma konversation
     
     Returns:
         AI-svar
@@ -725,10 +728,21 @@ def ai_chat(question: str, context: str = "", force_refresh: bool = False,
     user_message = question
     if context:
         user_message = f"{question}\n\nKontextdata:\n```json\n{context}\n```"
+    
+    # Bygg meddelanden med historik
+    messages = []
+    if history:
+        # Konvertera sparad historik till AI-format
+        for msg in history[-10:]:  # Max 10 tidigare meddelanden
+            role = "user" if msg["role"] == "user" else "assistant"
+            messages.append({"role": role, "content": msg["content"]})
+    
+    # Lagg till aktuell fraga
+    messages.append({"role": "user", "content": user_message})
 
     # Ingen cache för chatt - varje fråga är unik
     return _ai_call(
-        [{"role": "user", "content": user_message}],
+        messages,
         SYSTEM_PROMPT_CHAT,
         max_tokens=_resolve_depth(depth),
         provider=provider,
