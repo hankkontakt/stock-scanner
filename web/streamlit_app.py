@@ -237,125 +237,104 @@ def _get_depth() -> str:
 # SIDEBAR
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _nav_button(label: str, key: str):
+    """A key!"""
+    if st.button(label, key=key, use_container_width=True):
+        st.session_state["nav_page"] = label
+        st.rerun()
+
 def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
     """Bygger sidebar och returnerar (page, scan_date, sc_date, filters)."""
     with st.sidebar:
         st.markdown("## 📊 MarketScan")
         st.markdown("---")
 
-        page = st.radio(
-            "Navigering",
-            ["📊 Översikt", "🔍 Veckoscanner", "🏦 Småbolag",
-             "💼 Portfölj", "📄 Paper Trading", "🏭 Sektorrotation", "🚨 Larm & Notiser",
-             "📈 Backtesting", "📈 Teknisk analys", "🤖 AI", "🔧 Admin"],
-            label_visibility="collapsed",
-        )
-
+        # ── Global sökning (ALLTID synlig) ──────────────────────────────────
+        st.markdown("### 🔍 Sök")
+        _search_q = st.text_input("", placeholder="Ticker eller bolag...", key="global_search", label_visibility="collapsed")
         st.markdown("---")
-        st.markdown("### 📅 Datumval")
 
-        scan_date = st.selectbox(
-            "Veckoscanner (datum)",
-            scan_dates if scan_dates else ["Ingen data"],
-            key="scan_date",
-        )
-        sc_date = st.selectbox(
-            "Småbolag (datum)",
-            sc_dates if sc_dates else ["Ingen data"],
-            key="sc_date",
-        )
+        # ── Navigation via knappar i expanderbara grupper ───────────────────
+        if "nav_page" not in st.session_state:
+            st.session_state["nav_page"] = "📊 Översikt"
 
+        with st.expander("📈 MARKNAD", expanded=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                _nav_button("📊 Översikt", "nav_overview")
+                _nav_button("🔍 Veckoscanner", "nav_weekly")
+                _nav_button("🏦 Småbolag", "nav_smallcap")
+            with col2:
+                _nav_button("🏭 Sektorrotation", "nav_sector")
+                _nav_button("📈 Backtesting", "nav_backtest")
+
+        with st.expander("💼 PORTFÖLJ", expanded=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                _nav_button("💼 Portfölj", "nav_portfolio")
+                _nav_button("📄 Paper Trading", "nav_paper")
+            with col2:
+                _nav_button("🚨 Larm & Notiser", "nav_alerts")
+
+        with st.expander("🔧 SYSTEM", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                _nav_button("📈 Teknisk analys", "nav_technical")
+                _nav_button("🤖 AI", "nav_ai")
+            with col2:
+                _nav_button("🔧 Admin", "nav_admin")
+
+        page = st.session_state["nav_page"]
+
+        # ── Datumval (alltid synligt) ───────────────────────────────────────
         st.markdown("---")
+        with st.expander("📅 Datum", expanded=False):
+            scan_date = st.selectbox("Scan", scan_dates if scan_dates else ["Ingen data"], key="scan_date", label_visibility="collapsed")
+            sc_date = st.selectbox("Småbolag", sc_dates if sc_dates else ["Ingen data"], key="sc_date", label_visibility="collapsed")
+
+        # ── Filters per page ────────────────────────────────────────────────
         filters = {}
+        _show_filters = page in ("🔍 Veckoscanner", "🏦 Småbolag", "📈 Teknisk analys")
 
-        if page == "🔍 Veckoscanner":
-            st.markdown("### 🎛️ Filter – Veckoscanner")
-            filters["score_min"] = st.slider("Min score", 0, 100, 40, 5)
-            filters["score_max"] = st.slider("Max score", 0, 100, 100, 5)
-            filters["sector"]    = st.multiselect("Sektor", [], placeholder="Välj sektorer…")
-            filters["entry"]     = st.multiselect(
-                "Entry-signal",
-                ["STARK", "OK", "VÄNTA", "EJ AKTUELL"],
-                default=["STARK", "OK"],
-            )
-            filters["confidence"] = st.multiselect(
-                "Konfidens",
-                ["HÖG", "MEDEL", "LÅG"],
-                placeholder="Alla konfidensnivåer…",
-            )
-            filters["trend"] = st.selectbox(
-                "Trend",
-                ["Alla", "UPPTREND", "NEDTREND", "SIDLED"],
-            )
-            filters["piotroski_min"] = st.slider("Min Piotroski", 0, 9, 0)
-            filters["show_holdings"] = st.checkbox("Visa bara mina innehav")
-            filters["show_watchlist"] = st.checkbox("Inkludera bevakningslista")
+        if _show_filters:
+            with st.expander("🎛️ Filter", expanded=False):
+                if page == "🔍 Veckoscanner":
+                    filters["score_min"] = st.slider("Min score", 0, 100, 40, 5, key="ws_min")
+                    filters["score_max"] = st.slider("Max score", 0, 100, 100, 5, key="ws_max")
+                    filters["sector"]    = st.multiselect("Sektor", [], placeholder="Välj sektorer…", key="ws_sector")
+                    filters["entry"]     = st.multiselect("Entry", ["STARK","OK","VÄNTA","EJ AKTUELL"], default=["STARK","OK"], key="ws_entry")
+                    filters["confidence"] = st.multiselect("Konfidens", ["HÖG","MEDEL","LÅG"], placeholder="Alla...", key="ws_conf")
+                    filters["trend"] = st.selectbox("Trend", ["Alla","UPPTREND","NEDTREND","SIDLED"], key="ws_trend")
+                    filters["piotroski_min"] = st.slider("Min Piotroski", 0, 9, 0, key="ws_pio")
+                    filters["show_holdings"] = st.checkbox("Bara mina innehav", key="ws_hold")
+                    filters["show_watchlist"] = st.checkbox("Inkludera bevakning", key="ws_wl")
 
-        elif page == "🏦 Småbolag":
-            st.markdown("### 🎛️ Filter – Småbolag")
-            filters["sc_score_min"] = st.slider("Min poäng", 0, 100, 30, 5)
-            filters["sc_stars"]     = st.multiselect(
-                "Stjärnbetyg",
-                ["★★★★★", "★★★★", "★★★", "★★", "★"],
-                placeholder="Alla betyg…",
-            )
-            filters["sc_sector"]    = st.multiselect("Sektor", [], placeholder="Välj sektorer…")
-            filters["sc_insider"]   = st.selectbox(
-                "Insidersignal",
-                ["Alla", "BUY", "NEUTRAL", "SELL", "N/A"],
-            )
-            filters["sc_fcf"]       = st.checkbox("Positivt FCF")
-            filters["sc_market"]    = st.multiselect(
-                "Marknadsplats",
-                ["First North", "Small Cap", "Spotlight", "Övrigt"],
-                placeholder="Alla marknader…",
-            )
-            filters["sc_max_de"]    = st.slider("Max skuldsättning D/E (%)", 0, 500, 300, 25)
+                elif page == "🏦 Småbolag":
+                    filters["sc_score_min"] = st.slider("Min poäng", 0, 100, 30, 5, key="sc_min")
+                    filters["sc_stars"] = st.multiselect("⭐ Betyg", ["★★★★★","★★★★","★★★","★★","★"], placeholder="Alla...", key="sc_stars")
+                    filters["sc_sector"] = st.multiselect("Sektor", [], placeholder="Välj...", key="sc_sector")
+                    filters["sc_insider"] = st.selectbox("Insider", ["Alla","BUY","NEUTRAL","SELL","N/A"], key="sc_insider")
+                    filters["sc_fcf"] = st.checkbox("Positivt FCF", key="sc_fcf")
+                    filters["sc_max_de"] = st.slider("Max D/E %", 0, 500, 300, 25, key="sc_de")
 
-        elif page == "📈 Teknisk analys":
-            st.markdown("### 🎛️ Filter – Teknisk")
-            filters["rsi_min"] = st.slider("Min RSI", 0, 100, 0)
-            filters["rsi_max"] = st.slider("Max RSI", 0, 100, 100)
-            filters["ma200"]   = st.selectbox(
-                "MA200-status",
-                ["Alla", "Över MA200 (bull)", "Under MA200 (bear)"],
-            )
-            filters["t_sector"] = st.multiselect("Sektor", [], placeholder="Välj sektorer…")
-            filters["t_entry"]  = st.multiselect(
-                "Entry",
-                ["STARK", "OK", "VÄNTA", "EJ AKTUELL"],
-                placeholder="Alla signaler…",
-            )
-            filters["trend_tech"] = st.selectbox("Trend", ["Alla", "UPPTREND", "Övriga"])
+                elif page == "📈 Teknisk analys":
+                    filters["rsi_min"] = st.slider("Min RSI", 0, 100, 0, 5, key="tech_rsi_min")
+                    filters["rsi_max"] = st.slider("Max RSI", 0, 100, 100, 5, key="tech_rsi_max")
+                    filters["ma200"] = st.selectbox("MA200", ["Alla","Över MA200 (bull)","Under MA200 (bear)"], key="tech_ma200")
+                    filters["t_sector"] = st.multiselect("Sektor", [], placeholder="Välj...", key="tech_sector")
+                    filters["t_entry"] = st.multiselect("Entry", ["STARK","OK","VÄNTA","EJ AKTUELL"], placeholder="Alla...", key="tech_entry")
+                    filters["trend_tech"] = st.selectbox("Trend", ["Alla","UPPTREND","Övriga"], key="tech_trend")
 
-        # ── AI-provider selector ─────────────────────────────────────────────
+        # ── AI-inställningar (alltid) ────────────────────────────────────────
+        with st.expander("🤖 AI-inställningar", expanded=False):
+            ai_provider = st.selectbox("Tjänst", ["auto","deepseek","gemini"], format_func=lambda k: {"auto": f"Auto ({config.AI_PROVIDER})","deepseek":"DeepSeek","gemini":"Gemini"}.get(k,k), key="sidebar_ai_provider")
+            st.session_state["selected_provider"] = ai_provider
+            ai_depth = st.selectbox("Djup", ["Snabb","Normal","Djup","Extra djup"], index=1, key="sidebar_ai_depth")
+            st.session_state["selected_depth"] = ai_depth
+
+        # ── Statusfot ───────────────────────────────────────────────────────
         st.markdown("---")
-        st.markdown("### 🤖 AI-provider")
-        ai_provider = st.selectbox(
-            "Välj AI-tjänst",
-            ["auto", "deepseek", "gemini"],
-            format_func=lambda k: {
-                "auto": f"Auto ({config.AI_PROVIDER})",
-                "deepseek": "DeepSeek (komplex, kostar)",
-                "gemini": "Gemini (enkel, gratis)",
-            }.get(k, k),
-            key="sidebar_ai_provider",
-        )
-        st.session_state["selected_provider"] = ai_provider
-
-        # ── AI-djup selector ───────────────────────────────────────────────
-        st.markdown("### 🎯 AI-djup")
-        ai_depth = st.selectbox(
-            "Välj analytiskt djup",
-            ["Snabb", "Normal", "Djup", "Extra djup"],
-            index=1,  # Normal som default
-            key="sidebar_ai_depth",
-        )
-        st.session_state["selected_depth"] = ai_depth
-
-        # Sektorlistan fylls i av respektive page-funktion (de anropar sidebar_update_sectors)
-        st.markdown("---")
-        st.caption(f"Senast uppdaterad: {datetime.now().strftime('%H:%M')}")
+        st.caption(f"🟢 {len(scan_dates) if scan_dates else 0} datum · Senast: {max(scan_dates) if scan_dates else '—'}")
 
     return page, scan_date, sc_date, filters
 
