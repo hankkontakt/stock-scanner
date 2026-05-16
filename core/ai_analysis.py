@@ -199,18 +199,37 @@ Skriv på svenska. Max 250 ord per aktie."""
 # HJÄLPFUNKTIONER – Bestäm provider
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _resolve_provider(provider: str = "auto") -> str:
+def _resolve_provider(provider: str = "auto", task_type: str = "light") -> str:
     """Avgör vilken AI-provider som ska användas.
     
     Args:
         provider: "auto" (läs från config), "deepseek", eller "gemini"
+        task_type: "light" (standard, gratis), "heavy" (komplex), eller "deep" (endast deepseek)
     
     Returns:
         "deepseek" eller "gemini"
     """
-    if provider == "auto":
-        return getattr(config, "AI_PROVIDER", "deepseek") or "deepseek"
-    return provider
+    if provider != "auto":
+        return provider
+    
+    task_mode = getattr(config, "AI_TASK_MODE", "hybrid")
+    
+    # "gemini": alltid gemini (om man vill spara pengar helt)
+    if task_mode == "gemini":
+        return "gemini"
+    # "deepseek": alltid deepseek (om man vill ha högst kvalitet)
+    if task_mode == "deepseek":
+        return "deepseek"
+    
+    # "hybrid" (default): light->gemini, heavy/deep->deepseek
+    if task_type in ("deep",):
+        # Djupa analyser använder alltid DeepSeek
+        return getattr(config, "AI_DEEP_PROVIDER", "deepseek") or "deepseek"
+    elif task_type == "heavy":
+        return getattr(config, "AI_DEEP_PROVIDER", "deepseek") or "deepseek"
+    else:
+        # "light": använd standard-provider (nu gemini)
+        return getattr(config, "AI_PROVIDER", "gemini") or "gemini"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -727,6 +746,7 @@ def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
                                  depth: str = "Normal") -> str:
     """
     Skapa AI-analyssektion för veckorapporten.
+    Veckoanalys ar en "heavy" uppgift – anvander DeepSeek i hybrid-lage.
 
     Args:
         scored_df: DataFrame med scandata
@@ -737,6 +757,8 @@ def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
         provider: "auto", "deepseek" eller "gemini"
         depth: "Snabb", "Normal", "Djup" eller "Extra djup"
     """
+    if provider == "auto":
+        provider = _resolve_provider(provider, task_type="heavy")
     if scored_df.empty:
         return ""
 
@@ -778,12 +800,11 @@ def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
     }
 
     data_str = _safe_json(data_summary, indent=2, ensure_ascii=False)
-    resolved = _resolve_provider(provider)
-    cache_key = _make_cache_key("weekly_ai", datetime.now().strftime("%Y-%m-%d"), resolved)
+    cache_key = _make_cache_key("weekly_ai", datetime.now().strftime("%Y-%m-%d"), provider)
 
     result = _call_with_cache(
         SYSTEM_PROMPT_WEEKLY_REPORT,
-        [{"role": "user", "content": f"Generera veckoanalys för dagens scan.\n\nData:\n```json\n{data_str}\n```"}],
+        [{"role": "user", "content": f"Generera veckoanalys for dagens scan.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
         max_tokens=_resolve_depth(depth),
         force_refresh=True,  # Alltid fräsch data för veckorapport
