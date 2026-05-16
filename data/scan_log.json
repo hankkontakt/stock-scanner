@@ -62,17 +62,35 @@
     }
   },
   {
-    "timestamp": "2026-05-15T18:01:19",
-    "scan_type": "evening",
+    "timestamp": "2026-05-15T12:01:40",
+    "scan_type": "morning",
     "status": "OK",
     "details": {
-      "scan_type": "evening",
+      "scan_type": "morning",
       "n_holdings": 1,
       "n_prices": 1,
-      "n_sell_signals": 0,
-      "n_stoploss": 0,
-      "report_path": "reports/evening_2026-05-15.md",
-      "elapsed_seconds": 26.1
+      "n_stoploss": 1,
+      "n_crash": 0,
+      "n_surge": 0,
+      "n_opportunities": 0,
+      "report_path": "reports/morning_2026-05-15.md",
+      "elapsed_seconds": 13.6
+    }
+  },
+  {
+    "timestamp": "2026-05-15T12:29:19",
+    "scan_type": "morning",
+    "status": "OK",
+    "details": {
+      "scan_type": "morning",
+      "n_holdings": 1,
+      "n_prices": 1,
+      "n_stoploss": 1,
+      "n_crash": 0,
+      "n_surge": 0,
+      "n_opportunities": 0,
+      "report_path": "reports/morning_2026-05-15.md",
+      "elapsed_seconds": 4.7
     }
   }
 ]
