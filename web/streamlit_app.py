@@ -565,14 +565,14 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                         if not hist.empty and len(hist) >= 2:
                             curr = float(hist["Close"].iloc[-1])
                             prev = float(hist["Close"].iloc[-2])
-                            chg = ((curr / prev) - 1) * 100
+                            chg = ((curr / prev) - 1) * 100 if prev else 0.0
                             arrow = "🟢" if chg >= 0 else "🔴"
                             fx_rows.append({
                                 "Par": name,
                                 "Kurs": f"{curr:.4f}",
                                 "Förändring": f"{arrow} {chg:+.2f}%",
                             })
-                    except:
+                    except Exception:
                         pass
                 if fx_rows:
                     st.dataframe(pd.DataFrame(fx_rows), use_container_width=True,
@@ -601,7 +601,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                         margin=dict(t=16, b=16, l=16, r=16),
                     )
                     st.plotly_chart(fig_fx, use_container_width=True)
-            except:
+            except Exception:
                 pass
 
     with tab_rates:
@@ -629,7 +629,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                                 "Nivå": f"{curr:.2f}%",
                                 "Δ": f"{arrow} {chg:+.2f}%",
                             })
-                    except:
+                    except Exception:
                         pass
                 if rate_rows:
                     st.dataframe(pd.DataFrame(rate_rows), use_container_width=True,
@@ -1114,7 +1114,11 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
             if not filt_df.empty and sc_cols:
                 tickers_list = filt_df["ticker"].tolist()
                 chosen = st.selectbox("Välj bolag", tickers_list, key="radar_ticker")
-                row = filt_df[filt_df["ticker"] == chosen].iloc[0]
+                _match = filt_df[filt_df["ticker"] == chosen]
+                if _match.empty:
+                    st.info("Vald aktie hittades inte i filtrerad data.")
+                    return
+                row = _match.iloc[0]
                 r_vals  = [row.get(c, 0) for c in sc_cols]
                 r_cats  = [score_cols_map[c] for c in sc_cols]
                 fig_rad = go.Figure(go.Scatterpolar(
@@ -1759,7 +1763,7 @@ def page_technical(df: pd.DataFrame, filters: dict):
                             with col_m2:
                                 st.metric("Signal", f"{signal_line.iloc[-1]:.3f}" if not signal_line.empty else "—")
                             with col_m3:
-                                rsi_val = rsi.iloc[-1]
+                                rsi_val = rsi.iloc[-1] if not rsi.empty else float("nan")
                                 rsi_str = f"{rsi_val:.1f}" if not pd.isna(rsi_val) else "—"
                                 rsi_color = "🟢" if (not pd.isna(rsi_val) and 30 <= rsi_val <= 70) else ("🔴" if not pd.isna(rsi_val) else "⚪")
                                 st.metric("RSI (14)", f"{rsi_color} {rsi_str}")
@@ -1790,14 +1794,16 @@ def page_technical(df: pd.DataFrame, filters: dict):
                             hist = yf.download(ticker, period=period, auto_adjust=True, progress=False)
                             if not hist.empty and "Close" in hist.columns:
                                 prices = hist["Close"]
-                                if normalize:
+                                if isinstance(prices, pd.DataFrame):
+                                    prices = prices.iloc[:, 0]
+                                if normalize and len(prices) > 0 and prices.iloc[0] and not pd.isna(prices.iloc[0]):
                                     prices = prices / prices.iloc[0] * 100
                                 fig.add_trace(go.Scatter(
                                     x=prices.index, y=prices,
                                     mode="lines", name=ticker,
                                     line=dict(color=colors[i % len(colors)], width=2),
                                 ))
-                        except:
+                        except Exception:
                             pass
                     fig.update_layout(
                         title=f"Prisjämförelse ({'normaliserad' if normalize else 'absolut'})",
@@ -1818,13 +1824,23 @@ def page_technical(df: pd.DataFrame, filters: dict):
                                 try:
                                     h = yf.download(ticker, period=period, auto_adjust=True, progress=False)
                                     if not h.empty:
-                                        corr_data[ticker] = h["Close"].pct_change()
+                                        close = h["Close"]
+                                        if isinstance(close, pd.DataFrame):
+                                            close = close.iloc[:, 0]
+                                        corr_data[ticker] = close.pct_change()
                                 except:
                                     pass
                             if corr_data:
-                                corr_df = pd.DataFrame(corr_data).dropna()
-                                if len(corr_df) > 5 and len(corr_df.columns) > 1:
-                                    st.dataframe(corr_df.corr().round(3), use_container_width=True)
+                                corr_list = []
+                                for _k, _v in corr_data.items():
+                                    if isinstance(_v, pd.Series) and len(_v) > 5:
+                                        _s = _v.copy()
+                                        _s.name = _k
+                                        corr_list.append(_s)
+                                if len(corr_list) > 1:
+                                    corr_df = pd.concat(corr_list, axis=1).dropna()
+                                    if len(corr_df) > 5 and len(corr_df.columns) > 1:
+                                        st.dataframe(corr_df.corr().round(3), use_container_width=True)
             else:
                 st.info("Välj minst 2 aktier för att visa diagram.")
         else:
@@ -3882,7 +3898,23 @@ def _check_site_access() -> bool:
     return False
 
 
+def _init_session_state():
+    """Initialiserar session_state med säkra default-värden vid första laddning."""
+    defaults = {
+        "nav_page": "📊 Översikt",
+        "selected_provider": "auto",
+        "selected_depth": "Normal",
+        "global_search": "",
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+
 def main():
+
+    # Initiera session_state med defaults
+    _init_session_state()
 
     # Global lösenordsskydd – körs innan allt annat
     if not _check_site_access():
