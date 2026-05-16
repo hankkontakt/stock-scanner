@@ -18,6 +18,9 @@ from datetime import datetime
 from pathlib import Path
 import pandas as pd
 
+# Lägg till projektroten i sökvägen (fungerar oavsett varifrån skriptet körs)
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from core import config
 from core import data_fetcher
 from core import scoring

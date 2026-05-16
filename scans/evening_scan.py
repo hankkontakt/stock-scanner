@@ -31,6 +31,9 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 
+# Lägg till projektroten i sökvägen
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from core import config
 from core import alerts
 from core import logger
