@@ -247,7 +247,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             "Navigering",
             ["📊 Översikt", "🔍 Veckoscanner", "🏦 Småbolag",
              "💼 Portfölj", "📄 Paper Trading", "🏭 Sektorrotation", "🚨 Larm & Notiser",
-             "📈 Teknisk analys", "🤖 AI", "🔧 Admin"],
+             "📈 Backtesting", "📈 Teknisk analys", "🤖 AI", "🔧 Admin"],
             label_visibility="collapsed",
         )
 
@@ -3053,6 +3053,99 @@ def _trigger_gh_workflow(token: str, owner: str, repo: str,
         st.error(f"❌ Nätverksfel: {e}")
 
 # ══════════════════════════════════════════════════════════════════════════════
+# SIDA – BACKTESTING
+# ══════════════════════════════════════════════════════════════════════════════
+
+def page_backtesting():
+    """Backtesting – testa scoringmodellen historiskt."""
+    st.title("📈 Backtesting")
+    st.caption("Testa hur scoringmodellen presterat historiskt. Baseras på momentum (12m, 6m, 3m, 52v-high). Första körningen tar 1-2 min.")
+
+    col_yr, col_top, col_bench, col_run = st.columns([1, 1, 1, 1])
+    with col_yr:
+        years = st.number_input("År", min_value=1, max_value=10, value=3, key="bt_years")
+    with col_top:
+        top_n = st.number_input("Top-N", min_value=5, max_value=50, value=20, key="bt_top")
+    with col_bench:
+        bench = st.text_input("Benchmark", value="SPY", key="bt_bench")
+    with col_run:
+        run_bt = st.button("▶️ Kör", type="primary", key="bt_run", use_container_width=True)
+
+    if "bt_result" not in st.session_state:
+        st.session_state["bt_result"] = None
+
+    if run_bt:
+        with st.spinner(f"Kör backtest {int(years)} år, topp-{int(top_n)}..."):
+            try:
+                from backtesting.backtest import run_backtest
+                from core import config
+                tickers = config.UNIVERSE[:50]
+                result = run_backtest(tickers=tickers, years=int(years), top_n=int(top_n), benchmark=str(bench), verbose=False)
+                st.session_state["bt_result"] = result
+            except Exception as e:
+                st.error(f"Fel: {e}")
+                st.info("Första körningen tar 1-2 min medan data laddas ned")
+
+    result = st.session_state.get("bt_result")
+    if result and result.get("perioder", 0) > 0:
+        kpi_row([
+            ("📅 Perioder", f"{result['perioder']} mån", f"{result['år_testat']} år"),
+            ("📈 Kumulativ", f"{result['kumulativ_avkastning']:+.1f}%", f"Bench: {result.get('kumulativ_benchmark', 0):+.1f}%"),
+            ("📊 Annualiserad", f"{result['annualiserad_port']:+.1f}%/år", f"Alpha: {result.get('alpha_annualiserad', 0):+.1f}%/år"),
+            ("🎯 Sharpe", f"{result['sharpe_ratio']:.2f}", ">1.0 = bra"),
+            ("✅ Hit rate", f"{result.get('hit_rate_pct', 0):.0f}%", ">50% slår index"),
+            ("💀 Max DD", f"{result['max_drawdown_pct']:.1f}%", None),
+        ])
+
+        tab1, tab2, tab3 = st.tabs(["📈 Equity curve", "📋 Per period", "💾 Spara"])
+
+        with tab1:
+            period_data = result.get("period_details", pd.DataFrame())
+            if not period_data.empty:
+                port_rets = period_data["portfolio_ret"].values / 100
+                equity_port = [100]
+                for r in port_rets:
+                    equity_port.append(equity_port[-1] * (1 + r))
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=list(range(len(equity_port))), y=equity_port, mode="lines", name="Modell", line=dict(color="#00d4aa", width=2.5), fill="tozeroy", fillcolor="rgba(0,212,170,0.1)"))
+                if "benchmark_ret" in period_data.columns:
+                    bench_rets = period_data["benchmark_ret"].dropna().values / 100
+                    if len(bench_rets) == len(port_rets):
+                        eq_b = [100]
+                        for r in bench_rets:
+                            eq_b.append(eq_b[-1] * (1 + r))
+                        fig.add_trace(go.Scatter(x=list(range(len(eq_b))), y=eq_b, mode="lines", name=f"{bench}", line=dict(color="#64748b", width=1.5, dash="dash")))
+                fig.update_layout(template="plotly_dark", paper_bgcolor="#131722", plot_bgcolor="#1e2230", height=400, margin=dict(t=40, b=16, l=16, r=16), hovermode="x unified", legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"))
+                st.plotly_chart(fig, use_container_width=True)
+
+                fig_h = px.histogram(x=period_data["portfolio_ret"], nbins=20, color_discrete_sequence=["#42a5f5"], labels={"x": "Månadsavkastning %", "count": "Antal"}, template="plotly_dark")
+                fig_h.add_vline(x=0, line_dash="dash", line_color="#ef5350")
+                fig_h.update_layout(paper_bgcolor="#131722", plot_bgcolor="#1e2230", height=250, margin=dict(t=16, b=16, l=16, r=16))
+                st.plotly_chart(fig_h, use_container_width=True)
+
+        with tab2:
+            pd_data = result.get("period_details", pd.DataFrame())
+            if not pd_data.empty:
+                st.dataframe(pd_data, use_container_width=True, hide_index=True, height=400)
+
+        with tab3:
+            pd_data = result.get("period_details", pd.DataFrame())
+            st.download_button("📥 Ladda ner CSV", data=pd_data.to_csv(index=False) if not pd_data.empty else "", file_name=f"backtest_{datetime.now():%Y-%m-%d}.csv", mime="text/csv", use_container_width=True)
+            if st.button("🤖 AI-analys", key="bt_ai", use_container_width=True):
+                with st.spinner("Analyserar..."):
+                    try:
+                        c = {"annualiserad": result["annualiserad_port"], "sharpe": result["sharpe_ratio"], "hit_rate": result.get("hit_rate_pct"), "max_dd": result["max_drawdown_pct"], "alpha": result.get("alpha_annualiserad")}
+                        r = ai_analysis.ai_chat("Analysera backtestresultatet och ge rekommendationer", context=ai_analysis._safe_json(c, ensure_ascii=False), provider=_get_provider(), depth=_get_depth())
+                        with st.container(border=True):
+                            st.markdown(r)
+                    except Exception as e:
+                        st.error(f"❌ {e}")
+
+    elif result is not None:
+        st.warning("Inga resultat. Försök med fler tickers eller längre period.")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # SIDA – SEKTORROTATION
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -3800,6 +3893,9 @@ def main():
 
     elif page == "🚨 Larm & Notiser":
         page_alerts_notices(df)
+
+    elif page == "📈 Backtesting":
+        page_backtesting()
 
     elif page == "📈 Teknisk analys":
         if not df.empty and "sector" in df.columns:
