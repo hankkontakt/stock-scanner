@@ -118,7 +118,7 @@ def load_smallcap_reports() -> dict:
 def load_portfolio() -> pd.DataFrame:
     """Laddar holdings.csv och berikar med senaste scan-data."""
     try:
-        holdings = pd.read_csv(ROOT / "holdings.csv")
+        holdings = pd.read_csv(DATA_DIR / "holdings.csv")
         holdings["ticker"] = holdings["ticker"].str.upper()
         return holdings
     except Exception:
@@ -2295,7 +2295,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
 def _save_holdings_df(df: pd.DataFrame) -> bool:
     """Spara holdings.csv."""
     try:
-        path = ROOT / "holdings.csv"
+        path = DATA_DIR / "holdings.csv"
         df.to_csv(path, index=False)
         return True
     except Exception as e:
