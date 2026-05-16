@@ -1,0 +1,122 @@
+name: 📊 MarketScan Pipeline (Daily)
+
+on:
+  schedule:
+    # Morgon 09:00 CET = 07:00 UTC (vinter) / 08:00 UTC (sommar)
+    - cron: "0 7 * * 1-5"
+    # Kväll 17:30 CET = 16:30 UTC (vinter) / 15:30 UTC (sommar)
+    - cron: "30 15 * * 1-5"
+    # Veckoscan lördag 10:00 CET
+    - cron: "0 9 * * 6"
+    # Småbolag måndag 09:15 CET
+    - cron: "15 8 * * 1"
+
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Körläge'
+        required: true
+        default: 'morning'
+        type: choice
+        options:
+          - morning
+          - evening
+          - weekly
+          - smallcap
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 📥 Hämta kod
+        uses: actions/checkout@v4
+
+      - name: 🐍 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 📦 Installera beroenden
+        run: pip install -r requirements.txt
+
+      - name: 📂 Återställ data-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/cache
+            data/history
+            data/paper_trades.json
+            data/scan_log.json
+          key: scanner-data-${{ runner.os }}
+          restore-keys: |
+            scanner-data-${{ runner.os }}-
+
+      - name: 📁 Skapa mappar
+        run: mkdir -p data/cache data/history reports
+
+      - name: ✅ Verifiera holdings.csv
+        run: |
+          if [ -f data/holdings.csv ]; then
+            echo "✓ holdings.csv finns ($(wc -l < data/holdings.csv) rader)"
+          else
+            echo "ℹ holdings.csv saknas – kör utan portföljdata"
+          fi
+
+      - name: ⭐ Ladda bevakningslista
+        run: |
+          if [ -n "$WATCHLIST_JSON" ]; then
+            echo "$WATCHLIST_JSON" > data/watchlist.json
+          fi
+        env:
+          WATCHLIST_JSON: ${{ secrets.WATCHLIST_JSON }}
+        continue-on-error: true
+
+      - name: 🔄 Bestäm körläge
+        id: mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 7 * * 1-5" ]; then
+            echo "mode=morning" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "30 15 * * 1-5" ]; then
+            echo "mode=evening" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 9 * * 6" ]; then
+            echo "mode=weekly" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "15 8 * * 1" ]; then
+            echo "mode=smallcap" >> $GITHUB_OUTPUT
+          else
+            echo "mode=morning" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 🚀 Kör pipeline
+        env:
+          EMAIL_SENDER:     ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:   ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO:         ${{ secrets.EMAIL_TO }}
+          FINNHUB_API_KEY:  ${{ secrets.FINNHUB_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          echo "▶️ Kör pipeline i läge: ${{ steps.mode.outputs.mode }}"
+          python -c "from core.daily_pipeline import run_pipeline; run_pipeline('${{ steps.mode.outputs.mode }}')"
+
+      - name: 📤 Spara rapport som artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: report-${{ steps.mode.outputs.mode }}-${{ github.run_number }}
+          path: reports/*.md
+          retention-days: 30
+
+      - name: 💾 Committa CSV- och rapportdata
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "MarketScan Bot"
+          git add data/scan_log.json data/paper_trades.json reports/scored_universe_*.csv reports/smallcap_scored_*.csv reports/*.md || true
+          git diff --staged --quiet || git commit -m "🤖 Pipeline ${{ steps.mode.outputs.mode }} $(date +%Y-%m-%d)"
+          git push || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
