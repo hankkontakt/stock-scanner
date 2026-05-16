@@ -443,6 +443,7 @@ def update_ticker_health(
     strikes       = _load_json(STRIKE_FILE)
     blacklist     = _load_json(BLACKLIST_FILE)
     fetch_failed  = fetch_failed or []
+    today_str     = str(datetime.now().date())
 
     warnings        = []
     removed_details = []
@@ -461,15 +462,29 @@ def update_ticker_health(
         )
         diagnosis = diagnose_failure(ticker, ticker_data)
 
-        strikes[ticker] = strikes.get(ticker, 0) + 1
+        # Idempotens: räkna upp max en gång per dag så CI-retries inte dubblerar strikes.
+        prev = strikes.get(ticker)
+        if isinstance(prev, dict):
+            prev_count = int(prev.get("count", 0))
+            prev_date  = prev.get("date", "")
+        else:
+            prev_count = int(prev or 0)
+            prev_date  = ""
 
-        if strikes[ticker] == 2:
+        if prev_date == today_str:
+            new_count = prev_count  # redan räknat idag, hoppa över
+        else:
+            new_count = prev_count + 1
+
+        strikes[ticker] = {"count": new_count, "date": today_str}
+
+        if new_count == 2:
             warnings.append(f"{ticker} ({diagnosis})")
-        elif strikes[ticker] >= 3:
+        elif new_count >= 3:
             removed_details.append({"ticker": ticker, "reason": diagnosis})
             blacklist[ticker] = {
                 "reason": diagnosis,
-                "date":   str(datetime.now().date()),
+                "date":   today_str,
             }
             del strikes[ticker]
 

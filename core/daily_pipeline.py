@@ -102,9 +102,22 @@ def _enrich_holdings(holdings: pd.DataFrame, scored: pd.DataFrame) -> list[dict]
     score_lookup = scored.set_index("ticker").to_dict("index")
     enriched = []
 
+    def _lookup(ticker_in: str) -> dict:
+        """Tolerera holdings utan börssuffix: prova .ST, .HE, .CO, .OL för svenska/nordiska."""
+        if not ticker_in:
+            return {}
+        if ticker_in in score_lookup:
+            return score_lookup[ticker_in]
+        if "." not in ticker_in:
+            for suffix in (".ST", ".HE", ".CO", ".OL"):
+                candidate = ticker_in + suffix
+                if candidate in score_lookup:
+                    return score_lookup[candidate]
+        return {}
+
     for _, h in holdings.iterrows():
         t = str(h.get("ticker", "")).upper().strip()
-        sc = score_lookup.get(t, {})
+        sc = _lookup(t)
         price = sc.get("current_price") or sc.get("close", 0)
         cost = h.get("cost_basis", 0)
         shares = h.get("shares", 0)

@@ -399,7 +399,7 @@ MIN_DATA_QUALITY          = 0.5  # 0.5 = accepterar 4/8 fält (investmentbolag, 
 # ════════════════ DATA-INSTÄLLNINGAR ════════════════
 CACHE_DIR             = "data/cache"
 CACHE_HOURS           = 720  # Statisk fundamental data - cachas 30 dagar (ändras bara vid kvartalsrapport)
-DYNAMIC_CACHE_HOURS   = 170  # Dynamisk data - cachas 7 dagar (P/E, analytikermål, blankning, beta)
+DYNAMIC_CACHE_HOURS   = 48   # Dynamisk data - cachas 2 dagar (P/E, analytikermål, blankning, beta)
 PRICE_CACHE_HOURS     = 24   # Prishistorik - alltid färsk (RSI, MACD, marknadsvärde)
 MIN_DATA_QUALITY      = 0.5  # 0.5 = accepterar 4/8 fält (investmentbolag, råvarubolag etc.)
 
