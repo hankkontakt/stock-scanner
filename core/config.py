@@ -370,7 +370,9 @@ FMP_API_KEY      = _get_secret("FMP_API_KEY", "")
 FINNHUB_API_KEY  = _get_secret("FINNHUB_API_KEY", "")
 
 # ════════════════ AI / MULTI-PROVIDER ════════════════
-AI_PROVIDER       = _get_secret("AI_PROVIDER", "deepseek")  # "deepseek" (komplex, kostar) eller "gemini" (enkel, gratis)
+AI_PROVIDER       = _get_secret("AI_PROVIDER", "gemini")    # "gemini" (gratis, standard) eller "deepseek" (komplex, kostar)
+AI_DEEP_PROVIDER  = _get_secret("AI_DEEP_PROVIDER", "deepseek")  # Används för djupa analyser (weekly, deep stock analysis)
+AI_TASK_MODE      = _get_secret("AI_TASK_MODE", "hybrid")  # "hybrid": light->gemini, heavy->deepseek; "gemini": alltid gemini; "deepseek": alltid deepseek
 DEEPSEEK_API_KEY  = _get_secret("DEEPSEEK_API_KEY", "")
 AI_MODEL          = "deepseek-chat"          # deepseek-chat eller deepseek-reasoner
 GEMINI_API_KEY    = _get_secret("GEMINI_API_KEY", "")
