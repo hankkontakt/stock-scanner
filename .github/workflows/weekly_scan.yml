@@ -89,9 +89,9 @@ jobs:
         run: |
           ulimit -n 65535
           if [ -n "${{ github.event.inputs.tickers }}" ]; then
-            python scan.py --tickers "${{ github.event.inputs.tickers }}"
+            python scans/scan.py --tickers "${{ github.event.inputs.tickers }}"
           else
-            python scan.py
+            python scans/scan.py
           fi
 
       # ── Steg 7: Kontrollera om scan lyckades ─────────────────
