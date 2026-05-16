@@ -410,7 +410,7 @@ REPORT_DIR              = "reports"
 REPORT_FILENAME_PATTERN = "weekly_report_{date}.md"
 
 # ════════════════ PORTFÖLJ ════════════════
-HOLDINGS_FILE       = "holdings.csv"
+HOLDINGS_FILE       = "data/holdings.csv"
 WATCHLIST_FILE      = "data/watchlist.json"
 BUY_MORE_PERCENTILE = 80
 HOLD_PERCENTILE     = 50
