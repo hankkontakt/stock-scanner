@@ -34,6 +34,7 @@ import yfinance as yf
 from core import config
 from core import alerts
 from core import logger
+from core import email_template
 from portfolio import portfolio
 from portfolio import paper_trading
 from core import earnings_calendar as ec
@@ -841,33 +842,17 @@ def main():
         if v: print(f"\n  Rapport: {report_path}")
 
         # 9. Skicka email (alltid)
-        if not args.no_email and alerts.email_configured():
+        if not args.no_email and email_template.email_configured():
             print(f"✉ Skickar: {subject}")
-            sender, password, to = alerts._get_email_config()
-            if sender and password:
-                try:
-                    msg = MIMEMultipart("alternative")
-                    msg["Subject"] = subject
-                    msg["From"]    = f"MarketScan <{sender}>"
-                    msg["To"]      = to
-                    msg.attach(MIMEText(report, "plain", "utf-8"))
-                    html_body = alerts._markdown_to_html(report)
-                    full_html = (
-                        "<html><body style=\"font-family:sans-serif;"
-                        "max-width:680px;margin:0 auto;padding:20px\">"
-                        + html_body
-                        + "<div style=\"margin-top:24px;font-size:11px;color:#999\">"
-                        "Automatisk rapport från MarketScan. Inte finansiell rådgivning."
-                        "</div></body></html>"
-                    )
-                    msg.attach(MIMEText(full_html, "html", "utf-8"))
-                    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-                        s.login(sender, password)
-                        s.sendmail(sender, to, msg.as_string())
-                    print(f"  ✉ Email skickat till {to}")
-                except Exception as e:
-                    print(f"  ⚠ Email-fel: {e}")
-        elif not alerts.email_configured():
+            ok = email_template.send_email(
+                subject=subject,
+                body_markdown=report,
+                from_name="MarketScan Kvällsrapport",
+            )
+            if ok:
+                _, _, to = email_template._get_email_config()
+                print(f"  ✉ Email skickat till {to}")
+        elif not email_template.email_configured():
             print("  ℹ Email ej konfigurerat")
 
         # Terminal-sammanfattning

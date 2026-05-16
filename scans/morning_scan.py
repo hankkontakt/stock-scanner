@@ -39,6 +39,7 @@ from core import config
 from core import alerts
 from core import logger
 from core import ai_analysis
+from core import email_template
 from portfolio import portfolio
 from core import earnings_calendar as ec
 from portfolio import watchlist as wl
@@ -571,40 +572,16 @@ def build_morning_report(
 
 
 # ══════════════════════════════════════════════════════════════
-# EMAIL
+# EMAIL (delegeras till email_template)
 # ══════════════════════════════════════════════════════════════
 
 def send_email(subject: str, report: str) -> bool:
-    """Skickar email med markdown + HTML. Returnerar True vid lyckat utskick."""
-    sender, password, to = alerts._get_email_config()
-    if not sender or not password:
-        return False
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"]    = f"MarketScan <{sender}>"
-    msg["To"]      = to
-    msg.attach(MIMEText(report, "plain", "utf-8"))
-
-    html_body = alerts._markdown_to_html(report)
-    full_html = (
-        "<html><body style=\"font-family:sans-serif;max-width:680px;"
-        "margin:0 auto;padding:20px\">"
-        + html_body
-        + "<div style=\"margin-top:24px;font-size:11px;color:#999\">"
-        "Automatisk rapport från MarketScan. Inte finansiell rådgivning."
-        "</div></body></html>"
+    """Skickar email via gemensam email-engine."""
+    return email_template.send_email(
+        subject=subject,
+        body_markdown=report,
+        from_name="MarketScan Morgonkoll",
     )
-    msg.attach(MIMEText(full_html, "html", "utf-8"))
-
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-            s.login(sender, password)
-            s.sendmail(sender, to, msg.as_string())
-        return True
-    except Exception as e:
-        print(f"  ⚠ Email-fel: {e}")
-        return False
 
 
 # ══════════════════════════════════════════════════════════════
@@ -842,13 +819,13 @@ def main():
         log["report_path"] = str(report_path)
 
         # 11. Skicka email (alltid, om inte --no-email)
-        if not args.no_email and alerts.email_configured():
+        if not args.no_email and email_template.email_configured():
             print(f"\n✉ Skickar dagsbrev: {subject}")
             ok = send_email(subject, report)
             if ok:
-                _, _, to = alerts._get_email_config()
+                _, _, to = email_template._get_email_config()
                 print(f"  ✉ Email skickat till {to}")
-        elif not alerts.email_configured():
+        elif not email_template.email_configured():
             print("\n  ℹ Email ej konfigurerat – hoppar över")
 
         # Terminal-sammanfattning

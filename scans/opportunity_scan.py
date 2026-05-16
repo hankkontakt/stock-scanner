@@ -23,6 +23,7 @@ import yfinance as yf
 
 from core import config
 from core import alerts
+from core import email_template
 from core import ai_analysis
 
 
@@ -259,12 +260,12 @@ def main():
     path.write_text(report, encoding="utf-8")
 
     # 6. Skicka email bara om det finns signaler
-    if total > 0 and alerts.email_configured():
+    if total > 0 and email_template.email_configured():
         print("✉ Skickar email...")
-        alerts._send_email(
-            subject=f"🎯 MarketScan: {total} möjligheter – {date.today().strftime('%d %b')}",
-            body_html=alerts._markdown_to_html(report),
-            body_text=report,
+        email_template.send_email(
+            subject=f"MarketScan: {total} mojligheter – {date.today().strftime('%d %b')}",
+            body_markdown=report,
+            from_name="MarketScan",
         )
     elif total == 0:
         print("ℹ Inga signaler idag – email ej skickat")
