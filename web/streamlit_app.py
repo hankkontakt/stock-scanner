@@ -2033,72 +2033,125 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
         else:
             st.info("Ingen sektordata tillgänglig.")
 
-    # ── Flik 5: AI Chat (Feature 2a) ────────────────────────────────────────
+    # ── Flik 5: AI Chat (adaptiv med historik) ─────────────────────────────
     with tab_chat:
-        st.subheader("💬 AI-chatt – fråga MarketScan AI")
-        st.caption("Ställ frågor om marknaden, aktier, strategier – AI:n svarar med aktuell data som kontext.")
+        st.subheader("AI-chatt – fraga MarketScan AI")
+        st.caption("Stall fragor om marknaden, aktier, strategier. Skriv t.ex. 'sok bland 50 basta' for att fa mer data.",
+                   unsafe_allow_html=True)
 
-        # Förifyllda frågeförslag
-        suggestions = [
-            "Välj en fråga...",
-            "Vilka sektorer ser starkast ut just nu?",
-            "Vilka aktier har bäst momentum just nu?",
-            "Hur ser risksituationen ut på marknaden?",
-            "Ge mig en analys av dagens topp 10 aktier",
-            "Vilka aktier är mest undervärderade just nu?",
-            "Vad är din syn på marknaden just nu?",
-        ]
+        # Initiera chatt-historik i session state
+        if "chat_history" not in st.session_state:
+            st.session_state["chat_history"] = []
 
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            suggested_q = st.selectbox("Frågeförslag", suggestions, key="ai_chat_suggestion")
-        with col2:
-            chat_refresh = st.checkbox("Hoppa över cache", key="ai_chat_refresh")
+        # Knapp för att rensa historik
+        col_clear, col_refresh = st.columns([1, 3])
+        with col_clear:
+            if st.button("Rensa historik", key="btn_clear_chat"):
+                st.session_state["chat_history"] = []
+                st.rerun()
+        with col_refresh:
+            force_refresh = st.checkbox("Hoppa over cache", key="ai_chat_refresh2")
 
-        # Fritextfråga
-        user_question = st.text_area(
-            "Din fråga (på svenska):",
-            value=suggested_q if suggested_q != suggestions[0] else "",
-            placeholder="Ställ en fråga om marknaden...",
-            height=100,
-            key="ai_chat_input",
-        )
+        # Visa chatt-historik (senaste 20 meddelanden)
+        for msg in st.session_state["chat_history"][-20:]:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
 
-        if st.button("💬 Skicka fråga", key="btn_ai_chat",
-                     type="primary", use_container_width=True):
-            if user_question.strip():
-                # Bygg kontext från aktuell data
-                context_parts = []
-                if not df.empty:
-                    context_parts.append(f"Global scan: {len(df)} bolag")
-                    if "score_total" in df.columns:
-                        context_parts.append(f"snittscore {df['score_total'].mean():.1f}")
-                    if "entry_signal" in df.columns:
-                        n_stark = int((df["entry_signal"] == "STARK").sum())
-                        context_parts.append(f"STARK-signaler: {n_stark}")
-                if not sc_df.empty:
-                    sc_col = "sc_total" if "sc_total" in sc_df.columns else "score_total"
-                    context_parts.append(f"Småbolag: {len(sc_df)} bolag")
-                    if sc_col in sc_df.columns:
-                        context_parts.append(f"småbolagssnitt: {sc_df[sc_col].mean():.1f}")
+        # Input
+        prompt = st.chat_input("Stall en fraga om marknaden...")
 
-                context_str = ". ".join(context_parts) + "." if context_parts else ""
-                with st.chat_message("assistant"):
-                    with st.spinner("🤖 AI tänker..."):
-                        try:
-                            depth = _get_depth()
-                            result = ai_analysis.ai_chat(
-                                user_question,
-                                context=context_str if context_str else "",
-                                force_refresh=chat_refresh,
-                                provider=provider,
-                                depth=depth,
-                            )
-                            st.markdown(result)
-                        except Exception as e:
-                            st.error(f"❌ Chatten misslyckades: {e}")
-            else:
-                st.warning("Skriv en fråga först.")
+        if prompt:
+            # Visa anvandarens meddelande
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            # Bygg adaptiv kontext
+            context_parts = []
+
+            # 1. Extrahera onskat antal ur fragan (t.ex. "50 basta", "top 100")
+            import re
+            match_num = re.search(r"(\d+)", prompt)
+            top_n = int(match_num.group(1)) if match_num else 10
+            top_n = max(3, min(top_n, 200))
+
+            # 2. Global scan-data
+            if not df.empty:
+                context_parts.append(f"Global scan: {len(df)} bolag scannade")
+                if "score_total" in df.columns:
+                    context_parts.append(f"snittscore {df['score_total'].mean():.1f}")
+                if "entry_signal" in df.columns:
+                    n_stark = int((df["entry_signal"] == "STARK").sum())
+                    context_parts.append(f"STARK-signaler: {n_stark}")
+
+                # Adaptiv topplista – dynamiskt baserat pa siffra i fragan
+                score_col = "score_total"
+                if score_col in df.columns:
+                    top_df = df.nlargest(top_n, score_col)
+                    topp_lista = "; ".join(
+                        f"{r['ticker']} ({r[score_col]:.0f}p)"
+                        for _, r in top_df.iterrows()
+                    )
+                    context_parts.append(f"Topp {top_n}: {topp_lista}")
+
+            # 3. Smabolagsdata
+            if not sc_df.empty:
+                sc_col = "sc_total" if "sc_total" in sc_df.columns else "score_total"
+                context_parts.append(f"Smabolag: {len(sc_df)} bolag")
+                if sc_col in sc_df.columns:
+                    context_parts.append(f"smabolagssnitt: {sc_df[sc_col].mean():.1f}")
+                    sc_top = sc_df.nlargest(top_n, sc_col)
+                    sc_lista = "; ".join(
+                        f"{r['ticker']} ({r[sc_col]:.0f}p)"
+                        for _, r in sc_top.iterrows()
+                    )
+                    context_parts.append(f"Topp {top_n} smabolag: {sc_lista}")
+
+            # 4. Bygg kontext-strang
+            context_str = ". ".join(context_parts) + "." if context_parts else ""
+
+            # 5. Bygg historik-kontext (senaste 6 meddelanden)
+            history_context = ""
+            if st.session_state["chat_history"]:
+                recent = st.session_state["chat_history"][-6:]
+                history_lines = []
+                for m in recent:
+                    role = "anvandare" if m["role"] == "user" else "AI"
+                    # Begransa langden pa tidigare svar
+                    content = m["content"][:300]
+                    history_lines.append(f"{role}: {content}")
+                history_context = "\n".join(history_lines)
+
+            # 6. Kombinera all kontext
+            full_context = context_str
+            if history_context:
+                full_context = f"Tidigare konversation:\n{history_context}\n\nAktuell data:\n{context_str}"
+
+            # 7. Anropa AI
+            with st.chat_message("assistant"):
+                with st.spinner("AI tanker..."):
+                    try:
+                        depth = _get_depth()
+                        result = ai_analysis.ai_chat(
+                            prompt,
+                            context=full_context,
+                            force_refresh=force_refresh,
+                            provider=provider,
+                            depth=depth,
+                        )
+                        st.markdown(result)
+                    except Exception as e:
+                        st.error(f"Chatten misslyckades: {e}")
+                        result = f"Fel: {e}"
+
+            # 8. Spara i historik
+            st.session_state["chat_history"].append({"role": "user", "content": prompt})
+            st.session_state["chat_history"].append({"role": "assistant", "content": result})
+
+            # Begransa historik till 20 meddelanden
+            if len(st.session_state["chat_history"]) > 20:
+                st.session_state["chat_history"] = st.session_state["chat_history"][-20:]
+
+            st.rerun()
 
     # ── Flik 6: Portfolio Optimizer (Feature 4) ────────────────────────────
     with tab_portfolio:
