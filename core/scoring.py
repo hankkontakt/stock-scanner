@@ -352,7 +352,7 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
         w.get("risk", 0)     * df["score_risk"]     +
         w.get("size", 0)     * df["score_size"]     +
         w.get("dividend", 0) * df["score_dividend"] +
-        w.get("sentiment", 0) * df.get("score_sentiment", 0)
+        w.get("sentiment", 0) * df.get("score_sentiment", pd.Series(50, index=df.index))
     )
 
     # ── Holdingbolag & råvarubolag: score-rabatt ────────────────────────

@@ -278,9 +278,18 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
             
             fx_hist = _FX_CACHE[fx_ticker]
             
-            # Synka datumen (hanterar helgdagar i olika länder)
-            fx_aligned = fx_hist.reindex(hist.index).ffill().bfill()
-            
+            # Synka datumen (hanterar helgdagar i olika länder).
+            # Begränsa ffill till 5 dagar så vi inte propagerar en månadsgammal
+            # FX-kurs över långa luckor (kan ge 100-1000x felaktiga SEK-priser).
+            fx_aligned = fx_hist.reindex(hist.index).ffill(limit=5).bfill(limit=5)
+
+            # Sanity check: orealistiska dag-till-dag-hopp tyder på datafel.
+            if not fx_aligned.empty:
+                _ratio = (fx_aligned / fx_aligned.shift(1)).abs()
+                if (_ratio > 1.5).any() or (_ratio < 0.67).any():
+                    print(f"  ⚠ Misstänkt FX-hopp för {ticker} ({fx_ticker}) – hoppar konvertering")
+                    fx_aligned = pd.Series([1.0] * len(hist), index=hist.index)
+
             # Multiplicera alla priskolumner med växelkursen
             for col in ["Open", "High", "Low", "Close"]:
                 if col in hist.columns:
@@ -488,15 +497,21 @@ def _safe_return(series: pd.Series, days_back: int):
 
 
 def _calc_rsi(prices: pd.Series, period: int = 14):
-    """Calculate Relative Strength Index."""
+    """Calculate Relative Strength Index.
+
+    Returnerar 50 (neutralt) om både gain och loss är 0 (helt stilla pris),
+    100 om bara förluster saknas (ren uppgång), 0 om bara gains saknas.
+    """
     if len(prices) < period + 1:
         return None
     try:
         delta = prices.diff().dropna()
         gain = delta.clip(lower=0).rolling(period).mean().iloc[-1]
         loss = (-delta.clip(upper=0)).rolling(period).mean().iloc[-1]
+        if pd.isna(gain) or pd.isna(loss):
+            return None
         if loss == 0:
-            return 100.0
+            return 50.0 if gain == 0 else 100.0
         rs = gain / loss
         return 100 - (100 / (1 + rs))
     except Exception:
