@@ -342,7 +342,7 @@ def build_watchlist_morning_section(
     if not watchlist_items:
         return ""
 
-    lines = ["## ⭐ Bevakningslista – morgonstatus\n"]
+    lines = ["## Bevakningslista – morgonstatus\n"]
     lines.append("| Ticker | Bolag | Idag | Score | Signal | Nästa rapport |")
     lines.append("|--------|-------|------|-------|--------|---------------|")
 
@@ -373,8 +373,10 @@ def build_watchlist_morning_section(
         except Exception:
             pass
 
+        sign_chg = "+" if chg is not None and chg >= 0 else ""
+        chg_display = f"{sign_chg}{chg:.1f}%" if chg is not None else "—"
         lines.append(
-            f"| `{ticker}` | {name} | {chg_icon} {chg_s} | {score_s} | {signal} | {earn_s} |"
+            f"| `{ticker}` | {name} | {chg_display} | {score_s} | {signal} | {earn_s} |"
         )
 
     return "\n".join(lines) + "\n"
@@ -418,72 +420,71 @@ def build_morning_report(
 
     if stoploss_alerts:
         tickers  = ", ".join(a["ticker"] for a in stoploss_alerts[:2])
-        subject  = f"🛑 STOPPLOSS: {tickers} – {date.today().strftime('%d %b')}"
+        subject  = f"MarketScan: Stopploss {tickers} – {date.today().strftime('%d %b')}"
     elif crash and any(a["action"] == "SÄLJ/MINSKA" for a in crash):
         tickers  = ", ".join(a["ticker"] for a in crash if a["action"] == "SÄLJ/MINSKA")
-        subject  = f"🚨 CRASH ALERT: {tickers} – MarketScan {date.today().strftime('%d %b')}"
+        subject  = f"MarketScan: Alert {tickers} – {date.today().strftime('%d %b')}"
     elif crash:
         tickers  = ", ".join(a["ticker"] for a in crash)
-        subject  = f"⚠️ Varning: {tickers} ned – {omx_s or date.today().strftime('%d %b')}"
+        subject  = f"MarketScan: Varning {tickers} – {omx_s or date.today().strftime('%d %b')}"
     elif surge and any(a["action"] == "TA HEM HALVA" for a in surge):
         tickers  = ", ".join(a["ticker"] for a in surge if a["action"] == "TA HEM HALVA")
-        subject  = f"🚀 Stark uppgång: {tickers} – ta hem vinst? {date.today().strftime('%d %b')}"
+        subject  = f"MarketScan: Stark uppgang {tickers} – {date.today().strftime('%d %b')}"
     elif opportunities:
         first   = opportunities[0]
-        typ     = "Dipp" if first["type"] == "DIP" else "Breakout"
-        subject = f"💡 {typ}: {first['ticker']} ({first['score']:.0f}p) | {omx_s or date.today().strftime('%d %b')}"
+        typ     = "Dip" if first["type"] == "DIP" else "Breakout"
+        subject  = f"MarketScan: {typ} {first['ticker']} – {omx_s or date.today().strftime('%d %b')}"
     else:
-        subject = f"🌅 Morgonkoll {date.today().strftime('%d %b')} | {omx_s or 'Lugnt'} – inga alerts"
+        subject = f"MarketScan Morgon {date.today().strftime('%d %b')} – {omx_s or 'Inga signaler'}"
 
     # ── Rapport ───────────────────────────────────────────────
-    lines = [f"# 🌅 Morgonkoll – {now}\n", "---\n"]
+    lines = [f"# MarketScan · Morgon – {now}\n", "---\n"]
 
     # 1. Marknadsöversikt
     if market_overview:
-        lines.append("## 📊 Marknadsöversikt\n")
-        lines.append("| Index | Rörelse | Kurs |")
+        lines.append("## Marknad\n")
+        lines.append("| Index | Rorelse | Kurs |")
         lines.append("|-------|---------|------|")
         for sym, d in market_overview.items():
             chg   = d["change_pct"]
-            icon  = "🟢" if chg >= 0 else "🔴"
+            sign  = "+" if chg >= 0 else ""
             note  = f" _{d['note']}_" if d.get("note") else ""
-            lines.append(f"| {d['name']}{note} | {icon} {chg:+.2f}% | {d['price']:.2f} |")
+            lines.append(f"| {d['name']}{note} | {sign}{chg:+.2f}% | {d['price']:.2f} |")
         lines.append("")
 
     # 2. Stopploss-alerts (kritiska – visas högst upp)
     if stoploss_alerts:
-        lines.append("## 🛑 STOPPLOSS-ALERTS\n")
-        lines.append("> Följande innehav är ned mer än 15% från inköpspris och bör ses över.\n")
+        lines.append("## Stopploss\n")
+        lines.append("> Foljande innehav ar ned mer an 15% fran inkopspris och bor ses over.\n")
         for a in stoploss_alerts:
             lines.append(
-                f"🛑 **`{a['ticker']}`** – ned **{a['total_pct']:.1f}%** från "
-                f"inköpspris {a['cost_basis']:.2f} (nuvarande {a['price']:.2f})  \n"
+                f"**`{a['ticker']}`** – ned **{a['total_pct']:.1f}%** fran "
+                f"inkopspris {a['cost_basis']:.2f} (nuvarande {a['price']:.2f})  \n"
                 f"_{a['msg']}_\n"
             )
 
     # 3. Intradag-alerts (crash/surge)
     if crash:
-        lines.append("## 🚨 Portfölj-alerts\n")
+        lines.append("## Alerts\n")
         for a in sorted(crash, key=lambda x: x["change_pct"]):
-            icon  = "🔴" if a["action"] == "SÄLJ/MINSKA" else "🟡"
-            pnl_s = f" · Totalt P&L: {a['total_pnl']:+.1f}%" if a.get("total_pnl") is not None else ""
+            pnl_s = f" (Totalt P&L: {a['total_pnl']:+.1f}%)" if a.get("total_pnl") is not None else ""
             lines.append(
-                f"{icon} **`{a['ticker']}`** {a['change_pct']:+.1f}% "
-                f"→ **{a['action']}**  \n_{a['msg']}{pnl_s}_\n"
+                f"**`{a['ticker']}`** {a['change_pct']:+.1f}% "
+                f"\u2192 **{a['action']}**  \n_{a['msg']}{pnl_s}_\n"
             )
 
     if surge:
-        lines.append("## 🚀 Stark uppgång i portföljen\n")
+        lines.append("## Stark uppgang\n")
         for a in sorted(surge, key=lambda x: x["change_pct"], reverse=True):
-            pnl_s = f" · Totalt: {a['total_pnl']:+.1f}%" if a.get("total_pnl") is not None else ""
+            pnl_s = f" (Totalt: {a['total_pnl']:+.1f}%)" if a.get("total_pnl") is not None else ""
             lines.append(
-                f"🟢 **`{a['ticker']}`** {a['change_pct']:+.1f}% "
-                f"→ **{a['action']}**  \n_{a['msg']}{pnl_s}_\n"
+                f"**`{a['ticker']}`** {a['change_pct']:+.1f}% "
+                f"\u2192 **{a['action']}**  \n_{a['msg']}{pnl_s}_\n"
             )
 
     # 4. Portfölj-brief (alla innehav)
     if not holdings.empty and price_moves:
-        lines.append("## 💼 Portfölj-brief\n")
+        lines.append("## Portfolj\n")
         lines.append("| Ticker | Idag | Pris | Totalt |")
         lines.append("|--------|------|------|--------|")
         all_holding_rows = list(holdings.iterrows())
@@ -495,7 +496,6 @@ def build_morning_report(
             cost    = row.get("cost_basis")
             if chg is None:
                 continue
-            chg_icon  = "🟢" if chg >= 0 else "🔴"
             price_s   = f"{price:.2f}" if price else "—"
             total_s   = "—"
             if price and cost:
@@ -504,19 +504,18 @@ def build_morning_report(
                     total_s   = f"{total_pct:+.1f}%"
                 except Exception:
                     pass
-            lines.append(f"| `{ticker}` | {chg_icon} {chg:+.1f}% | {price_s} | {total_s} |")
+            lines.append(f"| `{ticker}` | {chg:+.1f}% | {price_s} | {total_s} |")
         lines.append("")
 
     # 5. Köpmöjligheter
     if opportunities:
-        lines.append(f"## 💡 Köpmöjligheter (topp-50 från {top50_date})\n")
+        lines.append(f"## Kopmojligheter (topp-50 fran {top50_date})\n")
         for opp in opportunities:
-            type_icon = "📉" if opp["type"] == "DIP" else "📈"
             lines.append(
-                f"{type_icon} **`{opp['ticker']}`** {opp['name']} "
+                f"**`{opp['ticker']}`** {opp['name']} "
                 f"_{opp['sector']}_  \n"
-                f"Score: **{opp['score']:.0f}** · {opp['change']:+.1f}% · "
-                f"{opp['signal']} · {opp['msg']}\n"
+                f"Score: **{opp['score']:.0f}** \xB7 {opp['change']:+.1f}% \xB7 "
+                f"{opp['signal']} \xB7 {opp['msg']}\n"
             )
 
     # 6. Nyheter (Finnhub)
@@ -530,7 +529,7 @@ def build_morning_report(
             ticker_names[item["ticker"]] = item.get("name", item["ticker"])
 
         news_md = news_fetcher.format_news_section_md(
-            news_by_ticker, ticker_names=ticker_names, header="📰 Nyheter (senaste 24h)"
+            news_by_ticker, ticker_names=ticker_names, header="Nyheter (senaste 24h)"
         )
         if news_md:
             lines.append(news_md)
@@ -542,7 +541,7 @@ def build_morning_report(
 
     # 7. Earnings-påminnelse
     if earnings_soon is not None and not earnings_soon.empty:
-        lines.append("## 📅 Kommande rapporter (dina innehav)\n")
+        lines.append("## Kommande rapporter\n")
         for _, row in earnings_soon.iterrows():
             days   = row.get("days_until", "?")
             ticker = row.get("ticker", "")
@@ -568,9 +567,9 @@ def build_morning_report(
     # Statusrad om inga alerts
     has_alerts = bool(crash or surge or stoploss_alerts or opportunities)
     if not has_alerts:
-        lines.append("## ℹ️ Status\n\n✅ Inga signaler – marknaden öppnar normalt.\n")
+        lines.append("## Status\n\nInga signaler – marknaden oppnar normalt.\n")
 
-    lines.append("---\n*⚠ Inte finansiell rådgivning. MarketScan morgonkoll.*")
+    lines.append("---\n*Inte finansiell radgivning. MarketScan morgonkoll.*")
     return "\n".join(lines), subject
 
 
@@ -808,7 +807,7 @@ def main():
                 opportunities=ai_opps,
             )
             if ai_brief and not ai_brief.startswith("⚠") and not ai_brief.startswith("ℹ"):
-                report += f"\n\n## 🤖 AI-morgonbrief\n\n{ai_brief}\n"
+                report += f"\n\n## Sammanfattning\n\n{ai_brief}\n"
                 print("  ✓ AI-morgonbrief tillagd i rapporten")
             else:
                 print(f"  ℹ AI-morgonbrief hoppades över: {ai_brief[:60] if ai_brief else 'tomt svar'}")
