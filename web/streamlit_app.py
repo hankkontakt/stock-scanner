@@ -643,7 +643,9 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
     with ai_col2:
         open_ai = st.button("➡️ Öppna AI Dashboard", key="btn_ov_ai_go", use_container_width=True)
         if open_ai:
-            st.switch_page("streamlit_app.py")  # Låter användaren navigera manuellt
+            # streamlit.switch_page fungerar inte om man redan är på samma sida.
+            # Istället visar vi en info-text om att använda webbläsarens navigering.
+            st.info("💡 Du är redan på översiktssidan. Använd navigeringsmenyn eller webbläsarens bakåt-knapp.")
 
     if st.button("🤖 Generera marknadssammanfattning", key="btn_ov_market_summary", use_container_width=True):
         with st.spinner("Analyserar marknaden..."):
