@@ -2543,7 +2543,9 @@ def _check_admin_access() -> bool:
     )
     
     if st.button("🔓 Lås upp", key="btn_admin_unlock", use_container_width=True):
-        if pw_input == admin_pw:
+        # hmac.compare_digest skyddar mot timing-attacker
+        import hmac
+        if hmac.compare_digest(str(pw_input), str(admin_pw)):
             st.session_state["admin_authenticated"] = True
             st.rerun()
         else:
@@ -2633,6 +2635,7 @@ def page_admin():
         # Snabb inmatning manuellt
         with st.expander("Eller lägg till manuellt (ticker)"):
             manual_ticker = st.text_input("Ticker (t.ex. AAPL)", key="wl_manual",
+                                          max_chars=15,
                                           placeholder="Ticker-symbol").upper().strip()
             manual_name = st.text_input("Namn (valfritt)", key="wl_manual_name")
             if st.button("➕ Lägg till", key="btn_wl_manual"):
@@ -2723,11 +2726,11 @@ def page_admin():
                 placeholder="AAPL"
             ).upper().strip()
         with col2:
-            shares = st.number_input("Antal aktier", min_value=0.0, step=1.0,
-                                     format="%.2f", key="hold_shares")
+            shares = st.number_input("Antal aktier", min_value=0.0, max_value=10_000_000.0,
+                                     step=1.0, format="%.2f", key="hold_shares")
         with col3:
-            cost = st.number_input("Inköpspris (SEK)", min_value=0.0, step=1.0,
-                                   format="%.2f", key="hold_cost")
+            cost = st.number_input("Inköpspris (SEK)", min_value=0.0, max_value=10_000_000.0,
+                                   step=1.0, format="%.2f", key="hold_cost")
 
         saved = st.button("💾 Spara i portföljen", key="btn_hold_save",
                           use_container_width=True, type="primary")
@@ -2768,21 +2771,28 @@ def page_admin():
         st.subheader("🚀 Starta scanning via GitHub Actions")
         st.caption("Triggar en scanning i GitHub. Scannern körs i molnet (även när din dator är avstängd).")
 
-        # Läs GITHUB_TOKEN från miljövariabel eller session state
-        gh_token = os.getenv("GITHUB_TOKEN") or st.session_state.get("gh_token", "")
+        # Läs GITHUB_TOKEN från Streamlit Secrets eller miljövariabel.
+        # Token lagras INTE i session_state (browser-cache / debug-läckage).
+        _secrets_token = ""
+        try:
+            if hasattr(st, "secrets"):
+                _secrets_token = st.secrets.get("GITHUB_TOKEN", "")
+        except Exception:
+            _secrets_token = ""
+        gh_token = os.getenv("GITHUB_TOKEN") or _secrets_token
         gh_owner = os.getenv("GITHUB_OWNER") or "hankkontakt"
         gh_repo  = os.getenv("GITHUB_REPO")  or "stock-scanner"
 
         if not gh_token:
+            # Använd lokal variabel i denna render – får inte persistera i session.
             gh_token = st.text_input(
                 "GitHub token (krävs för att starta scannar)",
                 type="password",
                 key="gh_token_input",
                 placeholder="ghp_...",
             )
-            st.session_state["gh_token"] = gh_token
         else:
-            st.success("✅ GitHub token läst från miljövariabel")
+            st.success("✅ GitHub token läst från miljövariabel/Secrets")
 
         col_a, col_b = st.columns(2)
 
@@ -2961,6 +2971,7 @@ def page_admin():
             col_bl_t, col_bl_r = st.columns([2, 3])
             with col_bl_t:
                 bl_ticker = st.text_input("Ticker", key="bl_add_ticker",
+                                          max_chars=15,
                                           placeholder="AAPL").upper().strip()
             with col_bl_r:
                 bl_reason = st.text_input("Anledning", key="bl_add_reason",
