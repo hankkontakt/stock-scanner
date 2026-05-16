@@ -1537,7 +1537,7 @@ def page_technical(df: pd.DataFrame, filters: dict):
         ("Snitt RSI / >70",  f"{avg_rsi:.0f} / {n_overbought}", None),
     ])
 
-    tab1, tab2, tab3 = st.tabs(["📋 Tabell", "📊 Diagram", "📉 MACD/RSI"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 Tabell", "📊 Diagram", "📉 MACD/RSI", "🔀 Jämför"])
 
     with tab1:
         tech_show = [c for c in [
@@ -1759,6 +1759,66 @@ def page_technical(df: pd.DataFrame, filters: dict):
 
                     except Exception as e:
                         st.error(f"Kunde inte hämta data för {tech_ticker}: {e}")
+
+    with tab4:
+        """Multi-ticker jämförelsediagram."""
+        st.subheader("🔀 Jämför flera aktier")
+        st.caption("Välj 2-5 aktier för att se deras kursutveckling i samma diagram.")
+
+        if not out.empty and "ticker" in out.columns:
+            all_tickers = sorted(out["ticker"].tolist())
+            selected = st.multiselect("Välj aktier", all_tickers, default=all_tickers[:3] if len(all_tickers) >= 3 else all_tickers, max_selections=5, key="tech_compare_tickers")
+            period = st.selectbox("Period", ["1mo", "3mo", "6mo", "1y", "2y"], index=1, key="tech_compare_period")
+            normalize = st.checkbox("Normalisera (100 = start)", value=True, key="tech_compare_norm")
+
+            if len(selected) >= 2:
+                with st.spinner("Hämtar prisdata..."):
+                    colors = ["#00d4aa", "#42a5f5", "#ff7043", "#ab47bc", "#ffc107"]
+                    fig = go.Figure()
+                    for i, ticker in enumerate(selected):
+                        try:
+                            hist = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+                            if not hist.empty and "Close" in hist.columns:
+                                prices = hist["Close"]
+                                if normalize:
+                                    prices = prices / prices.iloc[0] * 100
+                                fig.add_trace(go.Scatter(
+                                    x=prices.index, y=prices,
+                                    mode="lines", name=ticker,
+                                    line=dict(color=colors[i % len(colors)], width=2),
+                                ))
+                        except:
+                            pass
+                    fig.update_layout(
+                        title=f"Prisjämförelse ({'normaliserad' if normalize else 'absolut'})",
+                        template="plotly_dark", paper_bgcolor="#131722",
+                        plot_bgcolor="#1e2230", height=450,
+                        margin=dict(t=40, b=16, l=16, r=16),
+                        hovermode="x unified",
+                        legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"),
+                        yaxis_title="Pris" if not normalize else "Index (100 = start)",
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    # Visa korrelationsmatris
+                    if len(selected) >= 2:
+                        with st.expander("📊 Korrelationsmatris", expanded=False):
+                            corr_data = {}
+                            for ticker in selected:
+                                try:
+                                    h = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+                                    if not h.empty:
+                                        corr_data[ticker] = h["Close"].pct_change()
+                                except:
+                                    pass
+                            if corr_data:
+                                corr_df = pd.DataFrame(corr_data).dropna()
+                                if len(corr_df) > 5 and len(corr_df.columns) > 1:
+                                    st.dataframe(corr_df.corr().round(3), use_container_width=True)
+            else:
+                st.info("Välj minst 2 aktier för att visa diagram.")
+        else:
+            st.info("Ladda scandata för att se aktier att jämföra.")
 
     # ── AI-knapp: AI tolkning av teknisk data (Feature 3) ───────────────────
     st.markdown("---")
