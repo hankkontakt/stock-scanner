@@ -237,40 +237,14 @@ def fetch_universe_data(tickers: list, delay: float = 0.4) -> pd.DataFrame:
 def send_email(subject: str, body_markdown: str) -> bool:
     """Skickar rapporten via den gemensamma email-engine (core/email_template.py).
     
-    Konverterar markdown till responsiv HTML via mistune, skickar både HTML
-    och plain-text version.
+    Konverterar markdown till responsiv HTML via mistune.
     """
-    try:
-        from core.email_template import send_email as _send, _markdown_to_html
-    except ImportError:
-        print("⚠️  core.email_template kunde inte importeras – fallback till plain text")
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.text import MIMEText
-        import smtplib
-        user  = os.getenv("EMAIL_SENDER", os.getenv("EMAIL_USER", ""))
-        pw    = os.getenv("EMAIL_PASSWORD", os.getenv("EMAIL_PASS", ""))
-        to    = os.getenv("EMAIL_TO", os.getenv("EMAIL_RECIPIENT", user))
-        if not user or not pw:
-            print("⚠️  E-post ej konfigurerat")
-            return False
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject; msg["From"] = user; msg["To"] = to
-        msg.attach(MIMEText(body_markdown, "plain", "utf-8"))
-        try:
-            with smtplib.SMTP("smtp.gmail.com", 587) as srv:
-                srv.ehlo(); srv.starttls(); srv.ehlo(); srv.login(user, pw)
-                srv.sendmail(user, [to], msg.as_string())
-            print(f"  ✉️  (fallback) Rapport skickad till {to}")
-            return True
-        except Exception as e:
-            print(f"  ✗  E-post misslyckades: {e}"); return False
-
-    # Anropa den gemensamma email_template.send_email()
-    from_name = f"MarketScan Småbolag"
+    from core.email_template import send_email as _send
+    
     return _send(
         subject=subject,
         body_markdown=body_markdown,
-        from_name=from_name,
+        from_name="MarketScan Småbolag",
     )
 
 
