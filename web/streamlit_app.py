@@ -237,12 +237,6 @@ def _get_depth() -> str:
 # SIDEBAR
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _nav_button(label: str, key: str):
-    """A key!"""
-    if st.button(label, key=key, use_container_width=True):
-        st.session_state["nav_page"] = label
-        st.rerun()
-
 def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
     """Bygger sidebar och returnerar (page, scan_date, sc_date, filters)."""
     with st.sidebar:
@@ -252,37 +246,53 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
         # ── Global sökning (ALLTID synlig) ──────────────────────────────────
         st.markdown("### 🔍 Sök")
         _search_q = st.text_input("", placeholder="Ticker eller bolag...", key="global_search", label_visibility="collapsed")
+        _search_val = st.session_state.get("global_search", "").strip()
+        if len(_search_val) >= 2:
+            _hits = _search_ticker_yfinance(_search_val)
+            if _hits:
+                for _h in _hits[:6]:
+                    if st.button(f"{_h['ticker']} — {_h['name'][:40]}", key=f"gs_{_h['ticker']}", use_container_width=True):
+                        st.session_state["nav_page"] = "📊 Översikt"
+                        st.rerun()
         st.markdown("---")
 
-        # ── Navigation via knappar i expanderbara grupper ───────────────────
+        # ── Navigation ──────────────────────────────────────────────────────
         if "nav_page" not in st.session_state:
             st.session_state["nav_page"] = "📊 Översikt"
 
+        # Översikt – alltid synlig
+        if st.button("📊 Översikt", key="nav_overview", use_container_width=True):
+            st.session_state["nav_page"] = "📊 Översikt"
+            st.rerun()
+
+        # MARKNAD
         with st.expander("📈 MARKNAD", expanded=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                _nav_button("📊 Översikt", "nav_overview")
-                _nav_button("🔍 Veckoscanner", "nav_weekly")
-                _nav_button("🏦 Småbolag", "nav_smallcap")
-            with col2:
-                _nav_button("🏭 Sektorrotation", "nav_sector")
-                _nav_button("📈 Backtesting", "nav_backtest")
+            _m = st.radio("", ["🔍 Veckoscanner", "🏦 Småbolag", "🏭 Sektorrotation", "📈 Backtesting"],
+                          key="nav_market", label_visibility="collapsed",
+                          index=["🔍 Veckoscanner", "🏦 Småbolag", "🏭 Sektorrotation", "📈 Backtesting"].index(
+                              st.session_state["nav_page"]) if st.session_state["nav_page"] in ["🔍 Veckoscanner", "🏦 Småbolag", "🏭 Sektorrotation", "📈 Backtesting"] else 0)
+            st.session_state["nav_page"] = _m
 
+        # PORTFÖLJ
         with st.expander("💼 PORTFÖLJ", expanded=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                _nav_button("💼 Portfölj", "nav_portfolio")
-                _nav_button("📄 Paper Trading", "nav_paper")
-            with col2:
-                _nav_button("🚨 Larm & Notiser", "nav_alerts")
+            _p = st.radio("", ["💼 Portfölj", "📄 Paper Trading", "🚨 Larm & Notiser"],
+                          key="nav_portfolio", label_visibility="collapsed",
+                          index=["💼 Portfölj", "📄 Paper Trading", "🚨 Larm & Notiser"].index(
+                              st.session_state["nav_page"]) if st.session_state["nav_page"] in ["💼 Portfölj", "📄 Paper Trading", "🚨 Larm & Notiser"] else 0)
+            st.session_state["nav_page"] = _p
 
-        with st.expander("🔧 SYSTEM", expanded=False):
-            col1, col2 = st.columns(2)
-            with col1:
-                _nav_button("📈 Teknisk analys", "nav_technical")
-                _nav_button("🤖 AI", "nav_ai")
-            with col2:
-                _nav_button("🔧 Admin", "nav_admin")
+        # ANALYS
+        with st.expander("📈 ANALYS", expanded=False):
+            _a = st.radio("", ["📈 Teknisk analys", "🤖 AI"],
+                          key="nav_analys", label_visibility="collapsed",
+                          index=["📈 Teknisk analys", "🤖 AI"].index(
+                              st.session_state["nav_page"]) if st.session_state["nav_page"] in ["📈 Teknisk analys", "🤖 AI"] else 0)
+            st.session_state["nav_page"] = _a
+
+        # Admin – alltid synlig längst ner
+        if st.button("🔧 Admin", key="nav_admin", use_container_width=True):
+            st.session_state["nav_page"] = "🔧 Admin"
+            st.rerun()
 
         page = st.session_state["nav_page"]
 
