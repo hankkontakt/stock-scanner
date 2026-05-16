@@ -2201,15 +2201,35 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
     # ── Flik 7: News Analysis (Feature 5) ──────────────────────────────────
     with tab_news:
         st.subheader("📰 AI-nyhetsanalys")
-        st.caption("Hämta och analysera nyheter för en specifik aktie.")
+        st.caption("Sök och analysera nyheter för en specifik aktie.")
 
-        if not df.empty and "ticker" in df.columns:
-            tickers = sorted(df["ticker"].tolist())
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                news_ticker = st.selectbox("Välj aktie för nyhetsanalys", tickers, key="ai_news_ticker")
-            with col2:
-                force_refresh = st.checkbox("Hoppa över cache", key="ai_news_refresh")
+        # Sökfält för aktie (även om den inte finns i scan-datan)
+        news_search = st.text_input("Sök aktie (ticker eller bolagsnamn)", "",
+                                    key="news_search_input",
+                                    placeholder="t.ex. TSLA, AAPL, Investor, Volvo...")
+        news_ticker = ""
+
+        if news_search.strip():
+            news_hits = _search_ticker_yfinance(news_search.strip())
+            if news_hits:
+                news_options = {f"{h['ticker']} — {h['name'][:50]}": h for h in news_hits}
+                news_label = st.selectbox("Välj från sökresultat", list(news_options.keys()),
+                                          key="ai_news_ticker_select")
+                news_ticker = news_options[news_label]["ticker"]
+
+        # Fallback: om inget sökresultat, använd dropdown från scandata
+        if not news_ticker and not df.empty and "ticker" in df.columns and df["ticker"].nunique() > 0:
+            tickers = sorted(df["ticker"].dropna().unique().tolist())
+            news_ticker = st.selectbox("Eller välj från senaste scan", tickers, key="ai_news_ticker_fallback")
+        elif not news_ticker:
+            st.info("Sök på en aktie ovan för att komma igång.")
+
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            if news_ticker:
+                st.markdown(f"**Vald aktie:** `{news_ticker}`")
+        with col2:
+            force_refresh = st.checkbox("Hoppa över cache", key="ai_news_refresh")
 
             if st.button("📰 Hämta och analysera nyheter", key="btn_news_analysis",
                          type="primary", use_container_width=True):
