@@ -15,9 +15,20 @@ from pathlib import Path
 
 _REAL_APP = Path(__file__).resolve().parent / "web" / "streamlit_app.py"
 
-# Kompilera med den verkliga sökvägen så traceback pekar på rätt fil
-with open(_REAL_APP, encoding="utf-8") as _f:
-    _code = compile(_f.read(), str(_REAL_APP), "exec")
+if not _REAL_APP.is_file():
+    raise RuntimeError(
+        f"Kan inte starta MarketScan: huvudappen saknas på {_REAL_APP}. "
+        f"Kontrollera att web/streamlit_app.py finns i repot."
+    )
+
+try:
+    with open(_REAL_APP, encoding="utf-8") as _f:
+        _src = _f.read()
+    _code = compile(_src, str(_REAL_APP), "exec")
+except SyntaxError as _se:
+    raise RuntimeError(
+        f"Syntaxfel i {_REAL_APP}: {_se.msg} (rad {_se.lineno})."
+    ) from _se
 
 # Kör med __file__ = den riktiga filens sökväg så ROOT-beräkningen blir rätt
 exec(_code, {"__file__": str(_REAL_APP), "__name__": "__main__"})
