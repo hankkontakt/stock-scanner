@@ -2617,8 +2617,6 @@ def page_admin():
                 if ok:
                     st.cache_data.clear()
                     st.success(msg)
-                    # Nollställ fält
-                    st.session_state["hold_ticker_input"] = ""
                     st.rerun()
                 else:
                     st.error("Kunde inte spara portföljen. Se felmeddelandet ovan.")
