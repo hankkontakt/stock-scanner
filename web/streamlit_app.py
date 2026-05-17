@@ -1,4 +1,4 @@
-"""
+z"""
 MarketScan Dashboard – Interaktiv börsanalys
 ============================================
 Läser utdata från scan.py, smallcap/scanner.py och portfolio.py.
@@ -311,7 +311,8 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             if _hits:
                 for _h in _hits[:6]:
                     if st.button(f"{_h['ticker']} — {_h['name'][:40]}", key=f"gs_{_h['ticker']}", use_container_width=True):
-                        st.session_state["nav_page"] = "📊 Översikt"
+                        st.session_state["nav_page"] = "🔍 Aktie-sök"
+                        st.session_state["search_ticker"] = _h["ticker"]
                         st.rerun()
         st.markdown("---")
 
@@ -326,7 +327,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
 
         # MARKNAD / PORTFÖLJ / ANALYS — on_change uppdaterar nav_page bara när
         # användaren faktiskt klickar, inte vid varje rerun (löser override-buggen).
-        _MARKNAD     = ["🔍 Veckoscanner", "🏦 Småbolag", "🏭 Sektorrotation", "📈 Backtesting"]
+        _MARKNAD     = ["🔍 Veckoscanner", "🏦 Småbolag", "🔍 Aktie-sök", "⭐ Bevakningar", "🏭 Sektorrotation", "📈 Backtesting"]
         _PORTFOLIO   = ["💼 Portfölj", "📄 Paper Trading", "🤖 AI Paper Trading", "🚨 Larm & Notiser"]
         _ANALYS_OPTS = ["📈 Teknisk analys", "🤖 AI"]
         _cur = st.session_state["nav_page"]
@@ -4022,6 +4023,331 @@ def page_ml_paper_trading():
         st.markdown("---")
 
 
+def page_stock_search():
+    """🔍 Aktie-sök – sök på VILKEN aktie som helst via yfinance, visa info + AI + nyheter."""
+    st.title("🔍 Aktie-sök")
+    st.caption("Sök på vilken aktie som helst (även utanför ditt universum) och få prisgraf, AI-analys, nyheter.")
+
+    # Kolla om vi kom hit från sidebarsökningen
+    default_ticker = st.session_state.get("search_ticker", "")
+    if default_ticker:
+        st.session_state["search_ticker"] = ""  # återställ
+
+    # Ladda watchlist för lägg-till-knapp
+    items = load_watchlist()
+    holdings = load_portfolio()
+
+    # Sök-input
+    col_s, col_go = st.columns([4, 1])
+    with col_s:
+        search_q = st.text_input(
+            "Sök ticker eller bolagsnamn",
+            value=default_ticker,
+            key="stock_search_input",
+            placeholder="t.ex. TSLA, AAPL, VOLV-B.ST, Investor...",
+            label_visibility="collapsed",
+        )
+    with col_go:
+        search_clicked = st.button("🔍 Sök", key="btn_stock_search", use_container_width=True, type="primary")
+
+    if search_q:
+        with st.spinner("Söker efter aktie..."):
+            hits = _search_ticker_yfinance(search_q.strip())
+            if not hits:
+                # Försök direkt lookup
+                try:
+                    t = yf.Ticker(search_q.strip().upper())
+                    info = t.info or {}
+                    if info.get("quoteType") in ("EQUITY", "ETF", "MUTUALFUND", "INDEX"):
+                        hits = [{"ticker": search_q.strip().upper(),
+                                  "name": info.get("shortName") or info.get("longName", search_q),
+                                  "exchange": info.get("exchange", "")}]
+                except Exception:
+                    pass
+
+            if hits:
+                ticker_options = {f"{h['ticker']} — {h['name'][:50]} ({h.get('exchange', '?')})": h for h in hits}
+                selected_label = st.selectbox("Välj från sökresultat", list(ticker_options.keys()), key="stock_search_result")
+                selected = ticker_options[selected_label]
+                ticker = selected["ticker"]
+                name = selected["name"]
+
+                st.markdown(f"## 📈 `{ticker}` — {name}")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    if st.button("➕ Lägg till i bevakning", key=f"add_wl_{ticker}", use_container_width=True):
+                        if not any(i["ticker"] == ticker for i in items):
+                            items.append({"ticker": ticker, "name": name, "added": str(date.today())})
+                            _save_watchlist_data(items)
+                            st.success(f"`{ticker}` tillagd i bevakningslistan!")
+                            st.rerun()
+                        else:
+                            st.info(f"`{ticker}` finns redan i bevakningslistan.")
+                with col2:
+                    if st.button("➕ Lägg till i portfölj", key=f"add_pt_{ticker}", use_container_width=True):
+                        holdings = load_portfolio()
+                        if ticker not in holdings["ticker"].values:
+                            new_row = pd.DataFrame([{"ticker": ticker, "shares": 0, "cost_basis": 0}])
+                            holdings = pd.concat([holdings, new_row], ignore_index=True)
+                            _save_holdings_df(holdings)
+                            st.success(f"`{ticker}` tillagd i portföljen!")
+                            st.rerun()
+                        else:
+                            st.info(f"`{ticker}` finns redan i portföljen.")
+
+                # Hämta live-data från yfinance
+                try:
+                    yf_ticker = yf.Ticker(ticker)
+                    info = yf_ticker.info or {}
+                    price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
+                    sector = info.get("sector", "—")
+                    industry = info.get("industry", "—")
+                    pe = info.get("trailingPE")
+                    market_cap = info.get("marketCap")
+                    div_yield = info.get("dividendYield")
+                    beta = info.get("beta")
+                    high_52w = info.get("fiftyTwoWeekHigh")
+                    low_52w = info.get("fiftyTwoWeekLow")
+                    volume = info.get("volume")
+
+                    # KPI-kort
+                    kpi_data = [
+                        ("Pris", f"{price:.2f}" if price else "—", None),
+                        ("Sektor", sector[:20] if sector else "—", None),
+                        ("P/E", f"{pe:.1f}" if pe else "—", None),
+                        ("Marknadsvärde", f"{market_cap/1e9:.1f}B" if market_cap else "—", None),
+                    ]
+                    kpi_row(kpi_data)
+
+                    # Prisgraf
+                    from web.stock_detail import _price_chart
+                    chart = _price_chart(ticker, period="1y")
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
+                    else:
+                        st.info("Prisdata saknas för denna aktie.")
+
+                    # Mer info i expander
+                    with st.expander("📋 Detaljerad info", expanded=False):
+                        info_data = {
+                            "Bolag": name,
+                            "Ticker": ticker,
+                            "Sektor": sector,
+                            "Industri": industry,
+                            "Pris": f"{price:.2f}" if price else "—",
+                            "P/E (trailing)": f"{pe:.1f}" if pe else "—",
+                            "Beta": f"{beta:.2f}" if beta else "—",
+                            "Utdelningsyield": f"{div_yield*100:.2f}%" if div_yield else "—",
+                            "52v High": f"{high_52w:.2f}" if high_52w else "—",
+                            "52v Low": f"{low_52w:.2f}" if low_52w else "—",
+                            "Volym": f"{volume:,}" if volume else "—",
+                        }
+                        st.dataframe(
+                            pd.DataFrame(info_data.items(), columns=["Egenskap", "Värde"]),
+                            use_container_width=True, hide_index=True,
+                        )
+
+                    # AI-analys
+                    st.markdown("---")
+                    st.subheader("🤖 AI-analys")
+                    provider = _get_provider()
+                    if st.button(f"🤖 Analysera {ticker} med AI", key=f"btn_ai_{ticker}", use_container_width=True):
+                        depth = _get_depth()
+                        with st.spinner(f"Analyserar {ticker}..."):
+                            try:
+                                result = ai_analysis.analyze_stock(ticker, provider=provider, depth=depth)
+                                with st.container(border=True):
+                                    st.markdown(result)
+                            except Exception as e:
+                                st.error(f"❌ {e}")
+
+                    # Nyheter
+                    st.markdown("---")
+                    st.subheader("📰 Nyheter")
+                    try:
+                        from core.news_fetcher import fetch_company_news
+                        news = fetch_company_news(ticker, days_back=7)
+                        if news:
+                            for n in news[:5]:
+                                title = n.get("headline", n.get("title", "—"))
+                                source = n.get("source", "?")
+                                st.markdown(f"- **{title}** ({source})")
+                        else:
+                            st.caption("Inga nyheter hittade.")
+                    except Exception:
+                        st.caption("Nyheter ej tillgängliga (saknar API-nyckel).")
+
+                except Exception as e:
+                    st.error(f"Kunde inte hämta data för {ticker}: {e}")
+            else:
+                st.info("Inga sökresultat. Försök med en ticker-symbol som TSLA eller AAPL.")
+    else:
+        st.info("Skriv en ticker eller ett bolagsnamn ovan för att söka.")
+
+    # Visa senaste sökta
+    st.markdown("---")
+    st.caption("Tips: Använd sökfältet i sidebaren för att snabbt söka efter aktier!")
+
+
+def page_watchlist_detail(df: pd.DataFrame, watchlist: list):
+    """⭐ Bevakningar – förbättrad bevakningssida med live-data och detaljvy."""
+    st.title("⭐ Bevakningar")
+    st.caption("Dina bevakade aktier med live-data från yfinance. Klicka på en rad för detaljvy.")
+
+    if not watchlist:
+        st.info("Bevakningslistan är tom. Sök efter aktier på 🔍 Aktie-sök eller lägg till i Admin.")
+        return
+
+    # Hämta tickers som finns i scan-data vs som inte finns
+    scanned_tickers = set(df["ticker"].tolist()) if not df.empty and "ticker" in df.columns else set()
+
+    # Skapa DataFrame med live-data för ALLA bevakade tickers
+    rows = []
+    for item in watchlist:
+        t = item["ticker"]
+        name = item.get("name", t)
+
+        # Kolla om den finns i scan-data
+        if t in scanned_tickers:
+            sc = df[df["ticker"] == t]
+            if not sc.empty:
+                r = sc.iloc[0]
+                rows.append({
+                    "Ticker": t,
+                    "Bolag": name,
+                    "Sektor": r.get("sector", "—"),
+                    "Pris": r.get("current_price") or r.get("close", "—"),
+                    "Score": r.get("score_total"),
+                    "Entry": r.get("entry_signal", "—"),
+                    "Trend": r.get("trend_signal", "—"),
+                    "RSI": r.get("rsi_14"),
+                    "Tillagd": item.get("added", "—"),
+                    "_source": "scan",
+                })
+                continue
+
+        # Hämta live-data från yfinance
+        try:
+            yt = yf.Ticker(t)
+            info = yt.info or {}
+            price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
+            sector = info.get("sector", "—")
+            rows.append({
+                "Ticker": t,
+                "Bolag": info.get("shortName") or name,
+                "Sektor": sector,
+                "Pris": f"{price:.2f}" if price else "—",
+                "Score": None,
+                "Entry": "Ej scannad",
+                "Trend": "—",
+                "RSI": None,
+                "Tillagd": item.get("added", "—"),
+                "_source": "yfinance",
+            })
+        except Exception:
+            rows.append({
+                "Ticker": t, "Bolag": name, "Sektor": "—",
+                "Pris": "—", "Score": None, "Entry": "—",
+                "Trend": "—", "RSI": None,
+                "Tillagd": item.get("added", "—"), "_source": "error",
+            })
+
+    wl_df = pd.DataFrame(rows)
+
+    # KPI
+    n_scanned = sum(1 for r in rows if r.get("_source") == "scan")
+    n_live = sum(1 for r in rows if r.get("_source") == "yfinance")
+    kpi_row([
+        ("Bevakade totalt", len(rows), None),
+        ("I scan-data", n_scanned, None),
+        ("Live från yfinance", n_live, None),
+    ])
+
+    # Kolumn-konfiguration
+    col_cfg = {}
+    if "Score" in wl_df.columns:
+        col_cfg["Score"] = st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.0f")
+
+    # Visa tabell
+    display_cols = [c for c in ["Ticker", "Bolag", "Sektor", "Pris", "Score", "Entry", "Trend", "Tillagd"] if c in wl_df.columns]
+    event = st.dataframe(
+        wl_df[display_cols],
+        use_container_width=True,
+        hide_index=True,
+        column_config=col_cfg,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="wl_detail_table",
+    )
+    st.caption(f"{len(rows)} bevakade aktier — klicka på en rad för detaljvy")
+
+    # Klickbar rad → visa detaljvy
+    if event and event.selection and event.selection.rows:
+        sel_idx = event.selection.rows[0]
+        sel_ticker = wl_df.iloc[sel_idx]["Ticker"]
+        sel_source = wl_df.iloc[sel_idx].get("_source", "")
+
+        with st.expander(f"🔍 Detaljvy: {sel_ticker}", expanded=True):
+            if sel_source == "scan" and not df.empty:
+                # Använd render_stock_detail om den finns i scan-data
+                sel_row = df[df["ticker"] == sel_ticker]
+                if not sel_row.empty:
+                    render_stock_detail(
+                        sel_ticker, row=sel_row.iloc[0], df=df,
+                        show_ai=True, show_news=True, show_chart=True, show_detail_data=True,
+                    )
+            else:
+                # Visa direkt via yfinance
+                st.markdown(f"### 📈 `{sel_ticker}` – Live-data från yfinance")
+                try:
+                    yt = yf.Ticker(sel_ticker)
+                    info = yt.info or {}
+                    price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
+                    sector = info.get("sector", "—")
+                    pe = info.get("trailingPE")
+                    market_cap = info.get("marketCap")
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        st.metric("Pris", f"{price:.2f}" if price else "—")
+                        st.metric("Sektor", sector)
+                    with col_b:
+                        st.metric("P/E", f"{pe:.1f}" if pe else "—")
+                        st.metric("Marknadsvärde", f"{market_cap/1e9:.1f}B" if market_cap else "—")
+
+                    # Prisgraf
+                    from web.stock_detail import _price_chart
+                    chart = _price_chart(sel_ticker, period="1y")
+                    if chart:
+                        st.plotly_chart(chart, use_container_width=True)
+
+                    # AI-knapp
+                    if st.button(f"🤖 AI-analys för {sel_ticker}", key=f"wl_ai_{sel_ticker}", use_container_width=True):
+                        provider = _get_provider()
+                        depth = _get_depth()
+                        with st.spinner("Analyserar..."):
+                            try:
+                                result = ai_analysis.analyze_stock(sel_ticker, provider=provider, depth=depth)
+                                with st.container(border=True):
+                                    st.markdown(result)
+                            except Exception as e:
+                                st.error(f"❌ {e}")
+
+                except Exception as e:
+                    st.error(f"Kunde inte hämta data: {e}")
+
+    # Ta bort-knapp
+    st.markdown("---")
+    col_rm1, col_rm2 = st.columns([3, 1])
+    with col_rm1:
+        remove_ticker = st.selectbox("Ta bort från bevakningslistan", [""] + [r["Ticker"] for r in rows], key="wl_remove_detail")
+    with col_rm2:
+        if remove_ticker and st.button("🗑️ Ta bort", key="btn_wl_remove_detail", use_container_width=True):
+            items = [i for i in watchlist if i["ticker"] != remove_ticker]
+            _save_watchlist_data(items)
+            st.success(f"`{remove_ticker}` borttagen!")
+            st.rerun()
+
+
 def _check_site_access() -> bool:
     """Kräver lösenord för att överhuvudtaget komma in på sidan.
     
@@ -4183,6 +4509,12 @@ def main():
         if not sc_df.empty and "sector" in sc_df.columns:
             secs = sorted(sc_df["sector"].dropna().unique().tolist())
         page_smallcap(sc_df, filters)
+
+    elif page == "🔍 Aktie-sök":
+        page_stock_search()
+
+    elif page == "⭐ Bevakningar":
+        page_watchlist_detail(df, watchlist)
 
     elif page == "💼 Portfölj":
         page_portfolio(df, holdings, watchlist)
