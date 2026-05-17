@@ -575,19 +575,28 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                 f"{score:.0f} poäng",
                 d_str or f"{sector[:18]}",
             )
-            # Lägg till knappar i bevakning/portfölj
+            # Lägg till knappar i bevakning/portfölj (använder session_state för att undvika rerun-problem i nested columns)
             btn_col1, btn_col2 = col.columns(2)
             if btn_col1.button("⭐", key=f"ov_top_wl_{tkr}", help="Lägg till i bevakning"):
-                if not any(i["ticker"] == tkr for i in wl_items):
-                    wl_items.append({"ticker": tkr, "name": r.get("name", tkr), "added": str(date.today())})
-                    _save_watchlist_data(wl_items)
-                    st.rerun()
+                st.session_state[f"_add_wl_{tkr}"] = True
             if btn_col2.button("💰", key=f"ov_top_pt_{tkr}", help="Lägg till i portfölj (0 st)"):
-                hlds2 = load_portfolio()
-                if tkr not in hlds2["ticker"].values:
+                st.session_state[f"_add_pt_{tkr}"] = True
+            # Process pending actions after loop
+        # Process pending watchlist adds
+        for i, (_, r) in enumerate(top5.iterrows()):
+            tkr = r.get("ticker", "")
+            if st.session_state.pop(f"_add_wl_{tkr}", False):
+                if not any(item["ticker"] == tkr for item in load_watchlist()):
+                    wl = load_watchlist()
+                    wl.append({"ticker": tkr, "name": r.get("name", tkr), "added": str(date.today())})
+                    _save_watchlist_data(wl)
+                    st.rerun()
+            if st.session_state.pop(f"_add_pt_{tkr}", False):
+                h = load_portfolio()
+                if tkr not in h["ticker"].values:
                     new_row = pd.DataFrame([{"ticker": tkr, "shares": 0, "cost_basis": 0}])
-                    hlds2 = pd.concat([hlds2, new_row], ignore_index=True)
-                    _save_holdings_df(hlds2)
+                    h = pd.concat([h, new_row], ignore_index=True)
+                    _save_holdings_df(h)
                     st.rerun()
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -858,6 +867,21 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                 if not row.empty:
                     with st.expander(f"🔍 Detaljvy: {sel_ticker}",
                                      expanded=True):
+                        # Knappar för lägg till
+                        c1, c2 = st.columns(2)
+                        wl_items_ov = load_watchlist()
+                        if c1.button("➕ Lägg till i bevakning", key=f"ov_det_wl_{sel_ticker}", use_container_width=True):
+                            if not any(i["ticker"] == sel_ticker for i in wl_items_ov):
+                                wl_items_ov.append({"ticker": sel_ticker, "name": row.iloc[0].get("name", sel_ticker), "added": str(date.today())})
+                                _save_watchlist_data(wl_items_ov)
+                                st.rerun()
+                        if c2.button("➕ Lägg till i portfölj", key=f"ov_det_pt_{sel_ticker}", use_container_width=True):
+                            h = load_portfolio()
+                            if sel_ticker not in h["ticker"].values:
+                                new_row = pd.DataFrame([{"ticker": sel_ticker, "shares": 0, "cost_basis": 0}])
+                                h = pd.concat([h, new_row], ignore_index=True)
+                                _save_holdings_df(h)
+                                st.rerun()
                         render_stock_detail(
                             sel_ticker, row=row.iloc[0], df=df,
                             show_ai=True, show_news=False,
