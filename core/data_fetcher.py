@@ -1205,9 +1205,19 @@ def fetch_prices_only(tickers: list, period: str = "6mo",
         except Exception:
             return ticker, None
 
+    # Filter bort ogiltiga tickers som yfinance tolkar som
+    # $N, $., $-, $I etc. och returnerar "possibly delisted" för.
+    valid_tickers = [
+        t for t in tickers
+        if t and isinstance(t, str) and len(t.strip()) >= 2 and not t.strip().startswith("$")
+    ]
+    dropped = len(tickers) - len(valid_tickers)
+    if dropped:
+        print(f"  🗑️ Hoppar över {dropped} ogiltiga tickers (tomma/None/$prefix)")
+
     results = {}
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(_fetch, t): t for t in tickers}
+        futures = {executor.submit(_fetch, t): t for t in valid_tickers}
         for future in as_completed(futures):
             ticker, data = future.result()
             if data:
