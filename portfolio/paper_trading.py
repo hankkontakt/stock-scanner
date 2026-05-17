@@ -186,6 +186,80 @@ def get_kelly_inputs(min_trades: int = 20) -> dict:
 # REGISTRERA VECKANS REKOMMENDATIONER
 # ══════════════════════════════════════════════════════════════
 
+def _get_kelly_fraction(min_trades: int = 10) -> float:
+    """
+    Beräknar Half-Kelly fraktion baserat på empirisk track record.
+
+    Full-Kelly: f* = (p * b - q) / b  där p = win_rate, q = 1-p, b = win_loss_ratio
+    Half-Kelly: 0.5 * f*
+
+    Om för få trades → returnerar 1.0 (equal weight default).
+    """
+    # Anropa direkt eftersom vi är i samma modul
+    inputs = get_kelly_inputs(min_trades=min_trades)
+    if inputs.get("using_defaults", True):
+        return 1.0  # Fallback till equal weight om för få trades
+    p = inputs["win_rate"]
+    b = inputs["win_loss_ratio"]
+    if b <= 0:
+        return 1.0
+    q = 1.0 - p
+    f_star = (p * b - q) / b if b > 0 else 0
+    # Half-Kelly: halvera för att undvika överbetting vid parameterosäkerhet
+    half_kelly = max(0.0, min(1.0, f_star * 0.5))
+    return half_kelly if half_kelly > 0.01 else 1.0
+
+
+def _get_atr_multiplier(volatility_regime: str = "normal") -> float:
+    """
+    Auto-kalibrerad ATR-multiplikator baserat på volatilitetsregim.
+
+    Per arkitekturrekommendationen:
+    - Låg volatilitet (VIX < 15): 2.5x (mindre false stops)
+    - Normal volatilitet:        2.0x (standard)
+    - Hög volatilitet (VIX > 25): 1.5x (snabbare exit i turbulens)
+    - 21-perioders lookback istället för 14 i höga vol-regimer
+    """
+    mapping = {
+        "low":     2.5,
+        "normal":  2.0,
+        "high":    1.5,
+        "extreme": 1.0,
+    }
+    return mapping.get(volatility_regime, 2.0)
+
+
+def _detect_volatility_regime() -> str:
+    """
+    Detekterar volatilitetsregim baserat på SPY/OXSX 30-dagars historisk vol.
+
+    Returns:
+        "low", "normal", "high", "extreme"
+    """
+    try:
+        import yfinance as yf
+        spy = yf.Ticker("SPY")
+        hist = spy.history(period="3mo", auto_adjust=True)
+        if hist.empty or len(hist) < 30:
+            return "normal"
+        close = hist["Close"]
+        returns = close.pct_change().dropna()
+        trailing_vol = returns.tail(30).std() * np.sqrt(252)
+        # Tolkning
+        if trailing_vol < 0.15:
+            return "low"
+        elif trailing_vol < 0.22:
+            return "normal"
+        elif trailing_vol < 0.30:
+            return "high"
+        else:
+            return "extreme"
+    except Exception:
+        return "normal"
+
+
+
+
 def record_weekly_picks(
     scored_df: pd.DataFrame,
     top_n: int = 10,
@@ -197,6 +271,7 @@ def record_weekly_picks(
     Anropas automatiskt i slutet av scan.py.
     
     V2: Sätter stop-loss, take-profit, trailing-stop vid köp.
+    V3: Half-Kelly positionsstorlek + dynamisk ATR stop.
     """
     week_str = date.today().isoformat()
     trades = _load(TRADES_FILE)
@@ -216,7 +291,19 @@ def record_weekly_picks(
         candidates = candidates.sort_values(["_prio", "score_total"], ascending=[True, False])
 
     top = candidates.head(top_n)
-    capital_per_stock = capital / top_n
+
+    # ── V3: Half-Kelly positionsstorlek per ticker ──────────────────────
+    kelly_frac = _get_kelly_fraction(min_trades=10)
+    if kelly_frac < 1.0 and verbose:
+        print(f"  📐 Half-Kelly: {kelly_frac:.2f}x (från {get_kelly_inputs().get('n_trades', 0)} trades)")
+    vol_regime = _detect_volatility_regime()
+    atr_mult = _get_atr_multiplier(vol_regime)
+    if atr_mult != 2.0 and verbose:
+        print(f"  📐 ATR-mult: {atr_mult}x (regim: {vol_regime})")
+
+    # Half-Kelly: minska totalt kapital om signalstyrkan är låg
+    effective_capital = capital * kelly_frac
+    capital_per_stock = effective_capital / top_n
     week_trades = []
 
     for _, row in top.iterrows():

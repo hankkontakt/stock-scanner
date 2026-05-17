@@ -273,23 +273,32 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
                         lambda: fx_stock.history(period=period, auto_adjust=True)["Close"],
                         timeout_sec=20,
                     )
-                    _FX_CACHE[fx_ticker] = raw if raw is not None else pd.Series(dtype=float)
-                except Exception:
-                    _FX_CACHE[fx_ticker] = pd.Series(dtype=float)  # Hoppa över FX vid fel
-            
+                    if raw is not None and not raw.empty:
+                        _FX_CACHE[fx_ticker] = raw
+                    else:
+                        print(f"  ⚠ FX-data tom för {fx_ticker} – {ticker} behåller ursprungsvaluta")
+                        _FX_CACHE[fx_ticker] = pd.Series(dtype=float)
+                except Exception as _fx_err:
+                    print(f"  ⚠ FX-fetch misslyckades ({fx_ticker}): {_fx_err} – {ticker} behåller ursprungsvaluta")
+                    _FX_CACHE[fx_ticker] = pd.Series(dtype=float)
+
             fx_hist = _FX_CACHE[fx_ticker]
-            
+
             # Synka datumen (hanterar helgdagar i olika länder).
             # Begränsa ffill till 5 dagar så vi inte propagerar en månadsgammal
             # FX-kurs över långa luckor (kan ge 100-1000x felaktiga SEK-priser).
             fx_aligned = fx_hist.reindex(hist.index).ffill(limit=5).bfill(limit=5)
 
-            # Sanity check: orealistiska dag-till-dag-hopp tyder på datafel.
-            if not fx_aligned.empty:
+            # Fallback: om fx_aligned är tom eller all-NaN (FX-fetch misslyckades)
+            # → behåll ursprungspriser istället för att skriva NaN på hela serien.
+            if fx_aligned.empty or fx_aligned.isna().all():
+                fx_aligned = pd.Series(1.0, index=hist.index)
+            else:
+                # Sanity check: orealistiska dag-till-dag-hopp tyder på datafel.
                 _ratio = (fx_aligned / fx_aligned.shift(1)).abs()
                 if (_ratio > 1.5).any() or (_ratio < 0.67).any():
                     print(f"  ⚠ Misstänkt FX-hopp för {ticker} ({fx_ticker}) – hoppar konvertering")
-                    fx_aligned = pd.Series([1.0] * len(hist), index=hist.index)
+                    fx_aligned = pd.Series(1.0, index=hist.index)
 
             # Multiplicera alla priskolumner med växelkursen
             for col in ["Open", "High", "Low", "Close"]:
@@ -367,6 +376,18 @@ def _get_insider_signal(ticker: str) -> dict:
     except Exception:
         pass  # Säkert fallback – returnerar False/False
 
+    # För svenska aktier: komplettera med Finansinspektionens insynsregister
+    # (samma källa som Börsdata men gratis och offentlig data)
+    if ticker.upper().endswith(".ST") and not (result["insider_cluster"] or result["insider_executive_buy"]):
+        try:
+            from core.fi_insider_fetcher import get_insider_signal_fi
+            fi_result = get_insider_signal_fi(ticker)
+            # FI-data har företräde om den hittar signal (yfinance är dålig på svenska insiders)
+            if fi_result.get("insider_cluster") or fi_result.get("insider_executive_buy"):
+                result.update(fi_result)
+        except Exception:
+            pass  # FI-modulen är valfri – failar tyst
+
     _write_cache(cache_key, result)
     return result
 
@@ -400,6 +421,52 @@ def fetch_fmp_fallback(ticker: str) -> dict:
         print(f"  ⚠ FMP fallback failed for {ticker}: {e}")
 
     return {}
+
+
+def _get_fmp_fundamentals(ticker: str) -> dict:
+    """
+    Fetch expanded fundamental data from FMP key-metrics endpoint.
+    Fills gaps in yfinance data (P/E, P/B, ROE, EV/EBITDA, FCF yield).
+    Cached 720h (same as static fundamentals) to stay within free tier limits.
+    Only runs if FMP_API_KEY is configured.
+    """
+    if not config.FMP_API_KEY:
+        return {}
+
+    import requests as _requests
+
+    clean = ticker.split(".")[0]
+    cache_key = f"fmp_fund:{clean}"
+    # Long cache (30 days) — fundamentals change slowly, free tier = 250 calls/day
+    cached = _read_cache(cache_key, max_age_hours=720)
+    if cached is not None:
+        return cached
+
+    result = {}
+    try:
+        base = "https://financialmodelingprep.com/api/v3"
+        params = {"apikey": config.FMP_API_KEY, "limit": 1}
+        r = _requests.get(f"{base}/key-metrics-ttm/{clean}", params=params, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if data and isinstance(data, list) and data[0]:
+                km = data[0]
+                result = {
+                    "fmp_pe":              km.get("peRatioTTM"),
+                    "fmp_pb":              km.get("pbRatioTTM"),
+                    "fmp_roe":             km.get("roeTTM"),
+                    "fmp_roa":             km.get("returnOnTangibleAssetsTTM"),
+                    "fmp_ev_ebitda":       km.get("evToEbitdaTTM") or km.get("enterpriseValueOverEBITDATTM"),
+                    "fmp_fcf_yield":       km.get("freeCashFlowYieldTTM"),
+                    "fmp_net_debt_ebitda": km.get("netDebtToEBITDATTM"),
+                    "fmp_revenue_growth":  km.get("revenueGrowthTTM"),
+                    "fmp_earnings_yield":  km.get("earningsYieldTTM"),
+                }
+    except Exception as e:
+        pass  # Silent fallback — FMP enrichment is optional
+
+    _write_cache(cache_key, result)
+    return result
 
 
 def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
@@ -559,6 +626,25 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
             band_w = upper.iloc[-1] - lower.iloc[-1]
             if band_w > 0:
                 metrics["bb_position"] = float((current - lower.iloc[-1]) / band_w)
+
+    # ── FMP-berikningn: fyll luckor från yfinance med FMP key-metrics (TTM) ──
+    # Körs bara om FMP_API_KEY är konfigurerat. Gratis-tier: 250 anrop/dag,
+    # 720h cache → ~33 anrop/dag för 1 000 aktier med 30-dagars rotation.
+    fmp_fund = _get_fmp_fundamentals(ticker)
+    if fmp_fund:
+        # Fyll bara om yfinance returnerade None/saknade värdet
+        if metrics.get("pe_trailing") is None and fmp_fund.get("fmp_pe"):
+            metrics["pe_trailing"] = fmp_fund["fmp_pe"]
+        if metrics.get("price_to_book") is None and fmp_fund.get("fmp_pb"):
+            metrics["price_to_book"] = fmp_fund["fmp_pb"]
+        if metrics.get("roe") is None and fmp_fund.get("fmp_roe"):
+            metrics["roe"] = fmp_fund["fmp_roe"]
+        if metrics.get("roa") is None and fmp_fund.get("fmp_roa"):
+            metrics["roa"] = fmp_fund["fmp_roa"]
+        if metrics.get("ev_to_ebitda") is None and fmp_fund.get("fmp_ev_ebitda"):
+            metrics["ev_to_ebitda"] = fmp_fund["fmp_ev_ebitda"]
+        if metrics.get("revenue_growth") is None and fmp_fund.get("fmp_revenue_growth"):
+            metrics["revenue_growth"] = fmp_fund["fmp_revenue_growth"]
 
     # Insiderhandel-signaler (VD/CFO-köp & cluster-detektion)
     # Görs sist så timeout inte blockerar övrig datahämtning

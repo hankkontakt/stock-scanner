@@ -61,9 +61,39 @@ TECH_FEATURES = [
     "momentum_3_vs_12",
 ]
 
+# Fundamentala features (point-in-time-säkra om de beräknas från yfinance .info
+# som är en punkt-i-tid-snapshot). Dessa läggs till när fundamental data finns
+# tillgänglig i scored_df (d.v.s. efter att data_fetcher har körts).
+# OBS: Dessa ska INTE användas i historisk backtest där point-in-time
+# inte kan garanteras – enbart i live-inference.
+FUNDA_FEATURES = [
+    "fcf_yield_rank",        # EV-based FCF yield percentil (0-100)
+    "piotroski_score",       # Piotroski F-Score (0-9)
+    "insider_signal",        # 1 om insider executive buy, 0 annars
+    "insider_cluster",       # 1 om cluster buy (≥3 insiders), 0 annars
+    "pe_forward_rank",       # Forward P/E percentil (inverterad: högre = lägre P/E)
+    "de_rank",               # Debt/Equity percentil (inverterad: högre = lägre skuld)
+    "momentum_rank",         # 12-mån momentum percentil
+]
+
+# All features = tekniska + fundamentala. Används för träning och inference.
+# I träning: används om FUNDA_FEATURES finns i datasetet, annars bara TECH.
+# I inference: hämtas från scored_df (för funda) + OHLCV-cache (för tech).
+ALL_FEATURES = TECH_FEATURES + FUNDA_FEATURES
+
 # Halvlivstid för exponentiell tidsviktning i träning.
 # Data som är 2 år gammalt viktas till 50 %, 4 år → 25 %, COVID (6 år) → 12 %.
 SAMPLE_WEIGHT_HALFLIFE_YEARS: float = 2.0
+
+
+def _get_feature_cols(df: pd.DataFrame) -> list:
+    """Returnerar tillgängliga feature-kolumner (tech + funda som finns i df)."""
+    available = [c for c in TECH_FEATURES if c in df.columns]
+    # Lägg till fundamenta om de finns i datasetet
+    for c in FUNDA_FEATURES:
+        if c in df.columns:
+            available.append(c)
+    return available
 
 
 def _rsi(close: pd.Series, period: int = 14) -> float:
@@ -504,17 +534,37 @@ def predict_returns(scored_df: pd.DataFrame, universe: str,
 
     cache_dir = cache_dir or (ROOT / "data" / "cache")
 
-    # Bygg feature-matris från OHLCV-cache per ticker
-    rows = []
+    # Bygg feature-matris från OHLCV-cache per ticker (tekniska features)
+    tech_rows = []
     for ticker in scored_df["ticker"].tolist():
         feats = _load_features_from_cache(ticker, cache_dir)
-        rows.append(feats)
+        tech_rows.append(feats)
 
-    feat_df = pd.DataFrame(rows, index=scored_df.index)
+    tech_df = pd.DataFrame(tech_rows, index=scored_df.index)
+
+    # Extrahera fundamentala features från scored_df (direkt, point-in-time)
+    funda_cols_available = [c for c in FUNDA_FEATURES if c in scored_df.columns]
+    if funda_cols_available:
+        funda_df = scored_df[funda_cols_available].copy()
+        # Konvertera till numeriska och fyll NaN
+        for c in funda_cols_available:
+            funda_df[c] = pd.to_numeric(funda_df[c], errors="coerce").fillna(0)
+    else:
+        funda_df = None
 
     # Bara mata in features modellen tränades på
     cols = model_wrapper.feature_cols
-    X = feat_df.reindex(columns=cols).fillna(0).values
+    X_tech = tech_df.reindex(columns=[c for c in cols if c in TECH_FEATURES]).fillna(0).values
+
+    if funda_df is not None and funda_cols_available:
+        funda_cols_model = [c for c in funda_cols_available if c in cols]
+        if funda_cols_model:
+            X_funda = funda_df[funda_cols_model].values
+            X = np.hstack([X_tech, X_funda])
+        else:
+            X = X_tech
+    else:
+        X = X_tech
 
     try:
         preds = model_wrapper.model.predict(X)

@@ -230,7 +230,8 @@ def run_backtest(
             # Likaviktad portfölj-avkastning
             start_p = period_prices.iloc[0]
             end_p   = period_prices.iloc[-1]
-            gross_ret = ((end_p / start_p) - 1).mean()
+            # .mean().mean() hanterar både Series och DataFrame (MultiIndex)
+            gross_ret = ((end_p / start_p) - 1).mean().mean()
 
             # Transaktionskostnad: uppskatta omsättning vs förra perioden
             prev_tickers = set(period_details[-1]["top_tickers"].split(", ")) if period_details else set()
@@ -267,7 +268,7 @@ def run_backtest(
 
     if not portfolio_returns:
         print("  ❌ Inga resultat – försök med fler aktier eller kortare period")
-        return {}
+        return {"perioder": 0, "period_details": []}
 
     # Beräkna statistik
     port_arr = np.array(portfolio_returns)
@@ -297,6 +298,9 @@ def run_backtest(
     drawdowns   = (cum_values - rolling_max) / rolling_max
     max_dd      = drawdowns.min()
 
+    # Konvertera period_details lista till DataFrame direkt
+    period_df = pd.DataFrame(period_details) if period_details else pd.DataFrame()
+
     results = {
         "perioder":             len(port_arr),
         "år_testat":            round(n_years, 1),
@@ -309,7 +313,7 @@ def run_backtest(
         "hit_rate_pct":         round(hit_rate * 100, 1) if hit_rate is not None else None,
         "max_drawdown_pct":     round(max_dd * 100, 1),
         "snitt_månadsret":      round(port_arr.mean() * 100, 2),
-        "period_details":       period_details,
+        "period_details":       period_df,
     }
 
     return results

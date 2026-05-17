@@ -306,6 +306,55 @@ def run_scan(
     top5 = scored.head(5)[["ticker", "sc_total", "sc_stars"]].to_string(index=False)
     print(f"\n  🏆 Top-5 resultat:\n{top5}\n")
 
+    # 5b. Cash Runway Watch – identifiera emissionsrisker
+    print("  Beräknar kassabana ...")
+    try:
+        from smallcap.cash_runway_watch import analyze_cash_runway, build_runway_section
+        runway_df = analyze_cash_runway(scored, verbose=verbose)
+        _runway_section = build_runway_section(runway_df) if not runway_df.empty else ""
+    except ImportError:
+        _runway_section = ""
+        if verbose:
+            print("  ⚠ Cash Runway Watch-modulen saknas")
+    except Exception as e:
+        _runway_section = ""
+        print(f"  ⚠ Cash Runway Watch: {e}")
+
+    # 5c. Sektorrotation (justera scores baserat på sektormomentum)
+    print("  Beräknar sektorrotation ...")
+    try:
+        from core import sector_momentum as _sectormom
+        sec_mom = _sectormom.fetch_sector_momentum(verbose=False)
+        if sec_mom:
+            # Mappa smallcap-sektorer till ETF-sektorer
+            sector_map = {
+                "Försvar & Rymd": "Industrials",
+                "Mjukvara & SaaS": "Technology",
+                "MedTech & Life Science": "Healthcare",
+                "Industri & Verkstad": "Industrials",
+                "Konsument & Livsstil": "Consumer Cyclical",
+                "Fintech & Finans": "Financial Services",
+                "Gaming & Underhållning": "Technology",
+                "Cleantech & Energi": "Energy",
+                "Investmentbolag & Förvärvsbyggare": "Financial Services",
+                "Fastighet": "Real Estate",
+                "Tjänster & Konsult": "Industrials",
+                "Material & Skog": "Basic Materials",
+                "Telecom & Media": "Communication Services",
+            }
+            scored["sector_signal"] = scored["ticker"].apply(
+                lambda t: sec_mom.get(sector_map.get(_sector_for(t), "Technology"), {}).get("signal", "NEUTRAL")
+            )
+            sec_adj = {"STARK UPPTREND": 10, "UPPTREND": 5, "NEUTRAL": 0, "NEDTREND": -10, "STARK NEDTREND": -20}
+            scored["sector_adjustment"] = scored["sector_signal"].map(sec_adj).fillna(0)
+            scored["sc_total"] = (scored["sc_total"] + scored["sector_adjustment"]).clip(0, 110)
+            n_adj = (scored["sector_adjustment"] != 0).sum()
+            print(f"  🔄 Sektorjusterad: {n_adj} bolag fick justerade scores")
+    except ImportError:
+        print("  ⚠ Sektorrotation-modulen saknas – hoppar över")
+    except Exception as e:
+        print(f"  ⚠ Sektorrotation: {e}")
+
     # 6. Nyheter för topp-5 profiler (Google News RSS + Nasdaq Nordic)
     company_news = {}   # {ticker: [articles]}
     nasdaq_news  = []
@@ -346,7 +395,11 @@ def run_scan(
     # Spara aktuella poäng för nästa körnings trendpilar
     save_scores(scored)
 
-    # 8. Spara rapport + CSV (för dashboard)
+    # 8. Lägg till Cash Runway-sektion i rapporten (om data finns)
+    if _runway_section:
+        report = report.replace("## ℹ️ Metodik", f"{_runway_section}\n\n## ℹ️ Metodik")
+
+    # 9. Spara rapport + CSV (för dashboard)
     report_path = save_report(report, output_dir=output_dir)
     print(f"  ✓  Rapport sparad: {report_path}")
 
@@ -364,7 +417,7 @@ def run_scan(
     except Exception as _e:
         print(f"  ⚠  Kunde inte spara CSV: {_e}")
 
-    # 9. E-post
+    # 10. E-post
     if send_mail:
         date_str = datetime.today().strftime("%d %b %Y")
         top1     = scored.iloc[0]["ticker"] if not scored.empty else "—"

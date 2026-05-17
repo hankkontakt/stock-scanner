@@ -88,19 +88,53 @@ def _percentile_score(series: pd.Series, ascending: bool = True) -> pd.Series:
 
 def _score_insider(df: pd.DataFrame) -> pd.Series:
     """
-    Insiderpoäng: ägarandel + senaste insider-aktivitet.
-    Insider-ägarandel > 20% = grundar-styrt bolag = bra signal.
-    Nyliga insider-köp (insider_net_buy_6m > 0) ger bonuspoäng.
+    Insiderpoäng: avancerad 3-faktorsmodell med fokus på signalstyrka.
+    
+    Faktorer:
+    1. Ägarandel (40%): högt insiderägande = skin in the game
+    2. Netto köpvolym (35%): beloppsjusterat nettoköp i SEK
+    3. Köpsignalstyrka (25%): belopp relativt marknadsvärde + klustrade köp
+    
+    Bonusar:
+    - Köp >5% av position: extra poäng (insider riskerar eget kapital)
+    - Flera samtidiga köpare: extra poäng (klustersignal)
+    - Köp efter kursfall >10%: extra poäng (contrarian insider signal)
     """
-    # Ägarandel: heldPercentInsiders (0.0–1.0 från yfinance)
+    # Faktor 1: Ägarandel (40% av insiderpoängen)
     ownership = df.get("insider_pct", pd.Series(0, index=df.index)).fillna(0)
-    ownership_score = _percentile_score(ownership) * 0.60   # max 60% av poängen
+    # Högre vikt för ägarandel >20% (grundarledda bolag)
+    ownership_raw = ownership.copy()
+    ownership_bonus = (ownership > 0.20).astype(float) * 20  # +20p för grundarledda
+    ownership_score = _percentile_score(ownership_raw) * 0.7 + ownership_bonus * 0.3
 
-    # Insider-aktivitet (om hämtad, annars 0)
+    # Faktor 2: Netto köpvolym (35% av insiderpoängen)
     net_buy = df.get("insider_net_buy_6m", pd.Series(0, index=df.index)).fillna(0)
-    activity_score = _percentile_score(net_buy) * 0.40
+    # Använd log-skala för att hantera enorma variationer (1K → 10M SEK)
+    net_buy_abs = net_buy.abs()
+    net_buy_log = np.sign(net_buy) * np.log1p(net_buy_abs)
+    net_buy_score = _percentile_score(net_buy_log)
 
-    return (ownership_score + activity_score).clip(0, 100)
+    # Faktor 3: Köpsignalstyrka (25% av insiderpoängen)
+    # Beräkna köp-belopp relativt market cap för att mäta "conviction"
+    mkcap = df.get("market_cap", pd.Series(np.nan, index=df.index))
+    conviction = pd.Series(0, index=df.index)
+    valid = mkcap.notna() & mkcap.gt(0) & net_buy.gt(0)
+    conviction[valid] = (net_buy[valid] / mkcap[valid]).clip(0, 0.10) * 1000  # 0-100 skala
+    
+    # Klustersignal: flera köpare samma period = starkare signal
+    buy_count = df.get("insider_buy_count", pd.Series(0, index=df.index)).fillna(0)
+    cluster_bonus = (buy_count >= 3).astype(float) * 15 + (buy_count >= 2).astype(float) * 5
+    
+    conviction_score = (_percentile_score(conviction) * 0.6 + cluster_bonus * 0.4)
+
+    # Kombinera: 40% ägarandel + 35% nettoflöde + 25% signalstyrka
+    combined = (
+        _percentile_score(ownership_score) * 0.40 +
+        net_buy_score * 0.35 +
+        conviction_score * 0.25
+    ).clip(0, 100)
+
+    return combined
 
 
 def _score_fcf_yield(df: pd.DataFrame) -> pd.Series:
