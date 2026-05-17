@@ -25,6 +25,7 @@ if str(ROOT) not in sys.path:
 
 import numpy as np
 import pandas as pd
+from core.country_flags import flag_for_ticker
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -997,6 +998,11 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
     display = display.rename(columns={
         "rank":              "Rank",
         "ticker":            "Ticker",
+    })
+    # Lägg till landsflagga före ticker
+    if "Ticker" in display.columns:
+        display["Ticker"] = display["Ticker"].apply(lambda t: f"{flag_for_ticker(t)} {t}")
+    display = display.rename(columns={
         "name":              "Bolag",
         "_status":           "Status",
         "sector":            "Sektor",
