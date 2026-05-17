@@ -2672,13 +2672,25 @@ def _check_admin_access() -> bool:
         "Kontakta administratören för lösenordet."
     )
     
+    def _check_pw():
+        pw_in = st.session_state.get("admin_pw_input", "")
+        if pw_in == correct_pw:
+            st.session_state["admin_authenticated"] = True
+        elif pw_in:
+            st.session_state["admin_pw_error"] = True
+        else:
+            st.session_state["admin_pw_error"] = False
+
     pw_input = st.text_input(
         "Ange admin-lösenord",
         type="password",
         key="admin_pw_input",
         placeholder="••••••••",
+        on_change=_check_pw,
     )
-    
+
+    if st.session_state.get("admin_pw_error"):
+        st.error("Fel lösenord")
     if st.button("🔓 Lås upp", key="btn_admin_unlock", use_container_width=True):
         # hmac.compare_digest skyddar mot timing-attacker
         import hmac
@@ -4567,13 +4579,26 @@ def _check_site_access() -> bool:
     </div>
     """, unsafe_allow_html=True)
     
+    def _check_site_pw():
+        pw_in = st.session_state.get("site_pw_input", "")
+        if pw_in == pw:
+            st.session_state["site_authenticated"] = True
+        elif pw_in:
+            st.session_state["site_pw_error"] = True
+        else:
+            st.session_state["site_pw_error"] = False
+
     pw_input = st.text_input(
         "Lösenord",
         type="password",
         key="site_pw_input",
         placeholder="Ange lösenord",
         label_visibility="collapsed",
+        on_change=_check_site_pw,
     )
+    
+    if st.session_state.get("site_pw_error"):
+        st.error("❌ Fel lösenord!")
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
