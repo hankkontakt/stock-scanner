@@ -97,8 +97,8 @@ def score_at_date(prices: pd.DataFrame, date: pd.Timestamp) -> pd.Series:
     - 3m momentum  (20%)
     - Avstånd från 52v-high (10%)
     """
-    # Historisk data fram till (men inte inkl.) det aktuella datumet
-    hist = prices[prices.index <= date].copy()
+    # Historisk data fram till (men INTE inkl.) det aktuella datumet – undviker look-ahead bias
+    hist = prices[prices.index < date].copy()
 
     if len(hist) < 63:  # Minst 3 månader data
         return pd.Series(dtype=float)
@@ -223,23 +223,32 @@ def run_backtest(
             # Likaviktad portfölj-avkastning
             start_p = period_prices.iloc[0]
             end_p   = period_prices.iloc[-1]
-            ret     = ((end_p / start_p) - 1).mean()
+            gross_ret = ((end_p / start_p) - 1).mean()
+
+            # Transaktionskostnad: uppskatta omsättning vs förra perioden
+            prev_tickers = set(period_details[-1]["top_tickers"].split(", ")) if period_details else set()
+            turnover = len(set(valid) - prev_tickers) / max(len(valid), 1)
+            # 0.10 % per trade, köp + sälj = 0.20 % per omsatt position
+            tx_cost = turnover * 0.002
+            ret = gross_ret - tx_cost
 
             portfolio_returns.append(ret)
 
-            # Benchmark-avkastning
+            # Benchmark-avkastning – initieras till None för att undvika NameError
+            bench_ret = None
             if bench_prices is not None:
-                b_now  = bench_prices[bench_prices.index >= avail_now].iloc[0]
-                b_next = bench_prices[bench_prices.index >= avail_next].iloc[0]
-                bench_ret = (b_next / b_now) - 1
-                benchmark_returns.append(bench_ret)
-            else:
-                benchmark_returns.append(None)
+                try:
+                    b_now  = bench_prices[bench_prices.index >= avail_now].iloc[0]
+                    b_next = bench_prices[bench_prices.index >= avail_next].iloc[0]
+                    bench_ret = (b_next / b_now) - 1
+                except Exception:
+                    pass
+            benchmark_returns.append(bench_ret)
 
             period_details.append({
                 "period":          date_now.strftime("%Y-%m"),
                 "portfolio_ret":   round(ret * 100, 2),
-                "benchmark_ret":   round(bench_ret * 100, 2) if bench_ret else None,
+                "benchmark_ret":   round(bench_ret * 100, 2) if bench_ret is not None else None,
                 "alpha":           round((ret - (bench_ret or 0)) * 100, 2),
                 "top_tickers":     ", ".join(valid[:5]),
             })
@@ -266,8 +275,9 @@ def run_backtest(
     ann_port  = (1 + cum_port)  ** (1 / n_years) - 1 if n_years > 0 else 0
     ann_bench = (1 + cum_bench) ** (1 / n_years) - 1 if (cum_bench is not None and n_years > 0) else None
 
-    # Sharpe ratio (förenklad)
-    sharpe = (port_arr.mean() / port_arr.std() * np.sqrt(12)) if port_arr.std() > 0 else 0
+    # Sharpe ratio – subtraherar riskfri ränta (~4 % per år = 0.33 %/mån)
+    rf_monthly = 0.04 / 12
+    sharpe = ((port_arr.mean() - rf_monthly) / port_arr.std() * np.sqrt(12)) if port_arr.std() > 0 else 0
 
     # Hit rate (% perioder som slog benchmark)
     hit_rate = None
