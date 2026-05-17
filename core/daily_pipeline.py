@@ -681,7 +681,8 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             for h in enriched:
                 emoji = "🟢" if (h.get("pnl_pct") or 0) >= 0 else "🔴"
                 pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "—"
-                report_lines.append(f"- {emoji} **{h['ticker']}** – {pnl} | Score {h['score']:.0f} | Rekommendation: {_get_rec(h)}")
+                score_str = f"{h['score']:.0f}" if h.get('score') is not None else "—"
+                report_lines.append(f"- {emoji} **{h['ticker']}** – {pnl} | Score {score_str} | Rekommendation: {_get_rec(h)}")
         else:
             report_lines.append("*(Inga innehav i portföljen)*")
 
@@ -739,7 +740,8 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 rec = _get_rec(h)
                 emoji = "🟢" if rec in ("BEHÅLL", "KÖP MER") else "🟡" if rec == "BEVAKA" else "🔴"
                 pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "—"
-                report_lines.append(f"- {emoji} **{h['ticker']}** – {pnl} | Score {h['score']:.0f} | **{rec}**")
+                score_str = f"{h['score']:.0f}" if h.get('score') is not None else "—"
+                report_lines.append(f"- {emoji} **{h['ticker']}** – {pnl} | Score {score_str} | **{rec}**")
         else:
             report_lines.append("*(Inga innehav)*")
 

@@ -1,4 +1,5 @@
-# MarketScan — Quantitative Stock Scanner
+"""Script to write README.md - run with: python scripts/write_readme.py"""
+content = r"""# MarketScan — Quantitative Stock Scanner
 
 En kvantitativ aktiescanner som rangordnar 800+ aktier baserat på akademiskt validerade faktorer och ger rekommendationer för portföljen.
 
@@ -32,3 +33,9 @@ python portfolio/paper_trading.py status  # Paper trading status
 ## Datakällor
 
 yfinance (gratis), Finnhub (60/min gratis), Finansinspektionen (gratis), FMP (250/dag gratis), DeepSeek/Gemini (<$5/mån)
+"""
+
+import sys
+with open('README.md', 'w', encoding='utf-8') as f:
+    f.write(content)
+print(f"README.md written: {len(content)} bytes")

@@ -153,7 +153,7 @@ FIRST_NORTH = [
     "MAHA-A.ST",    # Maha Energy A – oljeproduktion
     "ANOT.ST",      # Anoto Group – digital skrivteknik
     "INTEG-B.ST",   # Integrum B – bioniska proteser
-    # ── Nya bolag: kvantitativ analys maj 2026 ───────────────────────────────
+    # ── Nya bolag: kvantitativ analys maj 2026 (v2) ─────────────────────────
     "NYAB.ST",      # NYAB AB – infrastruktur & anläggning
     "SECARE.ST",    # Swedencare – husdjurshälsa, 57,9% bruttomarginal
     "DVYSR.ST",     # Devyser Diagnostics – genetisk diagnostik
@@ -163,6 +163,15 @@ FIRST_NORTH = [
     "STORY-B.ST",   # Story of AMS B
     "MAGI.ST",      # Maginatics (kontrollera)
     "SF.ST",        # Stillfront Group – spelutveckling
+    # ── Kvantitativ allokeringsstudie maj 2026: 30 högpotentiella småbolag ──
+    "W5.ST",        # W5 Solutions – försvarsindustri, orderbok 828 MSEK
+    "GOMX.ST",      # GomSpace – nanosatelliter
+    "AAC.ST",       # AAC Clyde Space – rymdsystem
+    "VER.ST",       # Verve Group – AI-driven ad-tech-plattform
+    "VERT-B.ST",    # Vertiseit – Digital In-store SaaS, ARR 341 MSEK
+    "CX.ST",        # CombinedX – digitalisering & IT-konsult
+    "IDUN-B.ST",    # Idun Industrier – förvärvsbyggare, 59% bruttomarginal
+    "HUMBLE.ST",    # Humble Group – FMCG-hälsa, kassaflöde 515 MSEK
 ]
 
 
@@ -287,7 +296,7 @@ SMALL_CAP = [
     "MTG-B.ST",     # Modern Times Group B – gaming & media
     "TEL2-B.ST",    # Tele2 B – telekommunikation
     "TELIA.ST",     # Telia – telekommunikation
-    # ── Nya bolag: kvantitativ analys maj 2026 ───────────────────────────────
+    # ── Nya bolag: kvantitativ analys maj 2026 (v2) ─────────────────────────
     "MMGR-B.ST",    # Momentum Group B – industridistribution, ROE 22,9%
     "GREEN.ST",     # Green Landscaping Group – utemiljö, stark FCF
     "NELLY.ST",     # Nelly Group – e-handel mode, turnaround
@@ -299,6 +308,20 @@ SMALL_CAP = [
     "NEOBO.ST",     # Neobo Fastigheter – bostäder, aktieåterköp
     "VICO.ST",      # Vicore Pharma – IPF-pipeline (f.d. VICOR.ST)
     "KDEV.ST",      # Karolinska Development – life science investmentbolag
+    # ── Kvantitativ allokeringsstudie maj 2026: 30 högpotentiella småbolag ──
+    "BONEX.ST",     # Bonesupport – ortobiologi, 95,3% bruttomarginal
+    "ADDV-B.ST",    # ADDvise Group – life science förvärvsbyggare
+    "SUS.ST",       # Surgical Science – VR-kirurgisimulatorer
+    "NTEK-B.ST",    # Novotek – industriell IT & automation
+    "B3.ST",        # B3 Consulting Group – IT-konsult
+    "KARNEL-B.ST",  # Karnell Group – industriell förvärvsbyggare
+    "LAGR-B.ST",    # Lagercrantz Group – förvärvsbyggare, ROE 27,9%
+    "BULTEN.ST",    # Bulten – fästelement, expanderande marginaler
+    "INISS-B.ST",   # Inission – kontraktstillverkning EMS, 37% tillväxt
+    "CBTT-B.ST",    # Christian Berner Tech Trade – teknisk B2B-handel
+    "DUROC-B.ST",   # Duroc – industrigrupp, robust kassaflöde
+    "HAKI-B.ST",    # HAKI Safety – säkra arbetsplatser, oelastisk efterfrågan
+    "ELON.ST",      # Elon Group – vitvaror & hemelektronik
 ]
 
 
@@ -332,9 +355,9 @@ SPOTLIGHT = [
     # ── Fastighet (Spotlight) ────────────────────────────────────────────────
     "MTRS.ST",      # Mälarstaden – fastighetsbolag
     "HTRO.ST",      # Heatron – fastighetsutveckling
-    # ── Nya bolag: kvantitativ analys maj 2026 ───────────────────────────────
+    # ── Nya bolag: kvantitativ analys maj 2026 (v2) ─────────────────────────
     "PLEJD.ST",     # Plejd – smart belysning, 1 Mdr+ omsättning, stark FCF
-    "FREETR.ST",    # Freetrailer – delningsekonomi, asset-light
+    "FREETR.ST",     # Freetrailer – delningsekonomi, asset-light
     "SUSG.ST",      # Sustainion Group – hållbarhetsteknik
     "ANGL.ST",      # Angler Gaming – iGaming, 40%+ bruttomarginal
     "BPCINS.ST",    # BPC Instruments – biogas analytik
@@ -342,6 +365,8 @@ SPOTLIGHT = [
     "SOLIDX.ST",    # SolidX – IT-konsult, snabbväxande
     "BEYOND.ST",    # Beyond Frames Entertainment – VR-spel
     "REDS.ST",      # Redsense Medical – dialysövervakning
+    # ── Kvantitativ allokeringsstudie maj 2026: 30 högpotentiella småbolag ──
+    "ASTOR.ST",     # Scandinavian Astor Group – försvar & cybersäkerhet
 ]
 
 
@@ -432,17 +457,21 @@ def get_universe(market: str = "all") -> list:
     return list(dict.fromkeys(base + extra))
 
 
-# ── Bransch-kategorier ────────────────────────────────────────────────────────
+# ── Bransch-kategorier (uppdaterad med 30 nya bolag maj 2026) ─────────────────
 SECTOR_GROUPS = {
+    "Försvar & Rymd": [
+        "MILDEF.ST", "IVSO.ST", "W5.ST", "ASTOR.ST", "OVZON.ST",
+        "GOMX.ST", "AAC.ST", "CLAV.ST",
+    ],
     "Mjukvara & SaaS": [
         "LIME.ST", "FNOX.ST", "VIT-B.ST", "ANOD-B.ST", "ENEA.ST", "IAR-B.ST",
         "RAY-B.ST", "SECT-B.ST", "CINT.ST", "KNOW.ST", "PRIC-B.ST", "TOBII.ST",
         "NETI-B.ST", "CTEK.ST", "ALCA.ST", "CTM.ST", "ACAST.ST", "BUSER.ST",
         "SAFETY-B.ST", "PACT.ST", "BAHN-B.ST", "FPIP.ST", "MSAB-B.ST", "SOF-B.ST",
         "PRFO.ST", "BIM.ST", "UPSALE.ST", "PREV-B.ST", "NIL-B.ST", "EXS.ST",
-        "ADVE.ST", "SINCH.ST", "CLAV.ST", "VERI.ST", "AWRD.ST",
+        "ADVE.ST", "SINCH.ST", "VERI.ST", "AWRD.ST",
         "SAFE.ST", "EASY-B.ST", "QBNK.ST", "EWRK.ST", "BRIGHT.ST", "AYIMA-B.ST",
-        "KAMBI.ST", "NBZ.ST",
+        "KAMBI.ST", "NBZ.ST", "VER.ST", "VERT-B.ST", "CX.ST",
     ],
     "MedTech & Life Science": [
         "XVIVO.ST", "ELOS-B.ST", "BOMILL.ST", "BIOG-B.ST", "CEVI.ST", "MNTC.ST",
@@ -455,24 +484,26 @@ SECTOR_GROUPS = {
         "SOBI.ST", "BIOA-B.ST", "DICOT.ST", "SPAGO.ST",
         "REAL.ST", "SECARE.ST",
         "DVYSR.ST", "VICO.ST", "REDS.ST", "XINT.ST", "IMPC.ST",
+        "BONEX.ST", "ADDV-B.ST", "SUS.ST",
     ],
     "Industri & Verkstad": [
         "MIPS.ST", "GARO.ST", "OEM-B.ST", "SDIP-B.ST", "XANO-B.ST", "REJL-B.ST",
-        "HEXA-B.ST", "MILDEF.ST", "INSTAL.ST", "IVSO.ST", "BERG-B.ST", "EOLU-B.ST",
+        "HEXA-B.ST", "INSTAL.ST", "BERG-B.ST", "EOLU-B.ST",
         "BRAV.ST", "SENS.ST", "HANZA.ST", "TAGM-B.ST", "BUFAB.ST", "LIAB.ST",
         "ITAB.ST", "NCAB.ST", "TROAX.ST", "SYSR.ST", "MYCR.ST", "NOTE.ST",
         "AQ.ST", "BEIJ-B.ST", "HMS.ST", "NOLA-B.ST", "HPOL-B.ST", "VBG-B.ST",
         "ADDT-B.ST", "DOM.ST", "INWI.ST", "LOOMIS.ST", "ANOT.ST", "ENGCON-B.ST",
         "VOLV-B.ST", "SAND.ST", "ALFA.ST", "ASSA-B.ST", "SKF-B.ST", "TREL-B.ST",
         "HUSQ-B.ST", "SWEC-B.ST", "AFRY.ST", "MMGR-B.ST", "GREEN.ST", "SILEX.ST",
-        "SINT.ST", "FNM.ST",
+        "SINT.ST", "FNM.ST", "NTEK-B.ST", "INISS-B.ST", "CBTT-B.ST",
+        "DUROC-B.ST", "HAKI-B.ST", "BULTEN.ST",
     ],
     "Konsument & Livsstil": [
         "THULE.ST", "RVRC.ST", "SKIS-B.ST", "BHG.ST", "BORG.ST",
         "FING-B.ST", "MEKO.ST", "BILI-A.ST", "CLAS-B.ST", "DUNI.ST", "MSON-B.ST",
         "AAK.ST", "AXFO.ST", "BMAX.ST", "RUSTA.ST", "NEWA-B.ST", "ALLIGO-B.ST", "LYKO-A.ST",
         "KABE-B.ST", "FAG.ST", "ICA.ST", "NELLY.ST", "CLA-B.ST", "PLEJD.ST",
-        "HAYPP.ST", "BOOZT.ST",
+        "HAYPP.ST", "BOOZT.ST", "HUMBLE.ST", "ELON.ST",
     ],
     "Fintech & Finans": [
         "QLIRO.ST", "NOWO.ST", "RESURS.ST", "HOFI.ST", "INTRUM.ST",
@@ -488,10 +519,11 @@ SECTOR_GROUPS = {
         "MAHA-A.ST", "EPRO-B.ST", "ORRON.ST", "SUSG.ST", "SOLT.ST",
         "ARISE.ST", "OPTI.ST",
     ],
-    "Investmentbolag": [
+    "Investmentbolag & Förvärvsbyggare": [
         "BURE.ST", "CRED-A.ST", "NAXS.ST", "TRAC-B.ST", "SVOL-B.ST", "VNV.ST",
         "EAST.ST", "KINV-B.ST", "LIFCO-B.ST", "INDT.ST", "RATO-B.ST", "LATO-B.ST",
         "BINV.ST", "EQT.ST", "INVE-B.ST", "INDU-C.ST", "KDEV.ST",
+        "KARNEL-B.ST", "LAGR-B.ST", "IDUN-B.ST",
     ],
     "Fastighet": [
         "KFAST-B.ST", "NP3.ST", "SLP-B.ST", "CIBUS.ST", "PION-B.ST",
@@ -505,7 +537,7 @@ SECTOR_GROUPS = {
         "BTS-B.ST", "COOR.ST", "HUM.ST", "NOBI.ST", "ESSITY-B.ST", "EWRK.ST",
         "DUST.ST", "WISE.ST", "OGUN-B.ST", "ATT.ST", "AMBEA.ST",
         "SWEC-B.ST", "AFRY.ST", "SOLIDX.ST", "GJAB.ST", "FREETR.ST", "BPCINS.ST",
-        "VOLO.ST", "BEGR.ST",
+        "VOLO.ST", "BEGR.ST", "B3.ST",
     ],
     "Material & Skog": [
         "SSAB-A.ST", "SSAB-B.ST", "SCA-B.ST", "HOLM-B.ST", "SCST.ST", "NEXAM.ST",
