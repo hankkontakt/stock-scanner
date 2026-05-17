@@ -433,12 +433,14 @@ def score_distribution_chart(df: pd.DataFrame, score_col: str = "score_total") -
         title="Poängfördelning",
         labels={score_col: "Score", "count": "Antal bolag"},
         template="plotly_dark",
+        range_x=[0, 100],
     )
     fig.update_layout(
         margin=dict(t=36, b=16, l=16, r=16),
         plot_bgcolor="#1e2230",
         paper_bgcolor="#131722",
         height=260,
+        xaxis=dict(range=[0, 100], dtick=10),
     )
     return fig
 
@@ -3342,98 +3344,225 @@ def _trigger_gh_workflow(token: str, owner: str, repo: str,
 # ══════════════════════════════════════════════════════════════════════════════
 
 def page_backtesting():
-    """Backtesting – testa scoringmodellen historiskt."""
     st.title("📈 Backtesting")
-    st.caption("Testa hur scoringmodellen presterat historiskt. Baseras på momentum (12m, 6m, 3m, 52v-high). Första körningen tar 1-2 min.")
-    st.info(
-        "⚠️ **Tolkningsvarning:** Siffrorna inkluderar 0,2 % transaktionskostnad per omsatt position men lider fortfarande av "
-        "**survivorship bias** (bara aktier som finns kvar idag ingår) och **simplified scoring** (bara tekniska faktorer). "
-        "Verklig avkastning kan vara väsentligt lägre. Använd som relativ jämförelse – inte som absolut prognos.",
-        icon=None,
-    )
 
-    col_yr, col_top, col_bench, col_run = st.columns([1, 1, 1, 1])
+    with st.expander("ℹ️ Hur funkar backtesting? (klicka för att läsa)", expanded=False):
+        st.markdown("""
+### Vad är backtesting?
+
+Backtesting är ett sätt att se hur en strategi *hade* fungerat historiskt —
+vi reser "tillbaka i tid" och låtsas att vi handlade enligt modellens regler
+för varje månad under den valda perioden.
+
+### Hur fungerar den här modellen?
+
+Varje månad gör systemet följande:
+
+1. **Hämtar historisk prisdata** för alla aktier i universum (via Yahoo Finance)
+2. **Beräknar teknisk momentum-score** för varje aktie baserat på data som *faktiskt
+   var tillgänglig den dagen* — ingen fusk med framtida data
+   - 12-månaders momentum — 40 %
+   - 6-månaders momentum — 30 %
+   - 3-månaders momentum — 20 %
+   - Avstånd från 52-veckors-high — 10 %
+3. **Väljer topp-N aktier** (du styr antalet) och köper likaviktat
+4. **Mäter avkastningen** tills nästa månadsskifte, sedan rebalanseras portföljen
+5. **Jämför mot benchmark** (SPY = S&P 500, ^OMXS30 = svenska börsen)
+
+### Varför ser siffrorna "för bra" ut?
+
+Det finns tre inbyggda problem som blåser upp resultaten:
+
+| Problem | Förklaring | Effekt |
+|---------|------------|--------|
+| **Survivorship bias** | Bara aktier som *finns kvar idag* ingår. Aktier som gick i konkurs eller avnoterades saknas. | Kan blåsa upp +5–15 % per år |
+| **Momentum-only modell** | Scoringen bygger bara på pris — inte fundamenta, insider, sentiment m.m. | Underpresterar jämfört med fulla modellen |
+| **Transaktionskostnader** | 0,2 % per omsatt position är inkluderat, men spread, slippage och skatt saknas | Kan kosta ytterligare 0,5–1 % per år |
+
+**Tumregel:** Ta det visade resultatet och dra av ~10–15 % per år för att få en
+mer realistisk uppskattning av faktisk prestanda.
+
+### Vad är de viktigaste nyckeltalen?
+
+- **Sharpe ratio > 1.0** — bra riskjusterad avkastning
+- **Hit rate > 55 %** — strategin slog index mer än hälften av månaderna
+- **Max drawdown** — hur mycket portföljen gick ned som värst (ju lägre desto bättre)
+- **Alpha** — meravkastning utöver benchmark (kan vara positiv av survivorship bias)
+
+### Hur ska jag använda resultaten?
+
+Använd backtestingen för att **jämföra varianter** (t.ex. topp-10 vs topp-20,
+1 år vs 3 år) snarare än att ta de absoluta siffrorna bokstavligt.
+Om modellen konsistent slår index i 60–70 % av perioderna är det ett bra tecken —
+men garanterar ingenting om framtiden.
+        """)
+
+    st.warning("⚠️ **Tolkningsvarning:** Survivorship bias och förenklad scoring gör att siffrorna troligen är 10–15 %/år för höga. Se förklaringen ovan.")
+
+    col_yr, col_top, col_bench, col_bench2, col_run = st.columns([1, 1, 1, 1, 1])
     with col_yr:
-        years = st.number_input("År", min_value=1, max_value=10, value=3, key="bt_years")
+        years = st.number_input("År att testa", min_value=1, max_value=10, value=3, key="bt_years")
     with col_top:
-        top_n = st.number_input("Top-N", min_value=5, max_value=50, value=20, key="bt_top")
+        top_n = st.number_input("Top-N aktier", min_value=5, max_value=50, value=20, key="bt_top")
     with col_bench:
-        bench = st.text_input("Benchmark", value="SPY", key="bt_bench")
+        bench = st.text_input("Benchmark 1", value="SPY", key="bt_bench", help="S&P 500 ETF (global referens)")
+    with col_bench2:
+        bench2 = st.text_input("Benchmark 2", value="^OMXS30", key="bt_bench2", help="Lämna tomt för att skippa. T.ex. ^OMXS30, QQQ")
     with col_run:
-        run_bt = st.button("▶️ Kör", type="primary", key="bt_run", use_container_width=True)
+        run_bt = st.button("▶️ Kör backtest", type="primary", key="bt_run", use_container_width=True)
 
     if "bt_result" not in st.session_state:
         st.session_state["bt_result"] = None
+    if "bt_result2" not in st.session_state:
+        st.session_state["bt_result2"] = None
 
     if run_bt:
-        with st.spinner(f"Kör backtest {int(years)} år, topp-{int(top_n)}..."):
+        with st.spinner(f"Kör backtest {int(years)} år, topp-{int(top_n)}... (kan ta 1–2 min)"):
             try:
                 from backtesting.backtest import run_backtest
                 from core import config
                 tickers = config.UNIVERSE[:50]
                 result = run_backtest(tickers=tickers, years=int(years), top_n=int(top_n), benchmark=str(bench), verbose=False)
                 st.session_state["bt_result"] = result
+                if bench2.strip() and bench2.strip() != bench.strip():
+                    result2 = run_backtest(tickers=tickers, years=int(years), top_n=int(top_n), benchmark=str(bench2).strip(), verbose=False)
+                    st.session_state["bt_result2"] = result2
+                else:
+                    st.session_state["bt_result2"] = None
             except Exception as e:
                 st.error(f"Fel: {e}")
-                st.info("Första körningen tar 1-2 min medan data laddas ned")
 
-    result = st.session_state.get("bt_result")
+    result  = st.session_state.get("bt_result")
+    result2 = st.session_state.get("bt_result2")
+    b2_label = bench2.strip() if bench2.strip() else None
+
     if result and result.get("perioder", 0) > 0:
         kpi_row([
-            ("📅 Perioder", f"{result['perioder']} mån", f"{result['år_testat']} år"),
-            ("📈 Kumulativ", f"{result['kumulativ_avkastning']:+.1f}%", f"Bench: {result.get('kumulativ_benchmark', 0):+.1f}%"),
-            ("📊 Annualiserad", f"{result['annualiserad_port']:+.1f}%/år", f"Alpha: {result.get('alpha_annualiserad', 0):+.1f}%/år"),
-            ("🎯 Sharpe", f"{result['sharpe_ratio']:.2f}", ">1.0 = bra"),
-            ("✅ Hit rate", f"{result.get('hit_rate_pct', 0):.0f}%", ">50% slår index"),
-            ("💀 Max DD", f"{result['max_drawdown_pct']:.1f}%", None),
+            ("📅 Perioder testade",  f"{result['perioder']} mån",                        f"{result['år_testat']} år"),
+            ("📈 Kumulativ",          f"{result['kumulativ_avkastning']:+.1f}%",           f"{bench}: {result.get('kumulativ_benchmark', 0):+.1f}%"),
+            ("📊 Annualiserad",       f"{result['annualiserad_port']:+.1f}%/år",           f"Alpha: {result.get('alpha_annualiserad', 0) or 0:+.1f}%/år"),
+            ("🎯 Sharpe ratio",       f"{result['sharpe_ratio']:.2f}",                    ">1.0 = bra"),
+            ("✅ Hit rate",           f"{result.get('hit_rate_pct', 0):.0f}%",            ">50 % slår index"),
+            ("💀 Max drawdown",       f"{result['max_drawdown_pct']:.1f}%",               None),
         ])
 
-        tab1, tab2, tab3 = st.tabs(["📈 Equity curve", "📋 Per period", "💾 Spara"])
+        tab1, tab2, tab3 = st.tabs(["📈 Equity-kurva", "📋 Per period", "💾 Export & AI"])
 
         with tab1:
             period_data = result.get("period_details", pd.DataFrame())
             if not period_data.empty:
                 port_rets = period_data["portfolio_ret"].values / 100
-                equity_port = [100]
+                equity_port = [100.0]
                 for r in port_rets:
                     equity_port.append(equity_port[-1] * (1 + r))
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=list(range(len(equity_port))), y=equity_port, mode="lines", name="Modell", line=dict(color="#00d4aa", width=2.5), fill="tozeroy", fillcolor="rgba(0,212,170,0.1)"))
+                labels = list(period_data["period"]) + [period_data["period"].iloc[-1]]
+
+                fig_eq = go.Figure()
+                fig_eq.add_trace(go.Scatter(
+                    x=labels, y=equity_port, mode="lines",
+                    name="Modell (momentum top-N)",
+                    line=dict(color="#00d4aa", width=2.5),
+                    fill="tozeroy", fillcolor="rgba(0,212,170,0.08)",
+                ))
                 if "benchmark_ret" in period_data.columns:
                     bench_rets = period_data["benchmark_ret"].dropna().values / 100
                     if len(bench_rets) == len(port_rets):
-                        eq_b = [100]
+                        eq_b = [100.0]
                         for r in bench_rets:
                             eq_b.append(eq_b[-1] * (1 + r))
-                        fig.add_trace(go.Scatter(x=list(range(len(eq_b))), y=eq_b, mode="lines", name=f"{bench}", line=dict(color="#64748b", width=1.5, dash="dash")))
-                fig.update_layout(template="plotly_dark", paper_bgcolor="#131722", plot_bgcolor="#1e2230", height=400, margin=dict(t=40, b=16, l=16, r=16), hovermode="x unified", legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"))
-                st.plotly_chart(fig, use_container_width=True)
+                        fig_eq.add_trace(go.Scatter(
+                            x=labels, y=eq_b, mode="lines", name=bench,
+                            line=dict(color="#f59e0b", width=1.8, dash="dash"),
+                        ))
+                if result2 and not result2.get("period_details", pd.DataFrame()).empty:
+                    pd2 = result2["period_details"]
+                    if "benchmark_ret" in pd2.columns:
+                        b2_rets = pd2["benchmark_ret"].dropna().values / 100
+                        if len(b2_rets) > 0:
+                            eq_b2 = [100.0]
+                            for r in b2_rets:
+                                eq_b2.append(eq_b2[-1] * (1 + r))
+                            labels2 = list(pd2["period"]) + [pd2["period"].iloc[-1]]
+                            fig_eq.add_trace(go.Scatter(
+                                x=labels2, y=eq_b2, mode="lines",
+                                name=b2_label or "Benchmark 2",
+                                line=dict(color="#a78bfa", width=1.8, dash="dot"),
+                            ))
+                fig_eq.update_layout(
+                    template="plotly_dark", paper_bgcolor="#131722", plot_bgcolor="#1e2230",
+                    height=420, margin=dict(t=48, b=16, l=16, r=16),
+                    hovermode="x unified",
+                    legend=dict(orientation="h", y=1.12, x=0.5, xanchor="center"),
+                    title=dict(text="Kumulativ värdeutveckling (start = 100 kr)", font=dict(size=14)),
+                    yaxis=dict(title="Portföljvärde (kr)"),
+                    xaxis=dict(title="Period"),
+                )
+                st.plotly_chart(fig_eq, use_container_width=True)
 
-                fig_h = px.histogram(x=period_data["portfolio_ret"], nbins=20, color_discrete_sequence=["#42a5f5"], labels={"x": "Månadsavkastning %", "count": "Antal"}, template="plotly_dark")
-                fig_h.add_vline(x=0, line_dash="dash", line_color="#ef5350")
-                fig_h.update_layout(paper_bgcolor="#131722", plot_bgcolor="#1e2230", height=250, margin=dict(t=16, b=16, l=16, r=16))
-                st.plotly_chart(fig_h, use_container_width=True)
+                colors = ["#22c55e" if r >= 0 else "#ef4444" for r in period_data["portfolio_ret"]]
+                fig_bar = go.Figure(go.Bar(
+                    x=period_data["period"], y=period_data["portfolio_ret"],
+                    marker_color=colors, name="Månadsavkastning %",
+                ))
+                if "benchmark_ret" in period_data.columns:
+                    fig_bar.add_trace(go.Scatter(
+                        x=period_data["period"], y=period_data["benchmark_ret"],
+                        mode="lines", name=bench, line=dict(color="#f59e0b", width=1.5),
+                    ))
+                fig_bar.update_layout(
+                    template="plotly_dark", paper_bgcolor="#131722", plot_bgcolor="#1e2230",
+                    height=280, margin=dict(t=36, b=16, l=16, r=16),
+                    title=dict(text="Månadsavkastning — modell (staplar) vs benchmark (linje)", font=dict(size=13)),
+                    yaxis=dict(title="%", zeroline=True, zerolinecolor="#64748b"),
+                    legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"),
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+
+                if result2 and result2.get("perioder", 0) > 0:
+                    st.markdown("#### Jämförelse benchmarks")
+                    cmp_data = {
+                        "Metric": ["Kumulativ avkastning", "Annualiserad", "Sharpe", "Max drawdown"],
+                        "Modell": [
+                            f"{result['kumulativ_avkastning']:+.1f}%",
+                            f"{result['annualiserad_port']:+.1f}%/år",
+                            f"{result['sharpe_ratio']:.2f}",
+                            f"{result['max_drawdown_pct']:.1f}%",
+                        ],
+                        bench: [
+                            f"{result.get('kumulativ_benchmark', 0):+.1f}%",
+                            f"{result.get('annualiserad_bench', 0) or 0:+.1f}%/år", "—", "—",
+                        ],
+                    }
+                    if b2_label:
+                        cmp_data[b2_label] = [
+                            f"{result2.get('kumulativ_benchmark', 0):+.1f}%",
+                            f"{result2.get('annualiserad_bench', 0) or 0:+.1f}%/år", "—", "—",
+                        ]
+                    st.dataframe(pd.DataFrame(cmp_data), use_container_width=True, hide_index=True)
+            else:
+                st.info("Inga perioder att visa. Kör backtestet igen.")
 
         with tab2:
             pd_data = result.get("period_details", pd.DataFrame())
             if not pd_data.empty:
-                st.dataframe(pd_data, use_container_width=True, hide_index=True, height=400)
+                st.dataframe(pd_data, use_container_width=True, hide_index=True, height=450)
+                st.caption("**portfolio_ret** = modellens månadsavkastning, **benchmark_ret** = benchmarkens, **alpha** = skillnaden")
 
         with tab3:
             pd_data = result.get("period_details", pd.DataFrame())
             st.download_button("📥 Ladda ner CSV", data=pd_data.to_csv(index=False) if not pd_data.empty else "", file_name=f"backtest_{datetime.now():%Y-%m-%d}.csv", mime="text/csv", use_container_width=True)
-            if st.button("🤖 AI-analys", key="bt_ai", use_container_width=True):
+            if st.button("🤖 AI-analys av resultaten", key="bt_ai", use_container_width=True):
                 with st.spinner("Analyserar..."):
                     try:
-                        c = {"annualiserad": result["annualiserad_port"], "sharpe": result["sharpe_ratio"], "hit_rate": result.get("hit_rate_pct"), "max_dd": result["max_drawdown_pct"], "alpha": result.get("alpha_annualiserad")}
-                        r = ai_analysis.ai_chat("Analysera backtestresultatet och ge rekommendationer", context=ai_analysis._safe_json(c, ensure_ascii=False), provider=_get_provider(), depth=_get_depth())
+                        c = {"annualiserad": result["annualiserad_port"], "sharpe": result["sharpe_ratio"], "hit_rate": result.get("hit_rate_pct"), "max_dd": result["max_drawdown_pct"], "alpha": result.get("alpha_annualiserad"), "benchmark": bench}
+                        r = ai_analysis.ai_chat("Analysera backtestresultatet och ge rekommendationer på svenska. Var noga med att nämna begränsningarna (survivorship bias etc).", context=ai_analysis._safe_json(c, ensure_ascii=False), provider=_get_provider(), depth=_get_depth())
                         with st.container(border=True):
                             st.markdown(r)
                     except Exception as e:
                         st.error(f"❌ {e}")
 
     elif result is not None:
-        st.warning("Inga resultat. Försök med fler tickers eller längre period.")
+        st.warning("Inga resultat – försök med fler tickers eller längre period.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
