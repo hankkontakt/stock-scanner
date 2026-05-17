@@ -35,6 +35,7 @@ from core.email_template import send_email, build_section_header, build_pnl_cell
 from core.data_fetcher import fetch_prices_only, update_scored_with_prices, fetch_universe_data
 from core.scoring import score_universe
 from core import ai_analysis
+from core.country_flags import flag_for_ticker
 
 # ── Sökvägar ─────────────────────────────────────────────────────────────────
 DATA_DIR = ROOT / "data"
@@ -645,7 +646,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         if sl_warnings:
             report_lines.append(_section_header("⚠️ Stop-loss varningar"))
             for h in sl_warnings:
-                report_lines.append(f"- 🔴 **{h['ticker']}** – {h['pnl_pct']:+.1f}% sedan inköp (stop-loss vid {h['stop_loss_pct']:+.1f}%)")
+                report_lines.append(f"- 🔴 **{flag_for_ticker(h['ticker'])} {h['ticker']}** – {h['pnl_pct']:+.1f}% sedan inköp (stop-loss vid {h['stop_loss_pct']:+.1f}%)")
             report_lines.append("")
 
         # ── Portfölj ─────────────────────────────────────────────────────
@@ -658,7 +659,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 score_val = h.get('score')
                 score_str = f"{score_val:.0f}" if score_val is not None else "—"
                 entry_str = h.get('entry', '—') or '—'
-                report_lines.append(f"- {emoji} **{h['ticker']}** – {pnl} | Score {score_str} | {entry_str}{sl_info}")
+                report_lines.append(f"- {emoji} **{flag_for_ticker(h['ticker'])} {h['ticker']}** – {pnl} | Score {score_str} | {entry_str}{sl_info}")
         else:
             report_lines.append("*(Inga innehav i portföljen)*")
 
@@ -672,7 +673,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         if top_10:
             report_lines.append(_section_header("🏆 Dagens hetaste"))
             for t in top_10[:5]:
-                report_lines.append(f"- **{t['ticker']}** – Score {t['score']:.0f} | {t['entry']} | {t['sector']}")
+                report_lines.append(f"- **{flag_for_ticker(t['ticker'])} {t['ticker']}** – Score {t['score']:.0f} | {t['entry']} | {t['sector']}")
 
         # ── Opportunities ────────────────────────────────────────────────
         if opportunities:
@@ -715,7 +716,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 emoji = "🟢" if (h.get("pnl_pct") or 0) >= 0 else "🔴"
                 pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "—"
                 score_str = f"{h['score']:.0f}" if h.get('score') is not None else "—"
-                report_lines.append(f"- {emoji} **{h['ticker']}** – {pnl} | Score {score_str} | Rekommendation: {_get_rec(h)}")
+                report_lines.append(f"- {emoji} **{flag_for_ticker(h['ticker'])} {h['ticker']}** – {pnl} | Score {score_str} | Rekommendation: {_get_rec(h)}")
         else:
             report_lines.append("*(Inga innehav i portföljen)*")
 
@@ -723,9 +724,9 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         if top_10 or bottom_5:
             report_lines.append(_section_header("🏆 Dagens topp & botten"))
             if top_10:
-                report_lines.append("**Bästa:** " + ", ".join(f"{t['ticker']} ({t['score']:.0f})" for t in top_10[:5]))
+                report_lines.append("**Bästa:** " + ", ".join(f"{flag_for_ticker(t['ticker'])} {t['ticker']} ({t['score']:.0f})" for t in top_10[:5]))
             if bottom_5:
-                report_lines.append("**Sämsta:** " + ", ".join(f"{b['ticker']} ({b['score']:.0f})" for b in bottom_5[:5]))
+                report_lines.append("**Sämsta:** " + ", ".join(f"{flag_for_ticker(b['ticker'])} {b['ticker']} ({b['score']:.0f})" for b in bottom_5[:5]))
 
         # ── Opportunities ────────────────────────────────────────────────
         if opportunities:
@@ -774,7 +775,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 emoji = "🟢" if rec in ("BEHÅLL", "KÖP MER") else "🟡" if rec == "BEVAKA" else "🔴"
                 pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "—"
                 score_str = f"{h['score']:.0f}" if h.get('score') is not None else "—"
-                report_lines.append(f"- {emoji} **{h['ticker']}** – {pnl} | Score {score_str} | **{rec}**")
+                report_lines.append(f"- {emoji} **{flag_for_ticker(h['ticker'])} {h['ticker']}** – {pnl} | Score {score_str} | **{rec}**")
         else:
             report_lines.append("*(Inga innehav)*")
 
@@ -782,13 +783,13 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         if top_10:
             report_lines.append(_section_header("🏆 Topp-10 köprekommendationer"))
             for i, t in enumerate(top_10[:10], 1):
-                report_lines.append(f"  {i}. **{t['ticker']}** – Score {t['score']:.0f} | {t['entry']} | {t['sector']}")
+                report_lines.append(f"  {i}. **{flag_for_ticker(t['ticker'])} {t['ticker']}** – Score {t['score']:.0f} | {t['entry']} | {t['sector']}")
 
         # ── Bottom-5 ─────────────────────────────────────────────────────
         if bottom_5:
             report_lines.append(_section_header("🔴 Bottom-5 varningar"))
             for b in bottom_5[:5]:
-                report_lines.append(f"- **{b['ticker']}** – Score {b['score']:.0f} | {b['entry']} | {b['sector']}")
+                report_lines.append(f"- **{flag_for_ticker(b['ticker'])} {b['ticker']}** – Score {b['score']:.0f} | {b['entry']} | {b['sector']}")
 
         # ── Opportunities ────────────────────────────────────────────────
         if opportunities:
