@@ -79,7 +79,8 @@ _STATIC_FIELDS = frozenset({
     "debtToEquity", "currentRatio", "quickRatio",
     "freeCashflow", "totalCash", "totalDebt", "totalRevenue",
     "heldPercentInsiders", "heldPercentInstitutions",
-    "payoutRatio",
+    "payoutRatio", "dividendRate", "fiveYearAvgDividendYield",
+    "lastDividendValue", "exDividendDate",
 })
 
 
@@ -378,8 +379,12 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         "total_debt": info.get("totalDebt"),
 
         # Dividend
-        "dividend_yield": info.get("dividendYield"),
-        "payout_ratio": info.get("payoutRatio"),
+        "dividend_yield":       info.get("dividendYield"),
+        "payout_ratio":         info.get("payoutRatio"),
+        "dividend_rate":        info.get("dividendRate"),
+        "div_yield_5y_avg":     info.get("fiveYearAvgDividendYield"),
+        "last_dividend_value":  info.get("lastDividendValue"),
+        "ex_dividend_date":     info.get("exDividendDate"),
 
         # Risk
         "beta": info.get("beta"),

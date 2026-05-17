@@ -203,6 +203,189 @@ def _quick_data_cards(row: pd.Series):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# UTDELNINGSANALYS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _render_dividend_analysis(row: pd.Series):
+    """Visar utdelningsanalys med historik, nyckeltal och säkerhetsbedömning."""
+    import yfinance as yf
+    import plotly.graph_objects as go
+
+    ticker = str(row.get("ticker", ""))
+    yld    = row.get("dividend_yield")
+    pr     = row.get("payout_ratio")
+    fcf    = row.get("free_cash_flow")
+    div_rate  = row.get("dividend_rate")
+    yld_5y    = row.get("div_yield_5y_avg")
+    score_div = row.get("score_dividend")
+
+    # ── Ingen utdelning → kort info ───────────────────────────────────────────
+    no_div = (yld is None or pd.isna(yld) or float(yld) == 0)
+    if no_div and (div_rate is None or pd.isna(div_rate)):
+        st.info("📭 Bolaget betalar ingen utdelning.")
+        misc = {
+            "Utdelningsscore": _safe_val(score_div, "dec0"),
+            "Sektor": str(row.get("sector", "—")),
+            "Industri": str(row.get("industry", "—")),
+            "Land": str(row.get("country", "—")),
+        }
+        st.dataframe(pd.DataFrame(misc.items(), columns=["Mått", "Värde"]),
+                     use_container_width=True, hide_index=True)
+        return
+
+    # ── KPI-kort ──────────────────────────────────────────────────────────────
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("💰 Direktavkastning", f"{float(yld)*100:.2f}%" if yld and not pd.isna(yld) else "—")
+    c2.metric("📊 5Y snittyield",    f"{float(yld_5y):.2f}%" if yld_5y and not pd.isna(yld_5y) else "—")
+    c3.metric("💵 Utd/aktie (årl.)", f"{float(div_rate):.2f}" if div_rate and not pd.isna(div_rate) else "—")
+    c4.metric("🎯 Utdelningsscore",  f"{float(score_div):.0f}/100" if score_div and not pd.isna(score_div) else "—")
+
+    # ── Säkerhetsbedömning ────────────────────────────────────────────────────
+    st.markdown("#### 🔒 Utdelningens säkerhet")
+    safety_rows = []
+
+    # Payout ratio
+    if pr and not pd.isna(pr):
+        pr_f = float(pr) * 100
+        if pr_f > 100:
+            pr_icon, pr_label = "🔴", f"{pr_f:.0f}% — Utdelningen överstiger vinsten! Hög risk."
+        elif pr_f > 80:
+            pr_icon, pr_label = "🟡", f"{pr_f:.0f}% — Ansträngd utdelningsandel, bevaka."
+        elif pr_f > 0:
+            pr_icon, pr_label = "🟢", f"{pr_f:.0f}% — Hållbar utdelningsandel."
+        else:
+            pr_icon, pr_label = "⚪", "—"
+        safety_rows.append(("Payout Ratio (vinst)", f"{pr_icon} {pr_label}"))
+
+    # FCF coverage
+    if fcf and not pd.isna(fcf) and div_rate and not pd.isna(div_rate):
+        try:
+            shares = row.get("sharesOutstanding") or row.get("shares_outstanding")
+            if shares and not pd.isna(shares):
+                total_div = float(div_rate) * float(shares)
+                fcf_cov = float(fcf) / total_div if total_div > 0 else None
+                if fcf_cov is not None:
+                    if fcf_cov < 1.0:
+                        fcf_icon, fcf_label = "🔴", f"{fcf_cov:.1f}× — Fritt kassaflöde täcker EJ utdelningen."
+                    elif fcf_cov < 1.5:
+                        fcf_icon, fcf_label = "🟡", f"{fcf_cov:.1f}× — Liten marginal i kassaflödet."
+                    else:
+                        fcf_icon, fcf_label = "🟢", f"{fcf_cov:.1f}× — Utdelningen täcks väl av fritt kassaflöde."
+                    safety_rows.append(("FCF-täckning", f"{fcf_icon} {fcf_label}"))
+        except Exception:
+            pass
+
+    # Yield vs 5Y average
+    if yld and not pd.isna(yld) and yld_5y and not pd.isna(yld_5y):
+        try:
+            diff = (float(yld) * 100) - float(yld_5y)
+            if diff > 1.5:
+                y_icon, y_label = "🟡", f"Yield {diff:+.1f}pp över 5-årssnitt — kan vara utdelningstrap eller pressad aktiekurs."
+            elif diff < -1.5:
+                y_icon, y_label = "🟢", f"Yield {diff:+.1f}pp under 5-årssnitt — aktien värderas relativt högt."
+            else:
+                y_icon, y_label = "🟢", f"Yield nära 5-årssnitt ({float(yld_5y):.1f}%) — normalt historiskt läge."
+            safety_rows.append(("Yield vs historik", f"{y_icon} {y_label}"))
+        except Exception:
+            pass
+
+    if safety_rows:
+        st.dataframe(pd.DataFrame(safety_rows, columns=["Mått", "Bedömning"]),
+                     use_container_width=True, hide_index=True)
+
+    # ── Utdelningshistorik ────────────────────────────────────────────────────
+    st.markdown("#### 📅 Utdelningshistorik (senaste 7 åren)")
+    try:
+        t = yf.Ticker(ticker)
+        divs = t.dividends
+        if divs is not None and not divs.empty:
+            # Aggregera till årsvis
+            divs.index = pd.to_datetime(divs.index).tz_localize(None)
+            annual = divs.resample("YE").sum()
+            annual = annual[annual > 0].tail(7)
+
+            if not annual.empty:
+                years = [str(d.year) for d in annual.index]
+                amounts = annual.values.tolist()
+
+                # Beräkna tillväxttakt
+                if len(amounts) >= 2:
+                    cagr_1y = (amounts[-1] / amounts[-2] - 1) * 100 if amounts[-2] > 0 else None
+                    if len(amounts) >= 4:
+                        cagr_3y = ((amounts[-1] / amounts[-4]) ** (1/3) - 1) * 100 if amounts[-4] > 0 else None
+                    else:
+                        cagr_3y = None
+                    if len(amounts) >= 6:
+                        cagr_5y = ((amounts[-1] / amounts[-6]) ** (1/5) - 1) * 100 if amounts[-6] > 0 else None
+                    else:
+                        cagr_5y = None
+                else:
+                    cagr_1y = cagr_3y = cagr_5y = None
+
+                # Färgkoda staplar — grön = tillväxt, röd = minskning
+                bar_colors = []
+                for i, a in enumerate(amounts):
+                    if i == 0 or amounts[i-1] == 0:
+                        bar_colors.append("#42a5f5")
+                    elif a >= amounts[i-1]:
+                        bar_colors.append("#22c55e")
+                    else:
+                        bar_colors.append("#ef4444")
+
+                fig = go.Figure(go.Bar(
+                    x=years, y=amounts,
+                    marker_color=bar_colors,
+                    text=[f"{a:.2f}" for a in amounts],
+                    textposition="outside",
+                ))
+                fig.update_layout(
+                    template="plotly_dark", paper_bgcolor="#131722", plot_bgcolor="#1e2230",
+                    height=260, margin=dict(t=24, b=16, l=16, r=16),
+                    yaxis=dict(title="Utdelning per aktie"),
+                    showlegend=False,
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Tillväxttakter
+                gr_cols = st.columns(3)
+                gr_cols[0].metric("Tillväxt 1Y",
+                    f"{cagr_1y:+.1f}%" if cagr_1y is not None else "—",
+                    delta_color="normal")
+                gr_cols[1].metric("Tillväxt 3Y (CAGR)",
+                    f"{cagr_3y:+.1f}%" if cagr_3y is not None else "—",
+                    delta_color="normal")
+                gr_cols[2].metric("Tillväxt 5Y (CAGR)",
+                    f"{cagr_5y:+.1f}%" if cagr_5y is not None else "—",
+                    delta_color="normal")
+
+                # Konsistens
+                n_years = len(amounts)
+                n_growing = sum(1 for i in range(1, len(amounts)) if amounts[i] >= amounts[i-1])
+                consistency = n_growing / (n_years - 1) * 100 if n_years > 1 else 0
+                if consistency >= 80:
+                    st.success(f"✅ Konsistent utdelningstillväxt {n_growing}/{n_years-1} år ({consistency:.0f}%)")
+                elif consistency >= 50:
+                    st.info(f"📊 Blandad utdelningshistorik {n_growing}/{n_years-1} år med tillväxt ({consistency:.0f}%)")
+                else:
+                    st.warning(f"⚠️ Ojämn utdelningshistorik — minskade {n_years-1-n_growing} av {n_years-1} år")
+            else:
+                st.info("Ingen utdelningshistorik tillgänglig.")
+        else:
+            st.info("Ingen utdelningshistorik hittades via yfinance.")
+    except Exception as e:
+        st.caption(f"Kunde inte hämta utdelningshistorik: {e}")
+
+    # ── Övrigt ────────────────────────────────────────────────────────────────
+    misc_data = {
+        "Sektor":  str(row.get("sector", "—")),
+        "Industri": str(row.get("industry", "—")),
+        "Land":    str(row.get("country", "—")),
+    }
+    st.dataframe(pd.DataFrame(misc_data.items(), columns=["Mått", "Värde"]),
+                 use_container_width=True, hide_index=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # 3. DETALJERAD DATA-TABELL
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -278,20 +461,7 @@ def _detail_table(row: pd.Series):
             )
 
         with tab_div:
-            div_data = {
-                "Utdelningsyield": _safe_val(row.get("dividend_yield"), "pct"),
-                "Payout Ratio": _safe_val(row.get("payout_ratio"), "pct"),
-                "Utdelningsscore": _safe_val(row.get("score_dividend"), "dec0"),
-                "Sektor": str(row.get("sector", "—")),
-                "Industri": str(row.get("industry", "—")),
-                "Land": str(row.get("country", "—")),
-                "Koncifens": str(row.get("confidence_label", "—")),
-                "RS-labb": str(row.get("rs_label", "—")),
-            }
-            st.dataframe(
-                pd.DataFrame(div_data.items(), columns=["Mått", "Värde"]),
-                use_container_width=True, hide_index=True,
-            )
+            _render_dividend_analysis(row)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
