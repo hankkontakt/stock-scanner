@@ -1512,15 +1512,18 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
 # SIDA 4 – PORTFÖLJ
 # ══════════════════════════════════════════════════════════════════════════════
 
-def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list):
+def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
+                   sc_df: pd.DataFrame = None):
     st.title("💼 Portfölj & Bevakningslista")
 
     if holdings.empty:
         st.info("Ingen portföljdata. Lägg till innehav i `data/holdings.csv`.")
     else:
-        # Berika med scan-data
-        if not df.empty and "ticker" in df.columns:
-            score_data = df.set_index("ticker").to_dict("index")
+        # Berika med scan-data – slå ihop universum + småbolag så att alla tickers hittas
+        frames = [f for f in [df, sc_df] if f is not None and not f.empty and "ticker" in f.columns]
+        if frames:
+            combined = pd.concat(frames, ignore_index=True).drop_duplicates(subset="ticker", keep="first")
+            score_data = combined.set_index("ticker").to_dict("index")
         else:
             score_data = {}
 
@@ -1578,23 +1581,26 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list):
                      column_config=col_cfg)
 
         # Rekommendationer
-        if score_data:
-            st.markdown("---")
-            st.subheader("💡 Rekommendationer (baserat på senaste scan)")
-            for r in sorted(rows, key=lambda x: x.get("Score") or 0, reverse=True):
-                t  = r["Ticker"]
-                sc = score_data.get(t, {})
-                entry = sc.get("entry_signal", "—")
-                score = sc.get("score_total", 0) or 0
-                if score >= 70 and entry == "STARK":
-                    icon = "🟢"; rec = "BEHÅLL STARKT / KÖP MER"
-                elif score >= 55:
-                    icon = "🔵"; rec = "BEHÅLL"
-                elif score >= 40:
-                    icon = "🟡"; rec = "BEVAKA"
-                else:
-                    icon = "🔴"; rec = "MINSKA / SÄLJ"
-                st.markdown(f"{icon} **`{t}`** — {rec} (score {score:.0f})")
+        st.markdown("---")
+        st.subheader("💡 Rekommendationer (baserat på senaste scan)")
+        for r in sorted(rows, key=lambda x: x.get("Score") or 0, reverse=True):
+            t  = r["Ticker"]
+            sc = score_data.get(t, {})
+            if not sc:
+                # Ticker finns inte i något scannat universum – visa neutral rad
+                st.markdown(f"⚪ **`{t}`** — Ej i senaste scan (kör en ny scanning för att få rekommendation)")
+                continue
+            entry = sc.get("entry_signal", "—")
+            score = sc.get("score_total", 0) or 0
+            if score >= 70 and entry == "STARK":
+                icon = "🟢"; rec = "BEHÅLL STARKT / KÖP MER"
+            elif score >= 55:
+                icon = "🔵"; rec = "BEHÅLL"
+            elif score >= 40:
+                icon = "🟡"; rec = "BEVAKA"
+            else:
+                icon = "🔴"; rec = "MINSKA / SÄLJ"
+            st.markdown(f"{icon} **`{t}`** — {rec} (score {score:.0f})")
 
         # Sektorpaj
         if len(rows) > 1:
@@ -4795,7 +4801,7 @@ def main():
         page_watchlist_detail(df, watchlist)
 
     elif page == "💼 Portfölj":
-        page_portfolio(df, holdings, watchlist)
+        page_portfolio(df, holdings, watchlist, sc_df=sc_df)
 
     elif page == "📄 Paper Trading":
         page_paper_trading()
