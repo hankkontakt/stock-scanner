@@ -328,7 +328,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
         # MARKNAD / PORTFÖLJ / ANALYS – använder enkla knappar (inga radio/on_change) för att
         # undvika att st.rerun() från andra widgets ändrar nav_page.
         with st.expander("📈 MARKNAD", expanded=True):
-            for label in ["🔍 Veckoscanner", "🏦 Småbolag", "🔍 Aktie-sök", "⭐ Bevakningar", "🏭 Sektorrotation", "📈 Backtesting"]:
+            for label in ["🔍 Veckoscanner", "🏦 Småbolag", "🔍 Aktie-sök", "⭐ Bevakningar", "🌍 Globala marknader", "🏭 Sektorrotation", "📈 Backtesting"]:
                 if st.button(label, key=f"sb_{label}", use_container_width=True):
                     st.session_state["nav_page"] = label
                     st.rerun()
@@ -5045,6 +5045,9 @@ def main():
 
     elif page == "⭐ Bevakningar":
         page_watchlist_detail(df, watchlist)
+
+    elif page == "🌍 Globala marknader":
+        page_global_markets()
 
     elif page == "💼 Portfölj":
         page_portfolio(df, holdings, watchlist, sc_df=sc_df)
