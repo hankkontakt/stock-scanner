@@ -324,30 +324,30 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             st.session_state["nav_page"] = "📊 Översikt"
             st.rerun()
 
-        # MARKNAD
+        # MARKNAD / PORTFÖLJ / ANALYS — on_change uppdaterar nav_page bara när
+        # användaren faktiskt klickar, inte vid varje rerun (löser override-buggen).
+        _MARKNAD     = ["🔍 Veckoscanner", "🏦 Småbolag", "🏭 Sektorrotation", "📈 Backtesting"]
+        _PORTFOLIO   = ["💼 Portfölj", "📄 Paper Trading", "🤖 AI Paper Trading", "🚨 Larm & Notiser"]
+        _ANALYS_OPTS = ["📈 Teknisk analys", "🤖 AI"]
+        _cur = st.session_state["nav_page"]
+
         with st.expander("📈 MARKNAD", expanded=True):
-            _m = st.radio("", ["🔍 Veckoscanner", "🏦 Småbolag", "🏭 Sektorrotation", "📈 Backtesting"],
-                          key="nav_market", label_visibility="collapsed",
-                          index=["🔍 Veckoscanner", "🏦 Småbolag", "🏭 Sektorrotation", "📈 Backtesting"].index(
-                              st.session_state["nav_page"]) if st.session_state["nav_page"] in ["🔍 Veckoscanner", "🏦 Småbolag", "🏭 Sektorrotation", "📈 Backtesting"] else 0)
-            st.session_state["nav_page"] = _m
+            st.radio("", _MARKNAD, key="nav_market", label_visibility="collapsed",
+                     index=_MARKNAD.index(_cur) if _cur in _MARKNAD else 0,
+                     on_change=lambda: st.session_state.update(
+                         {"nav_page": st.session_state["nav_market"]}))
 
-        # PORTFÖLJ
         with st.expander("💼 PORTFÖLJ", expanded=True):
-            _portfolio_opts = ["💼 Portfölj", "📄 Paper Trading", "🤖 AI Paper Trading", "🚨 Larm & Notiser"]
-            _p = st.radio("", _portfolio_opts,
-                          key="nav_portfolio", label_visibility="collapsed",
-                          index=_portfolio_opts.index(st.session_state["nav_page"])
-                          if st.session_state["nav_page"] in _portfolio_opts else 0)
-            st.session_state["nav_page"] = _p
+            st.radio("", _PORTFOLIO, key="nav_portfolio", label_visibility="collapsed",
+                     index=_PORTFOLIO.index(_cur) if _cur in _PORTFOLIO else 0,
+                     on_change=lambda: st.session_state.update(
+                         {"nav_page": st.session_state["nav_portfolio"]}))
 
-        # ANALYS
         with st.expander("📈 ANALYS", expanded=False):
-            _a = st.radio("", ["📈 Teknisk analys", "🤖 AI"],
-                          key="nav_analys", label_visibility="collapsed",
-                          index=["📈 Teknisk analys", "🤖 AI"].index(
-                              st.session_state["nav_page"]) if st.session_state["nav_page"] in ["📈 Teknisk analys", "🤖 AI"] else 0)
-            st.session_state["nav_page"] = _a
+            st.radio("", _ANALYS_OPTS, key="nav_analys", label_visibility="collapsed",
+                     index=_ANALYS_OPTS.index(_cur) if _cur in _ANALYS_OPTS else 0,
+                     on_change=lambda: st.session_state.update(
+                         {"nav_page": st.session_state["nav_analys"]}))
 
         # Admin – alltid synlig längst ner
         if st.button("🔧 Admin", key="nav_admin", use_container_width=True):
@@ -967,14 +967,26 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
     if "Piotroski" in display.columns:
         col_cfg["Piotroski"] = st.column_config.NumberColumn("Piotroski", format="%.0f/9")
 
-    st.dataframe(
+    event = st.dataframe(
         display,
         use_container_width=True,
         height=min(700, max(350, len(display) * 36 + 40)),
         column_config=col_cfg,
         hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="main_ranking_table",
     )
-    st.caption(f"Visar {len(display)} bolag")
+    st.caption(f"Visar {len(display)} bolag — klicka på en rad för detaljer")
+
+    if event and event.selection and event.selection.rows:
+        sel_ticker = display.iloc[event.selection.rows[0]]["Ticker"]
+        sel_row = df[df["ticker"] == sel_ticker]
+        if not sel_row.empty:
+            with st.expander(f"🔍 Detaljvy: {sel_ticker}", expanded=True):
+                render_stock_detail(sel_ticker, row=sel_row.iloc[0], df=df,
+                                    show_ai=True, show_news=False,
+                                    show_chart=True, show_detail_data=True)
 
     # ── "Fråga AI om denna aktie" per rad ──────────────────────────────────
     st.markdown("---")
@@ -1334,8 +1346,10 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
                     "AI 30d-ret", format="%.1f%%",
                     help="ML-modellens prediktion av avkastning kommande 30 dagar"
                 )
-            st.dataframe(rank_disp, use_container_width=True, hide_index=True,
-                         column_config=col_cfg, height=600)
+            sc_event = st.dataframe(rank_disp, use_container_width=True, hide_index=True,
+                                    column_config=col_cfg, height=600,
+                                    on_select="rerun", selection_mode="single-row",
+                                    key="sc_ranking_table")
 
             c1, c2 = st.columns(2)
             with c1:
@@ -1344,14 +1358,11 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
                 st.plotly_chart(score_distribution_chart(filt, score_col), use_container_width=True)
 
             # ── Stock Detail Panel ──────────────────────────────────────────
-            st.markdown("---")
-            st.subheader("📈 Detaljvy")
-            if not filt.empty and "ticker" in filt.columns:
-                sc_detail_ticker = st.selectbox("Välj smallcap-aktie", sorted(filt["ticker"].tolist()),
-                                                key="sc_detail_ticker")
+            if sc_event and sc_event.selection and sc_event.selection.rows:
+                sc_detail_ticker = rank_disp.iloc[sc_event.selection.rows[0]]["Ticker"]
                 sc_row = sc_df[sc_df["ticker"] == sc_detail_ticker]
                 if not sc_row.empty:
-                    with st.expander("🔍 Visa detaljvy", expanded=False):
+                    with st.expander(f"🔍 Detaljvy: {sc_detail_ticker}", expanded=True):
                         render_stock_detail(
                             sc_detail_ticker, row=sc_row.iloc[0], df=sc_df,
                             show_ai=True, show_news=False, show_chart=True, show_detail_data=True,
