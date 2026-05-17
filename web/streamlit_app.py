@@ -3381,6 +3381,12 @@ def page_backtesting():
     """Backtesting – testa scoringmodellen historiskt."""
     st.title("📈 Backtesting")
     st.caption("Testa hur scoringmodellen presterat historiskt. Baseras på momentum (12m, 6m, 3m, 52v-high). Första körningen tar 1-2 min.")
+    st.info(
+        "⚠️ **Tolkningsvarning:** Siffrorna inkluderar 0,2 % transaktionskostnad per omsatt position men lider fortfarande av "
+        "**survivorship bias** (bara aktier som finns kvar idag ingår) och **simplified scoring** (bara tekniska faktorer). "
+        "Verklig avkastning kan vara väsentligt lägre. Använd som relativ jämförelse – inte som absolut prognos.",
+        icon=None,
+    )
 
     col_yr, col_top, col_bench, col_run = st.columns([1, 1, 1, 1])
     with col_yr:
