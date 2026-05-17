@@ -36,7 +36,7 @@ from core import config
 # KONFIGURATION
 # ═══════════════════════════════════════════════════════════════
 
-BACKTEST_TICKERS   = config.UNIVERSE[:100]   # Begränsa för hastighet
+BACKTEST_TICKERS   = config.UNIVERSE[:20]    # Begränsa för hastighet & reliability
 REBALANCE_FREQ     = "ME"                    # Månatlig rebalansering
 HOLDING_PERIOD_DAYS = 21                     # ~1 månad
 BENCHMARK          = "SPY"                   # S&P 500 ETF som jämförelse
@@ -50,36 +50,43 @@ LOOKBACK_YEARS     = 3                       # År att backtesta
 
 def fetch_all_prices(tickers: list, years: int = 4) -> pd.DataFrame:
     """
-    Hämtar all prishistorik för alla tickers på en gång (effektivt).
+    Hämtar prishistorik EN AKTIE I TAGET (mer robust mot timeouts).
     Returnerar DataFrame med adjusted close prices.
     """
+    import time as _time
     print(f"  Laddar ned prisdata för {len(tickers)} aktier ({years} år)...")
     period = f"{years+1}y"
-
-    try:
-        data = yf.download(
-            tickers,
-            period=period,
-            auto_adjust=True,
-            progress=False,
-            threads=True,
-        )
-        if isinstance(data.columns, pd.MultiIndex):
-            prices = data["Close"]
-        else:
-            prices = data[["Close"]]
-            prices.columns = tickers[:1]
-
-        # Ta bort aktier med för lite data
-        min_rows = 252 * years * 0.7
-        prices   = prices.dropna(axis=1, thresh=int(min_rows))
-
-        print(f"  ✓ Prisdata hämtad: {len(prices.columns)} aktier × {len(prices)} dagar")
-        return prices
-
-    except Exception as e:
-        print(f"  ⚠ Fel vid nedladdning: {e}")
+    
+    all_data = {}
+    failed = 0
+    for i, ticker in enumerate(tickers):
+        try:
+            data = yf.download(ticker, period=period, auto_adjust=True, progress=False)
+            if data is not None and not data.empty:
+                close = data["Close"] if "Close" in data.columns else data.iloc[:, 0]
+                if isinstance(close, pd.DataFrame):
+                    close = close.iloc[:, 0]
+                all_data[ticker] = close
+            else:
+                failed += 1
+        except Exception:
+            failed += 1
+        # Visa progress var 10:e ticker
+        if (i + 1) % 10 == 0:
+            print(f"    {i+1}/{len(tickers)} ({failed} misslyckades)...")
+        _time.sleep(0.15)  # Rate limiting
+    
+    if not all_data:
+        print(f"  ⚠ Alla {len(tickers)} aktier misslyckades!")
         return pd.DataFrame()
+    
+    prices = pd.DataFrame(all_data)
+    # Ta bort aktier med för lite data
+    min_rows = 252 * years * 0.7
+    prices = prices.dropna(axis=1, thresh=int(min_rows))
+    
+    print(f"  ✓ Prisdata hämtad: {len(prices.columns)}/{len(tickers)} aktier × {len(prices)} dagar ({failed} misslyckades)")
+    return prices
 
 
 # ═══════════════════════════════════════════════════════════════
