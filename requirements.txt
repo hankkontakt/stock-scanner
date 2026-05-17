@@ -17,6 +17,14 @@ plotly>=5.18.0,<6.0.0
 Pillow>=10.0.0,<12.0.0
 cryptography>=42.0.0
 
+# === ML-stack (för core/ml_predictor) ===
+# scikit-learn räcker som CPU-baseline; xgboost ger bättre prestanda när tillgängligt
+scikit-learn>=1.3.0,<2.0.0
+xgboost>=2.0.0,<3.0.0
+joblib>=1.3.0,<2.0.0
+pyarrow>=14.0.0,<22.0.0
+scipy>=1.11.0,<2.0.0
+
 # === Dev/test dependencies ===
 # Installera med: pip install -r requirements.txt[dev]
 # eller: pip install -e ".[dev]"

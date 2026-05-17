@@ -496,12 +496,16 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     # Scored universe
     if mode in ("morning", "evening"):
         scored = _load_latest_scored("scored_universe_*.csv")
+        _ml_universe = "universe"
     elif mode == "weekly":
         scored = _load_latest_scored("scored_universe_*.csv")
+        _ml_universe = "universe"
     elif mode == "smallcap":
         scored = _load_latest_scored("smallcap_scored_*.csv")
+        _ml_universe = "smallcap"
     else:
         scored = pd.DataFrame()
+        _ml_universe = None
 
     # ═══════════════════════════════════════════════════════════════════════
     # 1b. DAGLIG RE-SCORING (endast för morning/evening)
@@ -528,6 +532,39 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 logger.warning("  ⚠ Inga priser kunde hämtas – använder gårdagens data")
         except Exception as e:
             logger.warning(f"  ⚠ Re-scoring misslyckades: {e} – använder gårdagens data")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # 1c. ML-PREDIKTION (om modell finns)
+    #     Lägger till predicted_return + ml_rank-kolumner och sparar back.
+    # ═══════════════════════════════════════════════════════════════════════
+    if _ml_universe and not scored.empty and "ticker" in scored.columns:
+        try:
+            from core.ml_predictor import predict_returns
+            scored_ml = predict_returns(scored, _ml_universe)
+            if "predicted_return" in scored_ml.columns:
+                scored = scored_ml
+                logger.info(f"  🤖 ML-prediktioner tillagda för {_ml_universe} ({len(scored)} rader)")
+                # Spara back så Streamlit-appen kan visa kolumnen
+                if _ml_universe == "universe":
+                    csv_path = REPORT_DIR / f"scored_universe_{date_str}.csv"
+                else:
+                    csv_path = REPORT_DIR / f"smallcap_scored_{date_str}.csv"
+                scored.to_csv(csv_path, index=False)
+        except Exception as e:
+            logger.warning(f"  ⚠ ML-prediktion hoppades över: {e}")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # 1d. ML PAPER TRADING (om modell finns)
+    #     Registrera dagens topp-N enligt ML som virtuella köp.
+    # ═══════════════════════════════════════════════════════════════════════
+    if _ml_universe and not scored.empty and "predicted_return" in scored.columns:
+        try:
+            from core.ml_paper_trading import record_daily_signals
+            n_recorded = record_daily_signals(scored, universe=_ml_universe, top_n=10)
+            if n_recorded:
+                logger.info(f"  📈 ML paper trading: {n_recorded} signaler registrerade ({_ml_universe})")
+        except Exception as e:
+            logger.warning(f"  ⚠ ML paper trading hoppades över: {e}")
 
     # Portfölj & watchlist
     holdings = _load_portfolio()

@@ -1,0 +1,122 @@
+name: 🤖 Train ML Models
+
+on:
+  schedule:
+    # Söndag 03:00 UTC = 04:00/05:00 CET. Tränar båda modellerna en gång i veckan.
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      universe:
+        description: "Vilket universum att träna"
+        required: true
+        default: "both"
+        type: choice
+        options: [both, universe, smallcap]
+      years:
+        description: "Antal år historik att bygga dataset från"
+        required: true
+        default: "5"
+      max_tickers:
+        description: "Begränsa tickers (för test, lämna tomt för full)"
+        required: false
+        default: ""
+      rebuild_dataset:
+        description: "Bygg om dataset från scratch (annars använd cachad)"
+        type: boolean
+        default: true
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONPATH: .
+
+    steps:
+      - name: 📥 Hämta kod
+        uses: actions/checkout@v4
+
+      - name: 🐍 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 📦 Installera beroenden + ML-toolkit
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install xgboost scikit-learn joblib pyarrow scipy
+
+      - name: 📂 Återställ ML-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/ml
+            data/cache
+          key: ml-cache-${{ runner.os }}-${{ github.event.inputs.years || '5' }}
+          restore-keys: |
+            ml-cache-${{ runner.os }}-
+
+      - name: 🏗️  Bygg dataset (universum)
+        if: ${{ github.event.inputs.universe == 'universe' || github.event.inputs.universe == 'both' || github.event_name == 'schedule' }}
+        run: |
+          FLAGS=""
+          if [ -n "${{ github.event.inputs.max_tickers }}" ]; then
+            FLAGS="--max-tickers ${{ github.event.inputs.max_tickers }}"
+          fi
+          if [ "${{ github.event.inputs.rebuild_dataset }}" = "false" ] && [ -f data/ml/universe_training.parquet ]; then
+            echo "Hoppar över rebuild (cachad fil finns)"
+          else
+            python -m scripts.build_ml_dataset --universe universe --years ${{ github.event.inputs.years || '5' }} $FLAGS
+          fi
+
+      - name: 🏗️  Bygg dataset (smallcap)
+        if: ${{ github.event.inputs.universe == 'smallcap' || github.event.inputs.universe == 'both' || github.event_name == 'schedule' }}
+        run: |
+          FLAGS=""
+          if [ -n "${{ github.event.inputs.max_tickers }}" ]; then
+            FLAGS="--max-tickers ${{ github.event.inputs.max_tickers }}"
+          fi
+          if [ "${{ github.event.inputs.rebuild_dataset }}" = "false" ] && [ -f data/ml/smallcap_training.parquet ]; then
+            echo "Hoppar över rebuild (cachad fil finns)"
+          else
+            python -m scripts.build_ml_dataset --universe smallcap --years ${{ github.event.inputs.years || '5' }} $FLAGS
+          fi
+
+      - name: 🏋️  Träna modell (universum)
+        if: ${{ github.event.inputs.universe == 'universe' || github.event.inputs.universe == 'both' || github.event_name == 'schedule' }}
+        run: python -m scripts.train_ml --universe universe
+
+      - name: 🏋️  Träna modell (smallcap)
+        if: ${{ github.event.inputs.universe == 'smallcap' || github.event.inputs.universe == 'both' || github.event_name == 'schedule' }}
+        run: python -m scripts.train_ml --universe smallcap
+
+      - name: 💾 Committa modeller
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "MarketScan ML Bot"
+          mkdir -p models
+          git add models/*.pkl models/*.json || true
+          git diff --staged --quiet || git commit -m "🤖 Tränade ML-modeller ($(date +%Y-%m-%d))"
+          git push || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📤 Spara metrics som artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-metrics-${{ github.run_number }}
+          path: |
+            models/*.json
+          retention-days: 60
+
+      - name: 🚨 Skicka felmail om träning misslyckas
+        if: failure()
+        env:
+          EMAIL_SENDER:   ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO:       ${{ secrets.EMAIL_TO }}
+        run: |
+          python -c "from core.email_template import send_failure_alert; send_failure_alert('train_ml', '${{ github.run_id }}', '${{ github.repository }}')" || true

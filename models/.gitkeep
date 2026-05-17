@@ -1,0 +1,6 @@
+# models/ — pickled ML-modeller produceras av .github/workflows/train_ml.yml
+# Filer som hamnar här:
+#   ml_universe.pkl         — XGBoost för hela aktievärlden
+#   ml_smallcap.pkl         — XGBoost för svenska småbolag
+#   ml_universe_metrics.json — metrics (IC, MAE, hit-rate)
+#   ml_smallcap_metrics.json
