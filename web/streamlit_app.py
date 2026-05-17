@@ -566,10 +566,14 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
     avg_score  = df["score_total"].mean() if "score_total" in df.columns else 0
 
     kpi_row([
-        ("📈 Bolag i scan",  f"{n_total}",             None),
-        ("🥇 Toppbolag",     f"{top_ticker}",           f"{top_score:.0f} poäng"),
-        ("⚡ STARK entry",   f"{n_stark}",              None),
-        ("📊 Snittpoäng",    f"{avg_score:.1f}/100",    None),
+        ("📈 Bolag i scan",  f"{n_total}",             None,
+         "Totalt antal bolag i det scannnade universumet. Inkluderar stora, medelstora och småbolag från alla marknader."),
+        ("🥇 Toppbolag",     f"{top_ticker}",           f"{top_score:.0f} poäng",
+         "Bolaget med högst totalpoäng just nu. Poängen baseras på 8 faktorer: värdering, kvalitet, momentum, tillväxt, risk, storlek, utdelning och sentiment."),
+        ("⚡ STARK entry",   f"{n_stark}",              None,
+         "Antal bolag med en STARK köpsignal — tydlig uppåtrörelse med hög volym och teknisk styrka. Dessa är prioriterade köpkandidater."),
+        ("📊 Snittpoäng",    f"{avg_score:.1f}/100",    None,
+         "Genomsnittlig totalpoäng för alla bolag i scannningen. Mäter hur stark marknaden är generellt. Över 60 = bullish marknad."),
     ])
 
     st.markdown("---")
@@ -989,25 +993,39 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         "piotroski_f":       "Piotroski",
     })
 
-    col_cfg = {}
+    # Återsätt Rank till 1-baserad i filtrerad vy (rank 1 = bäst i filtrerat urval)
+    if "Rank" in display.columns:
+        display["Rank"] = range(1, len(display) + 1)
+
+    col_cfg = {
+        "Rank": st.column_config.NumberColumn("Rank", help="Position i rankinglistan. Rank 1 = bäst poäng i det filtrerade urvalet.", format="%d"),
+        "Ticker": st.column_config.TextColumn("Ticker", help="Börsticker — den förkortade koden som identifierar aktien på börsen."),
+        "Bolag": st.column_config.TextColumn("Bolag", help="Bolagets fullständiga namn."),
+        "Status": st.column_config.TextColumn("Status", help="💼 = du äger aktien · ⭐ = du bevakar den"),
+        "Sektor": st.column_config.TextColumn("Sektor", help="Vilken bransch bolaget tillhör. Sektorrotation är viktigt — starka sektorer presterar ofta bättre."),
+        "Entry": st.column_config.TextColumn("Entry", help="Köpsignal baserad på momentum och volym. STARK = tydlig uppåtrörelse med hög konfidensgrad. OK = måttlig signal. —= ingen signal just nu."),
+        "Konf.": st.column_config.TextColumn("Konf.", help="Konfidensnivå för entry-signalen. HÖG = starka indikatorer samstämmer. MEDEL = blandat. LÅG = svag signal."),
+        "Trend": st.column_config.TextColumn("Trend", help="Teknisk trend baserad på MA50/MA200. UPPTREND = aktien är i positiv trend och över sina glidande medelvärden."),
+        "Δ": st.column_config.TextColumn("Δ", help="Förändring sedan förra scanningen — t.ex. 'NYI TOPP20' eller rörelsepil. Visar rörlighet i rankinglistan."),
+        "Piotroski": st.column_config.NumberColumn("Piotroski", format="%.0f/9", help="Piotroski F-Score: 0–9 poäng baserade på 9 nyckeltal för lönsamhet, hävstång och effektivitet. 7–9 = stark fundamenta. 0–2 = svag."),
+    }
     if "Score (klassisk)" in display.columns:
         col_cfg["Score (klassisk)"] = st.column_config.ProgressColumn(
-            "Score (klassisk)", min_value=0, max_value=100, format="%.0f"
+            "Score (klassisk)", min_value=0, max_value=100, format="%.0f",
+            help="Totalt poäng 0–100 baserat på värdering, kvalitet, momentum, tillväxt, risk och storlek. 70+ = stark. 50–69 = neutral. <50 = svag.",
         )
     if "AI rank" in display.columns:
         col_cfg["AI rank"] = st.column_config.ProgressColumn(
-            "AI rank", min_value=0, max_value=100, format="%.0f"
+            "AI rank", min_value=0, max_value=100, format="%.0f",
+            help="ML-modellens rangordning 0–100. Kombinerar klassisk score med maskininlärd prediktion av framtida avkastning.",
         )
     if "AI 30d-ret" in display.columns:
         col_cfg["AI 30d-ret"] = st.column_config.NumberColumn(
             "AI 30d-ret", format="%.1f%%",
-            help="ML-modellens prediktion av avkastning kommande 30 dagar"
+            help="ML-modellens prediktion av avkastning kommande 30 dagar. Baseras på momentum, fundamenta och historiska mönster. Inte en garanti.",
         )
-        # Konvertera till procent för visningen (modellen returnerar fraction)
         if not display["AI 30d-ret"].isna().all():
             display["AI 30d-ret"] = display["AI 30d-ret"] * 100
-    if "Piotroski" in display.columns:
-        col_cfg["Piotroski"] = st.column_config.NumberColumn("Piotroski", format="%.0f/9")
 
     event = st.dataframe(
         display,
@@ -1093,10 +1111,14 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
     avg_sc   = filt_df["score_total"].mean() if "score_total" in filt_df.columns else 0
     n_stark  = (filt_df["entry_signal"] == "STARK").sum() if "entry_signal" in filt_df.columns else 0
     kpi_row([
-        ("Totalt i scan",    f"{n_total}",        None),
-        ("Matchar filter",   f"{n_filt}",          None),
-        ("Snittpoäng",       f"{avg_sc:.1f}",      None),
-        ("STARK entry",      f"{n_stark}",         None),
+        ("Totalt i scan",    f"{n_total}",        None,
+         "Totalt antal bolag i universumet innan filter appliceras."),
+        ("Matchar filter",   f"{n_filt}",          None,
+         "Antal bolag som uppfyller dina valda filtervillkor (sektor, land, poäng etc.)."),
+        ("Snittpoäng",       f"{avg_sc:.1f}",      None,
+         "Genomsnittlig totalpoäng bland filtrerade bolag. Högt snitt = starkt filtrerat urval."),
+        ("STARK entry",      f"{n_stark}",         None,
+         "Antal bolag med STARK köpsignal bland filtrerade bolag. Dessa är de starkaste köpkandidaterna just nu."),
     ])
 
     # Flikar
@@ -1346,10 +1368,14 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
         if "insider_signal" in filt.columns else 0
     avg_sc = filt[score_col].mean() if score_col in filt.columns else 0
     kpi_row([
-        ("Bolag (filtrerat)", f"{len(filt)} / {len(sc_df)}", None),
-        ("★★★★★ bolag",       f"{n_five}",                   None),
-        ("Insider BUY",       f"{n_buy}",                    None),
-        ("Snittpoäng",        f"{avg_sc:.1f}",               None),
+        ("Bolag (filtrerat)", f"{len(filt)} / {len(sc_df)}", None,
+         "Antal smallcap-bolag som uppfyller aktuella filter av totalt antal i smallcap-universumet."),
+        ("★★★★★ bolag",       f"{n_five}",                   None,
+         "Bolag med 5 stjärnor — högsta betygskategorin. Indikerar stark kombination av fundamenta, momentum och värdering."),
+        ("Insider BUY",       f"{n_buy}",                    None,
+         "Bolag där insiders (styrelse/ledning) nyligen köpt aktier i det egna bolaget. Insiderköp är ett positivt signal — de känner bolaget bäst."),
+        ("Snittpoäng",        f"{avg_sc:.1f}",               None,
+         "Genomsnittlig totalpoäng bland filtrerade smallcap-bolag."),
     ])
 
     tab1, tab2, tab3, tab4 = st.tabs(
@@ -1554,10 +1580,14 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
         worst      = min(pnl_vals) if pnl_vals else 0
 
         kpi_row([
-            ("Positioner",       f"{len(rows)}",            None),
-            ("Totalt värde",     f"{total_mv:,.0f} kr",     None),
-            ("Snitt P&L",        f"{avg_pnl:+.1f}%",        None),
-            ("Bäst / Sämst",     f"+{best:.1f}% / {worst:.1f}%", None),
+            ("Positioner",       f"{len(rows)}",            None,
+             "Antal aktier du för närvarande äger i din portfölj."),
+            ("Totalt värde",     f"{total_mv:,.0f} kr",     None,
+             "Totalt marknadsvärde av alla dina innehav baserat på senaste kurs."),
+            ("Snitt P&L",        f"{avg_pnl:+.1f}%",        None,
+             "Genomsnittlig vinst/förlust (Profit & Loss) för alla positioner sedan inköp. Positivt = portföljen är på plus totalt."),
+            ("Bäst / Sämst",     f"+{best:.1f}% / {worst:.1f}%", None,
+             "Din bästa respektive sämsta position i procent. Bra för att identifiera vinnare och förlorare i portföljen."),
         ])
 
         col_cfg = {}
@@ -1738,10 +1768,14 @@ def page_technical(df: pd.DataFrame, filters: dict):
     n_overbought = (out["rsi_14"] > 70).sum() if "rsi_14" in out.columns else 0
 
     kpi_row([
-        ("Visar",            f"{len(out)} / {len(df)}",  None),
-        ("UPPTREND",         f"{n_upptrend}",            None),
-        ("Över MA200",       f"{n_over_ma}",             None),
-        ("Snitt RSI / >70",  f"{avg_rsi:.0f} / {n_overbought}", None),
+        ("Visar",            f"{len(out)} / {len(df)}",  None,
+         "Antal bolag som visas efter filter, av totalt antal i universumet."),
+        ("UPPTREND",         f"{n_upptrend}",            None,
+         "Antal bolag i teknisk upptrend — aktiekursen är över MA50 och MA200 (glidande medelvärden). Många upptrend = bullish marknadsklimat."),
+        ("Över MA200",       f"{n_over_ma}",             None,
+         "Antal bolag vars kurs är över 200-dagars glidande medelvärde. MA200 är det viktigaste långsiktiga trendmåttet. Under MA200 = potentiellt riskabelt."),
+        ("Snitt RSI / >70",  f"{avg_rsi:.0f} / {n_overbought}", None,
+         "Genomsnittlig RSI för universumet / antal bolag med RSI >70. RSI >70 = överköpt. Många överköpta bolag kan indikera att marknaden är het och riskerar korrigering."),
     ])
 
     tab1, tab2, tab3, tab4 = st.tabs(["📋 Tabell", "📊 Diagram", "📉 MACD/RSI", "🔀 Jämför"])
@@ -3742,10 +3776,14 @@ def page_sector_rotation(df: pd.DataFrame):
         strong_up = sum(1 for v in trends.values() if v.get("signal") == "STARK UPPTREND")
         strong_down = sum(1 for v in trends.values() if v.get("signal") == "STARK NEDTREND")
         kpi_row([
-            ("Sektorer totalt", len(trends), None),
-            ("🚀 STARK UPPTREND", strong_up, None),
-            ("💀 STARK NEDTREND", strong_down, None),
-            ("📊 Sektorrotation", f"{strong_up - strong_down:+d}", None),
+            ("Sektorer totalt", len(trends), None,
+             "Antal bevakade sektorer med tillgänglig ETF-data för trendanalys."),
+            ("🚀 STARK UPPTREND", strong_up, None,
+             "Antal sektorer i stark teknisk upptrend baserat på ETF-momentum och glidande medelvärden. Fler = bredare bullish marknad."),
+            ("💀 STARK NEDTREND", strong_down, None,
+             "Antal sektorer i stark nedtrend. Undvik att köpa aktier i sektorer med stark nedtrend — de drar ofta ned hela portföljsektorn."),
+            ("📊 Sektorrotation", f"{strong_up - strong_down:+d}", None,
+             "Skillnad mellan sektorer i upptrend minus nedtrend. Positivt = fler sektorer stiger. Negativt = marknaden roterar nedåt. ±3 eller mer = tydlig signal."),
         ])
 
     tab1, tab2, tab3 = st.tabs(["🔥 Heatmap", "📋 Momentum-tabell", "🏆 Topp/botten sektorer"])
@@ -4025,10 +4063,14 @@ def page_alerts_notices(df: pd.DataFrame):
     n_near_tp = sum(1 for t in trades if t["status"] == "OPEN" and t.get("take_profit") and t.get("current_price") and t["current_price"] >= t["take_profit"] * 0.9)
 
     kpi_row([
-        ("🟢 Öppna positioner", n_open, None),
-        ("🔴 Nära stop-loss", n_near_stop, None),
-        ("🟢 Nära take-profit", n_near_tp, None),
-        ("⭐ Bevakade", len(watchlist), None),
+        ("🟢 Öppna positioner", n_open, None,
+         "Antal aktiva paper trading-positioner som inte stängts ännu. Paper trading = simulerade affärer utan riktiga pengar, för att testa strategier."),
+        ("🔴 Nära stop-loss", n_near_stop, None,
+         "Antal positioner vars kurs är inom 10% av stop-loss-nivån. Stop-loss = en prisnivå där positionen automatiskt säljs för att begränsa förluster."),
+        ("🟢 Nära take-profit", n_near_tp, None,
+         "Antal positioner vars kurs är inom 10% av take-profit-nivån. Take-profit = en prisnivå där positionen säljs för att låsa in vinst."),
+        ("⭐ Bevakade", len(watchlist), None,
+         "Antal aktier på din bevakningslista. Du får nyheter och larm för dessa aktier utan att äga dem."),
     ])
 
     tab1, tab2, tab3 = st.tabs(["🔴 Stop-loss/Take-profit", "🚨 Prislarm", "📰 Nyhetslarm"])
@@ -4488,16 +4530,21 @@ def page_ml_paper_trading():
 
         c1, c2, c3, c4, c5 = st.columns(5)
         with c1:
-            st.metric("Equity", f"{summary['equity']:,.0f} kr")
+            st.metric("Equity", f"{summary['equity']:,.0f} kr",
+                      help="Simulerat kapital startande på 100 000 kr. Ökar/minskar baserat på AI-modellens predikterade köp och faktiska kursrörelser.")
         with c2:
-            st.metric("Avkastning", f"{summary['total_return_pct']:+.2f}%")
+            st.metric("Avkastning", f"{summary['total_return_pct']:+.2f}%",
+                      help="Total avkastning sedan AI paper trading startade. Jämför med klassisk paper trading för att se om ML-modellen tillför värde.")
         with c3:
-            st.metric("Trades", f"{summary['n_trades']}")
+            st.metric("Trades", f"{summary['n_trades']}",
+                      help="Totalt antal affärer (öppna + stängda) som AI-modellen har genererat sedan start.")
         with c4:
-            st.metric("Öppna", f"{summary['n_open']}")
+            st.metric("Öppna", f"{summary['n_open']}",
+                      help="Antal aktiva positioner som fortfarande är öppna. Varje position stängs automatiskt efter 30 dagar.")
         with c5:
             hr = summary.get("hit_rate")
-            st.metric("Hit-rate", f"{hr:.1f}%" if hr is not None else "—")
+            st.metric("Hit-rate", f"{hr:.1f}%" if hr is not None else "—",
+                      help="Andel stängda positioner med positiv avkastning. >50% = modellen prickar rätt mer än hälften av gångerna. >60% = utmärkt.")
 
         eq_df = mlpt.get_equity_curve_df(universe)
         if not eq_df.empty:
@@ -4688,10 +4735,14 @@ def page_stock_search():
     profit_margin = info.get("profitMargins")
 
     kpi_row([
-        ("Pris", f"{price:.2f}" if price else "—", None),
-        ("Sektor", sector[:20] if sector else "—", None),
-        ("P/E", f"{pe:.1f}" if pe else "—", None),
-        ("Marknadsvärde", f"{market_cap/1e9:.1f}B" if market_cap else "—", None),
+        ("Pris", f"{price:.2f}" if price else "—", None,
+         "Senaste handelskurs för aktien. Uppdateras med ~15 min fördröjning via yfinance."),
+        ("Sektor", sector[:20] if sector else "—", None,
+         "Vilken bransch bolaget tillhör. Sektorns trend påverkar ofta enskilda aktier — köp i starka sektorer."),
+        ("P/E", f"{pe:.1f}" if pe else "—", None,
+         "Pris ÷ vinst per aktie. Lägre = billigare relativt vinst. Normalt 10–20 för stabila bolag. Högt P/E förutsätter stark framtida tillväxt."),
+        ("Marknadsvärde", f"{market_cap/1e9:.1f}B" if market_cap else "—", None,
+         "Totalt börsvärde = kurs × antal aktier. B = miljarder. Stort bolag (>10B) = mer stabilt. Litet bolag (<1B) = högre risk men potentiellt mer uppside."),
     ])
 
     # Linjegraf (stilren, ingen candlestick)
@@ -4911,9 +4962,12 @@ def page_watchlist_detail(df: pd.DataFrame, watchlist: list):
     n_scanned = sum(1 for r in rows if r.get("_source") == "scan")
     n_live = sum(1 for r in rows if r.get("_source") == "yfinance")
     kpi_row([
-        ("Bevakade totalt", len(rows), None),
-        ("I scan-data", n_scanned, None),
-        ("Live från yfinance", n_live, None),
+        ("Bevakade totalt", len(rows), None,
+         "Totalt antal aktier på din bevakningslista."),
+        ("I scan-data", n_scanned, None,
+         "Antal bevakade aktier som finns i senaste scanningens data — får fullständig poänganalys."),
+        ("Live från yfinance", n_live, None,
+         "Antal bevakade aktier som hämtas direkt från yfinance (inte i scan) — får bara grundläggande prisdata."),
     ])
 
     # Kolumn-konfiguration

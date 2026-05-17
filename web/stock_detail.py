@@ -182,6 +182,16 @@ def _price_chart(ticker: str, period: str = "1y") -> Optional[go.Figure]:
 # 2. DATA-KORT (snabbvy)
 # ══════════════════════════════════════════════════════════════════════════════
 
+_QUICK_CARD_HELP = {
+    "Score":     "Totalpoäng 0–100 från 8 faktorer: värdering, kvalitet, momentum, tillväxt, risk och storlek. 70+ = stark. 50–69 = neutral. Under 50 = svag.",
+    "Entry":     "Köpsignal: STARK = tydlig uppåtrörelse med stöd av volym. OK = måttlig signal. — = ingen signal. Klicka på aktien för mer detaljer.",
+    "Trend":     "Teknisk trend: UPPTREND = aktien är över MA50 och MA200 (glidande medelvärden). NEDTREND = under MA200. Viktig för tajming.",
+    "RSI":       "Relative Strength Index (0–100). Mäter om aktien är överköpt eller översåld. Under 30 = översåld (möjligt köpläge). Över 70 = överköpt (försiktig).",
+    "P/E":       "Pris/Vinst (trailing). Hur många kronor du betalar per vinstkrona. Lägre = billigare relativt vinst. Normalt 10–20. Negativt = bolaget går med förlust.",
+    "ROE":       "Return on Equity — avkastning på eget kapital. Visar hur effektivt bolaget använder ägarnas pengar. Över 15% = bra. Över 25% = utmärkt.",
+    "Piotroski": "Piotroski F-Score (0–9). Nio nyckeltal för lönsamhet, skuldsättning och effektivitet. 7–9 = stark fundamenta. 4–6 = godkänd. 0–3 = svag.",
+}
+
 def _quick_data_cards(row: pd.Series):
     """Visa en rad med metrik-kort för aktuell aktie."""
     cols = st.columns(7)
@@ -199,7 +209,7 @@ def _quick_data_cards(row: pd.Series):
     for col, (label, val, fmt, icon) in zip(cols, metrics):
         with col:
             formatted = _safe_val(val, fmt if fmt else "num")
-            st.metric(f"{icon} {label}", formatted)
+            st.metric(f"{icon} {label}", formatted, help=_QUICK_CARD_HELP.get(label))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -235,10 +245,14 @@ def _render_dividend_analysis(row: pd.Series):
 
     # ── KPI-kort ──────────────────────────────────────────────────────────────
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("💰 Direktavkastning", f"{float(yld)*100:.2f}%" if yld and not pd.isna(yld) else "—")
-    c2.metric("📊 5Y snittyield",    f"{float(yld_5y):.2f}%" if yld_5y and not pd.isna(yld_5y) else "—")
-    c3.metric("💵 Utd/aktie (årl.)", f"{float(div_rate):.2f}" if div_rate and not pd.isna(div_rate) else "—")
-    c4.metric("🎯 Utdelningsscore",  f"{float(score_div):.0f}/100" if score_div and not pd.isna(score_div) else "—")
+    c1.metric("💰 Direktavkastning", f"{float(yld)*100:.2f}%" if yld and not pd.isna(yld) else "—",
+              help="Årlig utdelning ÷ aktiekurs. 2–4% = normalt för stabila bolag. Mycket hög yield (>6–7%) kan vara en varningssignal om att kursen rasat eller utdelningen snart sänks.")
+    c2.metric("📊 5Y snittyield",    f"{float(yld_5y):.2f}%" if yld_5y and not pd.isna(yld_5y) else "—",
+              help="Genomsnittlig direktavkastning de senaste 5 åren. Jämför med dagens yield — om dagens är mycket högre kan det tyda på att aktien är nedtryckt eller utdelningen är hotad.")
+    c3.metric("💵 Utd/aktie (årl.)", f"{float(div_rate):.2f}" if div_rate and not pd.isna(div_rate) else "—",
+              help="Total utdelning per aktie per år i bolagets rapportvaluta. Används för att beräkna din faktiska inkomst per aktie du äger.")
+    c4.metric("🎯 Utdelningsscore",  f"{float(score_div):.0f}/100" if score_div and not pd.isna(score_div) else "—",
+              help="Sammanvägt poäng för utdelningskvalitet: direktavkastning, payout ratio, FCF-täckning och historisk stabilitet. 70+ = hög kvalitet. Under 40 = försiktig.")
 
     # ── Säkerhetsbedömning ────────────────────────────────────────────────────
     st.markdown("#### 🔒 Utdelningens säkerhet")
@@ -350,13 +364,16 @@ def _render_dividend_analysis(row: pd.Series):
                 gr_cols = st.columns(3)
                 gr_cols[0].metric("Tillväxt 1Y",
                     f"{cagr_1y:+.1f}%" if cagr_1y is not None else "—",
-                    delta_color="normal")
+                    delta_color="normal",
+                    help="Förändring i utdelning per aktie det senaste året. Positiv = utdelningen höjdes. 5–10% tillväxt per år = utmärkt utdelningsbolag.")
                 gr_cols[1].metric("Tillväxt 3Y (CAGR)",
                     f"{cagr_3y:+.1f}%" if cagr_3y is not None else "—",
-                    delta_color="normal")
+                    delta_color="normal",
+                    help="Genomsnittlig årlig utdelningstillväxt de senaste 3 åren (CAGR). Visar om bolaget konsekvent höjer utdelningen eller om det är ojämnt.")
                 gr_cols[2].metric("Tillväxt 5Y (CAGR)",
                     f"{cagr_5y:+.1f}%" if cagr_5y is not None else "—",
-                    delta_color="normal")
+                    delta_color="normal",
+                    help="Genomsnittlig årlig utdelningstillväxt de senaste 5 åren. Långsiktig trend — utdelningsbolag med 5%+ CAGR under 5 år är attraktiva för passiv inkomst.")
 
                 # Konsistens
                 n_years = len(amounts)
@@ -397,67 +414,103 @@ def _detail_table(row: pd.Series):
         ])
 
         with tab_val:
-            val_data = {
-                "P/E (trailing)": _safe_val(row.get("pe_trailing"), "dec1"),
-                "P/E (forward)": _safe_val(row.get("pe_forward"), "dec1"),
-                "P/B": _safe_val(row.get("price_to_book"), "dec2"),
-                "P/S": _safe_val(row.get("price_to_sales"), "dec2"),
-                "EV/EBITDA": _safe_val(row.get("ev_to_ebitda"), "dec1"),
-                "EV/Revenue": _safe_val(row.get("ev_to_revenue"), "dec2"),
-                "PEG Ratio": _safe_val(row.get("peg_ratio"), "dec2"),
-                "Värderingsscore": _safe_val(row.get("score_value"), "dec0"),
-            }
+            val_rows = [
+                ("P/E (trailing)", _safe_val(row.get("pe_trailing"), "dec1"),
+                 "Pris ÷ vinst per aktie (historisk). Lägre = billigare. 10–20 = normalt. Negativt = bolaget förlorar pengar."),
+                ("P/E (forward)", _safe_val(row.get("pe_forward"), "dec1"),
+                 "Pris ÷ förväntad framtida vinst. Om lägre än trailing P/E förväntas vinsttillväxt."),
+                ("P/B", _safe_val(row.get("price_to_book"), "dec2"),
+                 "Pris ÷ bokfört värde per aktie. Under 1.0 = handlas under substansvärde. Bankaktier har ofta lågt P/B."),
+                ("P/S", _safe_val(row.get("price_to_sales"), "dec2"),
+                 "Pris ÷ omsättning per aktie. Lägre = billigare relativt försäljning. Bra för förlustbolag utan vinst."),
+                ("EV/EBITDA", _safe_val(row.get("ev_to_ebitda"), "dec1"),
+                 "Företagsvärde ÷ rörelseresultat före avskrivningar. Under 10 = relativt billigt. Används för att jämföra bolag med olika skuldsättning."),
+                ("EV/Revenue", _safe_val(row.get("ev_to_revenue"), "dec2"),
+                 "Företagsvärde ÷ omsättning. Bra för att jämföra tillväxtbolag utan vinst. Under 2 = lågt."),
+                ("PEG Ratio", _safe_val(row.get("peg_ratio"), "dec2"),
+                 "P/E ÷ förväntad vinsttillväxt. Under 1.0 = aktien kan vara undervärderad relativt sin tillväxt. Populariserad av Peter Lynch."),
+                ("Värderingsscore", _safe_val(row.get("score_value"), "dec0"),
+                 "Systemets sammanvägda värderingspoäng 0–100 baserat på ovanstående nyckeltal. Högt = relativt billig aktie."),
+            ]
             st.dataframe(
-                pd.DataFrame(val_data.items(), columns=["Mått", "Värde"]),
+                pd.DataFrame(val_rows, columns=["Mått", "Värde", "ℹ️ Förklaring"]),
                 use_container_width=True, hide_index=True,
+                column_config={"ℹ️ Förklaring": st.column_config.TextColumn("ℹ️ Förklaring", width="large")},
             )
 
         with tab_qual:
-            qual_data = {
-                "ROE": _safe_val(row.get("roe"), "pct"),
-                "ROA": _safe_val(row.get("roa"), "pct"),
-                "Bruttomarginal": _safe_val(row.get("gross_margin"), "pct"),
-                "Rörelsemarginal": _safe_val(row.get("operating_margin"), "pct"),
-                "Nettomarginal": _safe_val(row.get("profit_margin"), "pct"),
-                "FCF": _safe_val(row.get("free_cash_flow"), "dec0"),
-                "Piotroski F-Score": _safe_val(row.get("piotroski_f"), "ratio"),
-                "Kvalitetsscore": _safe_val(row.get("score_quality"), "dec0"),
-            }
+            qual_rows = [
+                ("ROE", _safe_val(row.get("roe"), "pct"),
+                 "Return on Equity — avkastning på eget kapital. Visar hur effektivt bolaget tjänar pengar på ägarnas investering. 15%+ = bra, 25%+ = utmärkt."),
+                ("ROA", _safe_val(row.get("roa"), "pct"),
+                 "Return on Assets — avkastning på totalt kapital. 5%+ = bra. Viktigt för kapitalintensiva branscher som tillverkning."),
+                ("Bruttomarginal", _safe_val(row.get("gross_margin"), "pct"),
+                 "(Intäkter − kostnader för sålda varor) ÷ intäkter. Hög marginal = starkt prissättningsutrymme. Tech/pharma har ofta 60–80%."),
+                ("Rörelsemarginal", _safe_val(row.get("operating_margin"), "pct"),
+                 "Rörelseresultat ÷ omsättning. Visar lönsamhet efter löner och drift men före räntor och skatt. 10%+ = bra."),
+                ("Nettomarginal", _safe_val(row.get("profit_margin"), "pct"),
+                 "Nettovinst ÷ omsättning. Den slutliga vinsten per intäktskrona efter alla kostnader inklusive skatt och räntor."),
+                ("FCF", _safe_val(row.get("free_cash_flow"), "dec0"),
+                 "Fritt kassaflöde — kassa som genereras efter investeringar. Positivt = bolaget genererar pengar. Används för utdelning, återköp eller tillväxt."),
+                ("Piotroski F-Score", _safe_val(row.get("piotroski_f"), "ratio"),
+                 "9 binära nyckeltal för finansiell styrka: lönsamhet (4p), finansiering (3p), effektivitet (2p). 7–9 = stark. 0–2 = svag."),
+                ("Kvalitetsscore", _safe_val(row.get("score_quality"), "dec0"),
+                 "Systemets sammanvägda kvalitetspoäng 0–100 baserat på ovanstående. Högt = finansiellt starkt bolag."),
+            ]
             st.dataframe(
-                pd.DataFrame(qual_data.items(), columns=["Mått", "Värde"]),
+                pd.DataFrame(qual_rows, columns=["Mått", "Värde", "ℹ️ Förklaring"]),
                 use_container_width=True, hide_index=True,
+                column_config={"ℹ️ Förklaring": st.column_config.TextColumn("ℹ️ Förklaring", width="large")},
             )
 
         with tab_mom:
-            mom_data = {
-                "1 månad": _safe_val(row.get("return_1m"), "pct_plus"),
-                "3 månader": _safe_val(row.get("return_3m"), "pct_plus"),
-                "6 månader": _safe_val(row.get("return_6m"), "pct_plus"),
-                "12 månader": _safe_val(row.get("return_12m"), "pct_plus"),
-                "vs MA50": _safe_val(row.get("price_vs_ma50"), "pct_plus"),
-                "vs MA200": _safe_val(row.get("price_vs_ma200"), "pct_plus"),
-                "RSI (14)": _safe_val(row.get("rsi_14"), "dec0"),
-                "MACD ovan signal": str(row.get("macd_above_signal", "—")),
-                "Momentumscore": _safe_val(row.get("score_momentum"), "dec0"),
-            }
+            mom_rows = [
+                ("1 månad", _safe_val(row.get("return_1m"), "pct_plus"),
+                 "Kursavkastning senaste månaden. Kortsiktigt momentum — positiv = aktien rört sig uppåt nyligen."),
+                ("3 månader", _safe_val(row.get("return_3m"), "pct_plus"),
+                 "Kursavkastning senaste 3 månaderna. Mellanlångt momentum. Viktig faktor för teknisk analys."),
+                ("6 månader", _safe_val(row.get("return_6m"), "pct_plus"),
+                 "Kursavkastning senaste 6 månaderna. Stark 6m-avkastning = etablerad upptrend."),
+                ("12 månader", _safe_val(row.get("return_12m"), "pct_plus"),
+                 "Kursavkastning senaste 12 månaderna. Långsiktigt momentum — den starkaste prediktorn för fortsatt avkastning (momentum-faktor)."),
+                ("vs MA50", _safe_val(row.get("price_vs_ma50"), "pct_plus"),
+                 "Hur mycket aktiekursen ligger över/under 50-dagars glidande medelvärde. Positiv = kurs över MA50 = teknisk styrka."),
+                ("vs MA200", _safe_val(row.get("price_vs_ma200"), "pct_plus"),
+                 "Hur mycket kursen ligger över/under 200-dagars medelvärde. Positiv = långsiktig upptrend. Att ligga under MA200 kallas 'death cross'-zonen."),
+                ("RSI (14)", _safe_val(row.get("rsi_14"), "dec0"),
+                 "Relative Strength Index: 0–100. Under 30 = översåld (potentiellt köpläge). Över 70 = överköpt (potentiellt säljläge). 40–60 = neutral."),
+                ("MACD ovan signal", str(row.get("macd_above_signal", "—")),
+                 "Moving Average Convergence Divergence: True = momentum är uppåt (MACD-linjen är över signallinjen). False = nedåtmomentum."),
+                ("Momentumscore", _safe_val(row.get("score_momentum"), "dec0"),
+                 "Systemets sammanvägda momentumpoäng 0–100. Högt = aktien är i stark upptrend på kort och lång sikt."),
+            ]
             st.dataframe(
-                pd.DataFrame(mom_data.items(), columns=["Mått", "Värde"]),
+                pd.DataFrame(mom_rows, columns=["Mått", "Värde", "ℹ️ Förklaring"]),
                 use_container_width=True, hide_index=True,
+                column_config={"ℹ️ Förklaring": st.column_config.TextColumn("ℹ️ Förklaring", width="large")},
             )
 
         with tab_risk:
-            risk_data = {
-                "Beta": _safe_val(row.get("beta"), "dec2"),
-                "Volatilitet": _safe_val(row.get("volatility"), "pct"),
-                "D/E": _safe_val(row.get("debt_to_equity"), "dec0"),
-                "Current Ratio": _safe_val(row.get("current_ratio"), "dec2"),
-                "Quick Ratio": _safe_val(row.get("quick_ratio"), "dec2"),
-                "52v High": _safe_val(row.get("pct_from_52w_high"), "pct_plus"),
-                "Riskscore": _safe_val(row.get("score_risk"), "dec0"),
-            }
+            risk_rows = [
+                ("Beta", _safe_val(row.get("beta"), "dec2"),
+                 "Rörelsekänslighet vs marknaden. 1.0 = rör sig som index. 1.5 = 50% mer volatil än index. Under 0.8 = defensiv aktie."),
+                ("Volatilitet", _safe_val(row.get("volatility"), "pct"),
+                 "Historisk prisvariabilitet (standardavvikelse av dagliga avkastningar). Hög volatilitet = aktien svänger mycket. Riskfyllt men även möjlighet."),
+                ("D/E", _safe_val(row.get("debt_to_equity"), "dec0"),
+                 "Skuld ÷ eget kapital. Mäter hur skuldsatt bolaget är. Under 1.0 = låg skuldsättning. Över 2.0 = hög hävstång — känsligare vid ränteuppgång."),
+                ("Current Ratio", _safe_val(row.get("current_ratio"), "dec2"),
+                 "Omsättningstillgångar ÷ kortfristiga skulder. Mäter kortsiktig betalningsförmåga. Över 1.5 = bra. Under 1.0 = kan ha problem att betala räkningar."),
+                ("Quick Ratio", _safe_val(row.get("quick_ratio"), "dec2"),
+                 "Som Current Ratio men exkluderar lager (som kan vara svårt att sälja snabbt). Över 1.0 = god likviditet."),
+                ("52v High", _safe_val(row.get("pct_from_52w_high"), "pct_plus"),
+                 "Hur långt aktiekursen är från sin 52-veckorshöjning. −10% = 10% under toppnivån. Aktier nära 52v-high har ofta starkt momentum."),
+                ("Riskscore", _safe_val(row.get("score_risk"), "dec0"),
+                 "Systemets sammanvägda riskpoäng 0–100. Högt = låg risk (stabilt bolag med låg skuld och volatilitet). Lågt = hög risk."),
+            ]
             st.dataframe(
-                pd.DataFrame(risk_data.items(), columns=["Mått", "Värde"]),
+                pd.DataFrame(risk_rows, columns=["Mått", "Värde", "ℹ️ Förklaring"]),
                 use_container_width=True, hide_index=True,
+                column_config={"ℹ️ Förklaring": st.column_config.TextColumn("ℹ️ Förklaring", width="large")},
             )
 
         with tab_div:
