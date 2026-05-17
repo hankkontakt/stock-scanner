@@ -617,6 +617,32 @@ def _merge_news(finnhub: list, google: list, max_total: int = 5) -> list:
     return combined
 
 
+def _google_search_term(ticker: str) -> str:
+    """Deriverar sökterm från ticker när bolagsnamn saknas. 'INVE-B.ST' → 'INVE B'."""
+    base = ticker.split(".")[0]
+    return base.replace("-", " ")
+
+
+def fetch_company_news(ticker: str, days_back: int = 7, company_name: str = None) -> list:
+    """
+    Hämtar bolagsspecifika nyheter via Finnhub + Google News RSS och slår ihop resultaten.
+
+    Args:
+        ticker:       Ticker-symbol (t.ex. "INVE-B.ST")
+        days_back:    Hur långt bakåt att söka nyheter
+        company_name: Bolagsnamn för Google-sökning (t.ex. "Investor AB").
+                      Om None används en förenklad ticker-baserad sökterm.
+
+    Returnerar [{headline, source, url, datetime_str, age_hours}] nyast först.
+    """
+    import os
+    api_key = os.getenv("FINNHUB_API_KEY", "")
+    finnhub_results = fetch_news(ticker, api_key, days=days_back) if api_key else []
+    search_term = company_name.strip() if company_name and company_name.strip() else _google_search_term(ticker)
+    google_results = fetch_google_news_rss(search_term, max_items=5, days_back=days_back)
+    return _merge_news(finnhub_results, google_results, max_total=7)
+
+
 # ══════════════════════════════════════════════════════════════
 # NASDAQ NORDIC – Officiella börsmeddelanden
 # ══════════════════════════════════════════════════════════════

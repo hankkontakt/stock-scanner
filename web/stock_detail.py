@@ -347,7 +347,7 @@ def _radar_chart(row: pd.Series) -> go.Figure:
 # 5. NYHETSFLÖDE
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _news_feed(ticker: str):
+def _news_feed(ticker: str, company_name: str = None):
     """Visa de senaste nyheterna för en aktie."""
     st.subheader("📰 Nyheter")
 
@@ -356,7 +356,7 @@ def _news_feed(ticker: str):
         return
 
     try:
-        news = _fetch_news(ticker, days_back=7)
+        news = _fetch_news(ticker, days_back=7, company_name=company_name)
     except Exception as e:
         st.info(f"Kunde inte hämta nyheter: {e}")
         news = []
@@ -437,7 +437,7 @@ AI_PROMPTS_MAP = {
 }
 
 
-def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame):
+def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame, company_name: str = ""):
     """AI-analyspanel med preset prompts och provider-väljare."""
     st.subheader("🤖 AI-analys")
 
@@ -526,7 +526,7 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame):
                 news_items = None
                 if _fetch_news is not None:
                     try:
-                        raw_news = _fetch_news(ticker, days_back=7)
+                        raw_news = _fetch_news(ticker, days_back=7, company_name=company_name)
                         if raw_news:
                             news_items = [
                                 {
@@ -577,7 +577,16 @@ def render_stock_detail(
         show_chart: Visa prisgraf
         show_detail_data: Visa detaljerad data
     """
-    st.markdown(f"## 📈 `{ticker}` – Detaljvy")
+    company_name = ""
+    industry_str = ""
+    if row is not None and not row.empty:
+        company_name = str(row.get("name", "")).strip()
+        industry_str = str(row.get("industry", "")).strip()
+
+    display_title = f"`{ticker}`" + (f" — {company_name}" if company_name else "")
+    st.markdown(f"## 📈 {display_title}")
+    if industry_str and industry_str not in ("—", "nan", "None", ""):
+        st.caption(f"🏭 {industry_str}")
     st.markdown("---")
 
     # ── Sektion 1: Snabbdata-kort ──────────────────────────────────────────
@@ -619,11 +628,11 @@ def render_stock_detail(
 
     with col_news:
         if show_news:
-            _news_feed(ticker)
+            _news_feed(ticker, company_name=company_name)
 
     with col_ai:
         if show_ai and row is not None and not row.empty:
-            _ai_analysis_panel(ticker, row, df)
+            _ai_analysis_panel(ticker, row, df, company_name=company_name)
 
     # ── Botten: API-status ─────────────────────────────────────────────────
     st.markdown("---")
