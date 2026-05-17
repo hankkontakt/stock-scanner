@@ -155,6 +155,61 @@ def _enrich_holdings(holdings: pd.DataFrame, scored: pd.DataFrame) -> list[dict]
     return enriched
 
 
+def _get_score_deltas(today_df: pd.DataFrame, yesterday_df: pd.DataFrame,
+                      top_n: int = 10) -> dict:
+    """
+    Jämför dagens vs gårdagens scored_universe.
+    Returnerar:
+        movers_up:   top_n aktier med störst score-ökning
+        movers_down: top_n aktier med störst score-minskning
+        rsi_spikes:  aktier där RSI korsade 30↑ eller 70↓
+        big_price:   aktier med >4% kursrörelse
+    """
+    if today_df is None or today_df.empty or yesterday_df is None or yesterday_df.empty:
+        return {}
+    needed_today = [c for c in ["ticker", "score_total", "rsi_14", "close"] if c in today_df.columns]
+    needed_yest  = [c for c in ["ticker", "score_total", "rsi_14", "close"] if c in yesterday_df.columns]
+    if "ticker" not in needed_today or "ticker" not in needed_yest:
+        return {}
+    merged = today_df[needed_today].merge(
+        yesterday_df[needed_yest].rename(columns={
+            "score_total": "score_yesterday",
+            "rsi_14":      "rsi_yesterday",
+            "close":       "close_yesterday",
+        }),
+        on="ticker", how="inner",
+    )
+    if "score_total" in merged.columns and "score_yesterday" in merged.columns:
+        merged["score_delta"] = (merged["score_total"] - merged["score_yesterday"]).round(1)
+    else:
+        merged["score_delta"] = 0.0
+    if "close" in merged.columns and "close_yesterday" in merged.columns:
+        merged["price_delta_pct"] = (
+            (merged["close"] - merged["close_yesterday"]) / merged["close_yesterday"] * 100
+        ).round(1)
+    else:
+        merged["price_delta_pct"] = 0.0
+    # RSI-korsningar
+    if "rsi_14" in merged.columns and "rsi_yesterday" in merged.columns:
+        merged["rsi_crossed_30up"]  = (merged["rsi_yesterday"] < 30) & (merged["rsi_14"] >= 30)
+        merged["rsi_crossed_70down"] = (merged["rsi_yesterday"] > 70) & (merged["rsi_14"] <= 70)
+    else:
+        merged["rsi_crossed_30up"]  = False
+        merged["rsi_crossed_70down"] = False
+
+    base_cols = ["ticker", "score_total", "score_yesterday", "score_delta", "price_delta_pct"]
+    return {
+        "movers_up":   merged.nlargest(top_n, "score_delta")[base_cols].to_dict("records"),
+        "movers_down": merged.nsmallest(top_n, "score_delta")[base_cols].to_dict("records"),
+        "rsi_spikes":  merged[merged["rsi_crossed_30up"] | merged["rsi_crossed_70down"]][
+            ["ticker", "rsi_14", "rsi_yesterday", "rsi_crossed_30up", "rsi_crossed_70down"]
+        ].to_dict("records"),
+        "big_price":   merged[merged["price_delta_pct"].abs() >= 4].nlargest(10, "price_delta_pct")[
+            base_cols
+        ].to_dict("records"),
+    }
+
+
 def _get_opportunities(scored: pd.DataFrame, max_total: int = 5) -> list[dict]:
     """Identifiera opportunities från scored_universe (inget API-anrop)."""
     if scored.empty or "score_total" not in scored.columns:
