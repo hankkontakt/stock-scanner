@@ -131,16 +131,52 @@ def calc_value_score(df: pd.DataFrame) -> pd.Series:
     if score is not None:
         components.append(score)
 
-    # EV/EBITDA
+    # EV/EBITDA och FCF Yield – 50/50 blend för ett sammansatt värderingsvärde
     ev_ebitda = df["ev_to_ebitda"].where(df["ev_to_ebitda"] > 0)
-    score = _try_rank(ev_ebitda, ascending=False)
-    if score is not None:
-        components.append(score)
+    ev_score = _try_rank(ev_ebitda, ascending=False)
+    fcf_score = calc_fcf_yield_score(df)
+    fcf_neutral = (fcf_score == NEUTRAL_SCORE).all()
+    if ev_score is not None and not fcf_neutral:
+        components.append((ev_score + fcf_score) / 2)
+    elif ev_score is not None:
+        components.append(ev_score)
+    elif not fcf_neutral:
+        components.append(fcf_score)
 
     if not components:
         return _neutral_series(df.index)
 
     return pd.concat(components, axis=1).mean(axis=1)
+
+
+def calc_fcf_yield_score(df: pd.DataFrame) -> pd.Series:
+    """
+    FCF Yield score: free_cash_flow / enterprise_value.
+    Högre FCF yield = bättre värdering = högre poäng.
+    Används som komplement till EV/EBITDA i calc_value_score().
+    Fallback: approximerar EV med market_cap + total_debt - total_cash.
+    """
+    if "free_cash_flow" not in df.columns:
+        return _neutral_series(df.index)
+
+    if "enterprise_value" in df.columns and df["enterprise_value"].notna().any():
+        ev = df["enterprise_value"].where(df["enterprise_value"] > 0)
+    else:
+        # Enkel approximation om enterpriseValue saknas
+        mc   = df.get("market_cap",  pd.Series(0.0, index=df.index)).fillna(0)
+        debt = df.get("total_debt",  pd.Series(0.0, index=df.index)).fillna(0)
+        cash = df.get("total_cash",  pd.Series(0.0, index=df.index)).fillna(0)
+        ev_raw = mc + debt - cash
+        ev = ev_raw.where(ev_raw > 0)
+
+    fcf = df["free_cash_flow"]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        fcf_yield = fcf / ev
+    # Klipp extrema negativa värden (t.ex. -500 % ger brus)
+    fcf_yield = fcf_yield.where(fcf_yield > -0.50)
+
+    score = _try_rank(fcf_yield, ascending=True)
+    return score if score is not None else _neutral_series(df.index)
 
 
 def calc_quality_score(df: pd.DataFrame) -> pd.Series:
@@ -296,27 +332,32 @@ def calc_dividend_score(df: pd.DataFrame) -> pd.Series:
 
 def calc_sentiment_score(df: pd.DataFrame) -> pd.Series:
     """
-    Sentiment score from Finnhub news data.
-    'sentiment_raw' column contains -1 to +1 values from Finnhub.
-    If no Finnhub data, defaults to neutral (50).
+    Sentiment score från Finnhub-nyhetsdata + insiderhandelssignaler.
+    'sentiment_raw' = -1 till +1 från Finnhub.
+    Insider-boost: VD/CFO-köp → +20 poäng, cluster-köp → +30 poäng.
     """
     if "sentiment_raw" not in df.columns or df["sentiment_raw"].isna().all():
-        return _neutral_series(df.index)
+        score = _neutral_series(df.index)
+    else:
+        raw = df["sentiment_raw"].fillna(0)
+        linear = (raw + 1) * 50
+        if raw.notna().sum() > MIN_VALID_OBSERVATIONS:
+            pct = percentile_rank(raw, ascending=True)
+            score = (linear * 0.5 + pct * 0.5)
+        else:
+            score = linear
 
-    # sentiment_raw is -1 to +1 → convert to 0-100 percentile
-    # We do a simple linear mapping: -1 → 0, 0 → 50, +1 → 100
-    # Then also do percentile rank for relative comparison
-    raw = df["sentiment_raw"].fillna(0)  # Missing = neutral
+    # ── Insider-boost ────────────────────────────────────────────────────────
+    # VD/CFO köper: starkt bullish signal (+20, capped 95)
+    # Cluster (≥3 insiders inom 30d): ännu starkare (+30, capped 98)
+    if "insider_executive_buy" in df.columns:
+        exec_mask    = df["insider_executive_buy"].fillna(False).astype(bool)
+        cluster_mask = df.get("insider_cluster", pd.Series(False, index=df.index)).fillna(False).astype(bool)
+        score = score.copy()
+        score[exec_mask]    = (score[exec_mask]    + 20).clip(upper=95)
+        score[cluster_mask] = (score[cluster_mask] + 30).clip(upper=98)
 
-    # Linear map -1..+1 to 0..100
-    linear = (raw + 1) * 50
-
-    # Blend with percentile rank for stability
-    if raw.notna().sum() > MIN_VALID_OBSERVATIONS:
-        pct = percentile_rank(raw, ascending=True)
-        return (linear * 0.5 + pct * 0.5)
-
-    return linear
+    return score
 
 
 def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
@@ -334,6 +375,7 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     df["score_risk"]      = calc_risk_score(df)
     df["score_size"]      = calc_size_score(df)
     df["score_dividend"]  = calc_dividend_score(df)
+    df["score_fcf_yield"] = calc_fcf_yield_score(df)  # Exponerat för AI Djup-analys
     
     # Beräkna sentimentpoäng om sentiment_raw finns i datan
     if "sentiment_raw" in df.columns and df["sentiment_raw"].notna().any():

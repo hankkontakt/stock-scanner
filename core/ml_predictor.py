@@ -305,6 +305,157 @@ def train_from_dataset(parquet_path: Path, universe: str) -> Optional[TrainedMod
     )
 
 
+def _cpcv_split(dates: pd.Series, n_splits: int = 6, embargo_pct: float = 0.01) -> list:
+    """
+    Combinatorial Purged Cross-Validation (CPCV) — Lopez de Prado.
+
+    Förhindrar dataleakage från överlappande 30-dagars forward returns:
+      - Purging: träningsrader vars forward-fönster rör vid testperioden tas bort
+      - Embargo: N% av rader direkt efter testperiodens slut hoppas över
+
+    Args:
+        dates: Sorterad datumkolumn
+        n_splits: Antal fold (6 ger bra bias-variance tradeoff)
+        embargo_pct: Andel av datan som används som embargo (standard 1%)
+
+    Returns:
+        Lista av (train_indices, test_indices) tuples
+    """
+    n = len(dates)
+    if n < 200:
+        return []  # För lite data – hoppa över CPCV
+
+    embargo_size = max(1, int(n * embargo_pct))
+    fold_size    = n // n_splits
+    splits       = []
+
+    for i in range(n_splits):
+        test_start = i * fold_size
+        test_end   = test_start + fold_size if i < n_splits - 1 else n
+
+        # Purge: ta bort träningsrader vars 30-dagars forward-fönster
+        # överlappar med testperiodens start
+        purge_start = max(0, test_start - 30)   # 30 = forward_return_30d horisont
+
+        # Embargo: hoppa över rader direkt efter testslut
+        embargo_end = min(n, test_end + embargo_size)
+
+        train_idx = list(range(0, purge_start)) + list(range(embargo_end, n))
+        test_idx  = list(range(test_start, test_end))
+
+        if len(train_idx) >= 100 and len(test_idx) >= 20:
+            splits.append((train_idx, test_idx))
+
+    return splits
+
+
+def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]:
+    """
+    CPCV-validerad träning. Ersätter train_from_dataset() för bättre
+    IC-estimat utan forward-looking bias.
+
+    Steg:
+    1. Skapa 6 CPCV-fold med purging + embargo
+    2. Beräkna Information Coefficient (IC) per fold
+    3. Träna slutgiltig modell på hela datasetet
+    4. Returnera modell med CPCV-validerade metrics
+
+    Returns:
+        TrainedModel med cpcv_avg_ic i test_metrics, eller None vid fel.
+    """
+    if not parquet_path.exists():
+        logger.error(f"Saknar träningsdata: {parquet_path}")
+        return None
+
+    df = pd.read_parquet(parquet_path)
+    if df.empty or len(df) < 200:
+        logger.error(f"För lite träningsdata: {len(df)} rader")
+        return None
+
+    required = set(TECH_FEATURES) | {"forward_return_30d", "date"}
+    missing = required - set(df.columns)
+    if missing:
+        logger.error(f"Saknade kolumner: {missing}")
+        return None
+
+    df = df.dropna(subset=["forward_return_30d"]).copy()
+    df = df[df["forward_return_30d"].between(-0.9, 5.0)]
+    df = df.sort_values("date").reset_index(drop=True)
+
+    splits = _cpcv_split(df["date"])
+    if not splits:
+        logger.warning("CPCV: för lite data – faller tillbaka till train_from_dataset()")
+        return train_from_dataset(parquet_path, universe)
+
+    all_ic     = []
+    all_hitrate = []
+
+    for fold_i, (train_idx, test_idx) in enumerate(splits):
+        train, test = df.iloc[train_idx], df.iloc[test_idx]
+
+        X_tr = train[TECH_FEATURES].fillna(0).values
+        y_tr = train["forward_return_30d"].values
+        X_te = test[TECH_FEATURES].fillna(0).values
+        y_te = test["forward_return_30d"].values
+
+        # Tidsviktning inom fold (nyare data viktas mer)
+        _today = datetime.date.today()
+        _age   = pd.to_datetime(train["date"]).dt.date.apply(
+            lambda d: (_today - d).days
+        ).values
+        w_tr = np.exp(-np.log(2) / SAMPLE_WEIGHT_HALFLIFE_YEARS * (_age / 365.25))
+        w_tr = w_tr / w_tr.mean()
+
+        m = _make_regressor()
+        m.fit(X_tr, y_tr, sample_weight=w_tr)
+        pred = m.predict(X_te)
+
+        try:
+            from scipy.stats import spearmanr
+            ic, _ = spearmanr(pred, y_te)
+            all_ic.append(float(ic) if not math.isnan(ic) else 0.0)
+        except Exception:
+            if len(y_te) > 1:
+                all_ic.append(float(np.corrcoef(pred, y_te)[0, 1]))
+
+        if len(y_te) > 0:
+            all_hitrate.append(float(((pred > 0) == (y_te > 0)).mean()))
+
+        logger.info(f"  CPCV fold {fold_i+1}/{len(splits)}: "
+                    f"IC={all_ic[-1]:.4f}, hit_rate={all_hitrate[-1]:.4f}")
+
+    avg_ic      = round(float(np.mean(all_ic)), 4)      if all_ic      else 0.0
+    avg_hitrate = round(float(np.mean(all_hitrate)), 4) if all_hitrate else 0.0
+    logger.info(f"  CPCV summary: avg_IC={avg_ic}, avg_hit_rate={avg_hitrate}, folds={len(splits)}")
+
+    # Slutgiltig modell tränas på ALL data
+    X_all = df[TECH_FEATURES].fillna(0).values
+    y_all = df["forward_return_30d"].values
+    _today = datetime.date.today()
+    _age   = pd.to_datetime(df["date"]).dt.date.apply(
+        lambda d: (_today - d).days
+    ).values
+    w_all = np.exp(-np.log(2) / SAMPLE_WEIGHT_HALFLIFE_YEARS * (_age / 365.25))
+    w_all = w_all / w_all.mean()
+
+    final_model = _make_regressor()
+    final_model.fit(X_all, y_all, sample_weight=w_all)
+
+    return TrainedModel(
+        model=final_model,
+        feature_cols=TECH_FEATURES,
+        universe=universe,
+        trained_at=pd.Timestamp.utcnow().isoformat(),
+        n_rows=len(df),
+        test_metrics={
+            "cpcv_avg_ic":      avg_ic,
+            "cpcv_avg_hitrate": avg_hitrate,
+            "n_folds":          len(splits),
+            "n_train_total":    len(df),
+        },
+    )
+
+
 def save_model(trained: TrainedModel, universe: str) -> Path:
     """Sparar tränad modell till models/ml_<universe>.pkl (atomic write)."""
     target = MODELS_DIR / f"ml_{universe}.pkl"
