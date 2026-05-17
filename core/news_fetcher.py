@@ -216,71 +216,125 @@ def format_news_section_md(
 
 def fetch_global_market_news(api_key: str, max_articles: int = 5) -> list:
     """
-    Hämtar generella marknadsnyheter från Finnhub (/api/v1/news?category=general).
+    Hämtar generella marknadsnyheter. Försöker Finnhub först, sedan Google News RSS.
     Returnerar [{headline, source, url, datetime_str, age_hours}] nyast först.
     """
-    if not api_key:
-        return []
-
     cache_key = f"market_news_global:{max_articles}"
     cached    = _read_cache(cache_key)
     if cached is not None:
         return cached
 
-    try:
-        time.sleep(0.4)
-        resp = requests.get(
-            "https://finnhub.io/api/v1/news",
-            params={"category": "general", "token": api_key},
-            timeout=8,
-        )
-        if resp.status_code == 429:
-            time.sleep(61)
+    results = []
+
+    # Försök 1: Finnhub
+    if api_key:
+        try:
+            time.sleep(0.4)
             resp = requests.get(
                 "https://finnhub.io/api/v1/news",
                 params={"category": "general", "token": api_key},
                 timeout=8,
             )
-        if resp.status_code != 200:
-            _write_cache(cache_key, [])
-            return []
+            if resp.status_code == 429:
+                time.sleep(61)
+                resp = requests.get(
+                    "https://finnhub.io/api/v1/news",
+                    params={"category": "general", "token": api_key},
+                    timeout=8,
+                )
+            if resp.status_code == 200:
+                articles = resp.json()
+                if isinstance(articles, list):
+                    for a in sorted(articles, key=lambda x: x.get("datetime", 0), reverse=True):
+                        headline = a.get("headline", "").strip()
+                        url      = a.get("url", "").strip()
+                        source   = a.get("source", "").strip()
+                        ts       = a.get("datetime", 0)
+                        if not headline or not url:
+                            continue
+                        try:
+                            dt    = datetime.fromtimestamp(ts)
+                            age_h = (datetime.now() - dt).total_seconds() / 3600
+                            dt_s  = dt.strftime("%d %b %H:%M")
+                        except Exception:
+                            age_h = 999
+                            dt_s  = "—"
+                        results.append({
+                            "headline":     headline[:130],
+                            "source":       source,
+                            "url":          url,
+                            "datetime_str": dt_s,
+                            "age_hours":    round(age_h, 1),
+                        })
+                        if len(results) >= max_articles:
+                            break
+        except Exception:
+            pass
 
-        articles = resp.json()
-        if not isinstance(articles, list):
-            _write_cache(cache_key, [])
-            return []
-
-        results = []
-        for a in sorted(articles, key=lambda x: x.get("datetime", 0), reverse=True):
-            headline = a.get("headline", "").strip()
-            url      = a.get("url", "").strip()
-            source   = a.get("source", "").strip()
-            ts       = a.get("datetime", 0)
-            if not headline or not url:
-                continue
-            try:
-                dt    = datetime.fromtimestamp(ts)
-                age_h = (datetime.now() - dt).total_seconds() / 3600
-                dt_s  = dt.strftime("%d %b %H:%M")
-            except Exception:
-                age_h = 999
-                dt_s  = "—"
-            results.append({
-                "headline":     headline[:130],
-                "source":       source,
-                "url":          url,
-                "datetime_str": dt_s,
-                "age_hours":    round(age_h, 1),
-            })
+    # Försök 2: Google News RSS (engelska finansnyheter)
+    if not results:
+        _GLOBAL_FINANCE_RSS = [
+            ("Google Finance", "https://news.google.com/rss/search?q=stock+market+finance&hl=en-US&gl=US&ceid=US:en"),
+            ("Google Markets", "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtVnVHZ0pWVXlnQVAB?hl=en-US&gl=US&ceid=US:en"),
+        ]
+        for source_name, rss_url in _GLOBAL_FINANCE_RSS:
             if len(results) >= max_articles:
                 break
+            try:
+                time.sleep(0.5)
+                resp = requests.get(rss_url, timeout=10, headers={"User-Agent": "MarketScan/1.0"})
+                if resp.status_code != 200:
+                    continue
+                root = ET.fromstring(resp.content)
+                ns   = {"atom": "http://www.w3.org/2005/Atom"}
+                items = root.findall(".//item") or root.findall(".//atom:entry", ns)
+                for item in items:
+                    if len(results) >= max_articles:
+                        break
+                    title_el = item.find("title") or item.find("atom:title", ns)
+                    headline = (title_el.text or "").strip() if title_el is not None else ""
+                    # Google News encodes source in title as "Headline - Source"
+                    if " - " in headline:
+                        parts    = headline.rsplit(" - ", 1)
+                        headline = parts[0].strip()
+                        source   = parts[1].strip()
+                    else:
+                        source = source_name
+                    if not headline:
+                        continue
+                    link_el = item.find("link") or item.find("atom:link", ns)
+                    url = (link_el.get("href") or link_el.text or "").strip() if link_el is not None else ""
+                    if not url:
+                        continue
+                    pub_el = item.find("pubDate") or item.find("published") or item.find("atom:published", ns)
+                    age_h, dt_s = 999, "—"
+                    if pub_el is not None and pub_el.text:
+                        try:
+                            dt    = parsedate_to_datetime(pub_el.text.strip())
+                            age_h = (datetime.now(dt.tzinfo) - dt).total_seconds() / 3600
+                            dt_s  = dt.strftime("%d %b %H:%M")
+                        except Exception:
+                            try:
+                                dt    = datetime.fromisoformat(pub_el.text.strip().replace("Z", "+00:00"))
+                                age_h = (datetime.now(dt.tzinfo) - dt).total_seconds() / 3600
+                                dt_s  = dt.strftime("%d %b %H:%M")
+                            except Exception:
+                                pass
+                    if age_h > 96:
+                        continue
+                    results.append({
+                        "headline":     headline[:130],
+                        "source":       source,
+                        "url":          url,
+                        "datetime_str": dt_s,
+                        "age_hours":    round(age_h, 1),
+                    })
+            except Exception:
+                continue
 
+    if results:
         _write_cache(cache_key, results)
-        return results
-
-    except Exception:
-        _write_cache(cache_key, [])
-        return []
+    return results
 
 
 # ══════════════════════════════════════════════════════════════
@@ -357,8 +411,8 @@ def fetch_swedish_market_news(max_articles: int = 5) -> list:
                         except Exception:
                             pass
 
-                # Filtrera bort artiklar äldre än 48h
-                if age_h > 48:
+                # Filtrera bort artiklar äldre än 96h
+                if age_h > 96:
                     continue
 
                 # Undvik duplicerade rubriker
@@ -378,7 +432,7 @@ def fetch_swedish_market_news(max_articles: int = 5) -> list:
     results = sorted(results, key=lambda x: x["age_hours"])[:max_articles]
 
     # Fallback: Google News RSS om svenska RSS-källor inte gav något
-    if not results:
+    if len(results) < max_articles:
         try:
             google = fetch_google_news_rss(
                 "börsen aktier Sverige", max_items=max_articles, lang="sv", days_back=2
@@ -394,7 +448,8 @@ def fetch_swedish_market_news(max_articles: int = 5) -> list:
         except Exception:
             pass
 
-    _write_cache(cache_key, results)
+    if results:
+        _write_cache(cache_key, results)
     return results
 
 
