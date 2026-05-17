@@ -464,3 +464,58 @@ SMALLCAP_CONFIG = {
 }
 assert abs(sum(SMALLCAP_CONFIG["scoring_weights"].values()) - 1.0) < 0.001, \
     "SMALLCAP_CONFIG scoring_weights summerar inte till 1.0"
+
+
+# ── Custom-tickers för UNIVERSE (läggs till via webbgränssnittet) ──
+_CUSTOM_UNIVERSE_FILE = Path(__file__).parent.parent / "data" / "custom_universe.json"
+
+def load_custom_universe() -> list:
+    """Returnerar användartillagda tickers för universumscannern."""
+    try:
+        if _CUSTOM_UNIVERSE_FILE.exists():
+            import json
+            return json.loads(_CUSTOM_UNIVERSE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return []
+
+def _save_custom_universe(items: list):
+    import json
+    _CUSTOM_UNIVERSE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _CUSTOM_UNIVERSE_FILE.write_text(
+        json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+def add_custom_to_universe(ticker: str, name: str = "") -> bool:
+    """Lägger till en ticker i universumscannerns custom-lista. Returnerar True om ny."""
+    from datetime import date
+    ticker = ticker.strip().upper()
+    custom = load_custom_universe()
+    if any(c["ticker"] == ticker for c in custom):
+        return False
+    custom.append({
+        "ticker": ticker,
+        "name": name.strip(),
+        "added": str(date.today()),
+    })
+    _save_custom_universe(custom)
+    return True
+
+def remove_custom_from_universe(ticker: str) -> bool:
+    """Tar bort en ticker ur universumscannerns custom-lista."""
+    ticker = ticker.strip().upper()
+    custom = load_custom_universe()
+    new = [c for c in custom if c["ticker"] != ticker]
+    if len(new) == len(custom):
+        return False
+    _save_custom_universe(new)
+    return True
+
+# Slå ihop UNIVERSE med custom-tickers
+try:
+    _custom_tickers = [c["ticker"] for c in load_custom_universe()]
+    if _custom_tickers:
+        # Behåll UNIVERSE som en tuple (original), skapa en combined-lista vid runtime
+        pass
+except Exception:
+    pass

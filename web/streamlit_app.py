@@ -523,7 +523,7 @@ def holdings_pie(df: pd.DataFrame) -> go.Figure:
 # SIDA 1 – ÖVERSIKT
 # ══════════════════════════════════════════════════════════════════════════════
 
-def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
+def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame = None):
     st.title("📊 Översikt")
 
     if df.empty and sc_df.empty:
@@ -547,6 +547,64 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
         ("⚡ STARK entry",   f"{n_stark}",              None),
         ("📊 Snittpoäng",    f"{avg_score:.1f}/100",    None),
     ])
+
+    st.markdown("---")
+
+    # ── KÖP NU – STARK entry-signaler ────────────────────────────────────────
+    frames_all = [f for f in [df, sc_df] if not f.empty and "entry_signal" in f.columns]
+    if frames_all:
+        combined_all = pd.concat(frames_all, ignore_index=True).drop_duplicates("ticker")
+        score_col_c = "score_total" if "score_total" in combined_all.columns else combined_all.columns[0]
+        buy_now = (combined_all[combined_all["entry_signal"] == "STARK"]
+                   .sort_values(score_col_c, ascending=False).head(12))
+        if not buy_now.empty:
+            st.subheader("🚀 Köp nu — STARK entry-signal")
+            st.caption(f"{len(buy_now)} aktier med starkast entry just nu. Klicka på en rad för detaljvy.")
+            _buy_cols = [c for c in ["ticker", "name", score_col_c, "sector",
+                                     "rsi_14", "return_1m", "return_3m"]
+                         if c in buy_now.columns]
+            _buy_show = buy_now[_buy_cols].copy()
+            _buy_show.rename(columns={score_col_c: "Score", "ticker": "Ticker", "name": "Bolag",
+                                       "sector": "Sektor", "rsi_14": "RSI",
+                                       "return_1m": "1m%", "return_3m": "3m%"}, inplace=True)
+            _buy_ev = st.dataframe(
+                _buy_show, use_container_width=True, hide_index=True,
+                on_select="rerun", selection_mode="single-row", key="ov_buynow_table",
+                column_config={"Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.0f")},
+            )
+            if _buy_ev and _buy_ev.selection and _buy_ev.selection.rows:
+                _bt = buy_now.iloc[_buy_ev.selection.rows[0]]["ticker"]
+                _br = combined_all[combined_all["ticker"] == _bt]
+                if not _br.empty:
+                    with st.expander(f"🔍 {_bt}", expanded=True):
+                        render_stock_detail(_bt, row=_br.iloc[0], df=combined_all,
+                                            show_ai=True, show_news=False,
+                                            show_chart=True, show_detail_data=True)
+
+    # ── BEVAKA / SÄLJ – innehav med låg score ────────────────────────────────
+    if holdings is not None and not holdings.empty and frames_all:
+        score_lookup = combined_all.set_index("ticker").to_dict("index") if frames_all else {}
+        sell_rows = []
+        for _, h in holdings.iterrows():
+            t = str(h["ticker"]).upper()
+            sc = score_lookup.get(t, {})
+            if not sc:
+                continue
+            score = sc.get("score_total", 0) or 0
+            entry = sc.get("entry_signal", "—")
+            if score < 45 or entry == "EJ AKTUELL":
+                sell_rows.append({
+                    "Ticker": t,
+                    "Bolag": str(sc.get("name", t))[:28],
+                    "Score": round(score),
+                    "Entry": entry,
+                    "Orsak": "Låg score" if score < 45 else "Ej aktuell signal",
+                })
+        if sell_rows:
+            st.subheader("⚠️ Innehav att se över")
+            st.caption("Portföljinnehav med score < 45 eller 'EJ AKTUELL' signal.")
+            st.dataframe(pd.DataFrame(sell_rows), use_container_width=True, hide_index=True,
+                         column_config={"Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.0f")})
 
     st.markdown("---")
 
@@ -599,100 +657,6 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                     st.toast(f"✅ {tkr} tillagd i nästa scan!", icon="📡")
                 except:
                     pass
-
-    # ═══════════════════════════════════════════════════════════════════════════
-    # GLOBALA MARKNADER & VALUTOR
-    # ═══════════════════════════════════════════════════════════════════════════
-    st.markdown("---")
-    st.subheader("🌍 Globala marknader & Valutor")
-    tab_global_idx, tab_fx, tab_rates = st.tabs(["📊 Index", "💱 Valutor", "📈 Räntor"])
-
-    with tab_global_idx:
-        with st.spinner("Hämtar globala index..."):
-            try:
-                from core.global_markets import fetch_global_indices
-                indices = fetch_global_indices()
-                if indices:
-                    # Sortera efter region: Asien först, Europa, USA sist
-                    asia_keys = ["^N225","^TOPX","^HSI","000001.SS","^KS11","^AXJO","^BSESN","^STI"]
-                    euro_keys = ["^GDAXI","^FTSE","^FCHI","^STOXX50E","^OMX"]
-                    us_keys   = ["^GSPC","^IXIC","^DJI","^VIX"]
-
-                    rows = []
-                    for k in asia_keys + euro_keys + us_keys:
-                        d = indices.get(k)
-                        if d:
-                            chg = d.get("change_pct", 0)
-                            arrow = "🟢" if chg >= 0 else "🔴"
-                            rows.append({
-                                "Index": f"{d['name']}",
-                                "Senast": f"{d.get('close', 0):,.0f}" if d.get('close') else "—",
-                                "Förändring": f"{arrow} {chg:+.2f}%",
-                            })
-                    df_idx = pd.DataFrame(rows)
-                    col_cfg_idx = {
-                        "Index": st.column_config.TextColumn("Index"),
-                        "Senast": st.column_config.TextColumn("Senast", width=80),
-                        "Förändring": st.column_config.TextColumn("Förändring", width=100),
-                    }
-                    st.dataframe(df_idx, use_container_width=True, hide_index=True,
-                                 column_config=col_cfg_idx, height=min(400, len(df_idx)*37+40))
-                    st.caption("Data från yfinance · uppdateras varje gång sidan laddas")
-                else:
-                    st.info("Kunde inte hämta indexdata just nu.")
-            except Exception as e:
-                st.caption(f"Globala index ej tillgängliga: {e}")
-
-    with tab_fx:
-        with st.spinner("Hämtar valutakurser..."):
-            try:
-                fx_rows = fetch_fx_rows()
-                if fx_rows:
-                    st.dataframe(pd.DataFrame(fx_rows), use_container_width=True,
-                                 hide_index=True, height=200)
-                else:
-                    st.info("Kunde inte hämta valutakurser.")
-            except Exception as e:
-                st.caption(f"Valutor ej tillgängliga: {e}")
-
-        # Visa FX-graf
-        with st.expander("📈 Visa FX-historik (senaste månaden)", expanded=False):
-            try:
-                fx_ticker = st.selectbox("Välj valutapar", list(FX_PAIRS.keys()), key="fx_chart")
-                fx_ticker_symbol = FX_PAIRS[fx_ticker]
-                fx_hist = yf.download(fx_ticker_symbol, period="1y", progress=False)
-                if not fx_hist.empty:
-                    # yfinance med valutapar returnerar MultiIndex-kolumner
-                    close_col = fx_hist["Close"] if "Close" in fx_hist.columns else fx_hist.iloc[:, 0]
-                    if isinstance(close_col, pd.DataFrame):
-                        close_col = close_col.iloc[:, 0]
-                    fig_fx = go.Figure()
-                    fig_fx.add_trace(go.Scatter(
-                        x=fx_hist.index, y=close_col,
-                        mode="lines", name=fx_ticker,
-                        line=dict(color="#42a5f5", width=2),
-                        fill="tozeroy", fillcolor="rgba(66,165,245,0.1)",
-                    ))
-                    fig_fx.update_layout(
-                        template="plotly_dark", paper_bgcolor="#131722",
-                        plot_bgcolor="#1e2230", height=250,
-                        margin=dict(t=16, b=16, l=16, r=16),
-                    )
-                    st.plotly_chart(fig_fx, use_container_width=True)
-            except Exception as e:
-                st.caption(f"FX-graf kunde inte laddas: {e}")
-
-    with tab_rates:
-        with st.spinner("Hämtar räntor..."):
-            try:
-                rate_rows = fetch_rate_rows()
-                if rate_rows:
-                    st.dataframe(pd.DataFrame(rate_rows), use_container_width=True,
-                                 hide_index=True, height=250)
-                else:
-                    st.info("Kunde inte hämta räntor.")
-            except Exception as e:
-                st.caption(f"Räntor ej tillgängliga: {e}")
 
     st.markdown("---")
 
@@ -3643,6 +3607,131 @@ def page_sector_rotation(df: pd.DataFrame):
                         st.markdown(result)
                 except Exception as e:
                     st.error(f"❌ {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SIDA – GLOBALA MARKNADER
+# ══════════════════════════════════════════════════════════════════════════════
+
+def page_global_markets():
+    """Globala marknader – index, valutor, räntor och nyheter."""
+    st.title("🌍 Globala marknader")
+    st.caption("Realtidsdata för globala index, valutor, räntor och marknadsnyheter.")
+
+    tab_idx, tab_fx, tab_rates, tab_news = st.tabs(
+        ["📊 Index", "💱 Valutor", "📈 Räntor", "📰 Nyheter"]
+    )
+
+    with tab_idx:
+        with st.spinner("Hämtar globala index..."):
+            try:
+                from core.global_markets import fetch_global_indices
+                indices = fetch_global_indices()
+                if indices:
+                    asia_keys = ["^N225","^TOPX","^HSI","000001.SS","^KS11","^AXJO","^BSESN","^STI"]
+                    euro_keys = ["^GDAXI","^FTSE","^FCHI","^STOXX50E","^OMX"]
+                    us_keys   = ["^GSPC","^IXIC","^DJI","^VIX"]
+                    rows = []
+                    for region, keys in [("🇺🇸 USA", us_keys), ("🇪🇺 Europa", euro_keys), ("🌏 Asien/Pacific", asia_keys)]:
+                        for k in keys:
+                            d = indices.get(k)
+                            if d:
+                                chg = d.get("change_pct", 0) or 0
+                                rows.append({
+                                    "Region": region,
+                                    "Index": d.get("name", k),
+                                    "Senast": f"{d.get('close', 0):,.0f}" if d.get("close") else "—",
+                                    "Förändring": f"{'🟢' if chg >= 0 else '🔴'} {chg:+.2f}%",
+                                })
+                    if rows:
+                        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
+                                     height=min(500, len(rows) * 37 + 40))
+                        st.caption("Källa: yfinance · uppdateras varje sidladdning")
+                    else:
+                        st.info("Inga indexdata tillgängliga just nu.")
+                else:
+                    st.info("Kunde inte hämta indexdata.")
+            except Exception as e:
+                st.warning(f"Globala index ej tillgängliga: {e}")
+
+    with tab_fx:
+        with st.spinner("Hämtar valutakurser..."):
+            try:
+                fx_rows = fetch_fx_rows()
+                if fx_rows:
+                    st.dataframe(pd.DataFrame(fx_rows), use_container_width=True,
+                                 hide_index=True, height=220)
+                else:
+                    st.info("Kunde inte hämta valutakurser.")
+            except Exception as e:
+                st.warning(f"Valutor ej tillgängliga: {e}")
+
+        with st.expander("📈 FX-historik (1 år)", expanded=False):
+            try:
+                fx_ticker = st.selectbox("Valutapar", list(FX_PAIRS.keys()), key="gm_fx_chart")
+                fx_hist = yf.download(FX_PAIRS[fx_ticker], period="1y", progress=False)
+                if not fx_hist.empty:
+                    close_col = fx_hist["Close"] if "Close" in fx_hist.columns else fx_hist.iloc[:, 0]
+                    if isinstance(close_col, pd.DataFrame):
+                        close_col = close_col.iloc[:, 0]
+                    fig_fx = go.Figure()
+                    fig_fx.add_trace(go.Scatter(x=fx_hist.index, y=close_col, mode="lines",
+                                                name=fx_ticker, line=dict(color="#42a5f5", width=2),
+                                                fill="tozeroy", fillcolor="rgba(66,165,245,0.1)"))
+                    fig_fx.update_layout(template="plotly_dark", paper_bgcolor="#131722",
+                                         plot_bgcolor="#1e2230", height=280,
+                                         margin=dict(t=16, b=16, l=16, r=16))
+                    st.plotly_chart(fig_fx, use_container_width=True)
+            except Exception as e:
+                st.caption(f"FX-graf: {e}")
+
+    with tab_rates:
+        with st.spinner("Hämtar räntor..."):
+            try:
+                rate_rows = fetch_rate_rows()
+                if rate_rows:
+                    st.dataframe(pd.DataFrame(rate_rows), use_container_width=True,
+                                 hide_index=True, height=280)
+                else:
+                    st.info("Kunde inte hämta räntor.")
+            except Exception as e:
+                st.warning(f"Räntor ej tillgängliga: {e}")
+
+    with tab_news:
+        with st.spinner("Hämtar marknadsnyheter..."):
+            try:
+                from core.news_fetcher import fetch_swedish_market_news, fetch_global_market_news
+                from core import config as _cfg
+                swedish = fetch_swedish_market_news(max_articles=8)
+                global_n = fetch_global_market_news(_cfg.FINNHUB_API_KEY, max_articles=6)
+
+                c_se, c_gl = st.columns(2)
+                with c_se:
+                    st.subheader("🇸🇪 Svenska nyheter")
+                    if swedish:
+                        for a in swedish:
+                            age = a.get("age_hours", 999)
+                            icon = "🔴" if age < 6 else "🟡" if age < 24 else "⚪"
+                            url = a.get("url", "")
+                            title = f"[{a['headline']}]({url})" if url else a["headline"]
+                            st.markdown(f"{icon} {title}  \n*{a.get('source','?')} · {a.get('datetime_str','—')}*")
+                            st.divider()
+                    else:
+                        st.info("Inga svenska nyheter just nu.")
+                with c_gl:
+                    st.subheader("🌍 Globala nyheter")
+                    if global_n:
+                        for a in global_n:
+                            age = a.get("age_hours", 999)
+                            icon = "🔴" if age < 6 else "🟡" if age < 24 else "⚪"
+                            url = a.get("url", "")
+                            title = f"[{a['headline']}]({url})" if url else a["headline"]
+                            st.markdown(f"{icon} {title}  \n*{a.get('source','?')} · {a.get('datetime_str','—')}*")
+                            st.divider()
+                    else:
+                        st.info("Inga globala nyheter (FINNHUB_API_KEY krävs).")
+            except Exception as e:
+                st.warning(f"Nyheter ej tillgängliga: {e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
