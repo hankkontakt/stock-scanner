@@ -1042,6 +1042,8 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
     # Sortera enligt rank_mode
     if rank_mode == "AI prediction" and "predicted_return" in filt_df.columns:
         filt_df = filt_df.sort_values("predicted_return", ascending=False)
+    elif rank_mode == "Båda (side-by-side)" and "predicted_return" in filt_df.columns:
+        pass  # Behåll klassisk sortering som default
 
     # KPI
     n_total  = len(df)
@@ -1061,7 +1063,18 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
     )
 
     with tab1:
-        _main_ranking_table(filt_df, holdings, watchlist)
+        # Om "Båda (side-by-side)" - visa två tabeller bredvid varandra
+        if rank_mode == "Båda (side-by-side)" and "predicted_return" in filt_df.columns:
+            col_classic, col_ml = st.columns(2)
+            with col_classic:
+                st.subheader("📊 Klassisk score")
+                _main_ranking_table(filt_df, holdings, watchlist)
+            with col_ml:
+                st.subheader("🤖 ML-prediktion")
+                ml_sorted = filt_df.sort_values("predicted_return", ascending=False)
+                _main_ranking_table(ml_sorted, holdings, watchlist)
+        else:
+            _main_ranking_table(filt_df, holdings, watchlist)
         c1, c2 = st.columns(2)
         with c1:
             st.plotly_chart(sector_bar_chart(filt_df), use_container_width=True)
