@@ -1,5 +1,5 @@
 """
-kketScan Dashboard – Interaktiv börsanalys
+kJag can Dashboard – Interaktiv börsanalys
 ============================================
 Läser utdata från scan.py, smallcap/scanner.py och portfolio.py.
 
@@ -325,30 +325,25 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             st.session_state["nav_page"] = "📊 Översikt"
             st.rerun()
 
-        # MARKNAD / PORTFÖLJ / ANALYS — on_change uppdaterar nav_page bara när
-        # användaren faktiskt klickar, inte vid varje rerun (löser override-buggen).
-        _MARKNAD     = ["🔍 Veckoscanner", "🏦 Småbolag", "🔍 Aktie-sök", "⭐ Bevakningar", "🏭 Sektorrotation", "📈 Backtesting"]
-        _PORTFOLIO   = ["💼 Portfölj", "📄 Paper Trading", "🤖 AI Paper Trading", "🚨 Larm & Notiser"]
-        _ANALYS_OPTS = ["📈 Teknisk analys", "🤖 AI"]
-        _cur = st.session_state["nav_page"]
-
+        # MARKNAD / PORTFÖLJ / ANALYS – använder enkla knappar (inga radio/on_change) för att
+        # undvika att st.rerun() från andra widgets ändrar nav_page.
         with st.expander("📈 MARKNAD", expanded=True):
-            st.radio("", _MARKNAD, key="nav_market", label_visibility="collapsed",
-                     index=_MARKNAD.index(_cur) if _cur in _MARKNAD else None,
-                     on_change=lambda: st.session_state.update(
-                         {"nav_page": st.session_state["nav_market"]}))
+            for label in ["🔍 Veckoscanner", "🏦 Småbolag", "🔍 Aktie-sök", "⭐ Bevakningar", "🏭 Sektorrotation", "📈 Backtesting"]:
+                if st.button(label, key=f"sb_{label}", use_container_width=True):
+                    st.session_state["nav_page"] = label
+                    st.rerun()
 
         with st.expander("💼 PORTFÖLJ", expanded=True):
-            st.radio("", _PORTFOLIO, key="nav_portfolio", label_visibility="collapsed",
-                     index=_PORTFOLIO.index(_cur) if _cur in _PORTFOLIO else None,
-                     on_change=lambda: st.session_state.update(
-                         {"nav_page": st.session_state["nav_portfolio"]}))
+            for label in ["💼 Portfölj", "📄 Paper Trading", "🤖 AI Paper Trading", "🚨 Larm & Notiser"]:
+                if st.button(label, key=f"sb_{label}", use_container_width=True):
+                    st.session_state["nav_page"] = label
+                    st.rerun()
 
         with st.expander("📈 ANALYS", expanded=False):
-            st.radio("", _ANALYS_OPTS, key="nav_analys", label_visibility="collapsed",
-                     index=_ANALYS_OPTS.index(_cur) if _cur in _ANALYS_OPTS else None,
-                     on_change=lambda: st.session_state.update(
-                         {"nav_page": st.session_state["nav_analys"]}))
+            for label in ["📈 Teknisk analys", "🤖 AI"]:
+                if st.button(label, key=f"sb_{label}", use_container_width=True):
+                    st.session_state["nav_page"] = label
+                    st.rerun()
 
         # Admin – alltid synlig längst ner
         if st.button("🔧 Admin", key="nav_admin", use_container_width=True):
@@ -579,8 +574,8 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
             btn_col1, btn_col2 = col.columns(2)
             if btn_col1.button("⭐", key=f"ov_top_wl_{tkr}", help="Lägg till i bevakning"):
                 st.session_state[f"_add_wl_{tkr}"] = True
-            if btn_col2.button("💰", key=f"ov_top_pt_{tkr}", help="Lägg till i portfölj (0 st)"):
-                st.session_state[f"_add_pt_{tkr}"] = True
+            if btn_col2.button("💰", key=f"ov_top_add_{tkr}", help="Lägg till i nästa scan"):
+                st.session_state[f"_add_scan_{tkr}"] = True
             # Process pending actions after loop
         # Process pending watchlist adds
         for i, (_, r) in enumerate(top5.iterrows()):
@@ -591,13 +586,18 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                     wl.append({"ticker": tkr, "name": r.get("name", tkr), "added": str(date.today())})
                     _save_watchlist_data(wl)
                     st.rerun()
-            if st.session_state.pop(f"_add_pt_{tkr}", False):
-                h = load_portfolio()
-                if tkr not in h["ticker"].values:
-                    new_row = pd.DataFrame([{"ticker": tkr, "shares": 0, "cost_basis": 0}])
-                    h = pd.concat([h, new_row], ignore_index=True)
-                    _save_holdings_df(h)
+            if st.session_state.pop(f"_add_scan_{tkr}", False):
+                is_sc = any(suf in str(tkr).upper() for suf in [".ST", ".HE", ".CO", ".OL"])
+                try:
+                    if is_sc:
+                        from smallcap.universe import add_custom
+                        add_custom(tkr, str(r.get("name", tkr)))
+                    else:
+                        from core.config import add_custom_to_universe
+                        add_custom_to_universe(tkr, str(r.get("name", tkr)))
                     st.rerun()
+                except:
+                    pass
 
     # ═══════════════════════════════════════════════════════════════════════════
     # GLOBALA MARKNADER & VALUTOR
@@ -875,13 +875,19 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                                 wl_items_ov.append({"ticker": sel_ticker, "name": row.iloc[0].get("name", sel_ticker), "added": str(date.today())})
                                 _save_watchlist_data(wl_items_ov)
                                 st.rerun()
-                        if c2.button("➕ Lägg till i portfölj", key=f"ov_det_pt_{sel_ticker}", use_container_width=True):
-                            h = load_portfolio()
-                            if sel_ticker not in h["ticker"].values:
-                                new_row = pd.DataFrame([{"ticker": sel_ticker, "shares": 0, "cost_basis": 0}])
-                                h = pd.concat([h, new_row], ignore_index=True)
-                                _save_holdings_df(h)
+                        if c2.button("➕ Lägg till i nästa scan", key=f"ov_det_add_{sel_ticker}", use_container_width=True):
+                            is_sc = any(suf in str(sel_ticker).upper() for suf in [".ST", ".HE", ".CO", ".OL"])
+                            try:
+                                if is_sc:
+                                    from smallcap.universe import add_custom
+                                    add_custom(sel_ticker, str(row.iloc[0].get("name", sel_ticker)))
+                                else:
+                                    from core.config import add_custom_to_universe
+                                    add_custom_to_universe(sel_ticker, str(row.iloc[0].get("name", sel_ticker)))
+                                st.success(f"`{sel_ticker}` tillagd i nästa scan!")
                                 st.rerun()
+                            except Exception as e:
+                                st.error(f"Fel: {e}")
                         render_stock_detail(
                             sel_ticker, row=row.iloc[0], df=df,
                             show_ai=True, show_news=False,
@@ -2385,7 +2391,14 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                     )
                     context_parts.append(f"Topp {top_n} smabolag: {sc_lista}")
 
-            # 4. Bygg kontext-strang
+            # 4. Lägg till dagskännedom
+            now = datetime.now()
+            days = ["måndag","tisdag","onsdag","torsdag","fredag","lördag","söndag"]
+            day_name = days[now.weekday()]
+            is_weekend = "HELG" if now.weekday() >= 5 else "BÖRSDAG"
+            context_parts.append(f"Datum: {now.strftime('%Y-%m-%d')} ({day_name}, {is_weekend})")
+
+            # 4b. Bygg kontext-strang
             context_str = ". ".join(context_parts) + "." if context_parts else ""
 
             # 5. Bygg historik-kontext (senaste 6 meddelanden)
@@ -4165,16 +4178,27 @@ def page_stock_search():
             else:
                 st.info(f"{ticker} finns redan i bevakningslistan.")
     with col2:
-        if st.button("➕ Lägg till i portfölj", key=f"add_pt_{ticker}", use_container_width=True):
-            hlds = load_portfolio()
-            if ticker not in hlds["ticker"].values:
-                new_row = pd.DataFrame([{"ticker": ticker, "shares": 0, "cost_basis": 0}])
-                hlds = pd.concat([hlds, new_row], ignore_index=True)
-                _save_holdings_df(hlds)
-                st.success(f"{ticker} tillagd i portföljen!")
+        if st.button("➕ Lägg till i nästa scan", key=f"add_scan_{ticker}", use_container_width=True):
+            try:
+                # Kolla om det är en svensk småbolagsticker (slutar på .ST eller .HE etc)
+                is_smallcap = any(suffix in ticker.upper() for suffix in [".ST", ".HE", ".CO", ".OL"])
+                if is_smallcap:
+                    from smallcap.universe import add_custom
+                    added = add_custom(ticker, name)
+                    if added:
+                        st.success(f"✔ `{ticker}` tillagd i småbolagsscannern! Syns i nästa scanning + ML.")
+                    else:
+                        st.info(f"`{ticker}` finns redan i småbolagsscannern.")
+                else:
+                    from core.config import add_custom_to_universe
+                    added = add_custom_to_universe(ticker, name)
+                    if added:
+                        st.success(f"✔ `{ticker}` tillagd i universumscannern! Syns i nästa scanning + ML.")
+                    else:
+                        st.info(f"`{ticker}` finns redan i universumscannern.")
                 st.rerun()
-            else:
-                st.info(f"{ticker} finns redan i portföljen.")
+            except Exception as e:
+                st.error(f"Kunde inte lägga till: {e}")
 
     try:
         yf_ticker = yf.Ticker(ticker)
@@ -4311,6 +4335,20 @@ def page_stock_search():
                     if revenue: context_lines.append(f"Intäkter: {revenue/1e9:.1f}B")
                     if ebitda: context_lines.append(f"EBITDA: {ebitda/1e9:.1f}B")
                     if div_yield: context_lines.append(f"Utdelningsyield: {div_yield*100:.2f}%")
+                    # Lägg till dagskännedom
+                    now = datetime.now()
+                    days = ["måndag","tisdag","onsdag","torsdag","fredag","lördag","söndag"]
+                    day_name = days[now.weekday()]
+                    is_weekend = "HELG" if now.weekday() >= 5 else "BÖRSDAG"
+                    swedish_time = now.strftime("%H:%M")
+                    context_lines.append(f"Tid: {day_name} {swedish_time} ({is_weekend})")
+                    # Lägg till dagskännedom
+                    now = datetime.now()
+                    days = ["måndag","tisdag","onsdag","torsdag","fredag","lördag","söndag"]
+                    day_name = days[now.weekday()]
+                    is_weekend = "HELG" if now.weekday() >= 5 else "BÖRSDAG"
+                    swedish_time = now.strftime("%H:%M")
+                    context_lines.append(f"Tid: {day_name} {swedish_time} ({is_weekend})")
                     context_str = "\n".join(context_lines)
 
                     full_prompt = f"""Du är en professionell aktieanalytiker. Här är live-data för {ticker} ({name}):
