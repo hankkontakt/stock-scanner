@@ -333,19 +333,19 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
 
         with st.expander("📈 MARKNAD", expanded=True):
             st.radio("", _MARKNAD, key="nav_market", label_visibility="collapsed",
-                     index=_MARKNAD.index(_cur) if _cur in _MARKNAD else 0,
+                     index=_MARKNAD.index(_cur) if _cur in _MARKNAD else None,
                      on_change=lambda: st.session_state.update(
                          {"nav_page": st.session_state["nav_market"]}))
 
         with st.expander("💼 PORTFÖLJ", expanded=True):
             st.radio("", _PORTFOLIO, key="nav_portfolio", label_visibility="collapsed",
-                     index=_PORTFOLIO.index(_cur) if _cur in _PORTFOLIO else 0,
+                     index=_PORTFOLIO.index(_cur) if _cur in _PORTFOLIO else None,
                      on_change=lambda: st.session_state.update(
                          {"nav_page": st.session_state["nav_portfolio"]}))
 
         with st.expander("📈 ANALYS", expanded=False):
             st.radio("", _ANALYS_OPTS, key="nav_analys", label_visibility="collapsed",
-                     index=_ANALYS_OPTS.index(_cur) if _cur in _ANALYS_OPTS else 0,
+                     index=_ANALYS_OPTS.index(_cur) if _cur in _ANALYS_OPTS else None,
                      on_change=lambda: st.session_state.update(
                          {"nav_page": st.session_state["nav_analys"]}))
 
