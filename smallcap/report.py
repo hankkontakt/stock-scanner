@@ -26,6 +26,7 @@ import pandas as pd
 
 from .scoring import _stars
 from .universe import SECTOR_GROUPS
+from core.country_flags import flag_for_ticker
 
 # ── Konstanter ────────────────────────────────────────────────────────────────
 _RANK_MEDALS     = ["🥇", "🥈", "🥉", "4.", "5."]
@@ -143,6 +144,7 @@ def _section_top5(scored: pd.DataFrame, prev_scores: dict) -> str:
     for i, (_, r) in enumerate(top.iterrows()):
         medal   = _RANK_MEDALS[i]
         ticker  = r.get("ticker", "?")
+        flag    = flag_for_ticker(ticker)
         stars   = r.get("sc_stars", "?")
         total   = r.get("sc_total", float("nan"))
         trend   = trend_arrow(ticker, float(total), prev_scores)
@@ -151,7 +153,7 @@ def _section_top5(scored: pd.DataFrame, prev_scores: dict) -> str:
         day     = _pct_arrow(r.get("day_change_pct", float("nan")))
         week    = _pct_arrow(r.get("week_change_pct", float("nan")))
         lines.append(
-            f"| {medal} | **{ticker}** | {stars} | **{total:.1f}** | {trend} "
+            f"| {medal} | {flag} **{ticker}** | {stars} | **{total:.1f}** | {trend} "
             f"| {sector} | {price} | {day} | {week} |"
         )
 
@@ -175,6 +177,7 @@ def _section_score_table(scored: pd.DataFrame, top_n: int, prev_scores: dict) ->
 
     for rank, (_, r) in enumerate(top.iterrows(), 1):
         ticker  = r.get("ticker", "?")
+        flag    = flag_for_ticker(ticker)
         stars   = r.get("sc_stars", "?")
         total   = r.get("sc_total", float("nan"))
         trend   = trend_arrow(ticker, float(total), prev_scores)
@@ -183,7 +186,7 @@ def _section_score_table(scored: pd.DataFrame, top_n: int, prev_scores: dict) ->
         day     = _pct_arrow(r.get("day_change_pct", float("nan")))
         week    = _pct_arrow(r.get("week_change_pct", float("nan")))
         rows.append(
-            f"| {rank} | {ticker} | {stars} | **{total:.1f}** | {trend} "
+            f"| {rank} | {flag} {ticker} | {stars} | **{total:.1f}** | {trend} "
             f"| {sector} | {price} | {day} | {week} |"
         )
 
@@ -210,7 +213,8 @@ def _section_factor_table(scored: pd.DataFrame, top_n: int) -> str:
 
     for _, r in top.iterrows():
         ticker = r.get("ticker", "?")
-        cells  = [ticker]
+        flag   = flag_for_ticker(ticker)
+        cells  = [f"{flag} {ticker}"]
         for col, _ in factor_cols:
             v = r.get(col, float("nan"))
             try:
@@ -250,7 +254,8 @@ def _thematic_block(
         for col, _ in all_cols:
             v = r.get(col, "—")
             if col == "ticker":
-                cells.append(f"**{v}**")
+                flag = flag_for_ticker(v)
+                cells.append(f"{flag} **{v}**")
             elif col == "sc_stars":
                 cells.append(str(v))
             elif col == "sc_total":
@@ -313,12 +318,12 @@ def _company_profile(row: pd.Series, prev_scores: dict, news: list = None) -> st
     from .history import arrow as trend_arrow, delta_str
 
     t      = row.get("ticker", "?")
+    flag   = flag_for_ticker(t)
     stars  = row.get("sc_stars", "?")
     total  = row.get("sc_total", float("nan"))
     sector = _sector_for(t)
     trend  = trend_arrow(t, float(total), prev_scores)
     delta  = delta_str(t, float(total), prev_scores)
-
     # Marknadsdata
     price    = _fmt_price(row.get("current_price", float("nan")))
     day_chg  = _pct_arrow(row.get("day_change_pct", float("nan")))
@@ -347,7 +352,7 @@ def _company_profile(row: pd.Series, prev_scores: dict, news: list = None) -> st
         fcf_yield = fcf / mkcap
 
     lines = [
-        f"### {stars} {t} — {total:.1f} poäng  {trend} ({delta}p)",
+        f"### {stars} {flag} {t} — {total:.1f} poäng  {trend} ({delta}p)",
         f"**Sektor:** {sector}",
         "",
         "| Nyckeltal | Värde |",

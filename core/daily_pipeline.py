@@ -32,7 +32,8 @@ from core.global_markets import (
     fetch_global_indices, format_index_summary_short, get_global_market_narrative,
 )
 from core.email_template import send_email, build_section_header, build_pnl_cell
-from core.data_fetcher import fetch_prices_only, update_scored_with_prices
+from core.data_fetcher import fetch_prices_only, update_scored_with_prices, fetch_universe_data
+from core.scoring import score_universe
 from core import ai_analysis
 
 # ── Sökvägar ─────────────────────────────────────────────────────────────────
@@ -498,7 +499,39 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         scored = _load_latest_scored("scored_universe_*.csv")
         _ml_universe = "universe"
     elif mode == "weekly":
-        scored = _load_latest_scored("scored_universe_*.csv")
+        # ── Full universe scan ────────────────────────────────────────────────
+        # Hämtar data för ALLA tickers i UNIVERSE + custom-lista,
+        # scorer dem och sparar ny scored_universe_*.csv.
+        # Körs ~2-3 min med 8 workers + 30-dagars fundamentalcache.
+        logger.info("🔄 Full universe scan – hämtar data för alla tickers...")
+        from core.macro_regime import detect_regime
+
+        custom_tickers = [c["ticker"] for c in config.load_custom_universe()]
+        all_tickers = list(dict.fromkeys(config.UNIVERSE + custom_tickers))
+        logger.info(f"  📋 Universe: {len(all_tickers)} tickers")
+
+        raw_df = fetch_universe_data(all_tickers, verbose=True)
+
+        if not raw_df.empty:
+            # Detektera marknadsregim för dynamiska vikter
+            try:
+                regime_info = detect_regime()
+                regime = regime_info.get("regime", "OSÄKER")
+                logger.info(f"  🌡 Marknadsregim: {regime}")
+            except Exception as _re:
+                regime = "OSÄKER"
+                logger.warning(f"  ⚠ Regime-detektion misslyckades: {_re} – kör OSÄKER")
+
+            scored = score_universe(raw_df, regime=regime)
+            logger.info(f"  ✅ Scorat {len(scored)} tickers")
+
+            csv_path = REPORT_DIR / f"scored_universe_{date_str}.csv"
+            scored.to_csv(csv_path, index=False)
+            logger.info(f"  💾 Sparade {csv_path.name}")
+        else:
+            logger.warning("  ⚠ Universe fetch returnerade tom DataFrame – laddar senaste cache")
+            scored = _load_latest_scored("scored_universe_*.csv")
+
         _ml_universe = "universe"
     elif mode == "smallcap":
         scored = _load_latest_scored("smallcap_scored_*.csv")
