@@ -1,5 +1,5 @@
 """
-MarketScan Dashboard – Interaktiv börsanalys
+kketScan Dashboard – Interaktiv börsanalys
 ============================================
 Läser utdata från scan.py, smallcap/scanner.py och portfolio.py.
 
@@ -4074,6 +4074,10 @@ def page_stock_search():
     if default_ticker:
         st.session_state["search_ticker"] = ""
 
+    # Håll reda på vald ticker i session_state så den överlever reruns
+    if "stock_search_q" not in st.session_state:
+        st.session_state["stock_search_q"] = ""
+
     items = load_watchlist()
     hlds = load_portfolio()
 
@@ -4081,7 +4085,7 @@ def page_stock_search():
     with col_s:
         search_q = st.text_input(
             "Sök ticker eller bolagsnamn",
-            value=default_ticker,
+            value=default_ticker or st.session_state.get("stock_search_q", ""),
             key="stock_search_input",
             placeholder="t.ex. TSLA, AAPL, VOLV-B.ST, Investor...",
             label_visibility="collapsed",
@@ -4089,34 +4093,50 @@ def page_stock_search():
     with col_go:
         st.button("🔍 Sök", key="btn_stock_search", use_container_width=True, type="primary")
 
-    if not search_q:
+    # Uppdatera session_state med senaste sökning
+    if search_q:
+        st.session_state["stock_search_q"] = search_q
+
+    # Kolla om vi har en vald ticker från tidigare (efter rerun)
+    selected_ticker = st.session_state.get("selected_stock_ticker", "")
+    selected_name = st.session_state.get("selected_stock_name", "")
+
+    if not search_q and not selected_ticker:
         st.info("Skriv en ticker eller ett bolagsnamn ovan för att söka.")
         st.markdown("---")
         st.caption("Tips: Använd sökfältet i sidebaren för att snabbt söka efter aktier!")
         return
 
-    with st.spinner("Söker efter aktie..."):
-        hits = _search_ticker_yfinance(search_q.strip())
-        if not hits:
-            try:
-                t = yf.Ticker(search_q.strip().upper())
-                info = t.info or {}
-                if info.get("quoteType") in ("EQUITY", "ETF", "MUTUALFUND", "INDEX"):
-                    hits = [{"ticker": search_q.strip().upper(),
-                              "name": info.get("shortName") or info.get("longName", search_q),
-                              "exchange": info.get("exchange", "")}]
-            except Exception:
-                pass
+    # Om vi redan har en vald ticker från session_state, hoppa över sökning
+    if not selected_ticker:
+        with st.spinner("Söker efter aktie..."):
+            hits = _search_ticker_yfinance(search_q.strip())
+            if not hits:
+                try:
+                    t = yf.Ticker(search_q.strip().upper())
+                    info = t.info or {}
+                    if info.get("quoteType") in ("EQUITY", "ETF", "MUTUALFUND", "INDEX"):
+                        hits = [{"ticker": search_q.strip().upper(),
+                                  "name": info.get("shortName") or info.get("longName", search_q),
+                                  "exchange": info.get("exchange", "")}]
+                except Exception:
+                    pass
 
-        if not hits:
-            st.info("Inga sökresultat. Försök med en ticker-symbol som TSLA eller AAPL.")
-            return
+            if not hits:
+                st.info("Inga sökresultat. Försök med en ticker-symbol som TSLA eller AAPL.")
+                return
 
-    ticker_options = {f"{h['ticker']} - {h['name'][:50]} ({h.get('exchange', '?')})": h for h in hits}
-    selected_label = st.selectbox("Välj från sökresultat", list(ticker_options.keys()), key="stock_search_result")
-    selected = ticker_options[selected_label]
-    ticker = selected["ticker"]
-    name = selected["name"]
+        ticker_options = {f"{h['ticker']} - {h['name'][:50]} ({h.get('exchange', '?')})": h for h in hits}
+        selected_label = st.selectbox("Välj från sökresultat", list(ticker_options.keys()), key="stock_search_result")
+        selected = ticker_options[selected_label]
+        ticker = selected["ticker"]
+        name = selected["name"]
+        # Spara i session_state
+        st.session_state["selected_stock_ticker"] = ticker
+        st.session_state["selected_stock_name"] = name
+    else:
+        ticker = selected_ticker
+        name = selected_name
 
     st.markdown(f"## 📈 {ticker} - {name}")
     col1, col2 = st.columns(2)
