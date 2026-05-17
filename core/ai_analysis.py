@@ -28,6 +28,24 @@ import pandas as pd
 from . import config
 
 
+# ── Runtime-säker secret-läsare ────────────────────────────────────────────
+# config.py läser nycklar vid import-tid. På Streamlit Cloud är st.secrets
+# inte tillgängligt då. Denna funktion försöker os.environ först (GitHub
+# Actions, lokal .env) och faller tillbaka till st.secrets vid runtime.
+def _get_secret(key: str, default: str = "") -> str:
+    """Läs API-nyckel från miljövariabel. Fallback till st.secrets vid runtime."""
+    val = os.getenv(key)
+    if val:
+        return val
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+    return default
+
+
 # ── Depth-nivå → max_tokens mapping ──────────────────────────────────────────
 DEPTH_MAP = {
     "Snabb":      512,
@@ -300,7 +318,7 @@ def _deepseek_call(messages: list, system_prompt: str = "",
       
     Returnerar svaret som sträng eller felmeddelande.
     """
-    api_key = getattr(config, "DEEPSEEK_API_KEY", None) or os.getenv("DEEPSEEK_API_KEY", "")
+    api_key = _get_secret("DEEPSEEK_API_KEY", "")
     if not api_key:
         return "❌ **DeepSeek API-nyckel saknas.**\n\nLägg till `DEEPSEEK_API_KEY` i din `.env`-fil."
 
@@ -416,7 +434,7 @@ def _gemini_call(messages: list, system_prompt: str = "",
     Returnerar svaret som sträng, "" (tomt = fallback till DeepSeek),
     eller felmeddelande som börjar med "⚠️".
     """
-    api_key = getattr(config, "GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY", "")
+    api_key = _get_secret("GEMINI_API_KEY", "")
     if not api_key:
         return ""
 
@@ -605,7 +623,7 @@ def _ai_call(messages: list, system_prompt: str = "",
         #   - felmeddelande som börjar med "⚠️" (rate-limit, timeout, blockering)
         gemini_failed = not result or result.startswith("⚠️")
         if gemini_failed:
-            deepseek_key = getattr(config, "DEEPSEEK_API_KEY", None) or os.getenv("DEEPSEEK_API_KEY", "")
+            deepseek_key = _get_secret("DEEPSEEK_API_KEY", "")
             if deepseek_key:
                 ds_result = _deepseek_call(messages, system_prompt, max_tokens, temperature)
                 if not ds_result.startswith("⚠️") and not ds_result.startswith("❌"):
@@ -1335,7 +1353,7 @@ def test_api_key(provider: str = "auto") -> dict:
 
 def _test_deepseek_key() -> dict:
     """Testa DeepSeek API-nyckel."""
-    api_key = getattr(config, "DEEPSEEK_API_KEY", None) or os.getenv("DEEPSEEK_API_KEY", "")
+    api_key = _get_secret("DEEPSEEK_API_KEY", "")
     if not api_key:
         return {"status": "error", "message": "🔴 DeepSeek API-nyckel saknas"}
 
@@ -1375,7 +1393,7 @@ def _test_deepseek_key() -> dict:
 
 def _test_gemini_key() -> dict:
     """Testa Gemini API-nyckel."""
-    api_key = getattr(config, "GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY", "")
+    api_key = _get_secret("GEMINI_API_KEY", "")
     if not api_key:
         return {"status": "error", "message": "🔴 Gemini API-nyckel saknas"}
 
