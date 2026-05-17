@@ -2,9 +2,10 @@
 # Pinnar med övre gränser för att skydda mot breaking changes i minor releases.
 # Pillow + cryptography listas INTE explicit — de är transitive deps från
 # streamlit/PyNaCl och kan trigga pip-resolver-backtracking om de fästs här.
+# curl_cffi listas INTE explicit — yfinance hanterar sin egen curl_cffi-dep;
+# en explicit pinn konfliktar med nyare yfinance-versioner och hänger Streamlit Cloud.
 mistune>=3.0.0,<4.0.0
 yfinance>=0.2.40,<0.3.0
-curl_cffi>=0.6.0,<0.8.0
 pandas>=2.0.0,<2.3.0
 numpy>=1.24.0,<2.2.0
 requests>=2.32.0,<3.0.0
