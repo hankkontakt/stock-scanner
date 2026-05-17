@@ -114,9 +114,9 @@ def load_smallcap_reports() -> dict:
     return result
 
 
-@st.cache_data(ttl=60)
 def load_portfolio() -> pd.DataFrame:
-    """Laddar holdings.csv och berikar med senaste scan-data."""
+    """Laddar holdings.csv och berikar med senaste scan-data.
+    Ingen cache – filen ändras när användaren lägger till tickers."""
     try:
         holdings = pd.read_csv(DATA_DIR / "holdings.csv")
         holdings["ticker"] = holdings["ticker"].str.upper()
@@ -125,8 +125,8 @@ def load_portfolio() -> pd.DataFrame:
         return pd.DataFrame(columns=["ticker", "shares", "cost_basis"])
 
 
-@st.cache_data(ttl=60)
 def load_watchlist() -> list:
+    """Laddar watchlist.json. Ingen cache – filen ändras när användaren lägger till tickers."""
     wl_path = DATA_DIR / "watchlist.json"
     try:
         return json.loads(wl_path.read_text(encoding="utf-8"))
