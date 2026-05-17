@@ -377,7 +377,7 @@ DEEPSEEK_API_KEY  = _get_secret("DEEPSEEK_API_KEY", "")
 AI_MODEL          = "deepseek-chat"          # deepseek-chat eller deepseek-reasoner
 GEMINI_API_KEY    = _get_secret("GEMINI_API_KEY", "")
 GEMINI_MODEL      = "gemini-2.5-flash"       # nyaste gratis-modellen (1.5-flash deprecerades okt 2024). Fallback-kedja i ai_analysis.py
-AI_MAX_TOKENS     = 2048                     # Max tokens per svar
+AI_MAX_TOKENS     = 4096                     # Max tokens per svar
 AI_TEMPERATURE    = 0.3                      # Låg temperatur = mer deterministiska svar
 
 # ════════════════ PARALLELLA INSTÄLLNINGAR ════════════════

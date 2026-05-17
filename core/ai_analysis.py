@@ -30,10 +30,10 @@ from . import config
 
 # ── Depth-nivå → max_tokens mapping ──────────────────────────────────────────
 DEPTH_MAP = {
-    "Snabb":      256,
-    "Normal":     1024,
-    "Djup":       2048,
-    "Extra djup": 4096,
+    "Snabb":      512,
+    "Normal":     2048,
+    "Djup":       4096,
+    "Extra djup": 8192,
 }
 
 def _resolve_depth(depth: str = "Normal") -> int:
