@@ -2237,19 +2237,25 @@ def _save_watchlist_data(items: list):
 
 def _search_ticker_yfinance(query: str) -> list:
     """Sök ticker via yfinance. Returnerar lista med {ticker, name}."""
-    if not query or len(query) < 1:
+    if not query or len(query) < 2:
         return []
     try:
         results = yf.Search(query, max_results=8).quotes or []
+        # Om inga träffar med originalfrågan, försök med versaler (bättre för tickersymboler)
+        if not results and query != query.upper():
+            results = yf.Search(query.upper(), max_results=8).quotes or []
         hits = []
         for r in results:
             qtype = r.get("quoteType", "")
             if qtype in ("EQUITY", "ETF", "MUTUALFUND", "INDEX"):
-                hits.append({
-                    "ticker": r.get("symbol", ""),
-                    "name":   r.get("shortname") or r.get("longname") or "",
-                    "exchange": r.get("exchange", ""),
-                })
+                ticker = r.get("symbol", "")
+                name = r.get("shortname") or r.get("longname") or ""
+                if ticker:
+                    hits.append({
+                        "ticker": ticker,
+                        "name":   name,
+                        "exchange": r.get("exchange", ""),
+                    })
         return hits
     except Exception:
         return []
@@ -2431,12 +2437,14 @@ def page_admin():
                                  placeholder="t.ex. AAPL, VOLV-B.ST")
         ticker_map = {}
         if search_h:
-            hits = _search_ticker_yfinance(search_h.upper())
+            hits = _search_ticker_yfinance(search_h)
             if hits:
                 options = {f"{h['ticker']} — {h['name'][:40]}": h for h in hits}
                 selected = st.selectbox("Välj aktie", list(options.keys()), key="hold_hit")
                 if selected:
                     ticker_map = options[selected]
+            else:
+                st.caption("Inga träffar — prova med ticker direkt, t.ex. INVE-B.ST")
         else:
             # Manuell inmatning
             ticker_map = {"ticker": "", "name": ""}
