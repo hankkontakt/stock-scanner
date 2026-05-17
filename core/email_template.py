@@ -448,7 +448,7 @@ def build_section_header(title: str, subtitle: str = "") -> str:
 
 # ── Plain-text fallback ──────────────────────────────────────────────────────
 
-def _make_plain_text(md_text: str, max_chars: int = 1500) -> str:
+def _make_plain_text(md_text: str, max_chars: int = 100000) -> str:
     """
     Konverterar markdown till plain text och trunkerar vid mening.
     Trunkering sker alltid vid en mening (punkt + mellanrum), inte mitt i.
