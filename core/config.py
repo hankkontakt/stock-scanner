@@ -467,6 +467,7 @@ assert abs(sum(SMALLCAP_CONFIG["scoring_weights"].values()) - 1.0) < 0.001, \
 
 
 # ── Custom-tickers för UNIVERSE (läggs till via webbgränssnittet) ──
+from pathlib import Path
 _CUSTOM_UNIVERSE_FILE = Path(__file__).parent.parent / "data" / "custom_universe.json"
 
 def load_custom_universe() -> list:
