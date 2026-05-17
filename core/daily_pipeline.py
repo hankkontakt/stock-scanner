@@ -622,7 +622,10 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 emoji = "🟢" if (h.get("pnl_pct") or 0) >= 0 else "🔴"
                 pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "—"
                 sl_info = f" (stop-loss vid {h['stop_loss_pct']:+.1f}%)" if h.get('stop_loss_pct') and (h.get('pnl_pct') or 0) <= -10 else ""
-                report_lines.append(f"- {emoji} **{h['ticker']}** – {pnl} | Score {h['score']:.0f} | {h['entry']}{sl_info}")
+                score_val = h.get('score')
+                score_str = f"{score_val:.0f}" if score_val is not None else "—"
+                entry_str = h.get('entry', '—') or '—'
+                report_lines.append(f"- {emoji} **{h['ticker']}** – {pnl} | Score {score_str} | {entry_str}{sl_info}")
         else:
             report_lines.append("*(Inga innehav i portföljen)*")
 
