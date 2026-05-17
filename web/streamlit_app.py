@@ -649,25 +649,22 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
         hlds = load_portfolio()
         for i, (col, (_, r)) in enumerate(zip(cols, top5.iterrows())):
             medals = ["🥇", "🥈", "🥉", "4.", "5."]
-            tkr   = r.get("ticker", "")
+            tkr    = r.get("ticker", "")
             score  = r.get("score_total", 0)
-            entry  = r.get("entry_signal", "—")
             sector = r.get("sector", "—")
             delta  = r.get("score_delta")
             d_str  = f"Δ {delta:+.1f}p" if delta and not pd.isna(delta) else ""
-            col.metric(
-                f"{medals[i]} {tkr}",
-                f"{score:.0f} poäng",
-                d_str or f"{sector[:18]}",
-            )
-            # Lägg till knappar i bevakning/portfölj (använder session_state för att undvika rerun-problem i nested columns)
+            col.markdown(f"**{medals[i]}**")
+            if col.button(tkr, key=f"ov_top5_nav_{tkr}", use_container_width=True,
+                          help="Klicka för aktieanalys"):
+                st.session_state["top5_detail"] = tkr
+            col.metric("", f"{score:.0f} poäng", d_str or f"↑ {sector[:18]}")
             btn_col1, btn_col2 = col.columns(2)
             if btn_col1.button("⭐", key=f"ov_top_wl_{tkr}", help="Lägg till i bevakning"):
                 st.session_state[f"_add_wl_{tkr}"] = True
             if btn_col2.button("💰", key=f"ov_top_add_{tkr}", help="Lägg till i nästa scan"):
                 st.session_state[f"_add_scan_{tkr}"] = True
-            # Process pending actions after loop
-        # Process pending watchlist adds
+        # Process pending watchlist/scan adds
         for i, (_, r) in enumerate(top5.iterrows()):
             tkr = r.get("ticker", "")
             if st.session_state.pop(f"_add_wl_{tkr}", False):
@@ -689,6 +686,22 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                     st.toast(f"✅ {tkr} tillagd i nästa scan!", icon="📡")
                 except:
                     pass
+
+        # ── Detaljvy för klickad Topp 5-aktie ────────────────────────────
+        sel_detail = st.session_state.get("top5_detail")
+        if sel_detail:
+            sel_row = df[df["ticker"] == sel_detail]
+            if not sel_row.empty:
+                with st.expander(f"🔍 Detaljvy: {sel_detail}", expanded=True):
+                    close_col = st.columns([10, 1])[1]
+                    if close_col.button("✕", key="top5_detail_close", help="Stäng"):
+                        del st.session_state["top5_detail"]
+                        st.rerun()
+                    render_stock_detail(sel_detail, row=sel_row.iloc[0], df=df,
+                                        show_ai=True, show_news=False,
+                                        show_chart=True, show_detail_data=True)
+            else:
+                del st.session_state["top5_detail"]
 
     st.markdown("---")
 
