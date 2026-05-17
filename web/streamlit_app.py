@@ -968,7 +968,7 @@ def _apply_weekly_filters(df: pd.DataFrame, filters: dict,
     return out.reset_index(drop=True)
 
 
-def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list):
+def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list, table_key: str = "main_ranking_table"):
     """Visar huvudrankingstabellen med färgkodning."""
     if df.empty:
         st.info("Inga bolag matchar aktuella filter.")
@@ -1058,7 +1058,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         hide_index=True,
         on_select="rerun",
         selection_mode="single-row",
-        key="main_ranking_table",
+        key=table_key,
     )
     st.caption(f"Visar {len(display)} bolag — klicka på en rad för detaljer")
 
@@ -1159,7 +1159,7 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
             with col_ml:
                 st.subheader("🤖 ML-prediktion")
                 ml_sorted = filt_df.sort_values("predicted_return", ascending=False)
-                _main_ranking_table(ml_sorted, holdings, watchlist)
+                _main_ranking_table(ml_sorted, holdings, watchlist, table_key="main_ranking_table_ml")
         else:
             _main_ranking_table(filt_df, holdings, watchlist)
         c1, c2 = st.columns(2)
