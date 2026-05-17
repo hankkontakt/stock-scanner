@@ -438,10 +438,12 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def kpi_row(metrics: list):
-    """Visar en rad med st.metric-kort. metrics = [(label, value, delta), ...]"""
+    """Visar en rad med st.metric-kort. metrics = [(label, value, delta[, help]), ...]"""
     cols = st.columns(len(metrics))
-    for col, (label, value, delta) in zip(cols, metrics):
-        col.metric(label, value, delta)
+    for col, item in zip(cols, metrics):
+        label, value, delta = item[0], item[1], item[2]
+        help_text = item[3] if len(item) > 3 else None
+        col.metric(label, value, delta, help=help_text)
 
 
 def score_distribution_chart(df: pd.DataFrame, score_col: str = "score_total") -> go.Figure:
@@ -3495,18 +3497,24 @@ men garanterar ingenting om framtiden.
 
     if result and result.get("perioder", 0) > 0:
         kpi_row([
-            ("📅 Perioder testade",  f"{result['perioder']} mån",                        f"{result['år_testat']} år"),
-            ("📈 Kumulativ",          f"{result['kumulativ_avkastning']:+.1f}%",           f"{bench}: {result.get('kumulativ_benchmark', 0):+.1f}%"),
-            ("📊 Annualiserad",       f"{result['annualiserad_port']:+.1f}%/år",           f"Alpha: {result.get('alpha_annualiserad', 0) or 0:+.1f}%/år"),
-            ("🎯 Sharpe ratio",       f"{result['sharpe_ratio']:.2f}",                    ">1.0 = bra"),
-            ("✅ Hit rate",           f"{result.get('hit_rate_pct', 0):.0f}%",            ">50 % slår index"),
-            ("💀 Max drawdown",       f"{result['max_drawdown_pct']:.1f}%",               None),
+            ("📅 Perioder testade",  f"{result['perioder']} mån",                        f"{result['år_testat']} år",
+             "Antal månader som backtestet täcker. Fler perioder ger mer statistisk säkerhet. Minst 24 perioder (2 år) rekommenderas för meningsfulla slutsatser."),
+            ("📈 Kumulativ",          f"{result['kumulativ_avkastning']:+.1f}%",           f"{bench}: {result.get('kumulativ_benchmark', 0):+.1f}%",
+             "Total avkastning under hela testperioden om du investerat 100 kr från start. OBS: Survivorship bias blåser upp siffran med +5–15 %/år — ta den inte bokstavligt."),
+            ("📊 Annualiserad",       f"{result['annualiserad_port']:+.1f}%/år",           f"Alpha: {result.get('alpha_annualiserad', 0) or 0:+.1f}%/år",
+             "Genomsnittlig årsavkastning (geometriskt medelvärde). Alpha = meravkastning utöver benchmark. Högt alpha kan bero på survivorship bias snarare än riktig skicklighet."),
+            ("🎯 Sharpe ratio",       f"{result['sharpe_ratio']:.2f}",                    ">1.0 = bra",
+             "Riskjusterad avkastning: (avkastning − riskfri ränta) ÷ volatilitet. >1.0 = bra, >1.5 = mycket bra, >2.0 = utmärkt. Beräknas mot riskfri ränta ~4 %/år. Tar inte hänsyn till survivorship bias."),
+            ("✅ Hit rate",           f"{result.get('hit_rate_pct', 0):.0f}%",            ">50 % slår index",
+             "Andel månader som modellen slog benchmark. 50 % = kasta krona/klave. >55 % = bra. >60 % = mycket bra. Det viktigaste nyckeltalet — påverkas minst av survivorship bias."),
+            ("💀 Max drawdown",       f"{result['max_drawdown_pct']:.1f}%",               None,
+             "Värsta nedgång från toppnivå till bottennivå under testperioden. −20 % = portföljen tappade 20 % som värst innan den vände upp. Ju mer negativt, desto mer risk att du säljer i panik."),
         ])
 
-        tab1, tab2, tab3 = st.tabs(["📈 Equity-kurva", "📋 Per period", "💾 Export & AI"])
+        tab1, tab2, tab3 = st.tabs(["📈 Equity-kurva", "📋 Per period", "🤖 AI-analys"])
 
         with tab1:
-            period_data = result.get("period_details", pd.DataFrame())
+            period_data = pd.DataFrame(result.get("period_details", []))
             if not period_data.empty:
                 port_rets = period_data["portfolio_ret"].values / 100
                 equity_port = [100.0]
@@ -3531,8 +3539,8 @@ men garanterar ingenting om framtiden.
                             x=labels, y=eq_b, mode="lines", name=bench,
                             line=dict(color="#f59e0b", width=1.8, dash="dash"),
                         ))
-                if result2 and not result2.get("period_details", pd.DataFrame()).empty:
-                    pd2 = result2["period_details"]
+                if result2 and result2.get("period_details"):
+                    pd2 = pd.DataFrame(result2["period_details"])
                     if "benchmark_ret" in pd2.columns:
                         b2_rets = pd2["benchmark_ret"].dropna().values / 100
                         if len(b2_rets) > 0:
@@ -3600,23 +3608,84 @@ men garanterar ingenting om framtiden.
                 st.info("Inga perioder att visa. Kör backtestet igen.")
 
         with tab2:
-            pd_data = result.get("period_details", pd.DataFrame())
+            pd_data = pd.DataFrame(result.get("period_details", []))
             if not pd_data.empty:
                 st.dataframe(pd_data, use_container_width=True, hide_index=True, height=450)
                 st.caption("**portfolio_ret** = modellens månadsavkastning, **benchmark_ret** = benchmarkens, **alpha** = skillnaden")
 
         with tab3:
-            pd_data = result.get("period_details", pd.DataFrame())
-            st.download_button("📥 Ladda ner CSV", data=pd_data.to_csv(index=False) if not pd_data.empty else "", file_name=f"backtest_{datetime.now():%Y-%m-%d}.csv", mime="text/csv", use_container_width=True)
-            if st.button("🤖 AI-analys av resultaten", key="bt_ai", use_container_width=True):
-                with st.spinner("Analyserar..."):
+            pd_data = pd.DataFrame(result.get("period_details", []))
+            st.download_button(
+                "📥 Ladda ner CSV",
+                data=pd_data.to_csv(index=False) if not pd_data.empty else "",
+                file_name=f"backtest_{datetime.now():%Y-%m-%d}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+            st.markdown("---")
+            st.subheader("🤖 AI-analys av backtestresultaten")
+
+            _bt_context = {
+                "annualiserad": result["annualiserad_port"],
+                "sharpe": result["sharpe_ratio"],
+                "hit_rate": result.get("hit_rate_pct"),
+                "max_dd": result["max_drawdown_pct"],
+                "alpha": result.get("alpha_annualiserad"),
+                "benchmark": bench,
+                "perioder": result.get("perioder"),
+                "kumulativ": result.get("kumulativ_avkastning"),
+                "top_n": int(top_n),
+                "år": int(years),
+            }
+
+            _PRESET_QUESTIONS = [
+                "Är den här strategin robust eller är siffrorna vilseledande?",
+                "Vilka är de största riskerna med modellen?",
+                "Hur ser Sharpe ratio och drawdown ut jämfört med indexfonder?",
+                "Är hit rate och alpha statistiskt signifikanta eller kan det vara slump?",
+                "Vad är det smartaste sättet att förbättra strategin?",
+            ]
+
+            if "bt_chat" not in st.session_state:
+                st.session_state["bt_chat"] = []
+
+            st.caption("Snabbfrågor — klicka för att skicka:")
+            _qcols = st.columns(3)
+            for _qi, _qtext in enumerate(_PRESET_QUESTIONS):
+                _qcol = _qcols[_qi % 3]
+                _qlabel = (_qtext[:38] + "…") if len(_qtext) > 38 else _qtext
+                if _qcol.button(_qlabel, key=f"bt_preset_{_qi}", use_container_width=True):
+                    st.session_state["bt_chat_pending"] = _qtext
+
+            _user_q = st.chat_input("Skriv en egen fråga om backtestresultaten…", key="bt_chat_input")
+            if _user_q:
+                st.session_state["bt_chat_pending"] = _user_q
+
+            if "bt_chat_pending" in st.session_state:
+                _q = st.session_state.pop("bt_chat_pending")
+                st.session_state["bt_chat"].append({"role": "user", "content": _q})
+                _system_note = "\n\nViktigt: Nämn begränsningarna (survivorship bias ~+5–15 %/år, momentum-only modell, transaktionskostnader). Svara kortfattat på svenska."
+                with st.spinner("AI analyserar…"):
                     try:
-                        c = {"annualiserad": result["annualiserad_port"], "sharpe": result["sharpe_ratio"], "hit_rate": result.get("hit_rate_pct"), "max_dd": result["max_drawdown_pct"], "alpha": result.get("alpha_annualiserad"), "benchmark": bench}
-                        r = ai_analysis.ai_chat("Analysera backtestresultatet och ge rekommendationer på svenska. Var noga med att nämna begränsningarna (survivorship bias etc).", context=ai_analysis._safe_json(c, ensure_ascii=False), provider=_get_provider(), depth=_get_depth())
-                        with st.container(border=True):
-                            st.markdown(r)
-                    except Exception as e:
-                        st.error(f"❌ {e}")
+                        _resp = ai_analysis.ai_chat(
+                            _q + _system_note,
+                            context=ai_analysis._safe_json(_bt_context, ensure_ascii=False),
+                            provider=_get_provider(),
+                            depth=_get_depth(),
+                        )
+                        st.session_state["bt_chat"].append({"role": "assistant", "content": _resp})
+                    except Exception as _e:
+                        st.session_state["bt_chat"].append({"role": "assistant", "content": f"❌ Fel: {_e}"})
+                st.rerun()
+
+            for _msg in st.session_state["bt_chat"]:
+                with st.chat_message(_msg["role"]):
+                    st.markdown(_msg["content"])
+
+            if st.session_state.get("bt_chat"):
+                if st.button("🗑️ Rensa chatt", key="bt_clear_chat"):
+                    st.session_state["bt_chat"] = []
+                    st.rerun()
 
     elif result is not None:
         st.warning("Inga resultat – försök med fler tickers eller längre period.")

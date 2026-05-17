@@ -302,7 +302,7 @@ def run_backtest(
         "hit_rate_pct":         round(hit_rate * 100, 1) if hit_rate is not None else None,
         "max_drawdown_pct":     round(max_dd * 100, 1),
         "snitt_månadsret":      round(port_arr.mean() * 100, 2),
-        "period_details":       pd.DataFrame(period_details),
+        "period_details":       period_details,
     }
 
     return results
