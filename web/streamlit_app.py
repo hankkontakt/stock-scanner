@@ -2661,60 +2661,59 @@ def _save_watchlist_data(items: list):
         _github_commit_file("data/watchlist.json", content, token)
 
 
-def _search_ticker_yfinance(query: str) -> list:
-    """Sök ticker via yfinance. Returnerar lista med {ticker, name}.
-    
-    Forbattrad version:
-    - Okar sökresultat till 20 for att hitta svenska aktier
-    - Direkt ticker-koll om fragan ser ut som en ticker
-    - Prioriterar aktier (EQUITY) framfor ETFer
-    """
-    if not query or len(query) < 1:
-        return []
-    
+def _search_ticker_yfinance(query: str) -> tuple:
+    """Sök ticker via yfinance. Returnerar (hits_list, error_str|None)."""
+    if not query or len(query) < 2:
+        return [], None
+
     hits = []
+    error = None
     try:
-        # Steg 1: Om fragan ser ut som en ticker (kort, versaler, punkter), kolla direkt
         clean_q = query.strip().upper()
+
+        # Steg 1: direktkoll om frågan ser ut som en ticker (kort, inga mellanslag)
         is_ticker_like = (
-            len(clean_q) <= 15 and
-            (clean_q.isalpha() or "." in clean_q or "-" in clean_q)
+            " " not in clean_q and len(clean_q) <= 15 and
+            (clean_q.replace(".", "").replace("-", "").isalpha())
         )
-        
         if is_ticker_like:
             try:
-                ticker_info = yf.Ticker(clean_q).info or {}
-                if ticker_info.get("quoteType") in ("EQUITY", "ETF", "MUTUALFUND", "INDEX"):
-                    hits.append({
-                        "ticker": clean_q,
-                        "name": ticker_info.get("shortName") or ticker_info.get("longName") or clean_q,
-                        "exchange": ticker_info.get("exchange", ""),
-                    })
+                info = yf.Ticker(clean_q).fast_info
+                hits.append({
+                    "ticker": clean_q,
+                    "name": getattr(info, "exchange", clean_q) or clean_q,
+                    "exchange": getattr(info, "exchange", ""),
+                })
             except Exception:
                 pass
-        
-        # Steg 2: Sok fritt med Yahoo Search (okad till 20 resultat)
-        results = yf.Search(query, max_results=20).quotes or []
-        seen_tickers = {h["ticker"] for h in hits}
+
+        # Steg 2: Yahoo Search-API
+        try:
+            results = yf.Search(query, max_results=20).quotes or []
+        except Exception as e:
+            error = str(e)
+            results = []
+
+        seen = {h["ticker"] for h in hits}
         for r in results:
-            ticker = r.get("symbol", "")
-            if ticker in seen_tickers:
+            sym = r.get("symbol", "")
+            if not sym or sym in seen:
                 continue
-            qtype = r.get("quoteType", "")
-            if qtype in ("EQUITY", "ETF", "MUTUALFUND", "INDEX"):
+            if r.get("quoteType", "") in ("EQUITY", "ETF", "MUTUALFUND", "INDEX"):
                 hits.append({
-                    "ticker": ticker,
+                    "ticker": sym,
                     "name": r.get("shortname") or r.get("longname") or "",
                     "exchange": r.get("exchange", ""),
                 })
-                seen_tickers.add(ticker)
-        
-        # Sortera: aktier forst, sen ETFer
-        hits.sort(key=lambda h: (0 if h.get("exchange") in ("STO", "OMX", "HE", "CO", "OL", "DE", "PA", "L", "SW") else 1))
-        
-        return hits[:15]  # Max 15 resultat
-    except Exception:
-        return hits if hits else []
+                seen.add(sym)
+
+        hits.sort(key=lambda h: (
+            0 if h.get("exchange", "") in ("STO", "OMX", "HE", "CO", "OL", "DE", "PA", "L", "SW") else 1
+        ))
+        return hits[:15], error
+
+    except Exception as e:
+        return hits, str(e)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2923,13 +2922,18 @@ def page_admin():
                                  placeholder="t.ex. AAPL, VOLV-B.ST, Investor")
         suggested_ticker = ""
         if search_h:
-            hits = _search_ticker_yfinance(search_h)
+            hits, search_err = _search_ticker_yfinance(search_h)
             if hits:
                 options = {f"{h['ticker']} — {h['name'][:40]}": h for h in hits}
                 selected = st.selectbox("Välj från sökresultat", [""] + list(options.keys()),
                                         key="hold_hit")
                 if selected:
                     suggested_ticker = options[selected]["ticker"]
+            else:
+                if search_err:
+                    st.warning(f"Sökning misslyckades: {search_err} — ange ticker manuellt nedan.")
+                else:
+                    st.caption("Inga träffar. Prova att skriva bolagsnamnet på engelska, eller ange tickern direkt (t.ex. INVE-B.ST).")
 
         # Ticker, antal, pris – använder text_inputs egna key som session_state
         # (st.text_input med key="hold_ticker_input" lagrar sitt varde i
