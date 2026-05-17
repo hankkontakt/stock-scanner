@@ -376,6 +376,24 @@ def fetch_swedish_market_news(max_articles: int = 5) -> list:
             continue
 
     results = sorted(results, key=lambda x: x["age_hours"])[:max_articles]
+
+    # Fallback: Google News RSS om svenska RSS-källor inte gav något
+    if not results:
+        try:
+            google = fetch_google_news_rss(
+                "börsen aktier Sverige", max_items=max_articles, lang="sv", days_back=2
+            )
+            for g in google:
+                results.append({
+                    "headline":     g.get("headline", g.get("title", ""))[:130],
+                    "source":       g.get("source", "Google News"),
+                    "url":          g.get("url", ""),
+                    "datetime_str": g.get("datetime_str", "—"),
+                    "age_hours":    g.get("age_hours", 999),
+                })
+        except Exception:
+            pass
+
     _write_cache(cache_key, results)
     return results
 

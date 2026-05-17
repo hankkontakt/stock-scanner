@@ -3887,9 +3887,16 @@ def page_global_markets():
         with st.spinner("Hämtar marknadsnyheter..."):
             try:
                 from core.news_fetcher import fetch_swedish_market_news, fetch_global_market_news
-                from core import config as _cfg
+                import os as _os
+                # Läs nyckeln vid körtid (inte från modulcache) så st.secrets är tillgängligt
+                _fh_key = _os.getenv("FINNHUB_API_KEY", "")
+                if not _fh_key:
+                    try:
+                        _fh_key = st.secrets.get("FINNHUB_API_KEY", "")
+                    except Exception:
+                        pass
                 swedish = fetch_swedish_market_news(max_articles=8)
-                global_n = fetch_global_market_news(_cfg.FINNHUB_API_KEY, max_articles=6)
+                global_n = fetch_global_market_news(_fh_key, max_articles=6)
 
                 c_se, c_gl = st.columns(2)
                 with c_se:
@@ -3915,7 +3922,10 @@ def page_global_markets():
                             st.markdown(f"{icon} {title}  \n*{a.get('source','?')} · {a.get('datetime_str','—')}*")
                             st.divider()
                     else:
-                        st.info("Inga globala nyheter (FINNHUB_API_KEY krävs).")
+                        if _fh_key:
+                            st.info("Inga globala nyheter just nu.")
+                        else:
+                            st.info("Inga globala nyheter — FINNHUB_API_KEY saknas i secrets.")
             except Exception as e:
                 st.warning(f"Nyheter ej tillgängliga: {e}")
 
