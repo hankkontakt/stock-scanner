@@ -3490,9 +3490,22 @@ def page_sector_rotation(df: pd.DataFrame):
 
     with st.spinner("Hämtar sektor-ETF data..."):
         try:
-            from core.sector_momentum import get_sector_trends
-            trends = get_sector_trends()
-        except Exception:
+            from core.sector_momentum import fetch_sector_momentum
+            raw = fetch_sector_momentum(verbose=False)
+            # Normalisera fältnamn till vad sidan förväntar sig
+            _sig_scores = {"STARK UPPTREND": 4, "UPPTREND": 3, "NEUTRAL": 2, "NEDTREND": 1, "STARK NEDTREND": 0}
+            trends = {
+                sec: {
+                    **v,
+                    "momentum_3m":   (v.get("return_3m") or 0) * 100,
+                    "momentum_1m":   (v.get("return_1m") or 0) * 100,
+                    "current_price": v.get("current"),
+                    "signal_score":  _sig_scores.get(v.get("signal", "NEUTRAL"), 2),
+                }
+                for sec, v in raw.items()
+            }
+        except Exception as e:
+            st.warning(f"Kunde inte hämta sektordata: {e}")
             trends = {}
 
     # Sektor ETF mapping från scored_df sektorer
@@ -3569,12 +3582,21 @@ def page_sector_rotation(df: pd.DataFrame):
                 etf = etf_map.get(sec, "—")
                 mom3m = data.get("momentum_3m")
                 price = data.get("current_price")
+                mom1m = data.get("momentum_1m")
+                above50  = data.get("above_ma50")
+                above200 = data.get("above_ma200")
+                ma_txt = ("✅ MA50 ✅ MA200" if above50 and above200
+                          else "✅ MA50 ❌ MA200" if above50
+                          else "❌ MA50 ✅ MA200" if above200
+                          else "❌ MA50 ❌ MA200")
                 rows.append({
                     "Sektor": sec,
                     "ETF": etf,
                     "Signal": f"{'🟢' if 'UPPTREND' in sig else '🔴' if 'NEDTREND' in sig else '⚪'} {sig}",
-                    "Momentum 3m": f"{mom3m:+.1f}%" if mom3m else "—",
+                    "1m": f"{mom1m:+.1f}%" if mom1m else "—",
+                    "3m": f"{mom3m:+.1f}%" if mom3m else "—",
                     "Pris": f"{price:.2f}" if price else "—",
+                    "Trend": ma_txt,
                 })
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=400)
         else:
