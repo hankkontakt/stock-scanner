@@ -2590,21 +2590,75 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
 # HJÄLPFUNKTIONER – FILHANTERING (lokal)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _save_holdings_df(df: pd.DataFrame) -> bool:
-    """Spara holdings.csv."""
+def _github_commit_file(repo_path: str, content: str, token: str,
+                         owner: str = "hankkontakt", repo: str = "stock-scanner") -> bool:
+    """Committar en fil till GitHub via Contents API så att ändringar överlever Streamlit Cloud-omstarter."""
+    import base64
+    if not token:
+        return False
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "MarketScan-Streamlit",
+    }
+    url = f"https://api.github.com/repos/{owner}/{repo}/contents/{repo_path}"
     try:
-        path = DATA_DIR / "holdings.csv"
-        df.to_csv(path, index=False)
-        return True
-    except Exception as e:
-        st.error(f"Kunde inte spara: {e}")
+        sha = None
+        get_resp = requests.get(url, headers=headers, timeout=10)
+        if get_resp.status_code == 200:
+            sha = get_resp.json().get("sha")
+        payload = {
+            "message": f"chore: update {repo_path} via Streamlit",
+            "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+            "branch": "main",
+        }
+        if sha:
+            payload["sha"] = sha
+        resp = requests.put(url, json=payload, headers=headers, timeout=15)
+        return resp.status_code in (200, 201)
+    except Exception:
         return False
 
 
+def _get_github_token() -> str:
+    """Hämtar GITHUB_TOKEN från Streamlit Secrets eller miljövariabel."""
+    token = os.getenv("GITHUB_TOKEN", "")
+    if not token:
+        try:
+            token = st.secrets.get("GITHUB_TOKEN", "")
+        except Exception:
+            pass
+    return token or ""
+
+
+def _save_holdings_df(df: pd.DataFrame) -> bool:
+    """Spara holdings.csv lokalt och committa till GitHub för Streamlit Cloud-persistens."""
+    csv_content = df.to_csv(index=False)
+    # Lokal skrivning (fungerar lokalt; kan vara read-only på Streamlit Cloud)
+    try:
+        (DATA_DIR / "holdings.csv").write_text(csv_content, encoding="utf-8")
+    except Exception:
+        pass
+    # GitHub-commit – det enda som ger äkta persistens på Streamlit Cloud
+    token = _get_github_token()
+    if token:
+        ok = _github_commit_file("data/holdings.csv", csv_content, token)
+        if not ok:
+            st.warning("⚠️ Kunde inte synka till GitHub – ändringen kan försvinna vid omstart.")
+    return True
+
+
 def _save_watchlist_data(items: list):
+    content = json.dumps(items, indent=2, ensure_ascii=False)
     path = DATA_DIR / "watchlist.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(items, indent=2, ensure_ascii=False), encoding="utf-8")
+    try:
+        path.write_text(content, encoding="utf-8")
+    except Exception:
+        pass
+    token = _get_github_token()
+    if token:
+        _github_commit_file("data/watchlist.json", content, token)
 
 
 def _search_ticker_yfinance(query: str) -> list:
