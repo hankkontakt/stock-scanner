@@ -2861,9 +2861,9 @@ def page_admin():
     
     st.title("🔧 Admin – Hantera portfölj, bevakning & scannar")
 
-    tab_wl, tab_hold, tab_scan, tab_import, tab_health = st.tabs([
+    tab_wl, tab_hold, tab_scan, tab_import, tab_health, tab_email = st.tabs([
         "⭐ Bevakningslista", "💼 Portfölj", "🚀 Starta scan", "📥 Avanza-import",
-        "🩺 Universe Health"
+        "🩺 Universe Health", "📧 E-post"
     ])
 
     # ── St1: Bevakningslista ────────────────────────────────────────────────
@@ -3411,6 +3411,183 @@ def page_admin():
                             st.success("✅ Alla tickers verkar giltiga!")
                 except Exception as e:
                     st.error(f"❌ {e}")
+
+    # ── Flik 6: E-post-prenumeranter ──────────────────────────────────────────
+    with tab_email:
+        st.subheader("📧 E-post-prenumeranter")
+        st.caption(
+            "Hantera vilka som får rapporter och vilka typer de prenumererar på. "
+            "Listan sparas i repot via GitHub API – inga ändringar i Secrets krävs."
+        )
+
+        try:
+            from core.email_template import (
+                load_subscribers, save_subscribers, SUBSCRIPTION_TYPES,
+                email_configured, send_email as _send_test_email,
+            )
+        except ImportError as e:
+            st.error(f"Kunde inte ladda email_template: {e}")
+            return
+
+        if not email_configured():
+            st.warning(
+                "⚠️ Email är inte konfigurerat. "
+                "Sätt `EMAIL_SENDER` och `EMAIL_PASSWORD` i Streamlit Secrets eller config.py."
+            )
+
+        # Ladda prenumeranter
+        subs = load_subscribers()
+
+        # ── Tabell: nuvarande prenumeranter ───────────────────────────────
+        if subs:
+            sub_rows = []
+            for s in subs:
+                row = {
+                    "E-post": s.get("email", ""),
+                    "Namn": s.get("name", ""),
+                    "Aktiv": "✅" if s.get("active", True) else "❌",
+                    "Tillagd": s.get("added", ""),
+                }
+                for key, label in SUBSCRIPTION_TYPES.items():
+                    row[label] = "✓" if s.get("subscriptions", {}).get(key, False) else ""
+                sub_rows.append(row)
+            st.dataframe(pd.DataFrame(sub_rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("Inga prenumeranter ännu. Lägg till den första nedan.")
+
+        st.markdown("---")
+
+        # ── Formulär: lägg till prenumerant ──────────────────────────────
+        with st.expander("➕ Lägg till ny prenumerant", expanded=len(subs) == 0):
+            with st.form("form_add_subscriber", clear_on_submit=True):
+                col_e, col_n = st.columns([3, 2])
+                with col_e:
+                    new_email = st.text_input("E-postadress *", placeholder="namn@example.com")
+                with col_n:
+                    new_name = st.text_input("Namn (valfritt)", placeholder="Henrik")
+
+                st.markdown("**Prenumerationstyper:**")
+                sub_cols = st.columns(2)
+                new_subs: dict[str, bool] = {}
+                for i, (key, label) in enumerate(SUBSCRIPTION_TYPES.items()):
+                    with sub_cols[i % 2]:
+                        new_subs[key] = st.checkbox(label, value=(key in ("morning_report", "failure_alerts")),
+                                                    key=f"new_sub_{key}")
+
+                submitted_add = st.form_submit_button("➕ Lägg till", type="primary")
+                if submitted_add:
+                    new_email = new_email.strip().lower()
+                    if not new_email or "@" not in new_email:
+                        st.error("Ange en giltig e-postadress.")
+                    elif any(s["email"] == new_email for s in subs):
+                        st.warning(f"`{new_email}` finns redan.")
+                    else:
+                        subs.append({
+                            "email": new_email,
+                            "name": new_name.strip(),
+                            "active": True,
+                            "added": str(date.today()),
+                            "subscriptions": new_subs,
+                        })
+                        # Spara lokalt
+                        save_subscribers(subs)
+                        # Synka till GitHub
+                        token = _get_github_token()
+                        if token:
+                            content = json.dumps({"subscribers": subs}, indent=2, ensure_ascii=False)
+                            ok = _github_commit_file("data/email_subscribers.json", content, token)
+                            if ok:
+                                st.success(f"✅ `{new_email}` tillagd och synkad till GitHub!")
+                            else:
+                                st.success(f"✅ `{new_email}` tillagd lokalt (GitHub-sync misslyckades).")
+                        else:
+                            st.success(f"✅ `{new_email}` tillagd lokalt.")
+                        st.rerun()
+
+        # ── Redigera/ta bort + aktivera/inaktivera ────────────────────────
+        if subs:
+            st.markdown("---")
+            st.markdown("### Hantera befintliga prenumeranter")
+
+            email_options = [s["email"] for s in subs]
+            sel_email = st.selectbox("Välj prenumerant att hantera", email_options, key="sub_select")
+            sel_sub = next((s for s in subs if s["email"] == sel_email), None)
+
+            if sel_sub:
+                col_act, col_del, col_test = st.columns(3)
+
+                with col_act:
+                    is_active = sel_sub.get("active", True)
+                    btn_label = "⏸ Inaktivera" if is_active else "▶️ Aktivera"
+                    if st.button(btn_label, key="btn_sub_toggle"):
+                        sel_sub["active"] = not is_active
+                        save_subscribers(subs)
+                        token = _get_github_token()
+                        if token:
+                            content = json.dumps({"subscribers": subs}, indent=2, ensure_ascii=False)
+                            _github_commit_file("data/email_subscribers.json", content, token)
+                        st.rerun()
+
+                with col_del:
+                    if st.button("🗑️ Ta bort", key="btn_sub_delete"):
+                        subs = [s for s in subs if s["email"] != sel_email]
+                        save_subscribers(subs)
+                        token = _get_github_token()
+                        if token:
+                            content = json.dumps({"subscribers": subs}, indent=2, ensure_ascii=False)
+                            _github_commit_file("data/email_subscribers.json", content, token)
+                        st.success(f"`{sel_email}` borttagen!")
+                        st.rerun()
+
+                with col_test:
+                    if st.button("📤 Skicka testmail", key="btn_sub_test"):
+                        if email_configured():
+                            ok = _send_test_email(
+                                subject="📧 MarketScan – testmail",
+                                body_markdown=(
+                                    "# Testmail\n\nDetta är ett testmail från MarketScan admin-panelen.\n\n"
+                                    "Om du ser detta mail fungerar e-postkonfigurationen korrekt!"
+                                ),
+                                from_name="MarketScan",
+                                recipients=[sel_email],
+                            )
+                            if ok:
+                                st.success(f"✅ Testmail skickat till `{sel_email}`!")
+                            else:
+                                st.error("❌ Misslyckades. Kontrollera EMAIL_SENDER/EMAIL_PASSWORD.")
+                        else:
+                            st.error("Email är inte konfigurerat.")
+
+                # Redigera prenumerationstyper
+                with st.expander(f"Redigera prenumerationer för {sel_email}", expanded=False):
+                    with st.form(f"form_edit_{sel_email.replace('@','_').replace('.','_')}"):
+                        st.markdown("**Välj prenumerationstyper:**")
+                        edit_cols = st.columns(2)
+                        edit_subs: dict[str, bool] = {}
+                        for i, (key, label) in enumerate(SUBSCRIPTION_TYPES.items()):
+                            with edit_cols[i % 2]:
+                                current = sel_sub.get("subscriptions", {}).get(key, False)
+                                edit_subs[key] = st.checkbox(label, value=current, key=f"edit_{key}_{sel_email}")
+                        if st.form_submit_button("💾 Spara ändringar"):
+                            sel_sub["subscriptions"] = edit_subs
+                            save_subscribers(subs)
+                            token = _get_github_token()
+                            if token:
+                                content = json.dumps({"subscribers": subs}, indent=2, ensure_ascii=False)
+                                _github_commit_file("data/email_subscribers.json", content, token)
+                            st.success("✅ Prenumerationer uppdaterade!")
+                            st.rerun()
+
+        # ── Statusöversikt ────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("### 📊 Statistik")
+        col_s1, col_s2, col_s3 = st.columns(3)
+        with col_s1:
+            st.metric("Totalt prenumeranter", len(subs))
+        with col_s2:
+            st.metric("Aktiva", sum(1 for s in subs if s.get("active", True)))
+        with col_s3:
+            st.metric("Email konfigurerat", "✅ Ja" if email_configured() else "❌ Nej")
 
 
 def _trigger_gh_workflow(token: str, owner: str, repo: str,
