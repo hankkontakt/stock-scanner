@@ -658,11 +658,16 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
         with st.expander("📈 Visa FX-historik (senaste månaden)", expanded=False):
             try:
                 fx_ticker = st.selectbox("Välj valutapar", list(FX_PAIRS.keys()), key="fx_chart")
-                fx_hist = yf.download(FX_PAIRS[fx_ticker], period="1mo", auto_adjust=True, progress=False)
+                fx_ticker_symbol = FX_PAIRS[fx_ticker]
+                fx_hist = yf.download(fx_ticker_symbol, period="1mo", auto_adjust=True, progress=False)
                 if not fx_hist.empty:
+                    # yfinance med valutapar returnerar MultiIndex-kolumner
+                    close_col = fx_hist["Close"] if "Close" in fx_hist.columns else fx_hist.iloc[:, 0]
+                    if isinstance(close_col, pd.DataFrame):
+                        close_col = close_col.iloc[:, 0]
                     fig_fx = go.Figure()
                     fig_fx.add_trace(go.Scatter(
-                        x=fx_hist.index, y=fx_hist["Close"],
+                        x=fx_hist.index, y=close_col,
                         mode="lines", name=fx_ticker,
                         line=dict(color="#42a5f5", width=2),
                         fill="tozeroy", fillcolor="rgba(66,165,245,0.1)",
@@ -673,8 +678,8 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                         margin=dict(t=16, b=16, l=16, r=16),
                     )
                     st.plotly_chart(fig_fx, use_container_width=True)
-            except Exception:
-                pass
+            except Exception as e:
+                st.caption(f"FX-graf kunde inte laddas: {e}")
 
     with tab_rates:
         with st.spinner("Hämtar räntor..."):
