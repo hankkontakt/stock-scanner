@@ -1,0 +1,29 @@
+{
+  "universe": "smallcap",
+  "trained_at": "2026-05-17T08:26:48.715740+00:00",
+  "n_rows": 12689,
+  "feature_cols": [
+    "ret_1m",
+    "ret_3m",
+    "ret_6m",
+    "ret_12m",
+    "rsi_14",
+    "macd_hist",
+    "ma50_over_ma200",
+    "price_over_ma50",
+    "price_over_ma200",
+    "volatility_30d",
+    "volume_ratio_20d",
+    "dist_from_52w_high",
+    "dist_from_52w_low",
+    "bb_position",
+    "momentum_3_vs_12"
+  ],
+  "test_metrics": {
+    "mae": 0.1202,
+    "ic": 0.0145,
+    "hit_rate": 0.4957,
+    "n_train": 10151,
+    "n_test": 2538
+  }
+}

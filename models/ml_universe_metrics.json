@@ -1,0 +1,29 @@
+{
+  "universe": "universe",
+  "trained_at": "2026-05-17T08:26:46.365265+00:00",
+  "n_rows": 51899,
+  "feature_cols": [
+    "ret_1m",
+    "ret_3m",
+    "ret_6m",
+    "ret_12m",
+    "rsi_14",
+    "macd_hist",
+    "ma50_over_ma200",
+    "price_over_ma50",
+    "price_over_ma200",
+    "volatility_30d",
+    "volume_ratio_20d",
+    "dist_from_52w_high",
+    "dist_from_52w_low",
+    "bb_position",
+    "momentum_3_vs_12"
+  ],
+  "test_metrics": {
+    "mae": 0.1029,
+    "ic": -0.0233,
+    "hit_rate": 0.5547,
+    "n_train": 41519,
+    "n_test": 10380
+  }
+}
