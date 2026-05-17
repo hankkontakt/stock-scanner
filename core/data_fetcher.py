@@ -303,6 +303,74 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
         print(f"  ⚠ Failed to fetch prices for {ticker}: {e}")
         return pd.DataFrame()
 
+def _get_insider_signal(ticker: str) -> dict:
+    """
+    Analysera insiderhandel via yfinance (senaste 90 dagarna).
+    Returnerar:
+        insider_cluster (bool): ≥3 olika insiders köper inom 30 dagar
+        insider_executive_buy (bool): VD/CFO köper inom 90 dagar
+    Cachas 24h för att inte spamma Yahoo.
+    """
+    cache_key = f"insider_signal:{ticker}"
+    cached = _read_cache(cache_key, max_age_hours=24)
+    if cached is not None:
+        return cached
+
+    result = {"insider_cluster": False, "insider_executive_buy": False}
+    try:
+        t = yf.Ticker(ticker)
+        txns = t.insider_transactions
+        if txns is None or (hasattr(txns, "empty") and txns.empty):
+            _write_cache(cache_key, result)
+            return result
+
+        txns = txns.copy()
+        txns.columns = txns.columns.str.lower().str.replace(" ", "_")
+
+        # Normalisera datumkolumn
+        now = pd.Timestamp.now(tz=None)
+        date_col = next((c for c in txns.columns if "date" in c), None)
+        if date_col:
+            txns["_date"] = pd.to_datetime(txns[date_col], errors="coerce").dt.tz_localize(None)
+        else:
+            _write_cache(cache_key, result)
+            return result
+
+        # Transaktionstyp-kolumn
+        type_col = next((c for c in txns.columns if "type" in c or "transaction" in c), None)
+        if type_col:
+            buy_mask = txns[type_col].fillna("").str.lower().str.contains(
+                r"buy|purchase|köp|acqui|exercise", regex=True, na=False
+            )
+        else:
+            buy_mask = pd.Series(True, index=txns.index)  # anta alla är köp om kolumn saknas
+
+        recent_90 = txns[txns["_date"] >= (now - pd.Timedelta(days=90))]
+        buys_90 = recent_90[buy_mask.reindex(recent_90.index, fill_value=False)]
+
+        # VD/CFO-detektion
+        title_col = next((c for c in buys_90.columns if "title" in c or "position" in c or "relation" in c), None)
+        if title_col and not buys_90.empty:
+            exec_titles = {"ceo", "cfo", "vd", "verkst", "chief executive", "chief financial",
+                           "president", "managing director"}
+            titles = buys_90[title_col].fillna("").str.lower()
+            result["insider_executive_buy"] = bool(titles.apply(
+                lambda t: any(e in t for e in exec_titles)
+            ).any())
+
+        # Cluster: ≥3 distinkta insiders köper inom senaste 30 dagar
+        buys_30 = buys_90[buys_90["_date"] >= (now - pd.Timedelta(days=30))]
+        name_col = next((c for c in buys_30.columns if "name" in c or "insider" in c), None)
+        if name_col and not buys_30.empty:
+            result["insider_cluster"] = int(buys_30[name_col].nunique()) >= 3
+
+    except Exception:
+        pass  # Säkert fallback – returnerar False/False
+
+    _write_cache(cache_key, result)
+    return result
+
+
 def fetch_fmp_fallback(ticker: str) -> dict:
     """
     Fallback to Financial Modeling Prep if yfinance fails.
@@ -377,6 +445,7 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         "free_cash_flow": info.get("freeCashflow"),
         "total_cash": info.get("totalCash"),
         "total_debt": info.get("totalDebt"),
+        "enterprise_value": info.get("enterpriseValue"),
 
         # Dividend
         "dividend_yield":       info.get("dividendYield"),
@@ -404,6 +473,9 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         # NEW: Insider & institutionellt ägande
         "insider_pct":      info.get("heldPercentInsiders"),   # % ägt av insiders
         "institution_pct":  info.get("heldPercentInstitutions"),
+        # Insiderhandel-signaler (fyller i nedan efter transaktionsanalys)
+        "insider_cluster":       False,
+        "insider_executive_buy": False,
 
         # NEW: Earnings surprise (hur ofta slår bolaget estimat)
         "earnings_surprise_pct": info.get("earningsForecastsGrowthRate"),
@@ -487,6 +559,12 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
             band_w = upper.iloc[-1] - lower.iloc[-1]
             if band_w > 0:
                 metrics["bb_position"] = float((current - lower.iloc[-1]) / band_w)
+
+    # Insiderhandel-signaler (VD/CFO-köp & cluster-detektion)
+    # Görs sist så timeout inte blockerar övrig datahämtning
+    ins = _get_insider_signal(ticker)
+    metrics["insider_cluster"]       = ins.get("insider_cluster", False)
+    metrics["insider_executive_buy"] = ins.get("insider_executive_buy", False)
 
     return metrics
 
@@ -680,6 +758,133 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
 
     return df
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ASYNC PRISDATA-HÄMTNING (opt-in lager ovanpå sync-pipelinen)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Bakgrund: fetch_universe_data() använder ThreadPoolExecutor (8 workers)
+# vilket är snabbt men blockerar på I/O. För 1 000+ tickers ger asyncio/aiohttp
+# högre genomströmning utan thread-overhead.
+#
+# Användning (i daily_pipeline.py eller scan.py):
+#   import asyncio
+#   from core.data_fetcher import fetch_prices_async
+#   price_rows = asyncio.run(fetch_prices_async(tickers))
+#
+# OBS: Kräver `pip install aiohttp`. Faller automatiskt tillbaka till
+# fetch_universe_data() om aiohttp ej är installerat.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import asyncio
+
+try:
+    import aiohttp as _aiohttp
+    _AIOHTTP_AVAILABLE = True
+except ImportError:
+    _AIOHTTP_AVAILABLE = False
+
+
+def _parse_yahoo_chart_response(ticker: str, data: dict) -> dict | None:
+    """
+    Tolkar Yahoo Finance chart-API-svar (v8) till samma format som
+    extract_metrics() returnerar (enbart prisdata – ingen fundamental).
+    Returnerar None om svaret är ogiltigt.
+    """
+    try:
+        result = data.get("chart", {}).get("result", [])
+        if not result:
+            return None
+        r = result[0]
+        meta = r.get("meta", {})
+        timestamps = r.get("timestamp", [])
+        closes = (r.get("indicators", {})
+                   .get("quote", [{}])[0]
+                   .get("close", []))
+        if not closes or not timestamps:
+            return None
+
+        close_series = pd.Series(closes, index=pd.to_datetime(timestamps, unit="s"))
+        close_series = close_series.dropna()
+        if close_series.empty:
+            return None
+
+        current = float(close_series.iloc[-1])
+        return {
+            "ticker":        ticker,
+            "current_price": current,
+            "return_1m":     _safe_return(close_series, 21),
+            "return_3m":     _safe_return(close_series, 63),
+            "return_6m":     _safe_return(close_series, 126),
+            "return_12m":    _safe_return(close_series, 252),
+            "currency":      meta.get("currency", "USD"),
+        }
+    except Exception:
+        return None
+
+
+async def _fetch_price_async(
+    session,
+    ticker: str,
+    semaphore: asyncio.Semaphore,
+) -> dict | None:
+    """Async-hämtning av prisdata för en ticker via Yahoo Finance chart-API."""
+    async with semaphore:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+        params = {"interval": "1d", "range": "1y", "includePrePost": "false"}
+        try:
+            async with session.get(
+                url, params=params,
+                timeout=_aiohttp.ClientTimeout(total=10),
+                headers={"User-Agent": "Mozilla/5.0"},
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json(content_type=None)
+                return _parse_yahoo_chart_response(ticker, data)
+        except Exception:
+            return None
+
+
+async def fetch_prices_async(
+    tickers: list,
+    max_concurrent: int = 30,
+    verbose: bool = True,
+) -> list[dict]:
+    """
+    Async-hämtning av prisdata för en lista tickers.
+    Returnerar lista av metric-dicts (enbart prisdata).
+    Faller tillbaka till [] (tom lista) om aiohttp ej är installerat.
+
+    Args:
+        tickers: Lista av ticker-symboler
+        max_concurrent: Max samtidiga HTTP-anrop (standard 30)
+        verbose: Skriv ut framsteg
+
+    Returns:
+        Lista av dicts med prisdata per ticker (None-rader filtreras bort)
+    """
+    if not _AIOHTTP_AVAILABLE:
+        if verbose:
+            print("  ℹ  aiohttp saknas – kör pip install aiohttp för async-läge")
+        return []
+
+    semaphore = asyncio.Semaphore(max_concurrent)
+    results = []
+
+    async with _aiohttp.ClientSession() as session:
+        tasks = [_fetch_price_async(session, t, semaphore) for t in tickers]
+        if verbose:
+            print(f"  ⚡ Async-hämtar prisdata för {len(tickers)} tickers "
+                  f"(max {max_concurrent} parallella anrop)...")
+        raw = await asyncio.gather(*tasks, return_exceptions=True)
+        for item in raw:
+            if isinstance(item, dict) and item is not None:
+                results.append(item)
+
+    if verbose:
+        print(f"  ✓ Async: {len(results)}/{len(tickers)} lyckade")
+    return results
 
 
 # ============================================================

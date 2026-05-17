@@ -10,6 +10,8 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 
+import yfinance as yf
+
 from core import config
 
 
@@ -88,6 +90,11 @@ def analyze_portfolio(holdings: pd.DataFrame, scored_universe: pd.DataFrame) -> 
         # Generate recommendation
         rec, reason = _make_recommendation(row, scored_universe)
 
+        # ATR stop-loss endast för köprekommendationer
+        atr_stop_price, atr_stop_pct = None, None
+        if rec == "KÖP MER" and current_price and pd.notna(current_price):
+            atr_stop_price, atr_stop_pct = _atr_stop(ticker, float(current_price))
+
         rows.append({
             "ticker": ticker,
             "name": name,
@@ -101,9 +108,65 @@ def analyze_portfolio(holdings: pd.DataFrame, scored_universe: pd.DataFrame) -> 
             "rank": rank,
             "recommendation": rec,
             "reason": reason,
+            "atr_stop_price": atr_stop_price,
+            "atr_stop_pct":   atr_stop_pct,
         })
 
     return pd.DataFrame(rows)
+
+
+def _calc_atr(ticker: str, period: int = 14) -> float | None:
+    """Average True Range (ATR14) för en ticker via yfinance."""
+    try:
+        hist = yf.Ticker(ticker).history(period="1mo", auto_adjust=True)
+        if hist.empty or len(hist) < period:
+            return None
+        tr = pd.concat([
+            hist["High"] - hist["Low"],
+            abs(hist["High"] - hist["Close"].shift()),
+            abs(hist["Low"]  - hist["Close"].shift()),
+        ], axis=1).max(axis=1)
+        atr = float(tr.rolling(period).mean().iloc[-1])
+        return atr if not pd.isna(atr) else None
+    except Exception:
+        return None
+
+
+def _atr_stop(ticker: str, price: float, mult: float = 2.5) -> tuple:
+    """
+    Beräknar ATR-baserad stop-loss.
+    Returns: (stop_price, stop_pct) eller (None, None) om ATR ej tillgänglig.
+    """
+    atr = _calc_atr(ticker)
+    if not atr or atr <= 0:
+        return None, None
+    stop = price - atr * mult
+    return round(stop, 2), round((stop / price - 1) * 100, 1)
+
+
+def _half_kelly(portfolio_value: float) -> dict:
+    """
+    Half-Kelly positionsstorlek baserat på paper trading-historik.
+    Formel: Kelly = win_rate - (1-win_rate)/win_loss_ratio; Half = Kelly × 0.5
+    Klamrat 2–10 % av portföljvärdet.
+    """
+    try:
+        from portfolio.paper_trading import get_kelly_inputs
+        ki = get_kelly_inputs()
+    except Exception:
+        ki = {"win_rate": 0.55, "win_loss_ratio": 1.5, "n_trades": 0, "using_defaults": True}
+
+    wr = ki["win_rate"]
+    wl = ki["win_loss_ratio"]
+    kelly = max(0.0, wr - (1 - wr) / wl) if wl else 0.0
+    hk    = max(0.02, min(0.10, kelly * 0.5))
+
+    return {
+        "pct":          round(hk * 100, 1),
+        "sek":          round(portfolio_value * hk),
+        "n_trades":     ki.get("n_trades", 0),
+        "using_defaults": ki.get("using_defaults", True),
+    }
 
 
 def _make_recommendation(holding_row, scored_universe: pd.DataFrame) -> tuple:
@@ -181,6 +244,49 @@ def portfolio_summary(analysis: pd.DataFrame) -> dict:
         "top_3_concentration": top_3_concentration,
         "recommendations": rec_counts,
     }
+
+
+def get_buy_recommendations(
+    holdings: pd.DataFrame,
+    scored_universe: pd.DataFrame,
+    portfolio_value: float = 0,
+) -> pd.DataFrame:
+    """
+    Utökat analyze_portfolio() med Half-Kelly positionsstorlek och
+    ATR-baserade stop-loss strängar redo för visning i UI.
+
+    Returnerar samma DataFrame som analyze_portfolio() plus:
+        kelly_pct (float): Föreslagen portföljandel i procent
+        kelly_suggested_sek (float): Kronbelopp baserat på Half-Kelly
+        kelly_note (str): Läsbar förklaring
+        stop_loss_str (str): Formaterad stop-loss för KÖP MER-rader
+    """
+    analysis = analyze_portfolio(holdings, scored_universe)
+    if analysis.empty:
+        return analysis
+
+    if portfolio_value <= 0 and "market_value" in analysis.columns:
+        portfolio_value = float(analysis["market_value"].sum(skipna=True))
+
+    ki = _half_kelly(portfolio_value)
+    analysis["kelly_pct"]           = ki["pct"]
+    analysis["kelly_suggested_sek"] = ki["sek"]
+    analysis["kelly_note"] = (
+        f"Half-Kelly: {ki['pct']:.0f}% av portföljvärdet = {ki['sek']:,.0f} kr"
+        + (" (standardvärden – för få trades)" if ki.get("using_defaults") else
+           f" ({ki['n_trades']} stängda trades)")
+    )
+
+    def _fmt_stop(row) -> str:
+        if row.get("recommendation") == "KÖP MER" and pd.notna(row.get("atr_stop_price")):
+            return (
+                f"Stop-loss: {row['atr_stop_price']:.2f}"
+                f" ({row['atr_stop_pct']:.1f}% under kurs, ATR14)"
+            )
+        return ""
+
+    analysis["stop_loss_str"] = analysis.apply(_fmt_stop, axis=1)
+    return analysis
 
 
 # ══════════════════════════════════════════════════════════════

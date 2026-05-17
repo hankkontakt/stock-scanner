@@ -135,6 +135,54 @@ def _calculate_ai_stop(ticker: str, buy_price: float, current_price: float) -> f
 
 
 # ══════════════════════════════════════════════════════════════
+# KELLY-KALKYLATOR (exporteras till portfolio.py)
+# ══════════════════════════════════════════════════════════════
+
+def get_kelly_inputs(min_trades: int = 20) -> dict:
+    """
+    Beräknar win rate och win/loss-kvot från stängda paper trades.
+    Används av portfolio.py för Half-Kelly positionsstorleksberäkning.
+
+    Returns:
+        win_rate (float): Andel vinnande trades
+        win_loss_ratio (float): avg_vinst / avg_förlust
+        n_trades (int): Antal stängda trades
+        using_defaults (bool): True om för få trades för riktiga värden
+    """
+    trades = _load(TRADES_FILE)
+    closed = [
+        t for t in trades
+        if t.get("status") == "CLOSED" and t.get("pnl_pct") is not None
+    ]
+
+    if len(closed) < min_trades:
+        return {
+            "win_rate":       0.55,
+            "win_loss_ratio": 1.5,
+            "n_trades":       len(closed),
+            "using_defaults": True,
+        }
+
+    rets   = [t["pnl_pct"] for t in closed]
+    wins   = [r for r in rets if r > 0]
+    losses = [abs(r) for r in rets if r < 0]
+
+    wr        = len(wins) / len(rets)
+    avg_win   = float(np.mean(wins))   if wins   else 0.0
+    avg_loss  = float(np.mean(losses)) if losses else 1.0
+    wl_ratio  = avg_win / avg_loss if avg_loss > 0 else 1.5
+
+    return {
+        "win_rate":       round(wr, 4),
+        "win_loss_ratio": round(wl_ratio, 4),
+        "avg_win_pct":    round(avg_win, 2),
+        "avg_loss_pct":   round(avg_loss, 2),
+        "n_trades":       len(closed),
+        "using_defaults": False,
+    }
+
+
+# ══════════════════════════════════════════════════════════════
 # REGISTRERA VECKANS REKOMMENDATIONER
 # ══════════════════════════════════════════════════════════════
 

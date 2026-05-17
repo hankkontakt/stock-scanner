@@ -48,6 +48,57 @@ def _resolve_depth(depth: str = "Normal") -> int:
     return DEPTH_MAP.get(depth, 1024)
 
 
+# ── Djup-medveten prompt & data-filtrering ────────────────────────────────────
+
+# Nycklar som visas för varje djupnivå i analyze_stock
+SNABB_KEYS = {
+    "P/E (trailing)", "ROE", "Momentum", "Revenue Growth",
+    "Piotroski F-Score", "Entry Signal",
+}
+
+def _build_depth_context(stock_data: dict, depth: str) -> dict:
+    """Filtrera stock_data-dict baserat på vald djupnivå.
+    'Snabb' → bara de viktigaste 6 nyckeltalen.
+    'Normal'/'Djup'/'Extra djup' → returnerar orört (allt som finns)."""
+    if depth == "Snabb":
+        return {k: v for k, v in stock_data.items() if k in SNABB_KEYS}
+    return stock_data   # Normal, Djup, Extra djup: inga filter
+
+
+def _depth_system_prompt_addon(depth: str) -> str:
+    """Returnerar extra instruktion att lägga till i system-prompten."""
+    if depth == "Snabb":
+        return "\n\nGe ett kortfattat svar på max 3 meningar."
+    if depth == "Djup":
+        return (
+            "\n\nGör en djupgående analys med teknisk analys, sektorjämförelse och "
+            "fundamentala nyckeltal. Inkludera en konkret köp/sälj-rekommendation med motivering."
+        )
+    if depth == "Extra djup":
+        return (
+            "\n\nGör en heltäckande institutionell analys. Inkludera: "
+            "1) FCF-analys och historisk värdering "
+            "2) Scenarioanalys (bull/base/bear) "
+            "3) Risker och katalysatorer "
+            "4) Konkret positionsstorlek och entry/exit"
+        )
+    return ""   # "Normal" → inga tillägg
+
+
+def _is_swedish_stock(ticker: str) -> bool:
+    return str(ticker).upper().endswith(".ST")
+
+
+def _k3_accounting_note(ticker: str, depth: str) -> str:
+    """För Djup/Extra djup på svenska aktier: notering om K3/K2-redovisning."""
+    if depth in ("Djup", "Extra djup") and _is_swedish_stock(ticker):
+        return (
+            "\n\n**OBS – Svensk redovisning (K3/K2):** Obeskattade reserver kan reducera "
+            "redovisat resultat. ROA och marginaler är troligen undervärdering av faktisk lönsamhet."
+        )
+    return ""
+
+
 # ── Numpy/pandas-safe JSON-serialisering ─────────────────────────────────────
 def _safe_json(obj: dict, **kwargs) -> str:
     """json.dumps som hanterar numpy.int64, numpy.float64, pd.Timestamp m.fl."""
@@ -686,13 +737,41 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None,
                     else:
                         stock_data[label] = val
 
-    # Bygg prompt
-    data_str = _safe_json(stock_data, indent=2, ensure_ascii=False) if stock_data else "Ingen data tillgänglig för denna aktie."
+            # Extra fält för Djup / Extra djup
+            if depth in ("Djup", "Extra djup"):
+                extra_fields = {
+                    "bb_position":      "Bollinger Band Position",
+                    "insider_pct":      "Insider Ownership %",
+                    "institution_pct":  "Institution Ownership %",
+                    "insider_cluster":  "Insider Cluster Buy",
+                    "insider_executive_buy": "VD/CFO Buy",
+                    "roa":              "ROA",
+                    "operating_margin": "Operating Margin",
+                    "gross_margin":     "Gross Margin",
+                    "ev_to_ebitda":     "EV/EBITDA",
+                    "score_fcf_yield":  "FCF Yield Score",
+                    "free_cash_flow":   "Free Cash Flow",
+                    "return_1m":        "1m Return",
+                }
+                for field, label in extra_fields.items():
+                    val = row.get(field)
+                    if val is not None and not pd.isna(val):
+                        stock_data[label] = round(val, 2) if isinstance(val, float) else val
+
+    # Filtrera data baserat på djupnivå och bygg prompt
+    filtered_data = _build_depth_context(stock_data, depth)
+    data_str = _safe_json(filtered_data, indent=2, ensure_ascii=False) if filtered_data else "Ingen data tillgänglig för denna aktie."
     user_message = f"Analysera aktien **{ticker}**.\n\nTillgänglig data:\n```json\n{data_str}\n```"
 
-    cache_key = _make_cache_key("analyze_stock", ticker, data_str[:500] if stock_data else "no_data", _resolve_provider(provider))
+    # Djupanpassad system-prompt
+    k3_note = _k3_accounting_note(ticker, depth)
+    system_prompt = SYSTEM_PROMPT_STOCK_ANALYSIS + _depth_system_prompt_addon(depth) + k3_note
+
+    # depth ingår i cache-nyckeln så olika djupnivåer cachas separat
+    cache_key = _make_cache_key("analyze_stock", ticker, data_str[:500] if filtered_data else "no_data",
+                                _resolve_provider(provider), depth)
     return _call_with_cache(
-        SYSTEM_PROMPT_STOCK_ANALYSIS,
+        system_prompt,
         [{"role": "user", "content": user_message}],
         cache_key,
         max_tokens=_resolve_depth(depth),
@@ -777,10 +856,11 @@ def analyze_portfolio(holdings: pd.DataFrame, df: pd.DataFrame = None,
 
     data_str = _safe_json(portfolio_summary, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
-    cache_key = _make_cache_key("analyze_portfolio", str(holdings.shape), str(df.shape) if df is not None else "none", resolved)
+    cache_key = _make_cache_key("analyze_portfolio", str(holdings.shape), str(df.shape) if df is not None else "none",
+                                resolved, depth)
 
     return _call_with_cache(
-        SYSTEM_PROMPT_PORTFOLIO,
+        SYSTEM_PROMPT_PORTFOLIO + _depth_system_prompt_addon(depth),
         [{"role": "user", "content": f"Analysera min portfölj och föreslå förbättringar.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
         max_tokens=_resolve_depth(depth),
@@ -901,10 +981,10 @@ def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
     }
 
     data_str = _safe_json(data_summary, indent=2, ensure_ascii=False)
-    cache_key = _make_cache_key("weekly_ai", datetime.now().strftime("%Y-%m-%d"), provider)
+    cache_key = _make_cache_key("weekly_ai", datetime.now().strftime("%Y-%m-%d"), provider, depth)
 
     result = _call_with_cache(
-        SYSTEM_PROMPT_WEEKLY_REPORT,
+        SYSTEM_PROMPT_WEEKLY_REPORT + _depth_system_prompt_addon(depth),
         [{"role": "user", "content": f"Generera veckoanalys for dagens scan.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
         max_tokens=_resolve_depth(depth),
@@ -940,10 +1020,10 @@ def analyze_news(ticker: str, news_items: list = None,
 
     news_text = json.dumps(news_items[:10], indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
-    cache_key = _make_cache_key("analyze_news", ticker, str(len(news_items)), resolved)
+    cache_key = _make_cache_key("analyze_news", ticker, str(len(news_items)), resolved, depth)
 
     return _call_with_cache(
-        SYSTEM_PROMPT_NEWS_ANALYSIS,
+        SYSTEM_PROMPT_NEWS_ANALYSIS + _depth_system_prompt_addon(depth),
         [{"role": "user", "content": f"Analysera nyheterna för {ticker}.\n\nNyheter:\n{news_text}"}],
         cache_key,
         max_tokens=_resolve_depth(depth),
@@ -985,10 +1065,10 @@ def generate_morning_brief(market_data: dict = None,
     
     data_str = _safe_json(brief_data, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
-    cache_key = _make_cache_key("morning_brief", datetime.now().strftime("%Y-%m-%d"), resolved)
+    cache_key = _make_cache_key("morning_brief", datetime.now().strftime("%Y-%m-%d"), resolved, depth)
 
     return _call_with_cache(
-        SYSTEM_PROMPT_MORNING_BRIEF,
+        SYSTEM_PROMPT_MORNING_BRIEF + _depth_system_prompt_addon(depth),
         [{"role": "user", "content": f"Skapa dagens morgonbrief.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
         max_tokens=_resolve_depth(depth),
@@ -1044,10 +1124,11 @@ def analyze_sector(sector_name: str, df: pd.DataFrame = None,
 
     data_str = _safe_json(sector_data, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
-    cache_key = _make_cache_key("analyze_sector", sector_name, str(df.shape) if df is not None else "none", resolved)
+    cache_key = _make_cache_key("analyze_sector", sector_name, str(df.shape) if df is not None else "none",
+                                resolved, depth)
 
     return _call_with_cache(
-        SYSTEM_PROMPT_SECTOR_ANALYSIS,
+        SYSTEM_PROMPT_SECTOR_ANALYSIS + _depth_system_prompt_addon(depth),
         [{"role": "user", "content": f"Analysera sektorn {sector_name}.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
         max_tokens=_resolve_depth(depth),
@@ -1086,10 +1167,10 @@ def analyze_opportunity(ticker: str, signal_type: str,
     }
     data_str = _safe_json(data, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
-    cache_key = _make_cache_key("analyze_opportunity", ticker, signal_type, resolved)
+    cache_key = _make_cache_key("analyze_opportunity", ticker, signal_type, resolved, depth)
 
     return _call_with_cache(
-        SYSTEM_PROMPT_OPPORTUNITY,
+        SYSTEM_PROMPT_OPPORTUNITY + _depth_system_prompt_addon(depth),
         [{"role": "user", "content": f"Analysera denna möjlighet.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
         max_tokens=_resolve_depth(depth),
@@ -1141,7 +1222,7 @@ def compare_stocks(ticker_a: str, ticker_b: str, df: pd.DataFrame = None,
     data_str = _safe_json(comparison, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
     cache_key = _make_cache_key("compare_stocks", ticker_a, ticker_b,
-                                 str(df.shape) if df is not None else "none", resolved)
+                                 str(df.shape) if df is not None else "none", resolved, depth)
 
     user_msg = f"Jämför aktierna **{ticker_a}** och **{ticker_b}**.\n\nData:\n```json\n{data_str}\n```"
     sys_prompt = """Du jämför två aktier. Ge ett tydligt svar om:
@@ -1150,7 +1231,7 @@ def compare_stocks(ticker_a: str, ticker_b: str, df: pd.DataFrame = None,
 3. Din rekommendation: vilken är bäst att köpa JUST NU?
 4. Varför
 
-Skriv på svenska. Max 300 ord."""
+Skriv på svenska. Max 300 ord.""" + _depth_system_prompt_addon(depth)
 
     return _call_with_cache(
         sys_prompt,
@@ -1210,7 +1291,7 @@ def generate_market_summary(df: pd.DataFrame = None, sc_df: pd.DataFrame = None,
 
     data_str = _safe_json(summary, indent=2, ensure_ascii=False)
     resolved = _resolve_provider(provider)
-    cache_key = _make_cache_key("market_summary", datetime.now().strftime("%Y-%m-%d"), resolved)
+    cache_key = _make_cache_key("market_summary", datetime.now().strftime("%Y-%m-%d"), resolved, depth)
 
     return _call_with_cache(
         """Du är MarketScan AI-assistent. Skapa en marknadssammanfattning baserad på dagens scandata.
@@ -1221,7 +1302,7 @@ Analysera datan och inkludera:
 3. Starka kontra svaga aktier – mönster i faktorscorer
 4. Konkreta takeaways för investeraren
 
-Skriv på svenska, använd emojis. 150-300 ord beroende på datatillgång.""",
+Skriv på svenska, använd emojis. 150-300 ord beroende på datatillgång.""" + _depth_system_prompt_addon(depth),
         [{"role": "user", "content": f"Skapa en marknadssammanfattning.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
         max_tokens=_resolve_depth(depth),
