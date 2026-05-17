@@ -17,14 +17,29 @@ Design:
 """
 
 import html
+import json
 import re
 import smtplib
 from datetime import date, datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 from typing import Optional
 
 import mistune
+
+_SUBSCRIBERS_PATH = Path(__file__).resolve().parent.parent / "data" / "email_subscribers.json"
+
+# Alla prenumerationstyper med human-readable etiketter
+SUBSCRIPTION_TYPES: dict[str, str] = {
+    "morning_report":   "🌅 Daglig morgonrapport",
+    "evening_report":   "🌆 Kvällsuppdatering",
+    "weekly_summary":   "📊 Veckossammanfattning (fredag)",
+    "smallcap_report":  "🏦 Småbolagsrapport",
+    "stark_alerts":     "⚡ STARK-signaler (omedelbart)",
+    "portfolio_alerts": "💼 Portföljlarm (stop-loss/take-profit)",
+    "failure_alerts":   "🚨 Tekniska fel i pipeline",
+}
 
 
 # ── Färgpalett ──────────────────────────────────────────────────────────────
@@ -67,6 +82,49 @@ def email_configured() -> bool:
     """Returnerar True om email är konfigurerat."""
     sender, password, _ = _get_email_config()
     return bool(sender and password)
+
+
+# ── Prenumeranthantering ─────────────────────────────────────────────────────
+
+def load_subscribers() -> list[dict]:
+    """Laddar prenumeranter från data/email_subscribers.json."""
+    try:
+        data = json.loads(_SUBSCRIBERS_PATH.read_text(encoding="utf-8"))
+        return data.get("subscribers", [])
+    except Exception:
+        return []
+
+
+def save_subscribers(subscribers: list[dict]) -> bool:
+    """Sparar prenumeranter till data/email_subscribers.json."""
+    try:
+        _SUBSCRIBERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _SUBSCRIBERS_PATH.write_text(
+            json.dumps({"subscribers": subscribers}, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return True
+    except Exception as e:
+        print(f"  ❌ Kunde inte spara prenumeranter: {e}")
+        return False
+
+
+def get_emails_for_type(subscription_type: str) -> list[str]:
+    """
+    Returnerar lista av aktiva e-postadresser för en given prenumerationstyp.
+    Faller tillbaka på EMAIL_TO från config/env om prenumerantlistan är tom.
+    """
+    subscribers = load_subscribers()
+    emails = [
+        s["email"]
+        for s in subscribers
+        if s.get("active", True) and s.get("subscriptions", {}).get(subscription_type, False)
+    ]
+    if emails:
+        return emails
+    # Fallback: använd EMAIL_TO från konfigurationen
+    _, _, to = _get_email_config()
+    return [r.strip() for r in to.split(",") if r.strip()]
 
 
 # ── Mistune renderer för inline CSS ─────────────────────────────────────────
@@ -439,6 +497,8 @@ def send_email(
     body_html_extra: str = "",
     from_name: str = "MarketScan",
     unsubscribe_url: str = "",
+    subscription_type: str = "",
+    recipients: Optional[list[str]] = None,
 ) -> bool:
     """
     Skickar ett formaterat email via Gmail SMTP.
@@ -449,16 +509,29 @@ def send_email(
         body_html_extra: Extra HTML som läggs till efter markdown (t.ex. alert-boxar)
         from_name: Avsändarnamn
         unsubscribe_url: URL för att avsluta prenumeration (valfritt)
+        subscription_type: Prenumerationstyp (t.ex. "morning_report") för att slå upp mottagare
+        recipients: Explicit lista av mottagare (överskriver subscription_type och EMAIL_TO)
 
     Returns:
         True om email skickades, annars False
     """
-    sender, password, to = _get_email_config()
+    sender, password, _ = _get_email_config()
     if not sender or not password:
         print("  ⚠ Email ej konfigurerat – hoppar över utskick")
         return False
 
-    recipients = [r.strip() for r in to.split(",") if r.strip()]
+    if recipients is not None:
+        # Explicit lista skickad in
+        pass
+    elif subscription_type:
+        recipients = get_emails_for_type(subscription_type)
+    else:
+        _, _, to = _get_email_config()
+        recipients = [r.strip() for r in to.split(",") if r.strip()]
+
+    if not recipients:
+        print("  ⚠ Inga mottagare för utskicket")
+        return False
 
     # Bygg HTML-body
     html_parts = []
@@ -515,4 +588,5 @@ def send_failure_alert(workflow: str, run_id: str = "", repo: str = "") -> bool:
         subject=f"🚨 MarketScan: {workflow} misslyckades",
         body_markdown=body,
         from_name="MarketScan Alerts",
+        subscription_type="failure_alerts",
     )

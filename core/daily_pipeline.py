@@ -845,13 +845,21 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         "weekly": f"📊 MarketScan Veckorapport – v.{datetime.now().isocalendar()[1]}",
         "smallcap": f"🏦 MarketScan Småbolag – {date_str}",
     }
+    subscription_type_map = {
+        "morning":  "morning_report",
+        "evening":  "evening_report",
+        "weekly":   "weekly_summary",
+        "smallcap": "smallcap_report",
+    }
     subject = subject_map.get(mode, f"MarketScan Rapport – {date_str}")
+    sub_type = subscription_type_map.get(mode, "morning_report")
 
     try:
         email_sent = send_email(
             subject=subject,
             body_markdown=report_text,
             from_name="MarketScan",
+            subscription_type=sub_type,
         )
         if email_sent:
             logger.info(f"  ✉ Mail skickat: {subject}")
