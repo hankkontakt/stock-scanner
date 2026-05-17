@@ -87,12 +87,32 @@ st.markdown("""
 @st.cache_data(ttl=300)
 def load_scan_reports() -> dict:
     """Returnerar {datum_str: DataFrame} för alla vecko-scan CSVer."""
+    # Kolumner som kan saknas i äldre CSVer — fylls med NaN istället för crash
+    _OPTIONAL_COLS = [
+        "score_value", "score_quality", "score_momentum", "score_growth",
+        "score_risk", "score_size", "score_dividend", "score_sentiment",
+        "entry_signal", "trend_signal", "confidence_label",
+        "price", "close", "change_pct", "volume",
+        "rsi_14", "price_vs_ma50", "price_vs_ma200",
+        "return_1m", "return_3m", "return_6m", "return_12m",
+        "pe_trailing", "pe_forward", "price_to_book",
+        "roe", "roa", "profit_margin", "gross_margin",
+        "revenue_growth", "earnings_growth",
+        "debt_to_equity", "current_ratio", "dividend_yield",
+        "free_cash_flow", "piotroski_f",
+        "beta", "volatility", "pct_from_52w_high",
+        "score_delta", "delta_flag", "sector",
+        "name", "industry", "country",
+    ]
     result = {}
     for f in sorted(REPORT_DIR.glob("scored_universe_*.csv"), reverse=True):
         try:
-            d   = f.stem.replace("scored_universe_", "")
-            df  = pd.read_csv(f, low_memory=False)
+            d  = f.stem.replace("scored_universe_", "")
+            df = pd.read_csv(f, low_memory=False)
             df.columns = df.columns.str.strip()
+            for col in _OPTIONAL_COLS:
+                if col not in df.columns:
+                    df[col] = np.nan
             result[d] = df
         except Exception:
             pass
@@ -1594,6 +1614,43 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
                         st.markdown(result)
                 except Exception as e:
                     st.error(f"❌ {e}")
+
+    # ── Dividend-kalender ───────────────────────────────────────────────────
+    if not holdings.empty and "ticker" in holdings.columns:
+        st.markdown("---")
+        st.subheader("💰 Kommande utdelningar")
+        st.caption("Estimerade nästa utdelningsdatum för dina innehav (baseras på historisk frekvens).")
+        _div_days = st.slider("Visa inom (dagar)", 30, 180, 90, 30, key="div_days")
+        if st.button("🔄 Hämta utdelningsdata", key="btn_div_cal", use_container_width=True):
+            with st.spinner("Hämtar utdelningshistorik..."):
+                try:
+                    from core.dividend_calendar import get_upcoming_dividends
+                    _tickers = holdings["ticker"].str.strip().str.upper().tolist()
+                    _div_df = get_upcoming_dividends(_tickers, days_ahead=_div_days)
+                    st.session_state["div_cal"] = _div_df
+                except Exception as e:
+                    st.error(f"Kunde inte hämta utdelningsdata: {e}")
+
+        _div_result = st.session_state.get("div_cal")
+        if _div_result is not None:
+            if _div_result.empty:
+                st.info(f"Inga förväntade utdelningar inom {_div_days} dagar.")
+            else:
+                def _urgency(d):
+                    if d <= 7:   return "🔴"
+                    if d <= 21:  return "🟡"
+                    return "🟢"
+                _div_result = _div_result.copy()
+                _div_result["Kvar"] = _div_result["days_until"].apply(
+                    lambda d: f"{_urgency(d)} {d}d")
+                _div_result["Yield"] = _div_result["yield_pct"].apply(
+                    lambda v: f"{v:.1f}%" if v and not pd.isna(v) else "—")
+                _div_show = _div_result[["ticker", "name", "next_div", "Kvar",
+                                         "amount", "Yield", "frequency"]].copy()
+                _div_show.columns = ["Ticker", "Bolag", "Datum", "Kvar",
+                                     "Belopp", "Årsyield", "Frekvens"]
+                st.dataframe(_div_show, use_container_width=True, hide_index=True)
+                st.caption("⚠️ Datum är estimat baserade på historisk frekvens — inte bekräftade.")
 
     # Bevakningslista
     st.markdown("---")
