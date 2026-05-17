@@ -312,7 +312,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                 for _h in _hits[:6]:
                     if st.button(f"{_h['ticker']} — {_h['name'][:40]}", key=f"gs_{_h['ticker']}", use_container_width=True):
                         st.session_state["nav_page"] = "🔍 Aktie-sök"
-                        st.session_state["search_ticker"] = _h["ticker"]
+                        st.session_state["search_ticker"] = _h["ticker"]; st.session_state["selected_stock_ticker"] = ""; st.session_state["selected_stock_name"] = ""
                         st.rerun()
         st.markdown("---")
 
@@ -4096,6 +4096,9 @@ def page_stock_search():
     # Uppdatera session_state med senaste sökning
     if search_q:
         st.session_state["stock_search_q"] = search_q
+    if search_q and st.session_state.get("selected_stock_ticker","") and search_q != st.session_state.get("stock_search_q",""):
+        st.session_state["selected_stock_ticker"] = ""
+        st.session_state["selected_stock_name"] = ""
 
     # Kolla om vi har en vald ticker från tidigare (efter rerun)
     selected_ticker = st.session_state.get("selected_stock_ticker", "")
@@ -4273,7 +4276,7 @@ def page_stock_search():
     # Visa historik
     for msg in st.session_state["stock_chat"][-10:]:
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"][:500])
+            st.markdown(msg["content"])
 
     prompt = st.chat_input(f"Fråga om {ticker}...")
     if prompt:
