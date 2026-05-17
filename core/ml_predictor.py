@@ -23,6 +23,7 @@ Output i daily_pipeline: två nya kolumner i scored DataFrame:
 
 from __future__ import annotations
 
+import datetime
 import logging
 import math
 import pickle
@@ -59,6 +60,10 @@ TECH_FEATURES = [
     "bb_position",
     "momentum_3_vs_12",
 ]
+
+# Halvlivstid för exponentiell tidsviktning i träning.
+# Data som är 2 år gammalt viktas till 50 %, 4 år → 25 %, COVID (6 år) → 12 %.
+SAMPLE_WEIGHT_HALFLIFE_YEARS: float = 2.0
 
 
 def _rsi(close: pd.Series, period: int = 14) -> float:
@@ -253,8 +258,18 @@ def train_from_dataset(parquet_path: Path, universe: str) -> Optional[TrainedMod
     X_te = test[TECH_FEATURES].fillna(0).values
     y_te = test["forward_return_30d"].values
 
+    # Exponentiell tidsviktning — nyare data viktas högre.
+    # Halvlivstid = SAMPLE_WEIGHT_HALFLIFE_YEARS (default 2 år).
+    # COVID-data (~6 år gammalt) får ~12 % av vikten jämfört med dagens data.
+    _today = datetime.date.today()
+    _age_days = pd.to_datetime(train["date"]).dt.date.apply(
+        lambda d: (_today - d).days
+    ).values
+    w_tr = np.exp(-np.log(2) / SAMPLE_WEIGHT_HALFLIFE_YEARS * (_age_days / 365.25))
+    w_tr = w_tr / w_tr.mean()  # renormalisera till mean=1 (XGBoost-konvention)
+
     model = _make_regressor()
-    model.fit(X_tr, y_tr)
+    model.fit(X_tr, y_tr, sample_weight=w_tr)
 
     # Metrics
     pred_te = model.predict(X_te)
