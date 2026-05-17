@@ -585,6 +585,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                     wl = load_watchlist()
                     wl.append({"ticker": tkr, "name": r.get("name", tkr), "added": str(date.today())})
                     _save_watchlist_data(wl)
+                    st.toast(f"✅ {tkr} tillagd i bevakning!", icon="⭐")
                     st.rerun()
             if st.session_state.pop(f"_add_scan_{tkr}", False):
                 is_sc = any(suf in str(tkr).upper() for suf in [".ST", ".HE", ".CO", ".OL"])
@@ -595,7 +596,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                     else:
                         from core.config import add_custom_to_universe
                         add_custom_to_universe(tkr, str(r.get("name", tkr)))
-                    st.rerun()
+                    st.toast(f"✅ {tkr} tillagd i nästa scan!", icon="📡")
                 except:
                     pass
 
@@ -659,7 +660,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
             try:
                 fx_ticker = st.selectbox("Välj valutapar", list(FX_PAIRS.keys()), key="fx_chart")
                 fx_ticker_symbol = FX_PAIRS[fx_ticker]
-                fx_hist = yf.download(fx_ticker_symbol, period="1mo", auto_adjust=True, progress=False)
+                fx_hist = yf.download(fx_ticker_symbol, period="1y", progress=False)
                 if not fx_hist.empty:
                     # yfinance med valutapar returnerar MultiIndex-kolumner
                     close_col = fx_hist["Close"] if "Close" in fx_hist.columns else fx_hist.iloc[:, 0]
@@ -879,6 +880,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                             if not any(i["ticker"] == sel_ticker for i in wl_items_ov):
                                 wl_items_ov.append({"ticker": sel_ticker, "name": row.iloc[0].get("name", sel_ticker), "added": str(date.today())})
                                 _save_watchlist_data(wl_items_ov)
+                                st.toast(f"✅ {sel_ticker} tillagd i bevakning!", icon="⭐")
                                 st.rerun()
                         if c2.button("➕ Lägg till i nästa scan", key=f"ov_det_add_{sel_ticker}", use_container_width=True):
                             is_sc = any(suf in str(sel_ticker).upper() for suf in [".ST", ".HE", ".CO", ".OL"])
@@ -889,8 +891,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame):
                                 else:
                                     from core.config import add_custom_to_universe
                                     add_custom_to_universe(sel_ticker, str(row.iloc[0].get("name", sel_ticker)))
-                                st.success(f"`{sel_ticker}` tillagd i nästa scan!")
-                                st.rerun()
+                                st.toast(f"✅ {sel_ticker} tillagd i nästa scan!", icon="📡")
                             except Exception as e:
                                 st.error(f"Fel: {e}")
                         render_stock_detail(
@@ -4178,10 +4179,20 @@ def page_stock_search():
             if not any(i["ticker"] == ticker for i in items):
                 items.append({"ticker": ticker, "name": name, "added": str(date.today())})
                 _save_watchlist_data(items)
-                st.success(f"{ticker} tillagd i bevakningslistan!")
-                st.rerun()
+                # Lägg automatiskt till i nästa scan också
+                try:
+                    is_sc = any(suffix in ticker.upper() for suffix in [".ST", ".HE", ".CO", ".OL"])
+                    if is_sc:
+                        from smallcap.universe import add_custom
+                        add_custom(ticker, name)
+                    else:
+                        from core.config import add_custom_to_universe
+                        add_custom_to_universe(ticker, name)
+                except:
+                    pass
+                st.success(f"✅ `{ticker}` tillagd i bevakning + nästa scan!")
             else:
-                st.info(f"{ticker} finns redan i bevakningslistan.")
+                st.info(f"`{ticker}` finns redan i bevakningslistan.")
     with col2:
         if st.button("➕ Lägg till i nästa scan", key=f"add_scan_{ticker}", use_container_width=True):
             try:
@@ -4201,7 +4212,6 @@ def page_stock_search():
                         st.success(f"✔ `{ticker}` tillagd i universumscannern! Syns i nästa scanning + ML.")
                     else:
                         st.info(f"`{ticker}` finns redan i universumscannern.")
-                st.rerun()
             except Exception as e:
                 st.error(f"Kunde inte lägga till: {e}")
 
