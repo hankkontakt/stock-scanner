@@ -696,9 +696,48 @@ def _google_search_term(ticker: str) -> str:
     return base.replace("-", " ")
 
 
+def fetch_yfinance_news(ticker: str, max_items: int = 5) -> list:
+    """
+    Hämtar Yahoo Finance-nyheter via yfinance (gratis, ingen API-nyckel).
+    Returnerar [{headline, source, url, datetime_str, age_hours}] nyast först.
+    Cachar i 2 timmar.
+    """
+    cache_key = f"yf_news:{ticker}"
+    cached = _read_cache(cache_key)
+    if cached is not None:
+        return cached
+    result = []
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker)
+        news_items = t.news or []
+        now = datetime.utcnow()
+        for item in news_items[:max_items]:
+            ts = item.get("providerPublishTime") or item.get("publishTime", 0)
+            try:
+                pub = datetime.utcfromtimestamp(int(ts))
+                age_hours = round((now - pub).total_seconds() / 3600, 1)
+                dt_str = pub.strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                age_hours = 0
+                dt_str = ""
+            result.append({
+                "headline":     item.get("title", ""),
+                "url":          item.get("link", ""),
+                "source":       item.get("publisher", "Yahoo Finance"),
+                "datetime_str": dt_str,
+                "age_hours":    age_hours,
+            })
+    except Exception:
+        pass
+    _write_cache(cache_key, result)
+    return result
+
+
 def fetch_company_news(ticker: str, days_back: int = 7, company_name: str = None) -> list:
     """
     Hämtar bolagsspecifika nyheter via Finnhub + Google News RSS och slår ihop resultaten.
+    Kompletterar med Yahoo Finance-nyheter om Finnhub + Google ger < 3 resultat.
 
     Args:
         ticker:       Ticker-symbol (t.ex. "INVE-B.ST")
@@ -713,7 +752,12 @@ def fetch_company_news(ticker: str, days_back: int = 7, company_name: str = None
     finnhub_results = fetch_news(ticker, api_key, days=days_back) if api_key else []
     search_term = company_name.strip() if company_name and company_name.strip() else _google_search_term(ticker)
     google_results = fetch_google_news_rss(search_term, max_items=5, days_back=days_back)
-    return _merge_news(finnhub_results, google_results, max_total=7)
+    merged = _merge_news(finnhub_results, google_results, max_total=7)
+    # Supplement with Yahoo Finance headlines if Finnhub + Google returned few results
+    if len(merged) < 3:
+        yf_news = fetch_yfinance_news(ticker, max_items=5)
+        merged = _merge_news(merged, yf_news, max_total=7)
+    return merged
 
 
 # ══════════════════════════════════════════════════════════════

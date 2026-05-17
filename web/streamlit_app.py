@@ -135,6 +135,20 @@ def load_smallcap_reports() -> dict:
     return result
 
 
+@st.cache_data(ttl=300)
+def _load_nth_latest_scored(n: int = 2) -> pd.DataFrame:
+    """Laddar den N:e senaste scored_universe-filen (n=1 = senast, n=2 = igår)."""
+    files = sorted(REPORT_DIR.glob("scored_universe_*.csv"), reverse=True)
+    if len(files) < n:
+        return pd.DataFrame()
+    try:
+        df = pd.read_csv(files[n - 1], low_memory=False)
+        df.columns = df.columns.str.strip()
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+
 def load_portfolio() -> pd.DataFrame:
     """Laddar holdings.csv och berikar med senaste scan-data.
     Ingen cache – filen ändras när användaren lägger till tickers."""
@@ -399,6 +413,25 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                     filters["piotroski_min"] = st.slider("Min Piotroski", 0, 9, 0, key="ws_pio")
                     filters["show_holdings"] = st.checkbox("Bara mina innehav", key="ws_hold")
                     filters["show_watchlist"] = st.checkbox("Inkludera bevakning", key="ws_wl")
+                    st.markdown("---")
+                    filters["only_swedish"] = st.checkbox(
+                        "🇸🇪 Visa endast svenska aktier",
+                        value=False,
+                        key="ws_only_swedish",
+                        help="Filtrera till enbart aktier på Stockholmsbörsen (.ST)",
+                    )
+                    if not filters["only_swedish"]:
+                        filters["countries"] = st.multiselect(
+                            "🌍 Länder",
+                            options=["🇸🇪 Sverige", "🇺🇸 USA", "🇬🇧 UK", "🇩🇪 Tyskland",
+                                     "🇫🇮 Finland", "🇩🇰 Danmark", "🇳🇴 Norge",
+                                     "🇨🇳 Kina", "🇯🇵 Japan"],
+                            default=[],
+                            key="ws_countries",
+                            help="Lämna tomt för att visa alla länder.",
+                        )
+                    else:
+                        filters["countries"] = []
 
                 elif page == "🏦 Småbolag":
                     filters["sc_score_min"] = st.slider("Min poäng", 0, 100, 30, 5, key="sc_min")
@@ -963,6 +996,35 @@ def _apply_weekly_filters(df: pd.DataFrame, filters: dict,
     if filters.get("show_holdings") and not holdings.empty:
         h_tickers = set(holdings["ticker"].str.upper())
         out = out[out["ticker"].isin(h_tickers)]
+
+    # Landsfiltret: "Visa endast svenska aktier"
+    if filters.get("only_swedish"):
+        out = out[out["ticker"].str.endswith(".ST", na=False)]
+
+    # Lands-multiselect
+    _SUFFIX_MAP = {
+        "🇸🇪 Sverige": ".ST",
+        "🇬🇧 UK":      ".L",
+        "🇩🇪 Tyskland": ".DE",
+        "🇫🇮 Finland": ".HE",
+        "🇩🇰 Danmark": ".CO",
+        "🇳🇴 Norge":   ".OL",
+        "🇨🇳 Kina":    ".SS",
+        "🇯🇵 Japan":   ".T",
+    }
+    _ALL_NON_US = set(_SUFFIX_MAP.values())
+    selected_countries = filters.get("countries", [])
+    if selected_countries:
+        us_sel = "🇺🇸 USA" in selected_countries
+        suffixes = [_SUFFIX_MAP[c] for c in selected_countries if c in _SUFFIX_MAP]
+        def _country_match(t: str) -> bool:
+            t = str(t)
+            if any(t.endswith(s) for s in suffixes):
+                return True
+            if us_sel and not any(t.endswith(s) for s in _ALL_NON_US):
+                return True
+            return False
+        out = out[out["ticker"].apply(_country_match)]
 
     # Inkludera bevakningslista (ingen filtrering, bara markering)
     return out.reset_index(drop=True)
@@ -4553,7 +4615,10 @@ def page_alerts_notices(df: pd.DataFrame):
          "Antal aktier på din bevakningslista. Du får nyheter och larm för dessa aktier utan att äga dem."),
     ])
 
-    tab1, tab2, tab3 = st.tabs(["🔴 Stop-loss/Take-profit", "🚨 Prislarm", "📰 Nyhetslarm"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🔴 Stop-loss/Take-profit", "🚨 Prislarm", "📰 Nyhetslarm",
+        "📊 Stuckit ut (24h)", "📅 Värt att kolla",
+    ])
 
     with tab1:
         if not trades:
@@ -4637,6 +4702,153 @@ def page_alerts_notices(df: pd.DataFrame):
                         st.caption("Nyhetshämtning ej tillgänglig.")
         else:
             st.info("Lägg till bevakningslista för att se nyheter.")
+
+    with tab4:
+        st.subheader("📊 Vad stack ut de senaste 24 timmarna?")
+        st.caption("Jämför dagens ranking mot gårdagens — score-rörelser, RSI-korsningar och stora kursrörelser.")
+        try:
+            from core.daily_pipeline import _get_score_deltas
+            today_scored   = _load_nth_latest_scored(n=1)
+            yesterday_scored = _load_nth_latest_scored(n=2)
+            deltas = _get_score_deltas(today_scored, yesterday_scored)
+        except Exception as _e:
+            deltas = {}
+            st.warning(f"Kunde inte beräkna deltas: {_e}")
+
+        if not deltas:
+            st.info("Behöver minst 2 dagars scan-data för att visa förändringar.")
+        else:
+            col_up, col_dn = st.columns(2)
+            with col_up:
+                st.markdown("##### ⬆️ Störst score-ökning")
+                up_data = deltas.get("movers_up", [])
+                if up_data:
+                    up_df = pd.DataFrame(up_data).rename(columns={
+                        "ticker": "Ticker", "score_total": "Score idag",
+                        "score_yesterday": "Score igår", "score_delta": "Δ Score",
+                        "price_delta_pct": "Δ Pris %",
+                    })
+                    st.dataframe(up_df, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("Inga data.")
+            with col_dn:
+                st.markdown("##### ⬇️ Störst score-minskning")
+                dn_data = deltas.get("movers_down", [])
+                if dn_data:
+                    dn_df = pd.DataFrame(dn_data).rename(columns={
+                        "ticker": "Ticker", "score_total": "Score idag",
+                        "score_yesterday": "Score igår", "score_delta": "Δ Score",
+                        "price_delta_pct": "Δ Pris %",
+                    })
+                    st.dataframe(dn_df, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("Inga data.")
+
+            rsi_data = deltas.get("rsi_spikes", [])
+            if rsi_data:
+                st.markdown("##### 📈 RSI-korsningar (30↑ / 70↓)")
+                rsi_df = pd.DataFrame(rsi_data).rename(columns={
+                    "ticker": "Ticker", "rsi_14": "RSI idag", "rsi_yesterday": "RSI igår",
+                    "rsi_crossed_30up": "Korsade 30↑", "rsi_crossed_70down": "Korsade 70↓",
+                })
+                st.dataframe(rsi_df, use_container_width=True, hide_index=True)
+
+            price_data = deltas.get("big_price", [])
+            if price_data:
+                st.markdown("##### 💥 Stora kursrörelser (>4%)")
+                price_df = pd.DataFrame(price_data).rename(columns={
+                    "ticker": "Ticker", "score_total": "Score",
+                    "price_delta_pct": "Δ Pris %",
+                })
+                st.dataframe(price_df[["Ticker", "Score", "Δ Pris %"]],
+                             use_container_width=True, hide_index=True)
+
+    with tab5:
+        st.subheader("📅 Kommande händelser")
+        st.caption("Rapporter, centralbanksbeslut och utdelningar de närmaste veckorna.")
+
+        # ── Rapporter ──────────────────────────────────────────────────────────
+        col_port, col_top = st.columns(2)
+        _scored_for_cal = df if not df.empty else _load_nth_latest_scored(n=1)
+        _holdings_for_cal = holdings
+
+        with col_port:
+            st.markdown("##### 📊 Rapporter – innehav")
+            try:
+                from core.earnings_calendar import upcoming_in_portfolio
+                if not _holdings_for_cal.empty and not _scored_for_cal.empty:
+                    port_cal = upcoming_in_portfolio(_holdings_for_cal, _scored_for_cal, days_ahead=30)
+                    if not port_cal.empty:
+                        _pc = port_cal[["ticker", "earnings_date", "days_until"]].copy()
+                        _pc.columns = ["Ticker", "Datum", "Dagar kvar"]
+                        st.dataframe(_pc, use_container_width=True, hide_index=True)
+                        st.caption("⚠️ Var försiktig med köp precis innan rapport (gap-risk)")
+                    else:
+                        st.info("Inga rapporter de närmsta 30 dagarna.")
+                else:
+                    st.info("Lägg till innehav för att se kommande rapporter.")
+            except Exception as _e:
+                st.caption(f"Rapportkalender ej tillgänglig: {_e}")
+
+        with col_top:
+            st.markdown("##### 📊 Rapporter – topp-20")
+            try:
+                from core.earnings_calendar import upcoming_in_top
+                if not _scored_for_cal.empty:
+                    top_cal = upcoming_in_top(_scored_for_cal, top_n=20, days_ahead=14)
+                    if not top_cal.empty:
+                        _tc_cols = [c for c in ["ticker", "earnings_date", "days_until", "rank"]
+                                    if c in top_cal.columns]
+                        _tc = top_cal[_tc_cols].copy()
+                        _tc.columns = [{"ticker": "Ticker", "earnings_date": "Datum",
+                                         "days_until": "Dagar kvar", "rank": "Rank"}.get(c, c)
+                                        for c in _tc_cols]
+                        st.dataframe(_tc, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("Inga rapporter de närmsta 14 dagarna.")
+                else:
+                    st.info("Kör en scan för att se kommande rapporter.")
+            except Exception as _e:
+                st.caption(f"Rapportkalender ej tillgänglig: {_e}")
+
+        # ── Centralbanksbeslut ─────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("##### 🏦 Kommande centralbanksbeslut (30 dagar)")
+        try:
+            from core.macro_calendar import get_upcoming_macro_events
+            macro_evs = get_upcoming_macro_events(days_ahead=30)
+            if macro_evs:
+                _mc_df = pd.DataFrame(macro_evs)[["flag", "event", "date", "days_until"]]
+                _mc_df.columns = ["", "Händelse", "Datum", "Dagar kvar"]
+                st.dataframe(_mc_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("Inga centralbanksbeslut de närmsta 30 dagarna.")
+        except Exception as _e:
+            st.caption(f"Makrokalender ej tillgänglig: {_e}")
+
+        # ── Utdelningar ────────────────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("##### 💰 Kommande utdelningar – innehav (60 dagar)")
+        try:
+            from core.dividend_calendar import get_upcoming_dividends
+            if not _holdings_for_cal.empty:
+                div_cal = get_upcoming_dividends(
+                    _holdings_for_cal["ticker"].tolist(), days_ahead=60
+                )
+                if not div_cal.empty:
+                    _dc_cols = [c for c in ["ticker", "next_div_date", "amount", "yield_pct", "days_until"]
+                                if c in div_cal.columns]
+                    _dc = div_cal[_dc_cols].copy()
+                    _dc.columns = [{"ticker": "Ticker", "next_div_date": "Ex-datum",
+                                     "amount": "Belopp", "yield_pct": "Yield %",
+                                     "days_until": "Dagar kvar"}.get(c, c) for c in _dc_cols]
+                    st.dataframe(_dc, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Inga utdelningar de närmsta 60 dagarna.")
+            else:
+                st.info("Lägg till innehav för att se kommande utdelningar.")
+        except Exception as _e:
+            st.caption(f"Utdelningskalender ej tillgänglig: {_e}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
