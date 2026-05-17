@@ -122,6 +122,62 @@ Streamlit Cloud reagerar på reverten automatiskt.
 
 Gamla rapporter rensas automatiskt efter 60 dagar via `_cleanup_old_reports()` i pipeline.
 
+## ML-pipeline (egen kvant-modell)
+
+Parallellt med den klassiska scoring-formeln tränas två XGBoost-modeller som förutspår 30-dagars avkastning:
+
+| Universum | Modell-fil | Tickers | Triggers |
+|---|---|---|---|
+| **universe** (stora aktier) | `models/ml_universe.pkl` | ~800 från [core/config.py](core/config.py) | scheduled söndag 03:00 UTC + manuellt |
+| **smallcap** (svenska) | `models/ml_smallcap.pkl` | ~280 från [smallcap/universe.py](smallcap/universe.py) | samma som ovan |
+
+### Pipeline-flöde
+```
+GitHub Actions (träning, en gång i veckan)
+  └─ scripts/build_ml_dataset.py  →  data/ml/<universe>_training.parquet
+  └─ scripts/train_ml.py          →  models/ml_<universe>.pkl
+                                     models/ml_<universe>_metrics.json
+
+GitHub Actions (daily_scan, varje pipeline-körning)
+  └─ core/daily_pipeline.run_pipeline()
+       ├─ scoring (klassisk) → score_total
+       ├─ core.ml_predictor.predict_returns() → predicted_return + ml_rank
+       └─ core.ml_paper_trading.record_daily_signals() → topp-10 virtuella köp
+
+Streamlit
+  ├─ Veckoscanner: toggle "Klassisk score / AI prediction / Båda"
+  ├─ Småbolag: toggle "Klassisk score / AI prediction"
+  └─ 🤖 AI Paper Trading: equity curves, hit-rate, öppna/stängda positioner
+```
+
+### Träna manuellt
+```
+Actions → 🤖 Train ML → Run workflow → välj universum + years
+```
+
+### Lokalt
+```bash
+python -m scripts.build_ml_dataset --universe universe --years 5
+python -m scripts.train_ml --universe universe
+```
+
+### Features (15 tekniska, point-in-time-säkra)
+Se `TECH_FEATURES` i [core/ml_predictor.py](core/ml_predictor.py):
+returns 1/3/6/12m, RSI, MACD-histogram, MA-ratios, volatility 30d, volume ratio, 52w-distance, Bollinger band position, momentum-divergens.
+
+Fundamenta är ute med flit — point-in-time-data är svårt att rekonstruera korrekt från yfinance och ger look-ahead bias-risk.
+
+### Metrics att hålla koll på
+Sparas i `models/ml_<universe>_metrics.json`:
+- **IC** (information coefficient) > 0.03 = användbar signal
+- **hit_rate** > 0.52 = bättre än slumpen
+- **MAE** = average forecast error (low is good)
+
+### Modellen finns inte ännu?
+Pipelinen är robust mot detta — om `models/ml_<universe>.pkl` saknas, hoppar pipelinen tyst över ML-stegen och fortsätter med klassisk scoring som vanligt. Streamlit-UI visar då bara "Klassisk score" som ranking-läge.
+
+---
+
 ## Hur jag debuggar en misslyckad scan
 
 1. **Kolla GitHub Actions-loggen** — vid failure skickas ett mail via `send_failure_alert()`.

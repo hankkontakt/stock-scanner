@@ -334,10 +334,11 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
 
         # PORTFÖLJ
         with st.expander("💼 PORTFÖLJ", expanded=True):
-            _p = st.radio("", ["💼 Portfölj", "📄 Paper Trading", "🚨 Larm & Notiser"],
+            _portfolio_opts = ["💼 Portfölj", "📄 Paper Trading", "🤖 AI Paper Trading", "🚨 Larm & Notiser"]
+            _p = st.radio("", _portfolio_opts,
                           key="nav_portfolio", label_visibility="collapsed",
-                          index=["💼 Portfölj", "📄 Paper Trading", "🚨 Larm & Notiser"].index(
-                              st.session_state["nav_page"]) if st.session_state["nav_page"] in ["💼 Portfölj", "📄 Paper Trading", "🚨 Larm & Notiser"] else 0)
+                          index=_portfolio_opts.index(st.session_state["nav_page"])
+                          if st.session_state["nav_page"] in _portfolio_opts else 0)
             st.session_state["nav_page"] = _p
 
         # ANALYS
@@ -921,33 +922,48 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
     show = df.copy()
     show["_status"] = show["ticker"].apply(_flag)
 
-    # Välj kolumner
+    # Välj kolumner – inkluderar ML-kolumner när de finns
     base_cols = [c for c in [
         "rank", "ticker", "name", "_status", "sector",
-        "score_total", "entry_signal", "confidence_label", "trend_signal",
+        "score_total", "predicted_return", "ml_rank",
+        "entry_signal", "confidence_label", "trend_signal",
         "delta_flag", "piotroski_f",
     ] if c in show.columns]
 
     display = show[base_cols].copy()
     display = display.rename(columns={
-        "rank":            "Rank",
-        "ticker":          "Ticker",
-        "name":            "Bolag",
-        "_status":         "Status",
-        "sector":          "Sektor",
-        "score_total":     "Score",
-        "entry_signal":    "Entry",
-        "confidence_label":"Konf.",
-        "trend_signal":    "Trend",
-        "delta_flag":      "Δ",
-        "piotroski_f":     "Piotroski",
+        "rank":              "Rank",
+        "ticker":            "Ticker",
+        "name":              "Bolag",
+        "_status":           "Status",
+        "sector":            "Sektor",
+        "score_total":       "Score (klassisk)",
+        "predicted_return":  "AI 30d-ret",
+        "ml_rank":           "AI rank",
+        "entry_signal":      "Entry",
+        "confidence_label":  "Konf.",
+        "trend_signal":      "Trend",
+        "delta_flag":        "Δ",
+        "piotroski_f":       "Piotroski",
     })
 
     col_cfg = {}
-    if "Score" in display.columns:
-        col_cfg["Score"] = st.column_config.ProgressColumn(
-            "Score", min_value=0, max_value=100, format="%.0f"
+    if "Score (klassisk)" in display.columns:
+        col_cfg["Score (klassisk)"] = st.column_config.ProgressColumn(
+            "Score (klassisk)", min_value=0, max_value=100, format="%.0f"
         )
+    if "AI rank" in display.columns:
+        col_cfg["AI rank"] = st.column_config.ProgressColumn(
+            "AI rank", min_value=0, max_value=100, format="%.0f"
+        )
+    if "AI 30d-ret" in display.columns:
+        col_cfg["AI 30d-ret"] = st.column_config.NumberColumn(
+            "AI 30d-ret", format="%.1f%%",
+            help="ML-modellens prediktion av avkastning kommande 30 dagar"
+        )
+        # Konvertera till procent för visningen (modellen returnerar fraction)
+        if not display["AI 30d-ret"].isna().all():
+            display["AI 30d-ret"] = display["AI 30d-ret"] * 100
     if "Piotroski" in display.columns:
         col_cfg["Piotroski"] = st.column_config.NumberColumn("Piotroski", format="%.0f/9")
 
@@ -995,8 +1011,25 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
             with st.expander("Tillgängliga sektorer", expanded=False):
                 st.write(", ".join(secs))
 
+    # ── Ranking-läge: Klassisk score vs AI prediction ────────────────────────
+    has_ml = "predicted_return" in df.columns
+    if has_ml:
+        rank_mode = st.radio(
+            "🤖 Ranking-läge",
+            ["Klassisk score", "AI prediction", "Båda (side-by-side)"],
+            horizontal=True,
+            key="weekly_rank_mode",
+            help="AI-modellen (XGBoost) lär sig från historisk prishistorik och förutspår 30-dagars avkastning."
+        )
+    else:
+        rank_mode = "Klassisk score"
+
     # Applicera filter
     filt_df = _apply_weekly_filters(df, filters, holdings, watchlist)
+
+    # Sortera enligt rank_mode
+    if rank_mode == "AI prediction" and "predicted_return" in filt_df.columns:
+        filt_df = filt_df.sort_values("predicted_return", ascending=False)
 
     # KPI
     n_total  = len(df)
@@ -1221,7 +1254,23 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
                 st.write(", ".join(secs))
 
     score_col = "sc_total" if "sc_total" in sc_df.columns else "score_total"
-    filt      = _apply_sc_filters(sc_df, filters)
+
+    # ── Ranking-läge: Klassisk score vs AI prediction ────────────────────────
+    has_ml = "predicted_return" in sc_df.columns
+    if has_ml:
+        sc_rank_mode = st.radio(
+            "🤖 Ranking-läge",
+            ["Klassisk score", "AI prediction"],
+            horizontal=True,
+            key="smallcap_rank_mode",
+            help="AI-modellen (XGBoost) tränas separat på svenska småbolag och förutspår 30-dagars avkastning."
+        )
+    else:
+        sc_rank_mode = "Klassisk score"
+
+    filt = _apply_sc_filters(sc_df, filters)
+    if sc_rank_mode == "AI prediction" and "predicted_return" in filt.columns:
+        filt = filt.sort_values("predicted_return", ascending=False)
 
     # KPI
     n_five = (filt.get("sc_stars", pd.Series()) == "★★★★★").sum() \
@@ -1245,7 +1294,8 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
             st.info("Inga bolag matchar filter.")
         else:
             rank_cols = [c for c in [
-                "ticker", "sc_stars", score_col, "insider_signal",
+                "ticker", "sc_stars", score_col, "predicted_return", "ml_rank",
+                "insider_signal",
                 "current_price", "day_change_pct", "week_change_pct",
                 "return_6m", "return_12m", "piotroski_score",
             ] if c in filt.columns]
@@ -1254,6 +1304,8 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
             rename = {
                 "ticker": "Ticker", "sc_stars": "⭐",
                 score_col: "Poäng",
+                "predicted_return": "AI 30d-ret",
+                "ml_rank": "AI rank",
                 "insider_signal": "Insider",
                 "current_price": "Pris",
                 "day_change_pct": "Dag%",
@@ -1266,10 +1318,21 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
             for c in ["Dag%", "Vecka%", "6m%", "12m%"]:
                 if c in rank_disp.columns:
                     rank_disp[c] = rank_disp[c].apply(lambda v: pct_fmt(v))
+            if "AI 30d-ret" in rank_disp.columns and not rank_disp["AI 30d-ret"].isna().all():
+                rank_disp["AI 30d-ret"] = rank_disp["AI 30d-ret"] * 100
             col_cfg = {}
             if "Poäng" in rank_disp.columns:
                 col_cfg["Poäng"] = st.column_config.ProgressColumn(
                     "Poäng", min_value=0, max_value=100, format="%.0f"
+                )
+            if "AI rank" in rank_disp.columns:
+                col_cfg["AI rank"] = st.column_config.ProgressColumn(
+                    "AI rank", min_value=0, max_value=100, format="%.0f"
+                )
+            if "AI 30d-ret" in rank_disp.columns:
+                col_cfg["AI 30d-ret"] = st.column_config.NumberColumn(
+                    "AI 30d-ret", format="%.1f%%",
+                    help="ML-modellens prediktion av avkastning kommande 30 dagar"
                 )
             st.dataframe(rank_disp, use_container_width=True, hide_index=True,
                          column_config=col_cfg, height=600)
@@ -3833,6 +3896,108 @@ def page_paper_trading():
             st.metric("Snitt P&L efter DCA", f"{dca_avg:+.1f}%" if dca_avg else "—")
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SIDA – ML PAPER TRADING (separat från klassisk paper trading)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def page_ml_paper_trading():
+    """Dashboard för ML-modellens paper trading (parallellt spår mot klassisk)."""
+    from core import ml_paper_trading as mlpt
+    try:
+        from core.ml_predictor import load_model
+    except Exception:
+        load_model = lambda *_a, **_k: None  # noqa: E731
+
+    st.title("🤖 AI Paper Trading")
+    st.caption(
+        "Separat track record för ML-modellens topp-10 prediktioner per dag. "
+        "Klassisk paper trading körs orört parallellt — jämför dem för att se "
+        "vilken som faktiskt levererar."
+    )
+
+    # ── Modellstatus ────────────────────────────────────────────────────────
+    col_u, col_s = st.columns(2)
+    for col, universe, label in [(col_u, "universe", "Universum (stora aktier)"),
+                                 (col_s, "smallcap", "Småbolag (svenska)")]:
+        with col:
+            st.markdown(f"### {label}")
+            m = load_model(universe) if callable(load_model) else None
+            if m is None:
+                st.warning(
+                    f"Ingen modell tränad ännu för **{universe}**.\n\n"
+                    "Träna via GitHub Actions: workflow **🤖 Train ML** (manuell trigger)."
+                )
+            else:
+                mt = getattr(m, "test_metrics", {})
+                st.success(
+                    f"Modell tränad: **{getattr(m, 'trained_at', '?')[:10]}** · "
+                    f"{getattr(m, 'n_rows', 0):,} rader · "
+                    f"IC={mt.get('ic', '?')} · hit-rate={mt.get('hit_rate', '?')}"
+                )
+
+    st.markdown("---")
+
+    # ── Sammanfattning + Equity-kurva per universum ─────────────────────────
+    for universe, label in [("universe", "🌍 Universum"),
+                            ("smallcap", "🇸🇪 Småbolag")]:
+        st.markdown(f"## {label}")
+        summary = mlpt.get_summary(universe)
+
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1:
+            st.metric("Equity", f"{summary['equity']:,.0f} kr")
+        with c2:
+            st.metric("Avkastning", f"{summary['total_return_pct']:+.2f}%")
+        with c3:
+            st.metric("Trades", f"{summary['n_trades']}")
+        with c4:
+            st.metric("Öppna", f"{summary['n_open']}")
+        with c5:
+            hr = summary.get("hit_rate")
+            st.metric("Hit-rate", f"{hr:.1f}%" if hr is not None else "—")
+
+        eq_df = mlpt.get_equity_curve_df(universe)
+        if not eq_df.empty:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=eq_df["date"], y=eq_df["equity"],
+                mode="lines+markers", name="ML equity",
+                line=dict(color="#42a5f5", width=2),
+                fill="tozeroy", fillcolor="rgba(66,165,245,0.1)",
+            ))
+            fig.update_layout(
+                title=f"Equity curve – {label}",
+                template="plotly_dark", paper_bgcolor="#131722",
+                plot_bgcolor="#1e2230", height=300,
+                margin=dict(t=40, b=16, l=16, r=16),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Ingen equity-historik ännu. Pipeline registrerar trades vid varje körning.")
+
+        # Öppna positioner
+        open_df = mlpt.get_trades_df(universe, only_open=True)
+        with st.expander(f"📋 Öppna positioner ({len(open_df)})", expanded=False):
+            if open_df.empty:
+                st.caption("Inga öppna positioner.")
+            else:
+                st.dataframe(open_df, use_container_width=True, hide_index=True, height=300)
+
+        # Stängda
+        all_df = mlpt.get_trades_df(universe, only_open=False)
+        closed_df = all_df[all_df["exit_date"].notna()] if not all_df.empty and "exit_date" in all_df.columns else pd.DataFrame()
+        with st.expander(f"✅ Stängda positioner ({len(closed_df)})", expanded=False):
+            if closed_df.empty:
+                st.caption("Inga stängda positioner ännu (positioner stängs efter 30 dagar).")
+            else:
+                show = closed_df.copy()
+                if "realized_return" in show.columns:
+                    show["realized_return"] = (show["realized_return"] * 100).round(2)
+                st.dataframe(show, use_container_width=True, hide_index=True, height=300)
+
+        st.markdown("---")
+
+
 def _check_site_access() -> bool:
     """Kräver lösenord för att överhuvudtaget komma in på sidan.
     
@@ -4000,6 +4165,9 @@ def main():
 
     elif page == "📄 Paper Trading":
         page_paper_trading()
+
+    elif page == "🤖 AI Paper Trading":
+        page_ml_paper_trading()
 
     elif page == "🏭 Sektorrotation":
         page_sector_rotation(df)

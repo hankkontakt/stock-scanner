@@ -8,6 +8,9 @@ data/cache/
 # Personlig lokal data (hanteras via GitHub Secrets i CI)
 data/ticker_map.json
 
+# ML-träningsdataset (regenereras av train_ml-workflow, lagras EJ i git)
+data/ml/
+
 # Rapporter – markdown-filer behövs inte i repot, men CSV:erna läses av Streamlit
 reports/*.md
 reports/*.txt
