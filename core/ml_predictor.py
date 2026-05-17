@@ -591,8 +591,10 @@ def _load_features_from_cache(ticker: str, cache_dir: Path) -> dict:
     # som MD5-hashat filnamn. Vi söker efter ticker-specifika filer.
     # Fallback-strategi: om vi inte hittar i cachen, gör en kort yfinance-fetch.
     try:
-        from core.data_fetcher import fetch_prices_only
-        hist = fetch_prices_only(ticker)
+        # fetch_price_history returnerar en OHLCV DataFrame – det vi behöver för features.
+        # (fetch_prices_only returnerar ett dict med färdiga nyckeltal, inte rådata.)
+        from core.data_fetcher import fetch_price_history
+        hist = fetch_price_history(ticker, period="1y")
         if hist is None or hist.empty:
             return {f: float("nan") for f in TECH_FEATURES}
         close = hist["Close"] if "Close" in hist.columns else hist.iloc[:, 0]
