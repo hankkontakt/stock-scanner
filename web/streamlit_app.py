@@ -1,4 +1,4 @@
-z"""
+"""
 MarketScan Dashboard – Interaktiv börsanalys
 ============================================
 Läser utdata från scan.py, smallcap/scanner.py och portfolio.py.
