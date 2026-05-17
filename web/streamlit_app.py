@@ -4252,8 +4252,7 @@ def page_stock_search():
                     if revenue: context_lines.append(f"Intäkter: {revenue/1e9:.1f}B")
                     if ebitda: context_lines.append(f"EBITDA: {ebitda/1e9:.1f}B")
                     if div_yield: context_lines.append(f"Utdelningsyield: {div_yield*100:.2f}%")
-                    context_str = "
-".join(context_lines)
+                    context_str = "\n".join(context_lines)
 
                     full_prompt = f"""Du är en professionell aktieanalytiker. Här är live-data för {ticker} ({name}):
 
