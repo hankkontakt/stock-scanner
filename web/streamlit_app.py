@@ -59,10 +59,25 @@ st.markdown("""
 <style>
   /* ── Typsnitt: Inter ──────────────────────────────────────────────────────── */
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-  html, body, *, *[class] {
+
+  /* Applicera Inter på Streamlits huvud-containers (undviker att krocka med ikonfonter) */
+  [data-testid="stAppViewContainer"],
+  [data-testid="stSidebarContent"],
+  [data-testid="stHeader"],
+  [data-testid="stBottom"],
+  .main .block-container,
+  h1, h2, h3, h4, h5, h6,
+  p, span, div, button, input, textarea, select, a, td, th, label, li {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
   }
   h1, h2, h3 { font-weight: 700 !important; letter-spacing: -0.02em !important; }
+
+  /* Återställ Material Symbols för Streamlits expander-pilar (text-ligature ikoner) */
+  details summary p,
+  [data-testid="stExpander"] summary p,
+  .streamlit-expanderHeader p {
+    font-family: 'Material Symbols Rounded', 'Material Icons' !important;
+  }
 
   /* ── Tabeller ────────────────────────────────────────────────────────────── */
   .stDataFrame thead th {
