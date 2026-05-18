@@ -181,30 +181,49 @@ def check_alerts(debug: bool = False) -> list:
     watchlist = _load_watchlist()
     top_tickers = _load_top_tickers(10)
 
+    # Sets för korrekt statusklassning
+    portfolio_set = set(portfolio.keys())
+    watchlist_set = set(watchlist)
+    top_set       = set(top_tickers)
+
+    # Om användaren har portfölj/watchlist: använd den
+    # Om BÅDA är tomma: spamma INTE mail om random topp-10 utländska aktier.
+    # (Tidigare bugg: top-10 från scored_universe drog in AFL, TRV, etc. och
+    # markerade dem fel som "BEVAKAD" eftersom etiketten var binär.)
+    has_user_focus = bool(portfolio_set) or bool(watchlist_set)
+
     all_tickers = set()
-    all_tickers.update(portfolio.keys())  # Innehav (viktigast)
-    all_tickers.update(watchlist)         # Bevakningar
-    all_tickers.update(top_tickers)       # Dagens topp-10
+    all_tickers.update(portfolio_set)
+    all_tickers.update(watchlist_set)
+    if has_user_focus:
+        all_tickers.update(top_set)   # Topp-10 endast som komplement
+    else:
+        logger.info("  ⚠ Både portfölj och watchlist är tomma – hoppar över topp-10 "
+                    "för att undvika spam av aktier du inte följer.")
+        top_set = set()  # Töm så ingen kan klassas som TOPP-10 nedan
 
     # Exkludera index
     index_suffixes = (".SS", ".SSE", ".SZ")
     tickers_to_check = [t for t in all_tickers if t and not t.startswith("^") and not t.endswith(index_suffixes)]
 
     logger.info(f"  👁️ Bevakar {len(tickers_to_check)} tickers:")
-    logger.info(f"     Portfölj: {len(portfolio)}, Watchlist: {len(watchlist)}, Topp-10: {len(top_tickers)}")
+    logger.info(f"     Portfölj: {len(portfolio_set)}, Watchlist: {len(watchlist_set)}, "
+                f"Topp-10: {len(top_set)}")
 
     alerts = []
 
     for ticker in tickers_to_check:
+        status = _classify_status(ticker, portfolio_set, watchlist_set, top_set)
+
         # 1. Kolla nyheter via Finnhub
         news = _fetch_news(ticker, max_items=2)
         for article in news:
             headline = article.get("headline", "")
             source = article.get("source", "")
-            logger.info(f"  📰 {ticker}: {headline[:80]}...")
+            logger.info(f"  📰 {ticker} [{status}]: {headline[:80]}...")
 
             # AI-bedömning
-            alert = _evaluate_alert(ticker, headline, article, portfolio, debug)
+            alert = _evaluate_alert(ticker, headline, article, portfolio, status, debug)
             if alert:
                 alerts.append(alert)
 
@@ -213,10 +232,10 @@ def check_alerts(debug: bool = False) -> list:
         if price_alert:
             direction = price_alert["direction"]
             change = price_alert["change_pct"]
-            logger.info(f"  📈 {ticker}: {direction} {change:+.1f}%")
+            logger.info(f"  📈 {ticker} [{status}]: {direction} {change:+.1f}%")
 
             # AI-förklaring av rörelsen
-            alert = _evaluate_price_move(ticker, price_alert, debug)
+            alert = _evaluate_price_move(ticker, price_alert, status, debug)
             if alert:
                 alerts.append(alert)
 
@@ -233,10 +252,22 @@ def check_alerts(debug: bool = False) -> list:
     return alerts
 
 
+def _classify_status(ticker: str, portfolio_set: set, watchlist_set: set, top_set: set) -> str:
+    """Tre-vägs statusetikett. Prio: INNEHAV > BEVAKAD > TOPP-10 > ÖVRIGT."""
+    if ticker in portfolio_set:
+        return "🟢 INNEHAV"
+    if ticker in watchlist_set:
+        return "⭐ BEVAKAD"
+    if ticker in top_set:
+        return "🔥 TOPP-10"
+    return "📊 ÖVRIGT"
+
+
 def _evaluate_alert(ticker: str, headline: str, article: dict,
-                    portfolio: dict, debug: bool = False) -> dict | None:
+                    portfolio: dict, status: str = "📊 ÖVRIGT",
+                    debug: bool = False) -> dict | None:
     """AI-värdering av en nyhet. Returnerar alert-dict om viktig."""
-    is_holding = "🟢 INNEHAV" if ticker in portfolio else "⭐ BEVAKAD"
+    is_holding = status  # behåll variabelnamnet för bakåtkompatibilitet
 
     try:
         ctx = json.dumps({
@@ -287,10 +318,11 @@ def _evaluate_alert(ticker: str, headline: str, article: dict,
 
 
 def _evaluate_price_move(ticker: str, price_alert: dict,
+                          status: str = "📊 ÖVRIGT",
                           debug: bool = False) -> dict | None:
     """AI-förklaring av prisrörelse."""
     try:
-        ctx = json.dumps(price_alert, ensure_ascii=False)
+        ctx = json.dumps({**price_alert, "status": status}, ensure_ascii=False)
         result = ai_analysis.ai_chat(
             f"Förklara varför {ticker} rörde sig {price_alert['change_pct']:+.1f}% idag.",
             context=ctx,
@@ -300,6 +332,7 @@ def _evaluate_price_move(ticker: str, price_alert: dict,
         return {
             "type": "price_move",
             "ticker": ticker,
+            "status": status,
             "change_pct": price_alert["change_pct"],
             "current_price": price_alert["current_price"],
             "ai_analysis": result[:500] if result else f"⚠️ {ticker} rörde sig {price_alert['change_pct']:+.1f}% – sök efter nyheter.",
