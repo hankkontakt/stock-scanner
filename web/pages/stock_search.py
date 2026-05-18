@@ -140,11 +140,31 @@ def page_stock_search():
             except Exception as e:
                 st.error(f"Kunde inte lägga till: {e}")
 
+    # Använd data_fetcher med cache + retry-logik istället för direkt yf-anrop.
+    # Tidigare: yf.Ticker(ticker).info → 429 om yfinance rate-limitar IP:n.
+    # Nu: 30-dagars statisk cache + 7-dagars dynamisk cache + automatisk retry.
     try:
+        from core import data_fetcher
+        info = data_fetcher.fetch_stock_info(ticker) or {}
+        # Skapa yf_ticker bara för historik nedan (eget cache-lager via fetch_price_history)
         yf_ticker = yf.Ticker(ticker)
-        info = yf_ticker.info or {}
     except Exception as e:
-        st.error(f"Kunde inte hämta data för {ticker}: {e}")
+        err = str(e)
+        if "429" in err or "rate limit" in err.lower() or "too many" in err.lower():
+            st.error(
+                f"⏳ yfinance rate-limitar just nu för **{ticker}**. "
+                "Vänta några minuter och försök igen — eller använd en aktie "
+                "som redan finns i cachen (t.ex. från senaste veckoscan)."
+            )
+        else:
+            st.error(f"Kunde inte hämta data för {ticker}: {e}")
+        return
+
+    if not info:
+        st.warning(
+            f"Ingen data hittades för **{ticker}**. Antingen är aktien avnoterad, "
+            "ticker-symbolen är felstavad, eller yfinance rate-limitar just nu."
+        )
         return
 
     price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
