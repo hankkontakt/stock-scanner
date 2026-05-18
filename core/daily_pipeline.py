@@ -96,12 +96,24 @@ def _load_watchlist() -> list:
     return []
 
 
-def _enrich_holdings(holdings: pd.DataFrame, scored: pd.DataFrame) -> list[dict]:
-    """Berika portföljinnehav med scan-data."""
-    if scored.empty or "ticker" not in scored.columns:
-        return []
+def _fetch_live_price(ticker: str) -> float | None:
+    """Fetch a single live price from yfinance for holdings not in the scored universe."""
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker)
+        hist = t.history(period="2d", auto_adjust=True)
+        if not hist.empty:
+            return float(hist["Close"].iloc[-1])
+    except Exception:
+        pass
+    return None
 
-    score_lookup = scored.set_index("ticker").to_dict("index")
+
+def _enrich_holdings(holdings: pd.DataFrame, scored: pd.DataFrame) -> list[dict]:
+    """Berika portföljinnehav med scan-data. Holdings ej i universet får live-pris."""
+    score_lookup: dict = {}
+    if not scored.empty and "ticker" in scored.columns:
+        score_lookup = scored.set_index("ticker").to_dict("index")
     enriched = []
 
     def _lookup(ticker_in: str) -> dict:
@@ -117,10 +129,18 @@ def _enrich_holdings(holdings: pd.DataFrame, scored: pd.DataFrame) -> list[dict]
                     return score_lookup[candidate]
         return {}
 
+    if holdings is None or (hasattr(holdings, "empty") and holdings.empty):
+        return enriched
+
     for _, h in holdings.iterrows():
         t = str(h.get("ticker", "")).upper().strip()
+        if not t:
+            continue
         sc = _lookup(t)
         price = sc.get("current_price") or sc.get("close", 0)
+        # If holding isn't in scored universe, fetch live price so P&L is still correct
+        if not price:
+            price = _fetch_live_price(t) or 0
         cost = h.get("cost_basis", 0)
         shares = h.get("shares", 0)
 
@@ -482,6 +502,45 @@ STRUKTUR (1500-2000 ord):
 9. 🎯 **Kommande vecka** – Earnings, makro, opportunities
 10. ✅ **Rekommendation** – Om du bara gör EN sak denna vecka...
 """
+
+SMALLCAP_AI_SYSTEM_PROMPT = """Du är en småbolagsspecialist. Skapa en analys av småbolagsuniverse baserat på datan nedan.
+
+TÄNK PÅ:
+- Skriv på svenska, konkret och handlingsorienterat
+- Fokusera på specifika aktier och köpsignaler
+- Småbolag har högre risk – påpeka stop-loss-nivåer
+- Lyft fram det som sticker ut (positivt och negativt)
+
+STRUKTUR (600-900 ord):
+1. 📊 **Småbolagsöversikt** – Hur ser småbolagsmarknaden ut just nu?
+2. 💼 **Din portfölj** – Gå igenom innehaven med rekommendationer
+3. 🏆 **Topp-5 köpkandidater** – Starka signaler med motivering
+4. ⚠️ **Varningar** – Aktier med svaga signaler eller nära stop-loss
+5. 🎯 **Rekommendation** – 1-2 konkreta åtgärder just nu
+
+Avsluta med en kortsiktig utsikt för småbolag: "Läge: KÖPA / AVVAKTA / MINSKA"
+"""
+
+
+def _build_ai_smallcap_context(scored, enriched, watchlist, top_10, bottom_5,
+                                opportunities, indices) -> str:
+    """Bygg kontext för småbolagsrapportens AI-anrop."""
+    ctx = {
+        "universe": "smallcap",
+        "n_stocks_scanned": len(scored) if not scored.empty else 0,
+        "indices": {t: {"change_pct": d["change_pct"]}
+                    for t, d in indices.items() if d.get("change_pct") is not None},
+        "holdings": enriched,
+        "top_10_smallcap": top_10,
+        "bottom_5_warnings": bottom_5,
+        "opportunities": opportunities,
+        "watchlist": watchlist,
+    }
+    if not scored.empty and "score_total" in scored.columns:
+        ctx["avg_score"] = float(scored["score_total"].mean())
+        ctx["n_entry_ok"] = int((scored.get("entry_signal", pd.Series()) == "OK").sum())
+    return json.dumps(ctx, ensure_ascii=False, default=str)
+
 
 NEWS_ALERT_SYSTEM_PROMPT = """Du analyserar en nyhet för en aktie som mottagaren äger eller bevakar.
 
@@ -870,6 +929,66 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         report_lines.append(_section_header("🤖 AI: Veckoanalys"))
         report_lines.append("*Genereras nedan...*\n")
 
+    elif mode == "smallcap":
+        # ── Rubrik ────────────────────────────────────────────────────────
+        report_lines.append(f"# 🏦 MarketScan Småbolag – {date_str}\n")
+        report_lines.append(f"_{short_summary}_\n")
+
+        # ── Index-överblick ───────────────────────────────────────────────
+        report_lines.append(_section_header("🌏 Marknadsläge"))
+        index_lines = []
+        for ticker in ["^OMX", "^GSPC", "^IXIC", "^GDAXI"]:
+            data = indices.get(ticker)
+            if data:
+                name = data.get("name", ticker)
+                chg = data.get("change_pct")
+                close = data.get("close")
+                if chg is not None and close is not None:
+                    arrow = "🟢" if chg >= 0 else "🔴"
+                    index_lines.append(f"- {name} {arrow} **{chg:+.1f}%** ({close:,.0f})")
+        if index_lines:
+            report_lines.extend(index_lines)
+        report_lines.append("")
+
+        # ── Universet ─────────────────────────────────────────────────────
+        if not scored.empty and "score_total" in scored.columns:
+            avg_score = scored["score_total"].mean()
+            n_ok = int((scored.get("entry_signal", pd.Series()) == "OK").sum()) if "entry_signal" in scored.columns else 0
+            report_lines.append(f"**Skannade småbolag:** {len(scored)} st | Snittscore: {avg_score:.1f} | Entry OK: {n_ok} st\n")
+
+        # ── Portfölj ─────────────────────────────────────────────────────
+        report_lines.append(_section_header("💼 Din portfölj"))
+        if enriched:
+            for h in enriched[:10]:
+                emoji = "🟢" if (h.get("pnl_pct") or 0) >= 0 else "🔴"
+                pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "—"
+                score_str = f"{h['score']:.0f}" if h.get('score') is not None else "—"
+                entry_str = h.get('entry') or '—'
+                report_lines.append(f"- {emoji} **{flag_for_ticker(h['ticker'])} {h['ticker']}** – {pnl} | Score {score_str} | {entry_str}")
+        else:
+            report_lines.append("*(Inga innehav i portföljen)*")
+        report_lines.append("")
+
+        # ── Topp-10 ──────────────────────────────────────────────────────
+        if top_10:
+            report_lines.append(_section_header("🏆 Topp-10 småbolag"))
+            for i, t in enumerate(top_10[:10], 1):
+                report_lines.append(f"  {i}. **{flag_for_ticker(t['ticker'])} {t['ticker']}** – Score {t['score']:.0f} | {t['entry']} | {t['sector']}")
+
+        # ── Bottom varningar ──────────────────────────────────────────────
+        if bottom_5:
+            report_lines.append(_section_header("🔴 Varningar"))
+            for b in bottom_5[:5]:
+                report_lines.append(f"- **{flag_for_ticker(b['ticker'])} {b['ticker']}** – Score {b['score']:.0f} | {b['entry']} | {b['sector']}")
+
+        # ── Opportunities ────────────────────────────────────────────────
+        if opportunities:
+            report_lines.append(_opportunity_section(opportunities))
+
+        # ── AI-sektion ───────────────────────────────────────────────────
+        report_lines.append(_section_header("🤖 AI: Småbolagsanalys"))
+        report_lines.append("*Genereras nedan...*\n")
+
     # ═══════════════════════════════════════════════════════════════════════
     # 3. AI-ANROP
     # ═══════════════════════════════════════════════════════════════════════
@@ -920,6 +1039,20 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 context=ctx,
                 provider=provider,
                 depth="Extra djup",
+            )
+            ai_section = result
+
+        elif mode == "smallcap":
+            ctx = _build_ai_smallcap_context(
+                scored, enriched, watchlist_tickers, top_10, bottom_5,
+                opportunities, indices
+            )
+            result = ai_analysis.ai_chat(
+                "Skapa en småbolagsanalys. Identifiera de bästa köpkandidaterna och ge konkreta rekommendationer.",
+                context=ctx,
+                system_prompt_override=SMALLCAP_AI_SYSTEM_PROMPT,
+                provider=provider,
+                depth="Djup",
             )
             ai_section = result
 

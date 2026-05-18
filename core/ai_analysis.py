@@ -897,7 +897,8 @@ def analyze_portfolio(holdings: pd.DataFrame, df: pd.DataFrame = None,
 def ai_chat(question: str, context: str = "", force_refresh: bool = False,
             provider: str = "auto",
             depth: str = "Normal",
-            history: list = None) -> str:
+            history: list = None,
+            system_prompt_override: str = None) -> str:
     """
     Fritextfråga till AI:n med stöd för konversationshistorik.
     
@@ -941,9 +942,10 @@ def ai_chat(question: str, context: str = "", force_refresh: bool = False,
     messages.append({"role": "user", "content": user_message})
 
     # Ingen cache för chatt - varje fråga är unik
+    system_prompt = system_prompt_override if system_prompt_override else SYSTEM_PROMPT_CHAT
     return _ai_call(
         messages,
-        SYSTEM_PROMPT_CHAT,
+        system_prompt,
         max_tokens=_resolve_depth(depth),
         provider=provider,
     )
