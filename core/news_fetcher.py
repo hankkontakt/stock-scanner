@@ -639,12 +639,13 @@ def fetch_google_news_rss(
                 "age_hours":    round(age_h, 1),
             })
 
-        _write_cache(cache_key, results)
+        # Only cache if we actually found something – don't lock in empty results
+        if results:
+            _write_cache(cache_key, results)
         return results
 
     except Exception:
-        _write_cache(cache_key, [])
-        return []
+        return []  # Don't cache exceptions either – transient network errors shouldn't persist
 
 
 def fetch_company_news_google_batch(
@@ -730,8 +731,52 @@ def fetch_yfinance_news(ticker: str, max_items: int = 5) -> list:
             })
     except Exception:
         pass
-    _write_cache(cache_key, result)
+    if result:  # Don't cache empty results
+        _write_cache(cache_key, result)
     return result
+
+
+def _read_cache_long(key: str, max_age_hours: int = 720) -> object:
+    """Like _read_cache but with configurable TTL (default 30 days)."""
+    p = _cache_path(key)
+    if not p.exists():
+        return None
+    if datetime.now() - datetime.fromtimestamp(p.stat().st_mtime) > timedelta(hours=max_age_hours):
+        return None
+    try:
+        with open(p, "rb") as f:
+            return pickle.load(f)
+    except Exception:
+        return None
+
+
+def _resolve_company_name(ticker: str) -> str | None:
+    """
+    Look up the real company name for a ticker using yfinance.
+    Cached for 30 days – company names almost never change.
+    Returns None if lookup fails.
+    """
+    cache_key = f"cname:{ticker}"
+    cached = _read_cache_long(cache_key, max_age_hours=720)
+    if cached is not None:
+        return cached or None  # empty string means "tried and failed" → None
+
+    name = None
+    try:
+        import yfinance as yf
+        info = yf.Ticker(ticker).info
+        name = info.get("longName") or info.get("shortName")
+        if name:
+            # Strip common legal suffixes that hurt search quality
+            for suffix in (" AB (publ)", " AB", " (publ)", " Inc.", " Inc", " Corp.", " Corp", " Ltd.", " Ltd"):
+                if name.endswith(suffix):
+                    name = name[: -len(suffix)].strip()
+                    break
+    except Exception:
+        pass
+
+    _write_cache(cache_key, name or "")
+    return name or None
 
 
 def fetch_company_news(ticker: str, days_back: int = 7, company_name: str = None) -> list:
@@ -755,6 +800,10 @@ def fetch_company_news(ticker: str, days_back: int = 7, company_name: str = None
     """
     import os
     api_key = os.getenv("FINNHUB_API_KEY", "")
+
+    # Resolve company name if not provided – try yfinance first (cached separately)
+    if not company_name:
+        company_name = _resolve_company_name(ticker)
 
     # 1. Finnhub
     finnhub_results = fetch_news(ticker, api_key, days=days_back) if api_key else []
