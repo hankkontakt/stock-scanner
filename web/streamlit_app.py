@@ -78,6 +78,22 @@ st.markdown("""
   }
   h1, h2, h3 { font-weight: 700 !important; letter-spacing: -0.02em !important; }
 
+  /* ── Sidövergång – döljer ghosting vid rerun ─────────────────────────────── */
+  /* Fade + subtil slide-up varje gång huvudinnehållet renderas om */
+  [data-testid="stMainBlockContainer"] > div:first-child,
+  [data-testid="block-container"] {
+    animation: pageIn 0.22s ease-out both;
+  }
+  @keyframes pageIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Sidebar-filter: mjuk höjd-transition när filter-expander läggs till/tas bort */
+  div[data-testid="stSidebarContent"] .streamlit-expander {
+    transition: opacity 0.15s ease;
+  }
+
   /* ── Tabeller ────────────────────────────────────────────────────────────── */
   .stDataFrame thead th {
     font-size: 11px !important;
@@ -177,20 +193,61 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                     if st.button(f"{_h['ticker']} — {_h['name'][:40]}", key=f"gs_{_h['ticker']}", use_container_width=True):
                         st.session_state["nav_page"] = "🔍 Aktie-sök"
                         st.session_state["search_ticker"] = _h["ticker"]; st.session_state["selected_stock_ticker"] = ""; st.session_state["selected_stock_name"] = ""
+                        try:
+                            st.query_params["p"] = "stock-search"
+                        except Exception:
+                            pass
                         st.rerun()
         st.markdown('<div style="height:1px;background:linear-gradient(to right,transparent,#2d3250 30%,#2d3250 70%,transparent);margin:6px 0 12px 0;"></div>', unsafe_allow_html=True)
 
-        # ── Navigation ──────────────────────────────────────────────────────
-        if "nav_page" not in st.session_state:
+        # ── Navigation (st.query_params för historikstöd) ───────────────────
+        # Synkar nav_page med URL-query-parametern "p" så att webbläsarens
+        # tillbaka-knapp (historik) fungerar. När query_params ändras (av
+        # användarens tillbaka-knapp) uppdateras session_state i nästa rerun.
+
+        # Kända sidor och deras URL-nycklar
+        _known_pages = {
+            "overview":       "📊 Översikt",
+            "guide":          "📚 Guide & Hjälp",
+            "weekly-scan":    "🔍 Veckoscanner",
+            "smallcap":       "🏦 Småbolag",
+            "stock-search":   "🔍 Aktie-sök",
+            "watchlist":      "⭐ Bevakningar",
+            "global-markets": "🌍 Globala marknader",
+            "sector-rotation":"🏭 Sektorrotation",
+            "backtesting":    "📈 Backtesting",
+            "portfolio":      "💼 Portfölj",
+            "paper-trading":  "📄 Paper Trading",
+            "ai-paper-trading":"🤖 AI Paper Trading",
+            "alerts":         "🚨 Larm & Notiser",
+            "technical":      "📈 Teknisk analys",
+            "ai":             "🤖 AI",
+            "admin":          "🔧 Admin",
+        }
+        _reverse_map = {v: k for k, v in _known_pages.items()}
+
+        # Läs query_param "p" – om den finns och matchar en känd sida,
+        # använd den som nav_page (stöd för tillbaka-knapp i webbläsaren)
+        _qp = st.query_params.get_all("p")
+        _qp_page = _qp[0] if _qp else None
+        if _qp_page and _qp_page in _known_pages:
+            st.session_state["nav_page"] = _known_pages[_qp_page]
+        elif "nav_page" not in st.session_state:
             st.session_state["nav_page"] = "📊 Översikt"
+
+        def _navigate_to(page_title: str):
+            """Navigera till en sida – uppdaterar både session_state och URL.
+            Detta gör att webbläsarens historik fungerar (tillbaka-knappen)."""
+            st.session_state["nav_page"] = page_title
+            qp_key = _reverse_map.get(page_title, "overview")
+            st.query_params["p"] = qp_key
+            st.rerun()
 
         # Översikt & Guide – alltid synliga
         if st.button("Översikt", key="nav_overview", use_container_width=True):
-            st.session_state["nav_page"] = "📊 Översikt"
-            st.rerun()
+            _navigate_to("📊 Översikt")
         if st.button("Guide & Hjälp", key="nav_guide", use_container_width=True):
-            st.session_state["nav_page"] = "📚 Guide & Hjälp"
-            st.rerun()
+            _navigate_to("📚 Guide & Hjälp")
 
         # MARKNAD / PORTFÖLJ / ANALYS – enkla knappar (inga radio/on_change) för att
         # undvika att st.rerun() från andra widgets ändrar nav_page.
@@ -217,25 +274,21 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
         with st.expander("MARKNAD", expanded=True):
             for nav_key, display in _MARKNAD_PAGES:
                 if st.button(display, key=f"sb_{nav_key}", use_container_width=True):
-                    st.session_state["nav_page"] = nav_key
-                    st.rerun()
+                    _navigate_to(nav_key)
 
         with st.expander("PORTFÖLJ", expanded=True):
             for nav_key, display in _PORTFÖLJ_PAGES:
                 if st.button(display, key=f"sb_{nav_key}", use_container_width=True):
-                    st.session_state["nav_page"] = nav_key
-                    st.rerun()
+                    _navigate_to(nav_key)
 
         with st.expander("ANALYS", expanded=False):
             for nav_key, display in _ANALYS_PAGES:
                 if st.button(display, key=f"sb_{nav_key}", use_container_width=True):
-                    st.session_state["nav_page"] = nav_key
-                    st.rerun()
+                    _navigate_to(nav_key)
 
         # Admin – alltid synlig längst ner
         if st.button("Admin", key="nav_admin", use_container_width=True):
-            st.session_state["nav_page"] = "🔧 Admin"
-            st.rerun()
+            _navigate_to("🔧 Admin")
 
         page = st.session_state["nav_page"]
 
