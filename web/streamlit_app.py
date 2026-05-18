@@ -159,6 +159,38 @@ st.markdown("""
     text-transform: uppercase !important;
     color: #4a5568 !important;
   }
+
+  /* ── Mobil (max-width: 768px) ────────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    /* Mer luft under titlar */
+    h1 { font-size: 22px !important; margin-bottom: 12px !important; }
+    h2 { font-size: 18px !important; }
+    h3 { font-size: 16px !important; }
+
+    /* Tabeller: horisontell scroll i stället för klämda kolumner */
+    .stDataFrame { overflow-x: auto !important; }
+    .stDataFrame table { min-width: 480px !important; }
+    .stDataFrame tbody td,
+    .stDataFrame thead th { font-size: 12px !important; padding: 6px 8px !important; }
+
+    /* Knappar: tillräcklig tryckkänsla på pekskärm */
+    .stButton button { min-height: 44px !important; font-size: 14px !important; }
+
+    /* KPI-kort: 2 per rad på mobil i stället för 4 */
+    [data-testid="column"] { min-width: 45% !important; }
+
+    /* Formulärfält: läsbar textstorlek på iOS (förhindrar auto-zoom) */
+    input, select, textarea { font-size: 16px !important; }
+
+    /* Plotly-grafer: ingen horisontell overflow */
+    .js-plotly-plot, .plotly { max-width: 100% !important; }
+
+    /* Metrics / info-boxar: mer luft */
+    [data-testid="stMetric"] { padding: 12px !important; }
+
+    /* Göm onödiga padding-spacers på mobil */
+    [data-testid="stVerticalBlock"] > div[style*="gap"] { gap: 8px !important; }
+  }
 </style>
 """, unsafe_allow_html=True)
 

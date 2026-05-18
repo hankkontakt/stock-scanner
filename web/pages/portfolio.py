@@ -19,6 +19,50 @@ def _save_watchlist_data(items):
     _swd(items)
 
 
+def _calc_atr_stop(ticker: str, current_price: float, mult: float = 2.5) -> tuple[float | None, float | None]:
+    """
+    Beräknar ATR14-baserat stop-loss-nivå.
+    Returnerar (stop_price, stop_pct_from_current) eller (None, None) vid fel.
+    ATR (Average True Range) mäter den typiska dagliga rörelsen — stop-loss sätts
+    2.5× ATR under nuvarande kurs, vilket ger tillräckligt utrymme för normal variation.
+    """
+    try:
+        import yfinance as yf
+        hist = yf.Ticker(ticker).history(period="1mo", auto_adjust=True)
+        if hist.empty or len(hist) < 5:
+            return None, None
+        high, low, close = hist["High"], hist["Low"], hist["Close"]
+        tr = pd.concat([
+            high - low,
+            (high - close.shift()).abs(),
+            (low  - close.shift()).abs(),
+        ], axis=1).max(axis=1)
+        atr = float(tr.rolling(14, min_periods=5).mean().iloc[-1])
+        if atr <= 0 or current_price <= 0:
+            return None, None
+        stop = round(current_price - atr * mult, 2)
+        stop_pct = round((stop / current_price - 1) * 100, 1)
+        return stop, stop_pct
+    except Exception:
+        return None, None
+
+
+def _suggested_position_pct(score: float, entry: str) -> tuple[float, float]:
+    """
+    Föreslår positionsstorlek (% av portföljvärde) baserat på score + entry.
+    Princip: sprida risken, aldrig >10% i en enskild aktie.
+    Returnerar (min_pct, max_pct).
+    """
+    if score >= 70 and entry == "STARK":
+        return 5.0, 8.0
+    elif score >= 55:
+        return 3.0, 6.0
+    elif score >= 40:
+        return 2.0, 4.0
+    else:
+        return 1.0, 3.0
+
+
 def _save_holdings_user(df: pd.DataFrame):
     """Sparar holdings.csv i användarens datakatalog.
     För admin synkas till GitHub. För andra användare sparas lokalt OCH till GitHub
@@ -403,24 +447,55 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
                      column_config=col_cfg)
 
         st.markdown("---")
-        st.subheader("💡 Rekommendationer (baserat på senaste scan)")
+        st.subheader("💡 Rekommendationer")
+        st.caption("Baserat på senaste veckoanalys. Stop-loss beräknas på den typiska dagliga rörelsen (ATR14).")
+
+        _show_atr = st.toggle("Visa stop-loss & positionsstorlek", value=True, key="toggle_atr")
+
         for r in sorted(rows, key=lambda x: x.get("Score") or 0, reverse=True):
             t  = r["Ticker"]
             sc = score_data.get(t, {})
             if not sc:
-                st.markdown(f"⚪ **`{t}`** — Data uppdateras automatiskt inom kort (veckovis analys pågår)")
+                st.markdown(f"⚪ **{t}** — Analys uppdateras inom kort")
                 continue
-            entry = sc.get("entry_signal", "—")
-            score = sc.get("score_total", 0) or 0
+            entry  = sc.get("entry_signal", "—")
+            score  = sc.get("score_total", 0) or 0
+            price_val = sc.get("current_price") or sc.get("close")
+
             if score >= 70 and entry == "STARK":
-                icon = "🟢"; rec = "BEHÅLL STARKT / KÖP MER"
+                icon = "🟢"; rec = "Behåll / Köp mer"
             elif score >= 55:
-                icon = "🔵"; rec = "BEHÅLL"
+                icon = "🔵"; rec = "Behåll"
             elif score >= 40:
-                icon = "🟡"; rec = "BEVAKA"
+                icon = "🟡"; rec = "Avvakta"
             else:
-                icon = "🔴"; rec = "MINSKA / SÄLJ"
-            st.markdown(f"{icon} **`{t}`** — {rec} (score {score:.0f})")
+                icon = "🔴"; rec = "Minska / Sälj"
+
+            with st.container(border=True):
+                c1, c2 = st.columns([3, 2])
+                with c1:
+                    st.markdown(f"**{icon} {t}** — {rec}")
+                    st.caption(f"Score: {score:.0f}  ·  Signal: {entry}  ·  Trend: {sc.get('trend_signal', '—')}")
+                with c2:
+                    if _show_atr and price_val:
+                        try:
+                            cur = float(price_val)
+                            stop_p, stop_pct = _calc_atr_stop(t, cur)
+                            pos_min, pos_max = _suggested_position_pct(score, entry)
+                            if stop_p:
+                                color = "#ef5350" if (stop_pct or 0) < -12 else "#ffc107"
+                                st.markdown(
+                                    f"<span style='font-size:12px;color:{color};'>🛑 Stop-loss: "
+                                    f"**{stop_p:.2f}** ({stop_pct:+.1f}%)</span>",
+                                    unsafe_allow_html=True,
+                                )
+                            st.markdown(
+                                f"<span style='font-size:12px;color:#8892a4;'>📐 Föreslaget: "
+                                f"{pos_min:.0f}–{pos_max:.0f}% av portföljvärdet</span>",
+                                unsafe_allow_html=True,
+                            )
+                        except Exception:
+                            pass
 
         if len(rows) > 1:
             st.markdown("---")
