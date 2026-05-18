@@ -164,7 +164,7 @@ def compute_features_at(close: pd.Series, volume: pd.Series) -> dict:
 
         # Volatility 30d (stddev av dagliga returns)
         if len(close) >= 30:
-            daily_ret = close.pct_change().dropna().tail(30)
+            daily_ret = close.pct_change(fill_method=None).dropna().tail(30)
             out["volatility_30d"] = float(daily_ret.std() or 0)
 
         # Volume ratio (senaste 5 vs 20 dagar)

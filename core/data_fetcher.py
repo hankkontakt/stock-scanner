@@ -148,6 +148,11 @@ def _with_timeout(fn, timeout_sec=12):
     return result[0]
 
 
+class _RateLimitError(Exception):
+    """Raised when Yahoo Finance returns HTTP 429 Too Many Requests."""
+    pass
+
+
 def _retry(fn, *args, timeout_sec=12, **kwargs):
     """
     Kör fn() med retry-logik. TimeoutError = direkt fail, ingen retry.
@@ -158,6 +163,9 @@ def _retry(fn, *args, timeout_sec=12, **kwargs):
 
     Retry sker bara vid nätverksfel (ConnectionError, HTTPError etc.)
     som faktiskt kan lyckas vid nästa försök.
+
+    Rate limit (429) = höjs som _RateLimitError för att skilja dem från
+    vanliga fel – fetch_universe_data kan då samla upp dem för pass-2-retry.
     """
     for attempt in range(config.MAX_RETRIES):
         try:
@@ -165,6 +173,10 @@ def _retry(fn, *args, timeout_sec=12, **kwargs):
         except TimeoutError:
             raise   # Direkt vidare – ingen retry, ingen sleep
         except Exception as e:
+            err_str = str(e)
+            # Propagate rate limit immediately – no point retrying here
+            if "429" in err_str or "Too Many Requests" in err_str.lower() or "rate limit" in err_str.lower():
+                raise _RateLimitError(err_str) from e
             if attempt < config.MAX_RETRIES - 1:
                 wait = config.RETRY_BACKOFF_SEC * (attempt + 1)
                 time.sleep(wait)
@@ -586,7 +598,7 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
             metrics["pct_from_52w_high"] = (current / metrics["52_week_high"]) - 1.0
 
         # Volatility (annualized)
-        returns = close.pct_change().dropna()
+        returns = close.pct_change(fill_method=None).dropna()
         if len(returns) > 30:
             metrics["volatility"] = returns.std() * np.sqrt(252)
 
@@ -776,13 +788,21 @@ def _fetch_single_ticker(
         metrics = extract_metrics(ticker, info, history)
         return (ticker, metrics, "OK")
 
+    except _RateLimitError:
+        with _RATE_LIMIT_LOCK:
+            _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
+        return (ticker, None, "RATE_LIMITED")
     except TimeoutError:
         with _RATE_LIMIT_LOCK:
             _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
         return (ticker, None, "TIMEOUT")
     except Exception as e:
+        err_str = str(e)
         with _RATE_LIMIT_LOCK:
             _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
+        # Also catch rate limits that slip through (e.g. from fetch_stock_info directly)
+        if "429" in err_str or "Too Many Requests" in err_str.lower() or "rate limit" in err_str.lower():
+            return (ticker, None, "RATE_LIMITED")
         return (ticker, None, f"ERROR: {e}")
 
 
@@ -809,9 +829,10 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
 
     rows = []
     failed = []
+    rate_limited = []  # Tickers that got 429 – will retry in pass 2
     completed = 0
 
-    # Skicka alla tickers till poolen
+    # ── Pass 1: parallell hämtning med PARALLEL_WORKERS ────────────────────────
     with ThreadPoolExecutor(max_workers=config.PARALLEL_WORKERS) as pool:
         futures = {
             pool.submit(_fetch_single_ticker, t, _blacklist, verbose): t
@@ -823,23 +844,62 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
             completed += 1
 
             if verbose:
-                # Kompakt utskrift: "✓ AAPL OK" eller "✗ XYZ TIMEOUT"
                 icon = "✓" if metrics is not None else "✗"
                 print(f"  [{completed}/{total}] {icon} {ticker} {status}")
 
             if metrics is not None:
                 rows.append(metrics)
+            elif status == "RATE_LIMITED":
+                rate_limited.append(ticker)
             else:
                 failed.append(ticker)
+
+    # ── Pass 2: retry rate-limited tickers med 1 worker + fördröjning ──────────
+    if rate_limited:
+        if verbose:
+            print(f"\n  ⏳ Pass 2: {len(rate_limited)} rate-limited tickers – väntar 45s för att ge Yahoo tid att återhämta sig...")
+        time.sleep(45)
+
+        pass2_completed = 0
+        pass2_total = len(rate_limited)
+        still_failed = []
+
+        # Reset rate limit counter before pass 2
+        with _RATE_LIMIT_LOCK:
+            _RATE_LIMIT_COUNTER["consecutive_failures"] = 0
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            futures2 = {
+                pool.submit(_fetch_single_ticker, t, _blacklist, verbose): t
+                for t in rate_limited
+            }
+            for future in as_completed(futures2):
+                ticker, metrics, status = future.result()
+                pass2_completed += 1
+                if verbose:
+                    icon = "✓" if metrics is not None else "✗"
+                    print(f"  [P2 {pass2_completed}/{pass2_total}] {icon} {ticker} {status}")
+                # Throttle between retries (2s between each call, single worker)
+                time.sleep(2)
+                if metrics is not None:
+                    rows.append(metrics)
+                else:
+                    still_failed.append(ticker)
+
+        if verbose and still_failed:
+            print(f"  ⚠ Pass 2: {len(still_failed)} tickers fortfarande misslyckade: "
+                  f"{', '.join(still_failed[:10])}{'...' if len(still_failed) > 10 else ''}")
+        failed.extend(still_failed)
 
     df = pd.DataFrame(rows)
 
     if failed and verbose:
         n = len(failed)
-        print(f"  ⚠ {n} tickers misslyckades: "
+        print(f"  ⚠ {n} tickers misslyckades totalt: "
               f"{', '.join(failed[:10])}{'...' if n > 10 else ''}")
         if n > 15:
             print(f"  💡 Tips: Kör filters.clear_blacklist() om välkända aktier är med i listan")
+    if verbose:
         print(f"  ✓ {len(df)}/{total} aktier hämtade")
 
     return df
@@ -1164,7 +1224,7 @@ def fetch_prices_only(tickers: list, period: str = "6mo",
             rsi = float((100 - (100 / (1 + rs))).iloc[-1]) if not rs.empty and len(rs) >= 14 else None
 
             # Volatilitet (daglig, 252 dagar)
-            daily_returns = close.pct_change().dropna()
+            daily_returns = close.pct_change(fill_method=None).dropna()
             vol = float(daily_returns.std() * (252 ** 0.5)) if len(daily_returns) > 10 else None
 
             # Price vs MA50/MA200
