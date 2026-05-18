@@ -43,7 +43,8 @@ def _save_users_config(users: list):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _github_commit_file(repo_path: str, content: str, token: str,
-                         owner: str = "hankkontakt", repo: str = "stock-scanner") -> bool:
+                         owner: str = "hankkontakt", repo: str = "stock-scanner",
+                         message: str = "") -> bool:
     """Committar en fil till GitHub via Contents API så att ändringar överlever Streamlit Cloud-omstarter."""
     import base64
     if not token:
@@ -54,13 +55,14 @@ def _github_commit_file(repo_path: str, content: str, token: str,
         "User-Agent": "MarketScan-Streamlit",
     }
     url = f"https://api.github.com/repos/{owner}/{repo}/contents/{repo_path}"
+    commit_msg = message or f"chore: update {repo_path} via Streamlit"
     try:
         sha = None
         get_resp = requests.get(url, headers=headers, timeout=10)
         if get_resp.status_code == 200:
             sha = get_resp.json().get("sha")
         payload = {
-            "message": f"chore: update {repo_path} via Streamlit",
+            "message": commit_msg,
             "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
             "branch": "main",
         }
@@ -106,8 +108,10 @@ def _save_holdings_df(df: pd.DataFrame) -> bool:
 
 def _save_watchlist_data(items: list):
     """Spara watchlist.json i användarens katalog.
-    GitHub-commit görs bara för admin."""
+    GitHub-commit görs för admin (data/watchlist.json) och för andra användare
+    (data/users/{username}/watchlist.json) så att pipeline kan nå datan."""
     from web.utils import _active_data_dir
+    username = st.session_state.get("username", "admin")
     user_dir = _active_data_dir()
     content = json.dumps(items, indent=2, ensure_ascii=False)
     path = user_dir / "watchlist.json"
@@ -116,10 +120,17 @@ def _save_watchlist_data(items: list):
         path.write_text(content, encoding="utf-8")
     except Exception:
         pass
-    if st.session_state.get("username", "admin") == "admin":
-        token = _get_github_token()
-        if token:
+    token = _get_github_token()
+    if token:
+        if username == "admin":
             _github_commit_file("data/watchlist.json", content, token)
+        else:
+            _github_commit_file(
+                f"data/users/{username}/watchlist.json",
+                content,
+                token,
+                message=f"Update watchlist for {username}",
+            )
 
 
 def _search_ticker_yfinance(query: str):

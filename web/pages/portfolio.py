@@ -21,7 +21,8 @@ def _save_watchlist_data(items):
 
 def _save_holdings_user(df: pd.DataFrame):
     """Sparar holdings.csv i användarens datakatalog.
-    För admin synkas även till GitHub (via admin._save_holdings_df)."""
+    För admin synkas till GitHub. För andra användare sparas lokalt OCH till GitHub
+    (så att pipeline kan läsa data för personliga e-postutskick)."""
     username = st.session_state.get("username", "admin")
     if username == "admin":
         from web.pages.admin import _save_holdings_df
@@ -29,15 +30,31 @@ def _save_holdings_user(df: pd.DataFrame):
     else:
         user_dir = _active_data_dir()
         user_dir.mkdir(parents=True, exist_ok=True)
-        df.to_csv(user_dir / "holdings.csv", index=False)
+        csv_content = df.to_csv(index=False)
+        (user_dir / "holdings.csv").write_text(csv_content, encoding="utf-8")
+        # Commit till GitHub så pipeline kan läsa data för personliga e-postutskick
+        try:
+            from web.pages.admin import _get_github_token, _github_commit_file
+            token = _get_github_token()
+            if token:
+                _github_commit_file(
+                    f"data/users/{username}/holdings.csv",
+                    csv_content,
+                    token,
+                    message=f"Update portfolio for {username}",
+                )
+        except Exception:
+            pass  # GitHub-sync misslyckades, men lokal sparning lyckades
 
 
 def _upsert_holding(holdings: pd.DataFrame, ticker: str,
                     shares: float, cost_basis: float) -> pd.DataFrame:
-    """Lägg till eller uppdatera en aktie i portföljen."""
+    """Lägg till eller uppdatera en aktie i portföljen.
+    Om tickern är ny läggs den automatiskt till i nästa scan (custom_universe)."""
     h = holdings.copy() if not holdings.empty else pd.DataFrame(
         columns=["ticker", "shares", "cost_basis"]
     )
+    is_new = ticker not in (h["ticker"].values if not h.empty else [])
     if ticker in h["ticker"].values:
         h.loc[h["ticker"] == ticker, "shares"]     = shares
         h.loc[h["ticker"] == ticker, "cost_basis"] = cost_basis
@@ -45,7 +62,34 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
         h = pd.concat([h, pd.DataFrame([{
             "ticker": ticker, "shares": shares, "cost_basis": cost_basis
         }])], ignore_index=True)
+    # Auto-lägg till i scan-universum om det är en ny ticker
+    if is_new:
+        try:
+            from core.config import add_custom_to_universe
+            added = add_custom_to_universe(ticker)
+            if added:
+                st.session_state[f"scan_pending_{ticker}"] = True
+        except Exception:
+            pass
     return h
+
+
+def _show_scan_pending_notifications():
+    """Visar en blå infobox för tickers som lagts till i nästa scan."""
+    pending = [
+        k.replace("scan_pending_", "")
+        for k, v in st.session_state.items()
+        if k.startswith("scan_pending_") and v
+    ]
+    if pending:
+        tickers_str = ", ".join(f"`{t}`" for t in pending)
+        st.info(
+            f"⏳ **{tickers_str}** är {'nya' if len(pending) > 1 else 'ny'} i ditt universum "
+            "och läggs till i nästa scan. "
+            "Score, signaler och nyckeltal visas fullt ut efter nästa scan "
+            "(lördag för storbolag, måndag för småbolag). "
+            "Grundläggande prisinformation hämtas live från yfinance redan nu."
+        )
 
 
 def _manage_portfolio_section(holdings: pd.DataFrame):
@@ -132,7 +176,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                                 s = float(item["row"].get("shares", 0))
                                 c = float(item["row"].get("cost_basis", 0))
                                 was_new = t not in h["ticker"].values
-                                h = _upsert_holding(h, t, s, c)
+                                h = _upsert_holding(h, t, s, c)  # hanterar scan_pending internt
                                 if was_new: n_add += 1
                                 else:       n_upd += 1
                             _save_holdings_user(h)
@@ -283,6 +327,9 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
 def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
                    sc_df: pd.DataFrame = None):
     st.title("💼 Portfölj & Bevakningslista")
+
+    # ── Notiser för nyligen tillagda tickers som inväntar nästa scan ──────────
+    _show_scan_pending_notifications()
 
     # ── Portföljhantering (synlig för alla användare) ─────────────────────────
     _manage_portfolio_section(holdings)

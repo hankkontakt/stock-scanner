@@ -109,6 +109,102 @@ def save_subscribers(subscribers: list[dict]) -> bool:
         return False
 
 
+def build_personal_portfolio_section(username: str, scored_df=None) -> str:
+    """
+    Bygger en markdown-sektion med användarens innehav och bevakningslista
+    för inkludering i personaliserade e-postutskick.
+
+    Args:
+        username: Inloggningsnamn (admin → data/, övriga → data/users/{username}/)
+        scored_df: Senaste scorad DataFrame med kolumnerna ticker, close/current_price,
+                   score_total, entry_signal. Används för att berika med aktuell data.
+
+    Returns:
+        Markdown-sträng. Tom sträng om inga innehav finns.
+    """
+    import pandas as pd
+    from pathlib import Path
+
+    data_dir = Path(__file__).resolve().parent.parent / "data"
+    user_dir = data_dir if not username or username == "admin" else data_dir / "users" / username
+
+    # Ladda innehav
+    holdings = None
+    try:
+        h_path = user_dir / "holdings.csv"
+        if h_path.exists():
+            holdings = pd.read_csv(h_path)
+    except Exception:
+        pass
+
+    # Ladda bevakningslista
+    watchlist: list = []
+    try:
+        wl_path = user_dir / "watchlist.json"
+        if wl_path.exists():
+            watchlist = json.loads(wl_path.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+
+    if (holdings is None or holdings.empty) and not watchlist:
+        return ""
+
+    # Bygg uppslagsdict från scored_df (om tillgänglig)
+    score_lu: dict = {}
+    if scored_df is not None:
+        try:
+            score_lu = scored_df.set_index("ticker").to_dict("index")
+        except Exception:
+            pass
+
+    lines: list[str] = []
+
+    # ── Innehav ──
+    if holdings is not None and not holdings.empty:
+        lines.append("## 💼 Dina innehav\n")
+        for _, h in holdings.iterrows():
+            ticker = str(h.get("ticker", "")).strip()
+            if not ticker:
+                continue
+            cost   = float(h.get("cost_basis", 0) or 0)
+            shares = float(h.get("shares", 0) or 0)
+            sc     = score_lu.get(ticker, {})
+            price  = sc.get("current_price") or sc.get("close")
+            pnl_str   = ""
+            score_str = ""
+            entry_str = ""
+            if price and cost > 0:
+                try:
+                    pnl = (float(price) / cost - 1) * 100
+                    pnl_str = f" | P&L: **{pnl:+.1f}%**"
+                except Exception:
+                    pass
+            if sc.get("score_total") is not None:
+                score_str = f" | Score: {sc['score_total']:.0f}"
+            if sc.get("entry_signal"):
+                entry_str = f" | {sc['entry_signal']}"
+            lines.append(
+                f"- **{ticker}** — {shares:.0f} st à {cost:.2f} kr"
+                f"{score_str}{entry_str}{pnl_str}"
+            )
+        lines.append("")
+
+    # ── Bevakningslista ──
+    if watchlist:
+        lines.append("## ⭐ Bevakningslista\n")
+        for item in watchlist[:15]:
+            ticker = item.get("ticker", "").strip()
+            if not ticker:
+                continue
+            sc        = score_lu.get(ticker, {})
+            score_str = f" | Score: {sc['score_total']:.0f}" if sc.get("score_total") is not None else ""
+            entry_str = f" | {sc['entry_signal']}" if sc.get("entry_signal") else ""
+            notes_str = f" — {item['notes']}" if item.get("notes") else ""
+            lines.append(f"- **{ticker}**{score_str}{entry_str}{notes_str}")
+
+    return "\n".join(lines)
+
+
 def get_emails_for_type(subscription_type: str) -> list[str]:
     """
     Returnerar lista av aktiva e-postadresser för en given prenumerationstyp.

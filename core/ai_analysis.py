@@ -723,17 +723,21 @@ def _call_with_cache(system_prompt: str, messages: list, cache_key: str,
 def analyze_stock(ticker: str, df: pd.DataFrame = None,
                   force_refresh: bool = False,
                   provider: str = "auto",
-                  depth: str = "Normal") -> str:
+                  depth: str = "Normal",
+                  user_position: dict | None = None) -> str:
     """
     Analysera en enskild aktie.
-    
+
     Args:
         ticker: Ticker-symbol (t.ex. "AAPL")
         df: DataFrame med scandata (scored_universe)
         force_refresh: Hoppa över cache
         provider: "auto", "deepseek" eller "gemini"
         depth: "Snabb", "Normal", "Djup" eller "Extra djup"
-    
+        user_position: Dict med användarens position, t.ex.
+            {"shares": 100, "cost_basis": 245.50, "current_price": 280.0}
+            Om angivet läggs info om innehav och P&L till i promoten.
+
     Returns:
         AI-analys som formaterad text
     """
@@ -804,6 +808,27 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None,
     filtered_data = _build_depth_context(stock_data, depth)
     data_str = _safe_json(filtered_data, indent=2, ensure_ascii=False) if filtered_data else "Ingen data tillgänglig för denna aktie."
     user_message = f"Analysera aktien **{ticker}**.\n\nTillgänglig data:\n```json\n{data_str}\n```"
+
+    # Berika med användarens personliga position om tillgänglig
+    if user_position:
+        shares   = user_position.get("shares", 0)
+        cost     = user_position.get("cost_basis", 0)
+        cur_price = user_position.get("current_price") or stock_data.get("Price")
+        position_lines = [
+            f"\n\n**Användarens position i {ticker}:**",
+            f"- Antal aktier: {shares:.0f} st",
+            f"- Genomsnittligt inköpspris: {cost:.2f} kr/st",
+        ]
+        if cur_price and cost > 0:
+            try:
+                pnl_pct = (float(cur_price) / float(cost) - 1) * 100
+                pnl_kr  = (float(cur_price) - float(cost)) * float(shares)
+                position_lines.append(
+                    f"- Nuvarande P&L: {pnl_pct:+.1f}% ({pnl_kr:+,.0f} kr totalt)"
+                )
+            except Exception:
+                pass
+        user_message += "\n".join(position_lines)
 
     # Hämta nyheter automatiskt för alla djupnivåer
     news_lines = []
