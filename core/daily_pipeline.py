@@ -31,7 +31,7 @@ from core import config
 from core.global_markets import (
     fetch_global_indices, format_index_summary_short, get_global_market_narrative,
 )
-from core.email_template import send_email, build_section_header, build_pnl_cell
+from core.email_template import send_email, build_section_header
 from core.data_fetcher import fetch_prices_only, update_scored_with_prices, fetch_universe_data
 from core.scoring import score_universe
 from core import ai_analysis
@@ -40,7 +40,9 @@ from core.country_flags import flag_for_ticker
 # ── Sökvägar ─────────────────────────────────────────────────────────────────
 DATA_DIR = ROOT / "data"
 REPORT_DIR = ROOT / "reports"
+AI_CACHE_DIR = ROOT / "data" / "ai_cache"
 REPORT_DIR.mkdir(parents=True, exist_ok=True)
+AI_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Logger ───────────────────────────────────────────────────────────────────
 logger = logging.getLogger(__name__)
@@ -51,22 +53,67 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 # DATALADDNING
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _latest_report(pattern: str = "scored_universe_*.csv") -> Optional[Path]:
-    """Hitta senaste rapport-CSV som matchar mönstret."""
+def _latest_report(pattern: str = "scored_universe_*.parquet") -> Optional[Path]:
+    """Hitta senaste rapportfil som matchar mönstret.
+    Prioriterar .parquet (snabbare), fallback till .csv."""
+    # Första: leta efter .parquet
     files = sorted(REPORT_DIR.glob(pattern), reverse=True)
-    return files[0] if files else None
+    if files:
+        return files[0]
+    # Andra: fallback till .csv (för bakåtkompatibilitet)
+    csv_pattern = pattern.replace(".parquet", ".csv")
+    if csv_pattern != pattern:
+        csv_files = sorted(REPORT_DIR.glob(csv_pattern), reverse=True)
+        if csv_files:
+            logger.info(f"  ℹ Hittade .csv (ingen .parquet): {csv_files[0].name}")
+            return csv_files[0]
+    return None
 
 
-def _load_latest_scored(pattern: str = "scored_universe_*.csv") -> pd.DataFrame:
-    """Ladda senaste scored_universe CSV."""
+def _load_latest_scored(pattern: str = "scored_universe_*.parquet") -> pd.DataFrame:
+    """Ladda senaste scored_universe (parquet eller csv)."""
     path = _latest_report(pattern)
     if path and path.exists():
-        df = pd.read_csv(path, low_memory=False)
+        if path.suffix == ".parquet":
+            df = pd.read_parquet(path)
+        else:
+            df = pd.read_csv(path, low_memory=False)
         df.columns = df.columns.str.strip()
         logger.info(f"  📂 Laddade {path.name} ({len(df)} rader)")
         return df
-    logger.warning("  ⚠ Ingen scored_universe CSV hittad – kör utan scandata")
+    logger.warning("  ⚠ Ingen scored_universe-fil hittad – kör utan scandata")
     return pd.DataFrame()
+
+
+def _save_scored(df: pd.DataFrame, path: Path):
+    """Spara DataFrame som både .parquet (zstd) och .csv (för bakåtkompatibilitet).
+    
+    Använder atomisk skrivning: skriver först till .tmp, sedan rename.
+    Detta förhindrar att en krasch mitt i skrivningen lämnar en korrupt fil
+    som saboterar Streamlit-dashboarden.
+    """
+    csv_path = path.with_suffix(".csv")
+    df.to_csv(csv_path, index=False)
+    
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        parquet_path = path.with_suffix(".parquet")
+        tmp_path = parquet_path.with_suffix(".tmp.parquet")
+        table = pa.Table.from_pandas(df)
+        pq.write_table(table, tmp_path, compression="zstd")
+        tmp_path.replace(parquet_path)  # ← atomisk: antingen hela eller inget
+        logger.info(f"  💾 Sparade {parquet_path.name} + {csv_path.name}")
+    except ImportError:
+        logger.warning("  ⚠ pyarrow saknas – sparar enbart .csv")
+        logger.info(f"  💾 Sparade {csv_path.name}")
+
+
+def _save_ai_text(mode: str, date_str: str, text: str):
+    """Spara AI-genererad text i ai_cache/ för lazy-load."""
+    path = AI_CACHE_DIR / f"ai_{mode}_{date_str}.md"
+    path.write_text(text, encoding="utf-8")
+    logger.info(f"  💾 Sparade AI-text: {path.name}")
 
 
 def _load_portfolio() -> pd.DataFrame:
@@ -110,7 +157,7 @@ def _fetch_live_price(ticker: str) -> float | None:
 
 
 def _enrich_holdings(holdings: pd.DataFrame, scored: pd.DataFrame) -> list[dict]:
-    """Berika portföljinnehav med scan-data. Holdings ej i universet får live-pris."""
+    """Berika portföljinnehav med scan-data. Holdings ej i universet får live-pris och beräknad RSI/trend."""
     score_lookup: dict = {}
     if not scored.empty and "ticker" in scored.columns:
         score_lookup = scored.set_index("ticker").to_dict("index")
@@ -128,6 +175,54 @@ def _enrich_holdings(holdings: pd.DataFrame, scored: pd.DataFrame) -> list[dict]
                 if candidate in score_lookup:
                     return score_lookup[candidate]
         return {}
+
+    def _calc_tech_fallback(ticker_in: str) -> dict:
+        """Hämta prisdata och beräkna RSI, trend vs MA50/MA200 för holdings utanför universet."""
+        fallback = {}
+        try:
+            import yfinance as yf
+            t = yf.Ticker(ticker_in)
+            hist = t.history(period="6mo", auto_adjust=True)
+            if hist.empty or len(hist) < 20:
+                return fallback
+            closes = hist["Close"]
+            # RSI
+            delta = closes.diff()
+            gain = delta.where(delta > 0, 0.0)
+            loss = (-delta.where(delta < 0, 0.0))
+            avg_gain = gain.rolling(14).mean()
+            avg_loss = loss.rolling(14).mean()
+            rs = avg_gain / avg_loss.replace(0, float('inf'))
+            rsi = 100 - (100 / (1 + rs))
+            fallback["rsi"] = round(rsi.iloc[-1], 1) if not rsi.empty else None
+            # Trend vs MA50/MA200
+            ma50 = closes.rolling(50).mean().iloc[-1] if len(closes) >= 50 else None
+            ma200 = closes.rolling(200).mean().iloc[-1] if len(closes) >= 200 else None
+            current_price = closes.iloc[-1]
+            if ma50:
+                fallback["vs_ma50"] = round((current_price / ma50 - 1) * 100, 2)
+            if ma200:
+                fallback["vs_ma200"] = round((current_price / ma200 - 1) * 100, 2)
+            # Trend signal
+            if ma50 and ma200:
+                if current_price > ma50 and current_price > ma200:
+                    fallback["trend"] = "Upptrend"
+                elif current_price < ma50 and current_price < ma200:
+                    fallback["trend"] = "Nedtrend"
+                else:
+                    fallback["trend"] = "Blandad"
+            # Entry (estimera baserat på RSI)
+            rsi_val = fallback.get("rsi")
+            if rsi_val is not None:
+                if rsi_val < 30:
+                    fallback["entry"] = "Översåld"
+                elif rsi_val > 70:
+                    fallback["entry"] = "Överköpt"
+                else:
+                    fallback["entry"] = "Neutral"
+        except Exception:
+            pass
+        return fallback
 
     if holdings is None or (hasattr(holdings, "empty") and holdings.empty):
         return enriched
@@ -154,22 +249,27 @@ def _enrich_holdings(holdings: pd.DataFrame, scored: pd.DataFrame) -> list[dict]
 
         stop_loss_pct = round(((float(cost) * 0.85) / float(cost) - 1) * 100, 1) if cost > 0 else None
 
+        # Om holding saknas i scored_universe – beräkna tekniska indikatorer från prisdata
+        tech = {}
+        if not sc:
+            tech = _calc_tech_fallback(t)
+
         enriched.append({
             "ticker": t,
-            "name": sc.get("name", t),
-            "sector": sc.get("sector", "—"),
+            "name": sc.get("name", t) if sc else t,
+            "sector": sc.get("sector", "—") if sc else "—",
             "shares": shares,
             "cost_basis": cost,
             "price": round(float(price), 2) if price else None,
             "market_value": round(mv, 0),
             "pnl_pct": pnl_pct,
             "stop_loss_pct": stop_loss_pct,
-            "score": sc.get("score_total"),
-            "entry": sc.get("entry_signal", "—"),
-            "trend": sc.get("trend_signal", "—"),
-            "rsi": sc.get("rsi_14"),
-            "vs_ma50": sc.get("price_vs_ma50"),
-            "vs_ma200": sc.get("price_vs_ma200"),
+            "score": sc.get("score_total") if sc else None,
+            "entry": (sc.get("entry_signal", "—") if sc else tech.get("entry", "—")) or "—",
+            "trend": (sc.get("trend_signal", "—") if sc else tech.get("trend", "—")) or "—",
+            "rsi": sc.get("rsi_14") if sc else tech.get("rsi"),
+            "vs_ma50": sc.get("price_vs_ma50") if sc else tech.get("vs_ma50"),
+            "vs_ma200": sc.get("price_vs_ma200") if sc else tech.get("vs_ma200"),
         })
 
     return enriched
@@ -450,11 +550,12 @@ TÄNK PÅ:
 - Använd emojis för att markera riktning (🟢🔴🟡)
 - Var konkret med rekommendationer
 - Fokusera på vad som är VIKTIGT för mottagaren just idag
+- **Nyheter finns bifogade – väg in dem i din analys**, särskilt för portfölj och bevakningar
 
 STRUKTUR (800-1000 ord):
 1. 🌏 **Global överblick** – Vad hände i natt? USA-stängning, Asien-öppning, Europa-öppning. VIX-nivå.
 2. 💼 **Din portfölj** – Gå igenom varje innehav. Är någon nära stop-loss? Någon som sticker ut?
-3. ⭐ **Dina bevakningar** – Har någon rört sig mycket? Något nytt att titta på?
+3. ⭐ **Dina bevakningar** – Har någon rört sig mycket? Något nytt att titta på? Kolla nyheter om dem!
 4. 🏆 **Dagens hetaste** – Topp-5 just nu. Varför?
 5. ⚠️ **Varningar** – Stop-loss som triggas idag, oroliga signaler
 6. 📰 **Nyheter som påverkar dig** – Kort om vad som händer
@@ -470,11 +571,12 @@ TÄNK PÅ:
 - Använd emojis för att markera riktning (🟢🔴🟡)
 - Var konkret med rekommendationer
 - Analysera dagen och blicka framåt
+- **Nyheter finns bifogade – väg in dem**, särskilt om de påverkar portfölj eller bevakningar
 
 STRUKTUR (800-1000 ord):
 1. 📊 **Dagens utveckling** – Hur gick börserna idag? (Sverige, Europa, USA öppen)
 2. 💼 **Portfölj-P&L** – Hur mycket tjänade/förlorade du idag? Gå igenom varje innehav
-3. ⭐ **Bevakningar som rört sig** – Någon som stack ut idag?
+3. ⭐ **Bevakningar som rört sig** – Någon som stack ut idag? Har de nyheter?
 4. 🏆 **Dagens topp-5 & botten-5** – Bästa och sämsta aktierna
 5. 🔮 **Imorgon** – Makro-siffror, earnings, opportunities som uppstått
 6. 🎯 **Handlingsplan** – Vad göra imorgon bitti? Köp, sälj, avvakta?
@@ -489,13 +591,14 @@ TÄNK PÅ:
 - Använd emojis sparsamt (🟢🔴 för riktning)
 - Detta är en DJUP analys – inte en snabb överblick
 - Var modig med rekommendationer
+- **Nyheter finns bifogade för portfölj, bevakningar och topplaceringar – väg in dem**
 
 STRUKTUR (1500-2000 ord):
 1. 📈 **Marknadsregim & bredd** – Veckans utveckling, VIX, bredd, sektorer
 2. 🌏 **Globalt** – USA, Europa, Asien – trender och makro
-3. 💼 **Djup portföljanalys** – Varje innehav med trend, rekommendation, stop-loss
-4. ⭐ **Bevakningslistan** – Bör du lägga till/ta bort något? AI-bedömning
-5. 🏆 **Topp-10 köprekommendationer** – Med motivering per aktie
+3. 💼 **Djup portföljanalys** – Varje innehav med trend, rekommendation, stop-loss. Kolla nyheter om dem!
+4. ⭐ **Bevakningslistan** – Bör du lägga till/ta bort något? AI-bedömning. Finns nyheter?
+5. 🏆 **Topp-10 köprekommendationer** – Med motivering per aktie + nyheter
 6. 🔴 **Bottom-5 varningar** – Aktier att minska/undvika
 7. 🏭 **Sektormomentum** – Vilka sektorer leder/släpar
 8. 📰 **Nyheter & makro** – Viktigaste händelserna
@@ -637,8 +740,21 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 regime = "OSÄKER"
                 logger.warning(f"  ⚠ Regime-detektion misslyckades: {_re} – kör OSÄKER")
 
-            scored = score_universe(raw_df, regime=regime)
-            logger.info(f"  ✅ Scorat {len(scored)} tickers")
+            # Använd sektor-neutraliserad scoring för att undvika strukturell bias
+            # där tech-bolag systematiskt överrankas och värdebolag underrankas.
+            # Varje faktor score beräknas INOM sektor (t.ex. P/E för tech vs fastighet).
+            use_sector_neutral = getattr(config, "SCORE_MODE", "") == "sector_neutral"
+            if use_sector_neutral:
+                try:
+                    from core.scoring import score_universe_sector_neutralized
+                    scored = score_universe_sector_neutralized(raw_df)
+                    logger.info(f"  ✅ Scorat {len(scored)} tickers (sektorneutralt)")
+                except Exception as _sne:
+                    logger.warning(f"  ⚠ Sektorneutral scoring misslyckades: {_sne} – fallback till absolut")
+                    scored = score_universe(raw_df, regime=regime)
+            else:
+                scored = score_universe(raw_df, regime=regime)
+                logger.info(f"  ✅ Scorat {len(scored)} tickers")
 
             # Piotroski F-Score (fundamental quality 0–9)
             try:
@@ -656,12 +772,11 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             except Exception as _fe:
                 logger.warning(f"  ⚠ apply_all_filters misslyckades: {_fe}")
 
-            csv_path = REPORT_DIR / f"scored_universe_{date_str}.csv"
-            scored.to_csv(csv_path, index=False)
-            logger.info(f"  💾 Sparade {csv_path.name}")
+            csv_path = REPORT_DIR / f"scored_universe_{date_str}"
+            _save_scored(scored, csv_path)
         else:
             logger.warning("  ⚠ Universe fetch returnerade tom DataFrame – laddar senaste cache")
-            scored = _load_latest_scored("scored_universe_*.csv")
+            scored = _load_latest_scored("scored_universe_*.parquet")
 
         _ml_universe = "universe"
     elif mode == "smallcap":
@@ -688,10 +803,9 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 scored = update_scored_with_prices(scored, price_data)
                 logger.info(f"  ✅ Priser hämtade för {n_prices} tickers – scores uppdaterade")
                 
-                # Spara den uppdaterade CSV:n
-                csv_path = REPORT_DIR / f"scored_universe_{date_str}.csv"
-                scored.to_csv(csv_path, index=False)
-                logger.info(f"  💾 Sparade uppdaterad CSV: {csv_path.name}")
+                # Spara den uppdaterade parquet + csv
+                csv_path = REPORT_DIR / f"scored_universe_{date_str}"
+                _save_scored(scored, csv_path)
             else:
                 logger.warning("  ⚠ Inga priser kunde hämtas – använder gårdagens data")
         except Exception as e:
@@ -710,10 +824,10 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 logger.info(f"  🤖 ML-prediktioner tillagda för {_ml_universe} ({len(scored)} rader)")
                 # Spara back så Streamlit-appen kan visa kolumnen
                 if _ml_universe == "universe":
-                    csv_path = REPORT_DIR / f"scored_universe_{date_str}.csv"
+                    csv_path = REPORT_DIR / f"scored_universe_{date_str}"
                 else:
-                    csv_path = REPORT_DIR / f"smallcap_scored_{date_str}.csv"
-                scored.to_csv(csv_path, index=False)
+                    csv_path = REPORT_DIR / f"smallcap_scored_{date_str}"
+                _save_scored(scored, csv_path)
         except Exception as e:
             logger.warning(f"  ⚠ ML-prediktion hoppades över: {e}")
 
@@ -734,6 +848,57 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     holdings = _load_portfolio()
     watchlist_raw = _load_watchlist()
     watchlist_tickers = [i.get("ticker", "") for i in watchlist_raw if i.get("ticker")]
+
+    # Synka portföljinnehav till custom_universe så de ingår i veckoscannen
+    try:
+        custom_existing = set(c["ticker"] for c in config.load_custom_universe())
+        universe_tickers_set = set(getattr(config, "UNIVERSE", []))
+        added = 0
+        for _, h in holdings.iterrows():
+            t = str(h.get("ticker", "")).upper().strip()
+            if not t:
+                continue
+            # Kolla om tickern redan finns i UNIVERSE eller custom
+            if t in universe_tickers_set or t in custom_existing:
+                continue
+            # Kolla med suffix för svenska/nordiska aktier
+            in_main = any(t + sfx in universe_tickers_set for sfx in (".ST", ".HE", ".CO", ".OL"))
+            if in_main:
+                continue
+            in_custom = any(t + sfx in custom_existing for sfx in (".ST", ".HE", ".CO", ".OL"))
+            if in_custom:
+                continue
+            # Lägg till med full ticker (om den redan har suffix) eller utan
+            config.add_custom_to_universe(t, str(h.get("name", "")))
+            added += 1
+        if added:
+            logger.info(f"  ➕ Lade till {added} portföljinnehav i custom_universe för veckoscannen")
+    except Exception as e:
+        logger.warning(f"  ⚠ Kunde inte synka portfölj till custom_universe: {e}")
+
+    # Synka även bevakningar till custom_universe
+    try:
+        custom_existing_wl = set(c["ticker"] for c in config.load_custom_universe())
+        universe_tickers_set_wl = set(getattr(config, "UNIVERSE", []))
+        added_wl = 0
+        for w in watchlist_tickers:
+            if not w:
+                continue
+            w_up = w.upper().strip()
+            if w_up in universe_tickers_set_wl or w_up in custom_existing_wl:
+                continue
+            in_main_wl = any(w_up + sfx in universe_tickers_set_wl for sfx in (".ST", ".HE", ".CO", ".OL"))
+            if in_main_wl:
+                continue
+            in_custom_wl = any(w_up + sfx in custom_existing_wl for sfx in (".ST", ".HE", ".CO", ".OL"))
+            if in_custom_wl:
+                continue
+            config.add_custom_to_universe(w_up, "")
+            added_wl += 1
+        if added_wl:
+            logger.info(f"  ➕ Lade till {added_wl} bevakningar i custom_universe för veckoscannen")
+    except Exception as e:
+        logger.warning(f"  ⚠ Kunde inte synka bevakningar till custom_universe: {e}")
 
     # Berika portfölj
     enriched = _enrich_holdings(holdings, scored)
@@ -796,8 +961,27 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         # ── Bevakningar ──────────────────────────────────────────────────
         if watchlist_tickers:
             report_lines.append(_section_header("⭐ Dina bevakningar"))
-            for w in watchlist_tickers[:5]:
-                report_lines.append(f"- {w}")
+            # Slå upp data för bevakningar från scored universe
+            watchlist_with_data = []
+            if not scored.empty and "ticker" in scored.columns:
+                for w in watchlist_tickers[:8]:
+                    w_up = w.upper().strip()
+                    match = scored[scored["ticker"] == w_up]
+                    if not match.empty:
+                        r = match.iloc[0]
+                        sc = r.get("score_total")
+                        entry = r.get("entry_signal", "—")
+                        trend = r.get("trend_signal", "—")
+                        rsi = r.get("rsi_14")
+                        price = r.get("current_price") or r.get("close", 0)
+                        watchlist_with_data.append(f"- **{flag_for_ticker(w_up)} {w_up}** – Score {sc:.0f} | {entry} | Trend: {trend} | RSI {rsi:.0f}" if sc and sc == sc else f"- **{w_up}** – (ingen score)")
+                    else:
+                        watchlist_with_data.append(f"- **{w_up}** – (inte i universet)")
+            else:
+                for w in watchlist_tickers[:5]:
+                    watchlist_with_data.append(f"- {w}")
+            report_lines.extend(watchlist_with_data)
+            report_lines.append("")
 
         # ── Topp-5 ───────────────────────────────────────────────────────
         if top_10:
@@ -1119,6 +1303,9 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     report_text = "\n".join(report_lines)
     report_text = report_text.replace("*Genereras nedan...*\n", "")
     report_text += f"\n\n{ai_section}\n"
+
+    # Spara AI-text separat för lazy-load i Streamlit
+    _save_ai_text(mode, date_str, ai_section)
 
     # ═══════════════════════════════════════════════════════════════════════
     # 4. SPARA RAPPORT

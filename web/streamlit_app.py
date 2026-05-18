@@ -202,6 +202,23 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                     filters["sc_insider"] = st.selectbox("Insider", ["Alla","BUY","NEUTRAL","SELL","N/A"], key="sc_insider")
                     filters["sc_fcf"] = st.checkbox("Positivt FCF", key="sc_fcf")
                     filters["sc_max_de"] = st.slider("Max D/E %", 0, 500, 300, 25, key="sc_de")
+                    st.markdown("---")
+                    filters["sc_only_swedish"] = st.checkbox(
+                        "🇸🇪 Visa endast svenska aktier",
+                        value=False, key="sc_only_swedish",
+                        help="Filtrera till enbart aktier på Stockholmsbörsen (.ST)",
+                    )
+                    if not filters["sc_only_swedish"]:
+                        filters["sc_countries"] = st.multiselect(
+                            "🌍 Länder",
+                            options=["🇸🇪 Sverige", "🇺🇸 USA", "🇬🇧 UK", "🇩🇪 Tyskland",
+                                     "🇫🇮 Finland", "🇩🇰 Danmark", "🇳🇴 Norge",
+                                     "🇨🇳 Kina", "🇯🇵 Japan"],
+                            default=[], key="sc_countries",
+                            help="Lämna tomt för att visa alla länder.",
+                        )
+                    else:
+                        filters["sc_countries"] = []
 
                 elif page == "📈 Teknisk analys":
                     filters["rsi_min"] = st.slider("Min RSI", 0, 100, 0, 5, key="tech_rsi_min")
@@ -210,6 +227,23 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                     filters["t_sector"] = st.multiselect("Sektor", [], placeholder="Välj...", key="tech_sector")
                     filters["t_entry"] = st.multiselect("Entry", ["STARK","OK","VÄNTA","EJ AKTUELL"], placeholder="Alla...", key="tech_entry")
                     filters["trend_tech"] = st.selectbox("Trend", ["Alla","UPPTREND","Övriga"], key="tech_trend")
+                    st.markdown("---")
+                    filters["t_only_swedish"] = st.checkbox(
+                        "🇸🇪 Visa endast svenska aktier",
+                        value=False, key="t_only_swedish",
+                        help="Filtrera till enbart aktier på Stockholmsbörsen (.ST)",
+                    )
+                    if not filters["t_only_swedish"]:
+                        filters["t_countries"] = st.multiselect(
+                            "🌍 Länder",
+                            options=["🇸🇪 Sverige", "🇺🇸 USA", "🇬🇧 UK", "🇩🇪 Tyskland",
+                                     "🇫🇮 Finland", "🇩🇰 Danmark", "🇳🇴 Norge",
+                                     "🇨🇳 Kina", "🇯🇵 Japan"],
+                            default=[], key="t_countries",
+                            help="Lämna tomt för att visa alla länder.",
+                        )
+                    else:
+                        filters["t_countries"] = []
 
         # ── AI-inställningar (alltid) ────────────────────────────────────────
         with st.expander("🤖 AI-inställningar", expanded=False):

@@ -11,6 +11,19 @@ from web.utils import (
     kpi_row, scatter_momentum_value, pct_fmt, _get_provider, _get_depth,
 )
 from core import ai_analysis
+from core.country_flags import flag_for_ticker
+
+_TECH_COUNTRY_SUFFIX_MAP = {
+    "🇸🇪 Sverige":  ".ST",
+    "🇬🇧 UK":       ".L",
+    "🇩🇪 Tyskland": ".DE",
+    "🇫🇮 Finland":  ".HE",
+    "🇩🇰 Danmark":  ".CO",
+    "🇳🇴 Norge":    ".OL",
+    "🇨🇳 Kina":     ".SS",
+    "🇯🇵 Japan":    ".T",
+}
+_TECH_NON_US_SUFFIXES = set(_TECH_COUNTRY_SUFFIX_MAP.values())
 
 
 def page_technical(df: pd.DataFrame, filters: dict):
@@ -44,6 +57,20 @@ def page_technical(df: pd.DataFrame, filters: dict):
     if filters.get("trend_tech") == "UPPTREND" and "trend_signal" in out.columns:
         out = out[out["trend_signal"] == "UPPTREND"]
 
+    # Landfilter
+    if filters.get("t_only_swedish") and "ticker" in out.columns:
+        out = out[out["ticker"].str.endswith(".ST", na=False)]
+    else:
+        sel_countries = filters.get("t_countries", [])
+        if sel_countries and "ticker" in out.columns:
+            us_sel   = "🇺🇸 USA" in sel_countries
+            suffixes = [_TECH_COUNTRY_SUFFIX_MAP[c] for c in sel_countries if c in _TECH_COUNTRY_SUFFIX_MAP]
+            def _tcm(t: str) -> bool:
+                if any(t.endswith(s) for s in suffixes):  return True
+                if us_sel and not any(t.endswith(s) for s in _TECH_NON_US_SUFFIXES): return True
+                return False
+            out = out[out["ticker"].apply(_tcm)]
+
     n_upptrend = (out["trend_signal"] == "UPPTREND").sum() \
         if "trend_signal" in out.columns else 0
     n_over_ma  = (out["price_vs_ma200"] > 0).sum() \
@@ -72,7 +99,9 @@ def page_technical(df: pd.DataFrame, filters: dict):
             "return_1m", "return_3m", "return_6m", "return_12m",
             "volatility", "beta", "pct_from_52w_high",
         ] if c in out.columns]
-        td = out[tech_show].copy().rename(columns={
+        td = out[tech_show].copy()
+        td["ticker"] = td["ticker"].apply(lambda t: f"{flag_for_ticker(t)} {t}")
+        td = td.rename(columns={
             "rank": "#", "ticker": "Ticker", "name": "Bolag", "sector": "Sektor",
             "current_price": "Pris", "rsi_14": "RSI",
             "price_vs_ma50": "vs MA50", "price_vs_ma200": "vs MA200",

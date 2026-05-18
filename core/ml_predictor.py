@@ -42,6 +42,72 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# DEFLATED SHARPE RATIO  (Lopez de Prado 2018)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _deflated_sharpe_ratio(observed_sharpe: float, num_trials: int,
+                           T: int, skewness: float, kurtosis: float) -> float:
+    """
+    Beräknar Deflated Sharpe Ratio enligt Lopez de Prado (2018),
+    "Advances in Financial Machine Learning", Wiley.
+
+    Justerar den observerade Sharpekvoten för:
+    - Multiple testing bias (antal trial = num_trials)
+    - Icke-normal avkastningsfördelning (skewness, excess kurtosis)
+    - Kort tidsserie (T)
+
+    Formel:
+        DSR = Φ[ (SR·√(T-1) - E*) / √(1 - γ₃·SR + (γ₄-1)/4·SR²) ]
+
+    där:
+        E* = E[max_n(SR⁰)]  =  förväntad maximal SR under nollhypotesen
+                            ≈  (1-γ)·Φ⁻¹(1-1/n) + γ·Φ⁻¹(1-1/(n·e))
+        γ  = Euler–Mascheroni ≈ 0.5772
+        γ₃ = skewness,  γ₄ = excess kurtosis
+
+    Returns:
+        DSR (0-1): sannolikheten att den observerade SR är genuin.
+        Högre = mer robust. Penaliseras starkt av många trials och
+        icke-normalitet.
+    """
+    if T < 2 or observed_sharpe <= 0:
+        return 0.0
+
+    import math as _m
+    try:
+        from scipy.stats import norm as _norm
+    except ImportError:
+        return 0.0  # Kan inte beräkna DSR utan scipy – returnera 0, inte SR
+
+    EULER_MASCHERONI = 0.5772156649
+
+    # ── E[max_n(SR⁰)]: förväntad maximal Sharpe under nollhypotesen ───────────
+    # Baserat på extreme-value-approximation för max av n oberoende N(0,1)-drag.
+    # num_trials kläms nedåt till 2 för att undvika log(0) i ppf(1 - 1/n).
+    n = max(2, num_trials)
+    e_max_sr0 = (
+        (1 - EULER_MASCHERONI) * _norm.ppf(1 - 1.0 / n)
+        + EULER_MASCHERONI    * _norm.ppf(1 - 1.0 / (n * _m.e))
+    )
+
+    # ── Variance adjustment för icke-normalitet ───────────────────────────────
+    sr = observed_sharpe
+    var_adjust = 1.0 - skewness * sr + (kurtosis - 1) * sr ** 2 / 4.0
+    if var_adjust <= 0:
+        var_adjust = 1e-8
+
+    # ── DSR-täljare och nämnare ───────────────────────────────────────────────
+    numerator   = sr * _m.sqrt(T - 1) - e_max_sr0
+    denominator = _m.sqrt(var_adjust)
+
+    if denominator <= 0:
+        return 0.0
+
+    dsr = float(_norm.cdf(numerator / denominator))
+    return max(0.0, min(1.0, dsr))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # FEATURES
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -458,6 +524,48 @@ def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]
     avg_hitrate = round(float(np.mean(all_hitrate)), 4) if all_hitrate else 0.0
     logger.info(f"  CPCV summary: avg_IC={avg_ic}, avg_hit_rate={avg_hitrate}, folds={len(splits)}")
 
+    # ── Deflated Sharpe Ratio ─────────────────────────────────────────────
+    # Beräkna DSR från CPCV-foldsen för att straffa multiple testing.
+    # Använder prediktionernas Sharpe, skewness och kurtosis över alla folds.
+    dsr_value = 0.0
+    try:
+        all_preds  = np.concatenate([
+            _make_regressor().fit(df.iloc[tr][TECH_FEATURES].fillna(0).values,
+                                  df.iloc[tr]["forward_return_30d"].values).predict(
+                df.iloc[te][TECH_FEATURES].fillna(0).values
+            )
+            for tr, te in splits[:3]  # Max 3 folds för DSR-beräkning (snabbare)
+        ])
+        all_actuals = np.concatenate([
+            df.iloc[te]["forward_return_30d"].values
+            for tr, te in splits[:3]
+        ])
+        if len(all_preds) > 50:
+            excess_returns = all_actuals - np.mean(all_actuals)
+            # SR per period (30 dagar) – INTE annualiserad.
+            # DSR-formeln kräver att SR och T är på samma tidsskala:
+            #   T_obs = antal 30-dagarsperioder → sharpe_per_period passar.
+            #   Annualisering (×√12) skulle ge SR >> T-skalan och DSR ≈ 1.0 alltid.
+            sharpe_per_period = float(
+                np.mean(excess_returns) / (np.std(excess_returns) + 1e-10)
+            )
+            from scipy.stats import skew, kurtosis as _kurt
+            sk = float(skew(excess_returns))
+            ku = float(_kurt(excess_returns, fisher=True))  # Excess kurtosis
+            T_obs = len(excess_returns)
+            # num_trials = folds × features (approximation of search space)
+            num_trials = len(splits) * len(TECH_FEATURES)
+            dsr_value = round(_deflated_sharpe_ratio(
+                sharpe_per_period, num_trials, T_obs, sk, ku
+            ), 4)
+            # Logga även annualiserad SR för läsbarhet, men DSR beräknas på per-period
+            sharpe_annual = sharpe_per_period * np.sqrt(12)
+            logger.info(f"  DSR: {dsr_value:.4f} (SR_annual={sharpe_annual:.4f}, "
+                        f"SR_period={sharpe_per_period:.4f}, "
+                        f"skew={sk:.3f}, kurt={ku:.3f}, trials={num_trials})")
+    except Exception as e:
+        logger.warning(f"  ⚠ DSR-beräkning misslyckades: {e}")
+
     # Slutgiltig modell tränas på ALL data
     X_all = df[TECH_FEATURES].fillna(0).values
     y_all = df["forward_return_30d"].values
@@ -480,6 +588,7 @@ def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]
         test_metrics={
             "cpcv_avg_ic":      avg_ic,
             "cpcv_avg_hitrate": avg_hitrate,
+            "dsr":              dsr_value,
             "n_folds":          len(splits),
             "n_train_total":    len(df),
         },

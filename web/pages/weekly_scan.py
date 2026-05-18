@@ -172,10 +172,14 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
     st.caption(f"Visar {len(display)} bolag — klicka på en rad för detaljer")
 
     if event and event.selection and event.selection.rows:
-        sel_ticker = display.iloc[event.selection.rows[0]]["Ticker"]
+        idx = event.selection.rows[0]
+        # Använd råtickern från show (utan flagg-emoji) för lookup –
+        # display["Ticker"] har "🇸🇪 VOLV-B.ST" som inte matchar df["ticker"].
+        sel_ticker     = show.iloc[idx]["ticker"]
+        sel_display    = display.iloc[idx]["Ticker"]   # med flagg, bara för UI-titel
         sel_row = df[df["ticker"] == sel_ticker]
         if not sel_row.empty:
-            with st.expander(f"🔍 Detaljvy: {sel_ticker}", expanded=True):
+            with st.expander(f"🔍 Detaljvy: {sel_display}", expanded=True):
                 render_stock_detail(sel_ticker, row=sel_row.iloc[0], df=df,
                                     show_ai=True, show_news=False,
                                     show_chart=True, show_detail_data=True)

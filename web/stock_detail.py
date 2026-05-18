@@ -702,73 +702,83 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame, company_na
     if clicked:
         # Bestäm vilken prompt som ska användas
         preset_key = AI_PRESET_PROMPTS[selected_preset]
-        if preset_key == "custom":
-            if not custom_question.strip():
-                st.warning("Skriv en fråga först.")
-                return
-            # Använd chat-funktionen för egen fråga
-            with st.spinner(f"🤖 Hämtar nyheter och analyserar {ticker}..."):
-                try:
-                    # Bygg stockdata-kontext
-                    context_fields = {}
-                    for field in ["score_total", "sector", "current_price", "name",
-                                  "pe_trailing", "roe", "rsi_14", "trend_signal",
-                                  "entry_signal", "piotroski_f", "return_1m",
-                                  "return_3m", "return_12m", "price_vs_ma200"]:
-                        v = row.get(field)
-                        if v is not None and not pd.isna(v):
-                            context_fields[field] = float(v) if isinstance(v, (int, float)) else v
+        is_custom = preset_key == "custom"
+        
+        if is_custom and not custom_question.strip():
+            st.warning("Skriv en fråga först.")
+            return
+        
+        # Alla analyser (full, value, technical, etc.) använder ai_chat med nyheter
+        with st.spinner(f"🤖 Hämtar nyheter och analyserar {ticker}..."):
+            try:
+                # Bygg stockdata-kontext
+                context_fields = {}
+                for field in ["score_total", "score_value", "score_quality", "score_momentum",
+                              "score_growth", "score_risk", "score_dividend", "score_sentiment",
+                              "sector", "current_price", "name",
+                              "pe_trailing", "pe_forward", "price_to_book", "roe",
+                              "revenue_growth", "earnings_growth", "debt_to_equity",
+                              "dividend_yield", "free_cash_flow",
+                              "rsi_14", "trend_signal",
+                              "entry_signal", "piotroski_f", "return_1m",
+                              "return_3m", "return_6m", "return_12m", "price_vs_ma50",
+                              "price_vs_ma200", "macd_above_signal", "volatility", "beta"]:
+                    v = row.get(field)
+                    if v is not None and not pd.isna(v):
+                        context_fields[field] = float(v) if isinstance(v, (int, float)) else v
 
-                    stock_json = ai_analysis._safe_json(context_fields, ensure_ascii=False)
+                stock_json = ai_analysis._safe_json(context_fields, ensure_ascii=False)
 
-                    # Hämta live-nyheter
-                    news_lines = []
-                    if _fetch_news is not None:
-                        try:
-                            raw = _fetch_news(ticker, days_back=7, company_name=company_name) or []
-                            for n in raw[:8]:
-                                title = n.get("headline", n.get("title", "")).strip()
-                                src   = n.get("source", "")
-                                age   = n.get("age_hours")
-                                age_s = f" ({age:.0f}h sedan)" if age is not None else ""
-                                if title:
-                                    news_lines.append(f"- {title} [{src}]{age_s}")
-                        except Exception:
-                            pass
+                # Hämta live-nyheter
+                news_lines = []
+                if _fetch_news is not None:
+                    try:
+                        raw = _fetch_news(ticker, days_back=7, company_name=company_name) or []
+                        for n in raw[:8]:
+                            title = n.get("headline", n.get("title", "")).strip()
+                            src   = n.get("source", "")
+                            age   = n.get("age_hours")
+                            age_s = f" ({age:.0f}h sedan)" if age is not None else ""
+                            if title:
+                                news_lines.append(f"- {title} [{src}]{age_s}")
+                    except Exception:
+                        _logger = __import__("logging").getLogger(__name__)
+                        _logger.warning("Kunde inte hämta nyheter för %s", ticker)
 
-                    # Slå ihop: stock-JSON + nyheter med separator som ai_chat förstår
-                    full_context = stock_json
-                    if news_lines:
-                        full_context += "\n\nFärska nyheter:\n" + "\n".join(news_lines)
+                # Slå ihop: stock-JSON + nyheter med separator som ai_chat förstår
+                full_context = stock_json
+                if news_lines:
+                    full_context += "\n\nFärska nyheter:\n" + "\n".join(news_lines)
 
-                    depth = _get_depth()
-                    result = ai_analysis.ai_chat(
-                        f"Aktie: {ticker}\n\n{custom_question}",
-                        context=full_context,
-                        force_refresh=force_refresh,
-                        provider=provider,
-                        depth=depth,
+                depth = _get_depth()
+
+                # Bestäm fråga baserat på preset
+                if is_custom:
+                    question = f"Aktie: {ticker}\n\n{custom_question}"
+                else:
+                    prompt_info = AI_PROMPTS_MAP.get(preset_key, ("Fullständig analys", ""))
+                    custom_prompt = prompt_info[1] if prompt_info[1] else (
+                        "Analysera denna aktie. Väg in alla faktorer (värdering, kvalitet, "
+                        "momentum, tillväxt, risk, utdelning) OCH nyheterna. "
+                        "Ge en tydlig köp/sälj/bevaka-rekommendation med motivering."
                     )
-                    with st.container(border=True):
-                        st.markdown(result)
-                    if news_lines:
-                        with st.expander(f"📋 {len(news_lines)} nyheter hämtades", expanded=False):
-                            for line in news_lines:
-                                st.markdown(line)
-                except Exception as e:
-                    st.error(f"❌ {e}")
-        else:
-            with st.spinner(f"🤖 AI (via {provider}) analyserar..."):
-                try:
-                    depth = _get_depth()
-                    result = ai_analysis.analyze_stock(
-                        ticker, df=df, force_refresh=force_refresh, provider=provider,
-                        depth=depth,
-                    )
-                    with st.container(border=True):
-                        st.markdown(result)
-                except Exception as e:
-                    st.error(f"❌ {e}")
+                    question = f"Aktie: {ticker}\n\n{custom_prompt}"
+
+                result = ai_analysis.ai_chat(
+                    question,
+                    context=full_context,
+                    force_refresh=force_refresh,
+                    provider=provider,
+                    depth=depth,
+                )
+                with st.container(border=True):
+                    st.markdown(result)
+                if news_lines:
+                    with st.expander(f"📋 {len(news_lines)} nyheter hämtades", expanded=False):
+                        for line in news_lines:
+                            st.markdown(line)
+            except Exception as e:
+                st.error(f"❌ {e}")
 
     if news_clicked:
         # Hämta och analysera nyheter
@@ -789,7 +799,8 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame, company_na
                                 for n in raw_news[:10]
                             ]
                     except Exception:
-                        pass
+                        _logger = __import__("logging").getLogger(__name__)
+                        _logger.warning("Kunde inte hämta rånyheter för %s", ticker)
 
                 depth = _get_depth()
                 result = ai_analysis.analyze_news(

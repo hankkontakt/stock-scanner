@@ -16,6 +16,8 @@ import json
 import socket
 import pickle
 import hashlib
+import random
+import functools
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -188,13 +190,56 @@ class _DelistedError(Exception):
     pass
 
 
-# ── Thread-local flags set by yfinance log handler ───────────────────────
-# yfinance v0.2.x silently catches errors and only logs warnings – it does
-# NOT raise. We install a logging handler on the "yfinance" logger that
-# sets thread-local flags when matching messages appear.
-# _fetch_single_ticker checks the flags after each fetch and classifies
-# the result accordingly (RATE_LIMITED for pass-2 retry, DELISTED for
-# auto-blacklisting, FAILED for unknown errors).
+# ── RateLimiter (trådsäker) ────────────────────────────────────────────
+# Stryper anrop till max MAX_CALLS per PERIOD.
+# Används i ThreadPoolExecutor för att undvika 429 från yfinance.
+
+class RateLimiter:
+    """Trådsäker rate-limiter med sliding window."""
+    def __init__(self, max_calls: int = 8, period: float = 1.0):
+        self.max_calls = max_calls
+        self.period = period
+        self._calls: list[float] = []
+        self._lock = threading.Lock()
+
+    def wait(self):
+        """Blockera tills ett anrop är tillået."""
+        with self._lock:
+            now = time.time()
+            self._calls = [t for t in self._calls if now - t < self.period]
+            if len(self._calls) >= self.max_calls:
+                sleep_time = self._calls[0] + self.period - now
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+            self._calls.append(time.time())
+
+
+# ── yfinance retry-decorator with exponential backoff + jitter ────────
+def yfinance_retry(max_retries: int = 5, base_delay: float = 2.0):
+    """Decorator: exponential backoff med jitter för yfinance-anrop."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_error = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_error = e
+                    err_low = str(e).lower()
+                    if "too many requests" in err_low or "rate" in err_low:
+                        delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                    elif attempt < max_retries - 1:
+                        delay = base_delay * (attempt + 1.5 ** attempt)
+                    else:
+                        raise
+                    time.sleep(delay)
+            raise last_error
+        return wrapper
+    return decorator
+
+
+# ── Thread-local flags set by yfinance log handler ─────────────────────
 _RATE_LIMIT_TLS = threading.local()
 
 
@@ -453,7 +498,7 @@ def _get_insider_signal(ticker: str) -> dict:
     if cached is not None:
         return cached
 
-    result = {"insider_cluster": False, "insider_executive_buy": False}
+    result = {"insider_cluster": False, "insider_executive_buy": False, "insider_recent_date": None}
     try:
         t = yf.Ticker(ticker)
         txns = t.insider_transactions
@@ -500,6 +545,10 @@ def _get_insider_signal(ticker: str) -> dict:
         name_col = next((c for c in buys_30.columns if "name" in c or "insider" in c), None)
         if name_col and not buys_30.empty:
             result["insider_cluster"] = int(buys_30[name_col].nunique()) >= 3
+
+        # Senaste transaktionsdatum för decay-beräkning
+        if not buys_90.empty:
+            result["insider_recent_date"] = buys_90["_date"].max().isoformat()
 
     except Exception:
         pass  # Säkert fallback – returnerar False/False
@@ -779,6 +828,7 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
     ins = _get_insider_signal(ticker)
     metrics["insider_cluster"]       = ins.get("insider_cluster", False)
     metrics["insider_executive_buy"] = ins.get("insider_executive_buy", False)
+    metrics["insider_recent_date"]   = ins.get("insider_recent_date")
 
     return metrics
 

@@ -702,6 +702,10 @@ def fetch_yfinance_news(ticker: str, max_items: int = 5) -> list:
     Hämtar Yahoo Finance-nyheter via yfinance (gratis, ingen API-nyckel).
     Returnerar [{headline, source, url, datetime_str, age_hours}] nyast först.
     Cachar i 2 timmar.
+
+    Hanterar båda API-formaten från yfinance:
+      Gammalt format (yfinance <0.2.50): {title, link, publisher, providerPublishTime}
+      Nytt format  (yfinance ≥0.2.50):  {id, content: {title, canonicalUrl, provider, pubDate}}
     """
     cache_key = f"yf_news:{ticker}"
     cached = _read_cache(cache_key)
@@ -714,18 +718,45 @@ def fetch_yfinance_news(ticker: str, max_items: int = 5) -> list:
         news_items = t.news or []
         now = datetime.utcnow()
         for item in news_items[:max_items]:
-            ts = item.get("providerPublishTime") or item.get("publishTime", 0)
-            try:
-                pub = datetime.utcfromtimestamp(int(ts))
-                age_hours = round((now - pub).total_seconds() / 3600, 1)
-                dt_str = pub.strftime("%Y-%m-%d %H:%M")
-            except Exception:
-                age_hours = 0
-                dt_str = ""
+            content = item.get("content") or {}
+            if content:
+                # New nested format (yfinance ≥0.2.50)
+                headline = content.get("title", "")
+                url = (
+                    (content.get("canonicalUrl") or {}).get("url")
+                    or (content.get("clickThroughUrl") or {}).get("url")
+                    or ""
+                )
+                source = (content.get("provider") or {}).get("displayName", "Yahoo Finance")
+                pub_str = content.get("pubDate") or content.get("displayTime") or ""
+                try:
+                    pub = datetime.strptime(pub_str[:19], "%Y-%m-%dT%H:%M:%S")
+                    age_hours = round((now - pub).total_seconds() / 3600, 1)
+                    dt_str = pub.strftime("%Y-%m-%d %H:%M")
+                except Exception:
+                    age_hours = 0
+                    dt_str = ""
+            else:
+                # Old flat format (yfinance <0.2.50)
+                headline = item.get("title", "")
+                url      = item.get("link", "")
+                source   = item.get("publisher", "Yahoo Finance")
+                ts = item.get("providerPublishTime") or item.get("publishTime", 0)
+                try:
+                    pub = datetime.utcfromtimestamp(int(ts))
+                    age_hours = round((now - pub).total_seconds() / 3600, 1)
+                    dt_str = pub.strftime("%Y-%m-%d %H:%M")
+                except Exception:
+                    age_hours = 0
+                    dt_str = ""
+
+            if not headline:
+                continue  # Skip items with no headline (broken API response)
+
             result.append({
-                "headline":     item.get("title", ""),
-                "url":          item.get("link", ""),
-                "source":       item.get("publisher", "Yahoo Finance"),
+                "headline":     headline,
+                "url":          url,
+                "source":       source,
                 "datetime_str": dt_str,
                 "age_hours":    age_hours,
             })
@@ -854,7 +885,106 @@ def fetch_company_news(ticker: str, days_back: int = 7, company_name: str = None
         yf_news = fetch_yfinance_news(ticker, max_items=5)
         merged = _merge_news(merged, yf_news, max_total=8)
 
+    # 6. DuckDuckGo web search (absolut sista utväg – gratis, ingen API-nyckel)
+    # Triggas bara om alla ovanstående sources gett < 2 artiklar.
+    if len(merged) < 2:
+        search_name = company_name or ticker.split(".")[0]
+        ddg = _fetch_duckduckgo_news(ticker, search_name, max_items=5)
+        if ddg:
+            merged = _merge_news(merged, ddg, max_total=8)
+            import logging as _lg
+            _lg.getLogger(__name__).info(
+                "DuckDuckGo fallback for %s: %d articles found", ticker, len(ddg)
+            )
+
     return merged
+
+
+def _fetch_duckduckgo_news(ticker: str, company_name: str, max_items: int = 5) -> list:
+    """
+    Söker efter bolagsnyheter via DuckDuckGo (gratis, ingen API-nyckel).
+    Används som 6:e fallback när alla API-källor returnerat tomt.
+
+    Cache-TTL: 2h (kortare än Finnhub eftersom resultaten hämtas från öppna webben).
+    Rate-limit: ~100 sökningar/timme (mer än tillräckligt för 5-20 aktieanalyser/dag).
+    """
+    cache_key = f"ddg_news:{ticker}"
+    cached = _read_cache_long(cache_key, max_age_hours=2)
+    if cached is not None:
+        return cached
+
+    result = []
+    try:
+        # Paket heter numera 'ddgs' (byt namn från duckduckgo-search)
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS  # fallback till det gamla namnet
+
+        is_swedish = ticker.upper().endswith(".ST")
+        ticker_base = ticker.split(".")[0].replace("-", " ")  # "VOLV-B" → "VOLV B"
+
+        # Bygg sökfrågor: ticker-baserad är mer precis; bolagsnamn som alternativ.
+        # Vi kör båda och slår ihop för att maximera täckning.
+        if is_swedish:
+            queries = [
+                f"{ticker_base} aktier nyheter",
+                f'"{company_name}" aktier',
+            ]
+        else:
+            queries = [
+                f"{ticker_base} stock news",           # t.ex. "OPRA stock news"
+                f'"{company_name}" stock news',        # t.ex. "Opera Limited stock news"
+            ]
+
+        now = datetime.utcnow()
+        seen_urls: set = set()
+
+        for query in queries:
+            if len(result) >= max_items:
+                break
+            try:
+                with DDGS() as ddg:
+                    hits = list(ddg.news(query, max_results=max_items, timelimit="w"))
+                for h in hits:
+                    url = h.get("url") or ""
+                    if url in seen_urls:
+                        continue
+                    title = (h.get("title") or "").strip()
+                    if not title:
+                        continue
+                    seen_urls.add(url)
+                    pub = h.get("date") or ""
+                    try:
+                        age_h = (now - datetime.fromisoformat(pub[:19])).total_seconds() / 3600
+                    except Exception:
+                        age_h = None
+                    result.append({
+                        "headline":     title,
+                        "url":          url,
+                        "source":       h.get("source") or "Web (DuckDuckGo)",
+                        "datetime_str": pub,
+                        "age_hours":    round(age_h, 1) if age_h is not None else None,
+                    })
+                    if len(result) >= max_items:
+                        break
+            except Exception:
+                continue  # försök med nästa query
+
+    except ImportError:
+        import logging as _lg
+        _lg.getLogger(__name__).debug(
+            "ddgs-paketet ej installerat — DDG fallback ej tillgänglig. "
+            "Kör: pip install ddgs"
+        )
+    except Exception as exc:
+        import logging as _lg
+        _lg.getLogger(__name__).debug("DDG news search failed for %s: %s", ticker, exc)
+
+    # Cacha bara positiva resultat
+    if result:
+        _write_cache(cache_key, result)
+    return result
 
 
 # ══════════════════════════════════════════════════════════════
