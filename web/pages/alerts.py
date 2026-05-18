@@ -24,6 +24,37 @@ def _fetch_news_for(ticker: str, days_back: int = 3) -> list:
         return []
 
 
+def _collect_mover_news(tickers: list[str], days_back: int = 2, max_per_ticker: int = 3) -> dict[str, list]:
+    """
+    Fetch news for a list of tickers (notable movers).
+    Returns {ticker: [news_items]} — skips empties.
+    """
+    result = {}
+    for t in tickers:
+        news = _fetch_news_for(t, days_back=days_back)
+        if news:
+            result[t] = news[:max_per_ticker]
+    return result
+
+
+def _format_news_context(news_map: dict[str, list]) -> str:
+    """
+    Format {ticker: [news]} as a 'Färska nyheter:' context block for ai_chat().
+    """
+    if not news_map:
+        return ""
+    lines = ["Färska nyheter:"]
+    for ticker, items in news_map.items():
+        for n in items:
+            title = n.get("headline", n.get("title", "")).strip()
+            src = n.get("source", "")
+            age = n.get("age_hours")
+            age_str = f" ({age:.0f}h sedan)" if age is not None else ""
+            if title:
+                lines.append(f"[{ticker}] {title} – {src}{age_str}")
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
 def _score_deltas(df_today: pd.DataFrame, df_yest: pd.DataFrame, top_n: int = 8) -> dict:
     """Compare today vs yesterday scored universe."""
     try:
@@ -243,6 +274,18 @@ def page_alerts_notices(df: pd.DataFrame):
             if not deltas:
                 st.info("Inga delta-data tillgängliga.")
             else:
+                # ── Samla noterbara tickers (används av AI + nyhetsexpander) ──
+                up_tickers  = [r["ticker"] for r in deltas.get("movers_up", [])[:5]]
+                rsi_tickers = [r["ticker"] for r in deltas.get("rsi_spikes", [])[:5]]
+                big_tickers = [r["ticker"] for r in deltas.get("big_price", [])[:5]]
+                # Deduplicera, bevara ordning
+                _seen: set = set()
+                notable_tickers: list = []
+                for _t in up_tickers + rsi_tickers + big_tickers:
+                    if _t not in _seen:
+                        _seen.add(_t)
+                        notable_tickers.append(_t)
+
                 # ── AI-sammanfattning ──────────────────────────────────────
                 try:
                     from core import ai_analysis, config
@@ -250,12 +293,12 @@ def page_alerts_notices(df: pd.DataFrame):
                     api_key = config.DEEPSEEK_API_KEY or config.GEMINI_API_KEY
                     if api_key and st.button("🤖 AI-sammanfattning av dagens rörelser", key="btn_movers_ai",
                                              type="primary"):
-                        with st.spinner("Analyserar..."):
+                        with st.spinner("Hämtar nyheter och analyserar..."):
                             summary_context = []
-                            up = deltas.get("movers_up", [])[:5]
-                            dn = deltas.get("movers_down", [])[:5]
-                            rsi = deltas.get("rsi_spikes", [])
-                            big = deltas.get("big_price", [])
+                            up   = deltas.get("movers_up", [])[:5]
+                            dn   = deltas.get("movers_down", [])[:5]
+                            rsi  = deltas.get("rsi_spikes", [])
+                            big  = deltas.get("big_price", [])
                             if up:
                                 ups = ", ".join(
                                     f"{r['ticker']} (+{r.get('score_delta', 0):.0f}p, {r.get('price_delta_pct', 0):+.1f}%)"
@@ -281,11 +324,38 @@ def page_alerts_notices(df: pd.DataFrame):
                                 )
                                 summary_context.append(f"Stora kursrörelser: {big_str}")
 
-                            ctx = "\n".join(summary_context)
+                            # ── Hämta nyheter för noterbara tickers ──────────
+                            # 1) Live-nyheter för mover-tickers (max 12 tickers)
+                            news_map = _collect_mover_news(notable_tickers[:12], days_back=2)
+
+                            # 2) Komplettera med cachar nyheter för portfölj/bevakningslista
+                            port_tickers = (
+                                list(holdings["ticker"].tolist()) if not holdings.empty else []
+                            )
+                            watch_tickers_cached = [item["ticker"] for item in (watchlist or [])[:6]]
+                            extra_tickers = [
+                                t for t in port_tickers + watch_tickers_cached
+                                if t not in news_map and t not in notable_tickers
+                            ][:8]
+                            for _t in extra_tickers:
+                                # Använd cache-only (days_back=7 nyttjar 24h-cachen om den finns)
+                                _extra_news = _fetch_news_for(_t, days_back=7)
+                                if _extra_news:
+                                    news_map[_t] = _extra_news[:2]  # max 2 per extra ticker
+
+                            news_ctx = _format_news_context(news_map)
+
+                            # ── Bygg fullständigt context ─────────────────────
+                            ctx_parts = ["\n".join(summary_context)]
+                            if news_ctx:
+                                ctx_parts.append(news_ctx)
+                            ctx = "\n\n".join(ctx_parts)
+
                             result = ai_analysis.ai_chat(
                                 "Sammanfatta vad som stack ut på börsen idag baserat på dessa data. "
-                                "Ge en kort, läsbar analys (3-5 meningar) av de viktigaste rörelserna "
-                                "och vad de kan signalera.",
+                                "Ge en kortfattad analys (4-6 meningar) av de viktigaste rörelserna "
+                                "och vad de kan signalera. Om det finns nyheter, koppla dem till "
+                                "respektive aktie och förklara om de kan förklara rörelsen.",
                                 context=ctx,
                                 provider=_get_provider(),
                                 depth="Snabb",
@@ -298,6 +368,28 @@ def page_alerts_notices(df: pd.DataFrame):
                             )
                             st.markdown(result)
                             st.markdown("</div>", unsafe_allow_html=True)
+
+                            # ── Visa hämtade nyheter i expander ──────────────
+                            if news_map:
+                                total_news = sum(len(v) for v in news_map.values())
+                                with st.expander(
+                                    f"📰 Nyheter som inkluderades i analysen ({total_news} artiklar, "
+                                    f"{len(news_map)} bolag)",
+                                    expanded=False,
+                                ):
+                                    for _ticker, _items in news_map.items():
+                                        st.markdown(f"**{_ticker}**")
+                                        for _n in _items:
+                                            _title = _n.get("headline", _n.get("title", "—")).strip()
+                                            _src   = _n.get("source", "?")
+                                            _age   = _n.get("age_hours")
+                                            _url   = _n.get("url", "")
+                                            _age_s = f" · {_age:.0f}h sedan" if _age is not None else ""
+                                            if _url:
+                                                st.markdown(f"  - [{_title}]({_url}) — *{_src}*{_age_s}")
+                                            else:
+                                                st.markdown(f"  - {_title} — *{_src}*{_age_s}")
+                                        st.markdown("")
                 except Exception:
                     pass
 
@@ -381,6 +473,35 @@ def page_alerts_notices(df: pd.DataFrame):
                                     "Riktning": "🟢 Upp" if d > 0 else "🔴 Ned",
                                 })
                             st.dataframe(pd.DataFrame(big_rows), use_container_width=True, hide_index=True)
+
+                # ── Nyheter för noterbara aktier (lazy expanders) ────────────
+                if notable_tickers:
+                    st.markdown("---")
+                    st.markdown("##### 📰 Nyheter – aktier som stack ut idag")
+                    st.caption(
+                        "Klicka på en aktie för att se senaste nyheter. "
+                        "Nyheter hämtas ur cache (eller live om ingen cache finns)."
+                    )
+                    _n_cols = min(3, len(notable_tickers[:9]))
+                    _cols = st.columns(_n_cols)
+                    for _i, _nt in enumerate(notable_tickers[:9]):
+                        with _cols[_i % _n_cols]:
+                            with st.expander(f"📰 {_nt}", expanded=False):
+                                _nt_news = _fetch_news_for(_nt, days_back=3)
+                                if _nt_news:
+                                    for _nn in _nt_news[:4]:
+                                        _t2 = _nn.get("headline", _nn.get("title", "—")).strip()
+                                        _s2 = _nn.get("source", "?")
+                                        _a2 = _nn.get("age_hours")
+                                        _u2 = _nn.get("url", "")
+                                        _as2 = f" · {_a2:.0f}h" if _a2 is not None else ""
+                                        if _u2:
+                                            st.markdown(f"[{_t2}]({_u2})  \n*{_s2}*{_as2}")
+                                        else:
+                                            st.markdown(f"{_t2}  \n*{_s2}*{_as2}")
+                                        st.divider()
+                                else:
+                                    st.caption("Inga nyheter hittade.")
 
         st.markdown("---")
 
