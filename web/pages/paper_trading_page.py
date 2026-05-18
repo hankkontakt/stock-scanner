@@ -78,11 +78,26 @@ def page_paper_trading():
 
     st.title("📄 Paper Trading – Track Record")
 
-    trades   = _load(TRADES_FILE)
+    trades_all = _load(TRADES_FILE)
 
-    if not trades:
+    if not trades_all:
         st.info("Inga trades registrerade ännu. Kör en scan för att generera köpsignaler.")
         return
+
+    # ── Universum-filter ────────────────────────────────────────────────────
+    universes = sorted({t.get("universe", "universe") for t in trades_all})
+    if len(universes) > 1:
+        univ_labels = {"universe": "🌍 Stora universumet", "smallcap": "🏦 Småbolag"}
+        selected_univ = st.radio(
+            "Visa universum:",
+            options=universes,
+            format_func=lambda u: univ_labels.get(u, u),
+            horizontal=True,
+            key="pt_universe_filter",
+        )
+        trades = [t for t in trades_all if t.get("universe", "universe") == selected_univ]
+    else:
+        trades = trades_all
 
     open_t   = [t for t in trades if t["status"] == "OPEN"]
     closed_t = [t for t in trades if t["status"] == "CLOSED"]
