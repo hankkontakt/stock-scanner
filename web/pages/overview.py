@@ -11,6 +11,20 @@ from web.utils import (
 )
 from web.stock_detail import render_stock_detail
 from core import ai_analysis
+from core.country_flags import flag_for_ticker
+
+
+_COUNTRY_SUFFIX_MAP = {
+    "🇸🇪 Sverige":  ".ST",
+    "🇬🇧 UK":       ".L",
+    "🇩🇪 Tyskland": ".DE",
+    "🇫🇮 Finland":  ".HE",
+    "🇩🇰 Danmark":  ".CO",
+    "🇳🇴 Norge":    ".OL",
+    "🇨🇳 Kina":     ".SS",
+    "🇯🇵 Japan":    ".T",
+}
+_ALL_NON_US_SUFFIXES = set(_COUNTRY_SUFFIX_MAP.values())
 
 
 def _save_watchlist_data(items):
@@ -66,6 +80,10 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
             _buy_show.rename(columns={score_col_c: "Score", "ticker": "Ticker", "name": "Bolag",
                                        "sector": "Sektor", "rsi_14": "RSI",
                                        "return_1m": "1m%", "return_3m": "3m%"}, inplace=True)
+            if "Ticker" in _buy_show.columns:
+                _buy_show["Ticker"] = _buy_show["Ticker"].apply(
+                    lambda t: f"{flag_for_ticker(t)} {t}"
+                )
             _buy_ev = st.dataframe(
                 _buy_show, use_container_width=True, hide_index=True,
                 on_select="rerun", selection_mode="single-row", key="ov_buynow_table",
@@ -93,7 +111,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
             entry = sc.get("entry_signal", "—")
             if score < 45 or entry == "EJ AKTUELL":
                 sell_rows.append({
-                    "Ticker": t,
+                    "Ticker": f"{flag_for_ticker(t)} {t}",
                     "Bolag": str(sc.get("name", t))[:28],
                     "Score": round(score),
                     "Entry": entry,
@@ -122,8 +140,8 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
             delta  = r.get("score_delta")
             d_str  = f"Δ {delta:+.1f}p" if delta and not pd.isna(delta) else ""
             col.markdown(f"**{medals[i]}**")
-            if col.button(tkr, key=f"ov_top5_nav_{tkr}", use_container_width=True,
-                          help="Klicka för aktieanalys"):
+            if col.button(f"{flag_for_ticker(tkr)} {tkr}", key=f"ov_top5_nav_{tkr}",
+                          use_container_width=True, help="Klicka för aktieanalys"):
                 st.session_state["top5_detail"] = tkr
             col.metric("", f"{score:.0f} poäng", d_str or f"↑ {sector[:18]}")
             btn_col1, btn_col2 = col.columns(2)
@@ -191,7 +209,12 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
             show_cols = [c for c in ["ticker", "sc_stars", score_col, "insider_signal",
                                      "current_price", "day_change_pct", "week_change_pct"]
                          if c in top_sc.columns]
-            st.dataframe(top_sc[show_cols].reset_index(drop=True), use_container_width=True)
+            sc_show = top_sc[show_cols].copy()
+            if "ticker" in sc_show.columns:
+                sc_show["ticker"] = sc_show["ticker"].apply(
+                    lambda t: f"{flag_for_ticker(t)} {t}"
+                )
+            st.dataframe(sc_show.reset_index(drop=True), use_container_width=True)
 
     # ── Entry-signal-fördelning ───────────────────────────────────────────────
     if not df.empty and "entry_signal" in df.columns:
@@ -265,6 +288,9 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                 )
                 display_cal = cal_df[["earnings_date", "Dagar", "ticker", "name", "score_total"]].copy()
                 display_cal.columns = ["Rapportdag", "Kvar", "Ticker", "Bolag", "Score"]
+                display_cal["Ticker"] = display_cal["Ticker"].apply(
+                    lambda t: f"{flag_for_ticker(t)} {t}"
+                )
                 display_cal["Score"] = display_cal["Score"].apply(
                     lambda v: f"{v:.0f}" if pd.notna(v) else "—"
                 )
@@ -283,6 +309,19 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
     st.markdown("---")
     st.subheader("🏆 Topplista – sök & filtrera")
     st.caption("Välj top-N, sök på ticker/namn och klicka för detaljvy.")
+    col_ov_sw, col_ov_ctry = st.columns([1, 3])
+    with col_ov_sw:
+        ov_only_swedish = st.checkbox("🇸🇪 Endast svenska aktier", value=False,
+                                      key="ov_only_swedish")
+    with col_ov_ctry:
+        ov_countries = [] if ov_only_swedish else st.multiselect(
+            "🌍 Länder",
+            options=["🇸🇪 Sverige", "🇺🇸 USA", "🇬🇧 UK", "🇩🇪 Tyskland",
+                     "🇫🇮 Finland", "🇩🇰 Danmark", "🇳🇴 Norge", "🇨🇳 Kina", "🇯🇵 Japan"],
+            default=[],
+            key="ov_countries",
+            help="Filtrera på börsland. Tomt = alla länder visas.",
+        )
     col_top_n, col_search = st.columns([1, 3])
     with col_top_n:
         top_n = st.selectbox("Visa topp", [50, 100, 200, 500], index=1,
@@ -294,6 +333,17 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
 
     if df is not None and not df.empty:
         display_df = df.head(top_n).copy()
+        # Country filter
+        if ov_only_swedish:
+            display_df = display_df[display_df["ticker"].str.endswith(".ST", na=False)]
+        elif ov_countries:
+            _us_sel   = "🇺🇸 USA" in ov_countries
+            _suffixes = [_COUNTRY_SUFFIX_MAP[c] for c in ov_countries if c in _COUNTRY_SUFFIX_MAP]
+            def _ov_cm(t: str) -> bool:
+                if any(t.endswith(s) for s in _suffixes): return True
+                if _us_sel and not any(t.endswith(s) for s in _ALL_NON_US_SUFFIXES): return True
+                return False
+            display_df = display_df[display_df["ticker"].apply(_ov_cm)]
         if search_q.strip():
             q = search_q.strip().lower()
             mask = (
@@ -328,6 +378,10 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
             }
             shown.rename(columns={k: v for k, v in col_rename.items()
                                   if k in shown.columns}, inplace=True)
+            if "Ticker" in shown.columns:
+                shown["Ticker"] = shown["Ticker"].apply(
+                    lambda t: f"{flag_for_ticker(t)} {t}"
+                )
             event = st.dataframe(
                 shown, use_container_width=True, hide_index=True,
                 column_config=col_config,
