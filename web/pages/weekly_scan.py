@@ -185,9 +185,9 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
     ticker_list = df["ticker"].tolist()
     col_q1, col_q2 = st.columns([3, 1])
     with col_q1:
-        ai_ticker = st.selectbox("Välj aktie att analysera", ticker_list, key="ranking_ai_ticker")
+        ai_ticker = st.selectbox("Välj aktie att analysera", ticker_list, key=f"{table_key}_ai_ticker")
     with col_q2:
-        ai_go = st.button("🤖 Analysera", key="btn_ranking_ai", use_container_width=True)
+        ai_go = st.button("🤖 Analysera", key=f"btn_{table_key}_ai", use_container_width=True)
     if ai_go and ai_ticker:
         row = df[df["ticker"] == ai_ticker]
         if not row.empty:

@@ -1,4 +1,4 @@
-"""web/pages/alerts.py – Sida 12: Larm & Notiser"""
+"""web/pages/alerts.py – Sida 12: Larm & Notiser (ombyggd)"""
 
 import pandas as pd
 import streamlit as st
@@ -6,197 +6,423 @@ import streamlit as st
 from web.utils import kpi_row, load_portfolio, load_watchlist, _load_nth_latest_scored
 
 
-def page_alerts_notices(df: pd.DataFrame):
-    """Larm & notiser – visa aktiva stop-loss, prisnivåer och nyhetslarm."""
-    st.title("🚨 Larm & Notiser")
-    st.caption("Översikt över aktiva stop-loss, take-profit, prisnivåer och larm baserat på din portfölj och bevakningslista.")
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
-    # Ladda paper trading-data för stop-loss/take-profit-larm
+def _load_trades():
     try:
         from portfolio.paper_trading import _load, TRADES_FILE
-        trades = _load(TRADES_FILE)
+        return _load(TRADES_FILE)
     except Exception:
-        trades = []
+        return []
 
-    # Ladda holdings/watchlist
+
+def _fetch_news_for(ticker: str, days_back: int = 3) -> list:
+    try:
+        from core.news_fetcher import fetch_company_news
+        return fetch_company_news(ticker, days_back=days_back) or []
+    except Exception:
+        return []
+
+
+def _score_deltas(df_today: pd.DataFrame, df_yest: pd.DataFrame, top_n: int = 8) -> dict:
+    """Compare today vs yesterday scored universe."""
+    try:
+        from core.daily_pipeline import _get_score_deltas
+        return _get_score_deltas(df_today, df_yest, top_n=top_n)
+    except Exception:
+        return {}
+
+
+def _pct_color(val: float) -> str:
+    return "🟢" if val > 0 else ("🔴" if val < 0 else "⚪")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN PAGE
+# ══════════════════════════════════════════════════════════════════════════════
+
+def page_alerts_notices(df: pd.DataFrame):
+    """Larm & Notiser – ombyggd för bättre läsbarhet."""
+    st.title("🚨 Larm & Notiser")
+
+    trades = _load_trades()
     holdings = load_portfolio()
     watchlist = load_watchlist()
 
-    # KPI-kort
+    # ── KPI-rad ────────────────────────────────────────────────────────────
     n_open = sum(1 for t in trades if t["status"] == "OPEN")
-    n_near_stop = sum(1 for t in trades if t["status"] == "OPEN" and t.get("stop_loss") and t.get("current_price") and t["current_price"] <= t["stop_loss"] * 1.1)
-    n_near_tp = sum(1 for t in trades if t["status"] == "OPEN" and t.get("take_profit") and t.get("current_price") and t["current_price"] >= t["take_profit"] * 0.9)
+    n_near_stop = sum(
+        1 for t in trades
+        if t["status"] == "OPEN"
+        and t.get("stop_loss") and t.get("current_price")
+        and t["current_price"] <= t["stop_loss"] * 1.1
+    )
+    n_near_tp = sum(
+        1 for t in trades
+        if t["status"] == "OPEN"
+        and t.get("take_profit") and t.get("current_price")
+        and t["current_price"] >= t["take_profit"] * 0.9
+    )
 
     kpi_row([
         ("🟢 Öppna positioner", n_open, None,
-         "Antal aktiva paper trading-positioner som inte stängts ännu. Paper trading = simulerade affärer utan riktiga pengar, för att testa strategier."),
+         "Antal aktiva paper trading-positioner."),
         ("🔴 Nära stop-loss", n_near_stop, None,
-         "Antal positioner vars kurs är inom 10% av stop-loss-nivån. Stop-loss = en prisnivå där positionen automatiskt säljs för att begränsa förluster."),
+         "Positioner vars kurs är inom 10 % av stop-loss-nivån."),
         ("🟢 Nära take-profit", n_near_tp, None,
-         "Antal positioner vars kurs är inom 10% av take-profit-nivån. Take-profit = en prisnivå där positionen säljs för att låsa in vinst."),
+         "Positioner vars kurs är inom 10 % av take-profit-nivån."),
         ("⭐ Bevakade", len(watchlist), None,
-         "Antal aktier på din bevakningslista. Du får nyheter och larm för dessa aktier utan att äga dem."),
+         "Antal aktier på bevakningslistan."),
     ])
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🔴 Stop-loss/Take-profit", "🚨 Prislarm", "📰 Nyhetslarm",
-        "📊 Stuckit ut (24h)", "📅 Värt att kolla",
+    st.markdown("---")
+
+    tab_pos, tab_movers, tab_events = st.tabs([
+        "📊 Positioner & Prislarm",
+        "🔥 Vad stack ut idag?",
+        "📅 Kommande händelser",
     ])
 
-    with tab1:
+    # ══════════════════════════════════════════════════════════════════════
+    # TAB 1 — Positioner & Prislarm
+    # ══════════════════════════════════════════════════════════════════════
+    with tab_pos:
+
+        # ── Stop-loss / Take-profit ────────────────────────────────────────
+        st.subheader("🛡 Stop-loss & Take-profit (paper trading)")
+
         if not trades:
-            st.info("Inga paper trading-positioner. Starta en scan för att få trades.")
+            st.info("Inga paper trading-positioner ännu.")
         else:
-            # Trades nära stop-loss
-            near_stop = [t for t in trades if t["status"] == "OPEN" and t.get("stop_loss") and t.get("current_price") and t["current_price"] <= t["stop_loss"] * 1.15]
-            near_tp = [t for t in trades if t["status"] == "OPEN" and t.get("take_profit") and t.get("current_price") and t["current_price"] >= t["take_profit"] * 0.85]
-            trailing = [t for t in trades if t["status"] == "OPEN" and t.get("trailing_stop")]
+            open_t = [t for t in trades if t["status"] == "OPEN"]
+
+            near_stop = [
+                t for t in open_t
+                if t.get("stop_loss") and t.get("current_price")
+                and t["current_price"] <= t["stop_loss"] * 1.15
+            ]
+            near_tp = [
+                t for t in open_t
+                if t.get("take_profit") and t.get("current_price")
+                and t["current_price"] >= t["take_profit"] * 0.85
+            ]
+            safe = [t for t in open_t if t not in near_stop and t not in near_tp]
 
             col_a, col_b, col_c = st.columns(3)
-            with col_a:
-                st.subheader(f"🔴 Stop-loss ({len(near_stop)})")
-                for t in sorted(near_stop, key=lambda x: x.get("pnl_pct", 0)):
-                    pnl = t.get("pnl_pct", 0) or 0
-                    st.markdown(f"**{t['ticker']}** — {pnl:+.1f}% — SL: {t.get('stop_loss', 0):.2f}")
-            with col_b:
-                st.subheader(f"🟢 Take-profit ({len(near_tp)})")
-                for t in sorted(near_tp, key=lambda x: -x.get("pnl_pct", 0)):
-                    pnl = t.get("pnl_pct", 0) or 0
-                    st.markdown(f"**{t['ticker']}** — {pnl:+.1f}% — TP: {t.get('take_profit', 0):.2f}")
-            with col_c:
-                st.subheader(f"🔻 Trailing ({len(trailing)})")
-                for t in sorted(trailing, key=lambda x: -x.get("pnl_pct", 0)):
-                    ts = t.get("trailing_stop", 0)
-                    st.markdown(f"**{t['ticker']}** — Trail: {ts:.2f}")
 
-            # Senaste triggade stop-loss
-            triggered = [t for t in trades if t["status"] == "CLOSED" and "stop" in (t.get("exit_reason", "") or "")]
+            with col_a:
+                st.markdown(f"#### 🔴 Nära stop-loss ({len(near_stop)})")
+                if near_stop:
+                    for t in sorted(near_stop, key=lambda x: x.get("pnl_pct", 0) or 0):
+                        pnl = t.get("pnl_pct", 0) or 0
+                        sl = t.get("stop_loss", 0)
+                        cur = t.get("current_price", 0)
+                        dist = ((cur - sl) / sl * 100) if sl else 0
+                        st.markdown(
+                            f"**{t['ticker']}** &nbsp; {pnl:+.1f}%  \n"
+                            f"Kurs: {cur:.2f} · SL: {sl:.2f} · "
+                            f"Dist: {dist:.1f}%",
+                            unsafe_allow_html=True,
+                        )
+                        st.divider()
+                else:
+                    st.caption("Inga positioner nära stop-loss.")
+
+            with col_b:
+                st.markdown(f"#### 🟢 Nära take-profit ({len(near_tp)})")
+                if near_tp:
+                    for t in sorted(near_tp, key=lambda x: -(x.get("pnl_pct", 0) or 0)):
+                        pnl = t.get("pnl_pct", 0) or 0
+                        tp = t.get("take_profit", 0)
+                        cur = t.get("current_price", 0)
+                        dist = ((tp - cur) / tp * 100) if tp else 0
+                        st.markdown(
+                            f"**{t['ticker']}** &nbsp; {pnl:+.1f}%  \n"
+                            f"Kurs: {cur:.2f} · TP: {tp:.2f} · "
+                            f"Kvar: {dist:.1f}%",
+                            unsafe_allow_html=True,
+                        )
+                        st.divider()
+                else:
+                    st.caption("Inga positioner nära take-profit.")
+
+            with col_c:
+                trailing = [t for t in open_t if t.get("trailing_stop")]
+                st.markdown(f"#### 🔻 Trailing stop ({len(trailing)})")
+                if trailing:
+                    for t in sorted(trailing, key=lambda x: -(x.get("pnl_pct", 0) or 0)):
+                        ts = t.get("trailing_stop", 0)
+                        cur = t.get("current_price", 0)
+                        pnl = t.get("pnl_pct", 0) or 0
+                        st.markdown(
+                            f"**{t['ticker']}** &nbsp; {pnl:+.1f}%  \n"
+                            f"Kurs: {cur:.2f} · Trail: {ts:.2f}",
+                            unsafe_allow_html=True,
+                        )
+                        st.divider()
+                else:
+                    st.caption("Inga trailing stops aktiva.")
+
+            # Senaste triggade
+            triggered = [
+                t for t in trades
+                if t["status"] == "CLOSED"
+                and "stop" in (t.get("exit_reason", "") or "")
+            ]
             if triggered:
                 st.markdown("---")
-                st.subheader(f"💀 Senaste triggade stop-loss ({len(triggered)})")
+                st.markdown("#### 💀 Senast triggade stop-loss")
                 for t in sorted(triggered, key=lambda x: x.get("sell_date", ""), reverse=True)[:5]:
-                    st.markdown(f"**{t['ticker']}** — såldes {t.get('sell_date', '?')} — {t.get('pnl_pct', 0):+.1f}% (anledning: {t.get('exit_reason', '?')})")
+                    st.markdown(
+                        f"**{t['ticker']}** såldes {t.get('sell_date', '?')} · "
+                        f"{t.get('pnl_pct', 0):+.1f}% · _{t.get('exit_reason', '?')}_"
+                    )
 
-    with tab2:
-        st.subheader("🚨 Prislarm")
-        st.caption("Här kan du skapa och se prislarm för dina bevakade aktier.")
+        st.markdown("---")
 
-        # Simpel prislarm-funktion: visa när bevakade aktier rör sig >5%
+        # ── Prislarm från bevakningslista ──────────────────────────────────
+        st.subheader("🚨 Prislarm – bevakningslista")
+
         if watchlist and not df.empty and "ticker" in df.columns:
             score_lu = df.set_index("ticker").to_dict("index")
-            alarms = []
+            alarms, normal = [], []
             for item in watchlist:
                 t = item["ticker"]
                 sc = score_lu.get(t, {})
-                price = sc.get("current_price")
+                price = sc.get("current_price") or sc.get("close")
                 change = sc.get("change_pct") or sc.get("day_change_pct")
-                if change and abs(change) >= 3:
+                entry = sc.get("entry_signal", "—")
+                if change is not None and abs(change) >= 3:
                     alarms.append({
                         "Ticker": t,
-                        "Bolag": item.get("name", t),
+                        "Bolag": item.get("name", t)[:35],
                         "Pris": f"{price:.2f}" if price else "—",
                         "Förändring": f"{change:+.1f}%",
-                        "Larm": "🔴 Stor rörelse" if abs(change) >= 5 else "🟡 Rörelse >3%",
+                        "Entry": entry,
+                        "Status": "🔴 Stor rörelse" if abs(change) >= 5 else "🟡 Rörelse",
                     })
+                else:
+                    normal.append({
+                        "Ticker": t,
+                        "Bolag": item.get("name", t)[:35],
+                        "Pris": f"{price:.2f}" if price else "—",
+                        "Dag": f"{change:+.1f}%" if change is not None else "—",
+                        "Entry": entry,
+                    })
+
             if alarms:
-                st.warning(f"⚠️ {len(alarms)} aktier med prislarm!")
+                st.warning(f"⚠️ {len(alarms)} aktie(r) med prislarm idag!")
                 st.dataframe(pd.DataFrame(alarms), use_container_width=True, hide_index=True)
             else:
-                st.info("Inga aktiva prislarm just nu.")
-        else:
-            st.info("Lägg till bevakningslista för att se prislarm.")
+                st.success("✅ Inga prislarm – lugnt på bevakningslistan idag.")
 
-    with tab3:
-        st.subheader("📰 Nyhetslarm")
-        st.caption("Se senaste nyheter för dina innehav.")
+            if normal:
+                with st.expander(f"📋 Alla bevakade ({len(normal)} aktier, inga larm)", expanded=False):
+                    st.dataframe(pd.DataFrame(normal), use_container_width=True, hide_index=True)
+        else:
+            st.info("Lägg till aktier i bevakningslistan för att se prislarm.")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # TAB 2 — Vad stack ut idag?
+    # ══════════════════════════════════════════════════════════════════════
+    with tab_movers:
+        st.subheader("🔥 Vad stack ut de senaste 24 timmarna?")
+
+        today_scored   = _load_nth_latest_scored(n=1)
+        yest_scored    = _load_nth_latest_scored(n=2)
+
+        if today_scored.empty:
+            st.info("Ingen scandata tillgänglig. Kör en weekly scan för att generera data.")
+            st.stop()
+
+        if yest_scored.empty:
+            st.info("Behöver minst 2 dagars scandata för att visa förändringar.")
+        else:
+            deltas = _score_deltas(today_scored, yest_scored, top_n=8)
+
+            if not deltas:
+                st.info("Inga delta-data tillgängliga.")
+            else:
+                # ── AI-sammanfattning ──────────────────────────────────────
+                try:
+                    from core import ai_analysis, config
+                    from web.utils import _get_provider, _get_depth
+                    api_key = config.DEEPSEEK_API_KEY or config.GEMINI_API_KEY
+                    if api_key and st.button("🤖 AI-sammanfattning av dagens rörelser", key="btn_movers_ai",
+                                             type="primary"):
+                        with st.spinner("Analyserar..."):
+                            summary_context = []
+                            up = deltas.get("movers_up", [])[:5]
+                            dn = deltas.get("movers_down", [])[:5]
+                            rsi = deltas.get("rsi_spikes", [])
+                            big = deltas.get("big_price", [])
+                            if up:
+                                ups = ", ".join(
+                                    f"{r['ticker']} (+{r.get('score_delta', 0):.0f}p, {r.get('price_delta_pct', 0):+.1f}%)"
+                                    for r in up
+                                )
+                                summary_context.append(f"Störst score-ökning: {ups}")
+                            if dn:
+                                dns = ", ".join(
+                                    f"{r['ticker']} ({r.get('score_delta', 0):.0f}p, {r.get('price_delta_pct', 0):+.1f}%)"
+                                    for r in dn
+                                )
+                                summary_context.append(f"Störst score-minskning: {dns}")
+                            if rsi:
+                                rsi_str = ", ".join(
+                                    f"{r['ticker']} (RSI {r.get('rsi_yesterday', 0):.0f}→{r.get('rsi_14', 0):.0f})"
+                                    for r in rsi[:5]
+                                )
+                                summary_context.append(f"RSI-korsningar: {rsi_str}")
+                            if big:
+                                big_str = ", ".join(
+                                    f"{r['ticker']} ({r.get('price_delta_pct', 0):+.1f}%)"
+                                    for r in big[:5]
+                                )
+                                summary_context.append(f"Stora kursrörelser: {big_str}")
+
+                            ctx = "\n".join(summary_context)
+                            result = ai_analysis.ai_chat(
+                                "Sammanfatta vad som stack ut på börsen idag baserat på dessa data. "
+                                "Ge en kort, läsbar analys (3-5 meningar) av de viktigaste rörelserna "
+                                "och vad de kan signalera.",
+                                context=ctx,
+                                provider=_get_provider(),
+                                depth="Snabb",
+                                force_refresh=True,
+                            )
+                            st.markdown(
+                                '<div style="background:#1a2332;border:1px solid #2d3250;'
+                                'border-radius:8px;padding:12px 18px;margin-bottom:16px">',
+                                unsafe_allow_html=True,
+                            )
+                            st.markdown(result)
+                            st.markdown("</div>", unsafe_allow_html=True)
+                except Exception:
+                    pass
+
+                st.markdown("---")
+
+                # ── Score-rörelser ──────────────────────────────────────────
+                col_up, col_dn = st.columns(2)
+
+                with col_up:
+                    st.markdown("##### ⬆️ Störst score-ökning")
+                    up_data = deltas.get("movers_up", [])
+                    if up_data:
+                        rows = []
+                        for r in up_data:
+                            ticker = r["ticker"]
+                            delta = r.get("score_delta", 0)
+                            price_d = r.get("price_delta_pct", 0)
+                            score = r.get("score_total", 0)
+                            rows.append({
+                                "Ticker": ticker,
+                                "Score": f"{score:.0f}",
+                                "Δ Score": f"+{delta:.1f}",
+                                "Δ Pris": f"{price_d:+.1f}%",
+                            })
+                        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                    else:
+                        st.caption("Inga data.")
+
+                with col_dn:
+                    st.markdown("##### ⬇️ Störst score-minskning")
+                    dn_data = deltas.get("movers_down", [])
+                    if dn_data:
+                        rows = []
+                        for r in dn_data:
+                            ticker = r["ticker"]
+                            delta = r.get("score_delta", 0)
+                            price_d = r.get("price_delta_pct", 0)
+                            score = r.get("score_total", 0)
+                            rows.append({
+                                "Ticker": ticker,
+                                "Score": f"{score:.0f}",
+                                "Δ Score": f"{delta:.1f}",
+                                "Δ Pris": f"{price_d:+.1f}%",
+                            })
+                        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                    else:
+                        st.caption("Inga data.")
+
+                # ── RSI-korsningar ──────────────────────────────────────────
+                rsi_data = deltas.get("rsi_spikes", [])
+                big_data = deltas.get("big_price", [])
+
+                if rsi_data or big_data:
+                    st.markdown("---")
+                    col_rsi, col_big = st.columns(2)
+
+                    with col_rsi:
+                        if rsi_data:
+                            st.markdown("##### 📈 RSI-korsningar (30↑ / 70↓)")
+                            rsi_rows = []
+                            for r in rsi_data:
+                                crossed = ("30 ↑" if r.get("rsi_crossed_30up") else "70 ↓")
+                                rsi_rows.append({
+                                    "Ticker": r["ticker"],
+                                    "RSI idag": f"{r.get('rsi_14', 0):.0f}",
+                                    "RSI igår": f"{r.get('rsi_yesterday', 0):.0f}",
+                                    "Signal": crossed,
+                                })
+                            st.dataframe(pd.DataFrame(rsi_rows), use_container_width=True, hide_index=True)
+
+                    with col_big:
+                        if big_data:
+                            st.markdown("##### 💥 Stora kursrörelser (>4%)")
+                            big_rows = []
+                            for r in big_data[:8]:
+                                d = r.get("price_delta_pct", 0)
+                                big_rows.append({
+                                    "Ticker": r["ticker"],
+                                    "Score": f"{r.get('score_total', 0):.0f}",
+                                    "Δ Pris": f"{d:+.1f}%",
+                                    "Riktning": "🟢 Upp" if d > 0 else "🔴 Ned",
+                                })
+                            st.dataframe(pd.DataFrame(big_rows), use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+
+        # ── Nyheter för bevakningslistan ──────────────────────────────────
+        st.subheader("📰 Senaste nyheter – bevakningslistan")
         if watchlist:
-            for item in watchlist[:5]:
+            watch_tickers = [item["ticker"] for item in watchlist[:8]]
+            for item in watchlist[:6]:
                 t = item["ticker"]
-                with st.expander(f"📰 {t} — {item.get('name', '')[:40]}", expanded=False):
-                    try:
-                        from core.news_fetcher import fetch_company_news
-                        news = fetch_company_news(t, days_back=3)
-                        if news:
-                            for n in news[:3]:
-                                st.markdown(f"- **{n.get('headline', '?')}** ({n.get('source', '?')})")
-                        else:
-                            st.caption("Inga nyheter hittade.")
-                    except Exception:
-                        st.caption("Nyhetshämtning ej tillgänglig.")
+                name = item.get("name", t)[:40]
+                with st.expander(f"📰 {t} — {name}", expanded=False):
+                    news = _fetch_news_for(t, days_back=3)
+                    if news:
+                        for n in news[:4]:
+                            title = n.get("headline", n.get("title", "—"))
+                            src = n.get("source", "?")
+                            age = n.get("age_hours")
+                            age_str = f" · {age:.0f}h sedan" if age is not None else ""
+                            url = n.get("url", "")
+                            if url:
+                                st.markdown(f"- [{title}]({url}) — *{src}*{age_str}")
+                            else:
+                                st.markdown(f"- **{title}** — *{src}*{age_str}")
+                    else:
+                        st.caption("Inga nyheter hittade de senaste 3 dagarna.")
         else:
-            st.info("Lägg till bevakningslista för att se nyheter.")
+            st.info("Lägg till aktier i bevakningslistan för att se nyheter.")
 
-    with tab4:
-        st.subheader("📊 Vad stack ut de senaste 24 timmarna?")
-        st.caption("Jämför dagens ranking mot gårdagens — score-rörelser, RSI-korsningar och stora kursrörelser.")
-        try:
-            from core.daily_pipeline import _get_score_deltas
-            today_scored   = _load_nth_latest_scored(n=1)
-            yesterday_scored = _load_nth_latest_scored(n=2)
-            deltas = _get_score_deltas(today_scored, yesterday_scored)
-        except Exception as _e:
-            deltas = {}
-            st.warning(f"Kunde inte beräkna deltas: {_e}")
-
-        if not deltas:
-            st.info("Behöver minst 2 dagars scan-data för att visa förändringar.")
-        else:
-            col_up, col_dn = st.columns(2)
-            with col_up:
-                st.markdown("##### ⬆️ Störst score-ökning")
-                up_data = deltas.get("movers_up", [])
-                if up_data:
-                    up_df = pd.DataFrame(up_data).rename(columns={
-                        "ticker": "Ticker", "score_total": "Score idag",
-                        "score_yesterday": "Score igår", "score_delta": "Δ Score",
-                        "price_delta_pct": "Δ Pris %",
-                    })
-                    st.dataframe(up_df, use_container_width=True, hide_index=True)
-                else:
-                    st.caption("Inga data.")
-            with col_dn:
-                st.markdown("##### ⬇️ Störst score-minskning")
-                dn_data = deltas.get("movers_down", [])
-                if dn_data:
-                    dn_df = pd.DataFrame(dn_data).rename(columns={
-                        "ticker": "Ticker", "score_total": "Score idag",
-                        "score_yesterday": "Score igår", "score_delta": "Δ Score",
-                        "price_delta_pct": "Δ Pris %",
-                    })
-                    st.dataframe(dn_df, use_container_width=True, hide_index=True)
-                else:
-                    st.caption("Inga data.")
-
-            rsi_data = deltas.get("rsi_spikes", [])
-            if rsi_data:
-                st.markdown("##### 📈 RSI-korsningar (30↑ / 70↓)")
-                rsi_df = pd.DataFrame(rsi_data).rename(columns={
-                    "ticker": "Ticker", "rsi_14": "RSI idag", "rsi_yesterday": "RSI igår",
-                    "rsi_crossed_30up": "Korsade 30↑", "rsi_crossed_70down": "Korsade 70↓",
-                })
-                st.dataframe(rsi_df, use_container_width=True, hide_index=True)
-
-            price_data = deltas.get("big_price", [])
-            if price_data:
-                st.markdown("##### 💥 Stora kursrörelser (>4%)")
-                price_df = pd.DataFrame(price_data).rename(columns={
-                    "ticker": "Ticker", "score_total": "Score",
-                    "price_delta_pct": "Δ Pris %",
-                })
-                st.dataframe(price_df[["Ticker", "Score", "Δ Pris %"]],
-                             use_container_width=True, hide_index=True)
-
-    with tab5:
+    # ══════════════════════════════════════════════════════════════════════
+    # TAB 3 — Kommande händelser
+    # ══════════════════════════════════════════════════════════════════════
+    with tab_events:
         st.subheader("📅 Kommande händelser")
-        st.caption("Rapporter, centralbanksbeslut och utdelningar de närmaste veckorna.")
 
-        # ── Rapporter ──────────────────────────────────────────────────────────
-        col_port, col_top = st.columns(2)
         _scored_for_cal = df if not df.empty else _load_nth_latest_scored(n=1)
         _holdings_for_cal = holdings
 
+        # ── Rapporter ─────────────────────────────────────────────────────
+        col_port, col_top = st.columns(2)
+
         with col_port:
-            st.markdown("##### 📊 Rapporter – innehav")
+            st.markdown("##### 📊 Rapporter – innehav (30 dagar)")
             try:
                 from core.earnings_calendar import upcoming_in_portfolio
                 if not _holdings_for_cal.empty and not _scored_for_cal.empty:
@@ -214,7 +440,7 @@ def page_alerts_notices(df: pd.DataFrame):
                 st.caption(f"Rapportkalender ej tillgänglig: {_e}")
 
         with col_top:
-            st.markdown("##### 📊 Rapporter – topp-20")
+            st.markdown("##### 📊 Rapporter – topp-20 (14 dagar)")
             try:
                 from core.earnings_calendar import upcoming_in_top
                 if not _scored_for_cal.empty:
@@ -234,8 +460,9 @@ def page_alerts_notices(df: pd.DataFrame):
             except Exception as _e:
                 st.caption(f"Rapportkalender ej tillgänglig: {_e}")
 
-        # ── Centralbanksbeslut ─────────────────────────────────────────────────
         st.markdown("---")
+
+        # ── Centralbanksbeslut ────────────────────────────────────────────
         st.markdown("##### 🏦 Kommande centralbanksbeslut (30 dagar)")
         try:
             from core.macro_calendar import get_upcoming_macro_events
@@ -249,8 +476,9 @@ def page_alerts_notices(df: pd.DataFrame):
         except Exception as _e:
             st.caption(f"Makrokalender ej tillgänglig: {_e}")
 
-        # ── Utdelningar ────────────────────────────────────────────────────────
         st.markdown("---")
+
+        # ── Utdelningar ───────────────────────────────────────────────────
         st.markdown("##### 💰 Kommande utdelningar – innehav (60 dagar)")
         try:
             from core.dividend_calendar import get_upcoming_dividends

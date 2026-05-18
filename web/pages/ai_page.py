@@ -166,7 +166,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
     # ── Flik 2: One-click Stock Analysis (Feature 2b) ───────────────────────
     with tab_stock:
         st.subheader("📈 AI-aktieanalys")
-        st.caption("Välj en aktie för djupgående AI-analys av alla faktorer.")
+        st.caption("Välj en aktie för djupgående AI-analys av alla faktorer – inklusive färska nyheter.")
 
         if not df.empty and "ticker" in df.columns:
             tickers = sorted(df["ticker"].tolist())
@@ -178,17 +178,54 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
 
             if st.button("🤖 Analysera aktie", key="btn_stock_analysis",
                          type="primary", use_container_width=True):
-                with st.spinner(f"Analyserar {sel_ticker}..."):
+                with st.spinner(f"Hämtar nyheter och analyserar {sel_ticker}..."):
                     try:
+                        # Fetch live news first
+                        fetched_news = []
+                        try:
+                            from core.news_fetcher import fetch_company_news
+                            fetched_news = fetch_company_news(sel_ticker, days_back=7) or []
+                        except Exception:
+                            pass
+
                         depth = _get_depth()
                         result = ai_analysis.analyze_stock(
                             sel_ticker, df=df, force_refresh=force_refresh,
                             provider=provider,
                             depth=depth,
                         )
+
+                        # If we have news, append a news analysis below the stock analysis
+                        if fetched_news:
+                            news_items = [
+                                {"title": n.get("headline", n.get("title", "")),
+                                 "summary": n.get("summary", n.get("description", "")),
+                                 "source": n.get("source", ""),
+                                 "date": n.get("datetime", n.get("datetime_str", ""))}
+                                for n in fetched_news[:8]
+                            ]
+                            news_result = ai_analysis.analyze_news(
+                                sel_ticker, news_items=news_items,
+                                force_refresh=force_refresh,
+                                provider=provider,
+                                depth=depth,
+                            )
+                            full_result = result + "\n\n---\n\n### 📰 Nyhetsläget\n\n" + news_result
+                        else:
+                            full_result = result
+
                         st.markdown(_ai_section_header(), unsafe_allow_html=True)
-                        st.markdown(result)
+                        st.markdown(full_result)
                         st.markdown(_ai_section_footer(), unsafe_allow_html=True)
+
+                        if fetched_news:
+                            with st.expander(f"📋 Källnyheter ({len(fetched_news)} artiklar)", expanded=False):
+                                for n in fetched_news[:8]:
+                                    title = n.get("headline", n.get("title", "—"))
+                                    src = n.get("source", "?")
+                                    age = n.get("age_hours")
+                                    age_str = f" · {age:.0f}h sedan" if age is not None else ""
+                                    st.markdown(f"- **{title}** — *{src}*{age_str}")
                     except Exception as e:
                         st.error(f"❌ Analys misslyckades: {e}")
 
@@ -374,17 +411,46 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
             is_weekend = "HELG" if now.weekday() >= 5 else "BÖRSDAG"
             context_parts.append(f"Datum: {now.strftime('%Y-%m-%d')} ({day_name}, {is_weekend})")
 
-            context_str = ". ".join(context_parts) + "." if context_parts else ""
+            # ── Auto-detect ticker mention in prompt → fetch live news ──────
+            news_context_parts = []
+            prompt_upper = prompt.upper()
+            # Look for known tickers from df/sc_df, or anything that looks like a ticker
+            all_known = set()
+            if not df.empty and "ticker" in df.columns:
+                all_known.update(df["ticker"].tolist())
+            if not sc_df.empty and "ticker" in sc_df.columns:
+                all_known.update(sc_df["ticker"].tolist())
 
-            history_context = ""
-            if st.session_state["chat_history"]:
-                recent = st.session_state["chat_history"][-6:]
-                history_lines = []
-                for m in recent:
-                    role = "anvandare" if m["role"] == "user" else "AI"
-                    content = m["content"][:300]
-                    history_lines.append(f"{role}: {content}")
-                history_context = "\n".join(history_lines)
+            mentioned_tickers = [t for t in all_known if t.upper() in prompt_upper or
+                                  t.split(".")[0].upper() in prompt_upper]
+
+            # Also look for patterns like nyheter/news + word, and explicit ".ST" suffixes
+            ticker_pattern = re.findall(r'\b([A-ZÅÄÖ]{2,6}(?:-[A-Z])?(?:\.ST|\.OL|\.CO|\.HE)?)\b', prompt_upper)
+            for tp in ticker_pattern:
+                if tp not in mentioned_tickers and len(tp) >= 3:
+                    # Validate: is it in all_known or ends with exchange suffix?
+                    if tp in all_known or any(tp.endswith(s) for s in [".ST", ".OL", ".CO", ".HE"]):
+                        mentioned_tickers.append(tp)
+
+            mentioned_tickers = list(dict.fromkeys(mentioned_tickers))[:3]  # max 3
+
+            if mentioned_tickers:
+                try:
+                    from core.news_fetcher import fetch_company_news
+                    for mt in mentioned_tickers:
+                        news_list = fetch_company_news(mt, days_back=5) or []
+                        if news_list:
+                            headlines = "; ".join(
+                                n.get("headline", n.get("title", ""))[:100]
+                                for n in news_list[:5]
+                            )
+                            news_context_parts.append(f"Senaste nyheter {mt}: {headlines}")
+                except Exception:
+                    pass
+
+            context_str = ". ".join(context_parts) + "." if context_parts else ""
+            if news_context_parts:
+                context_str += "\n\nFärska nyheter:\n" + "\n".join(news_context_parts)
 
             full_context = context_str
 
@@ -481,31 +547,35 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
         elif not news_ticker:
             st.info("Sök på en aktie ovan för att komma igång.")
 
-        col1, col2 = st.columns([3, 1])
-        with col1:
+        col_info, col_opt = st.columns([3, 1])
+        with col_info:
             if news_ticker:
                 st.markdown(f"**Vald aktie:** `{news_ticker}`")
-        with col2:
+        with col_opt:
             force_refresh = st.checkbox("Hoppa över cache", key="ai_news_refresh")
 
+        if news_ticker:
             if st.button("📰 Hämta och analysera nyheter", key="btn_news_analysis",
                          type="primary", use_container_width=True):
                 with st.spinner(f"Hämtar nyheter för {news_ticker}..."):
                     try:
-                        news_items = None
+                        fetched = []
                         try:
                             from core.news_fetcher import fetch_company_news
-                            items = fetch_company_news(news_ticker, days_back=7)
-                            if items:
-                                news_items = [{"title": n.get("headline", n.get("title", "")),
-                                               "summary": n.get("summary", n.get("description", "")),
-                                               "source": n.get("source", "Finnhub"),
-                                               "date": n.get("datetime", n.get("publishedAt", ""))}
-                                              for n in items[:10]]
-                        except ImportError:
-                            pass
+                            fetched = fetch_company_news(news_ticker, days_back=7) or []
                         except Exception:
                             pass
+
+                        if fetched:
+                            news_items = [
+                                {"title": n.get("headline", n.get("title", "")),
+                                 "summary": n.get("summary", n.get("description", "")),
+                                 "source": n.get("source", ""),
+                                 "date": n.get("datetime", n.get("datetime_str", ""))}
+                                for n in fetched[:10]
+                            ]
+                        else:
+                            news_items = None
 
                         depth = _get_depth()
                         result = ai_analysis.analyze_news(
@@ -517,26 +587,42 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                         st.markdown(result)
                         st.markdown(_ai_section_footer(), unsafe_allow_html=True)
 
-                        if news_items:
+                        if fetched:
                             st.markdown("---")
-                            st.caption(f"📋 Senaste {len(news_items)} nyheterna för {news_ticker}")
-                            for item in news_items:
-                                st.markdown(f"- **{item['title']}** ({item.get('source', '?')})")
+                            st.caption(f"📋 {len(fetched)} nyheter hämtade (senaste 7 dagar)")
+                            for n in fetched[:10]:
+                                title = n.get("headline", n.get("title", "—"))
+                                src = n.get("source", "?")
+                                age = n.get("age_hours")
+                                age_str = f" · {age:.0f}h sedan" if age is not None else ""
+                                url = n.get("url", "")
+                                if url:
+                                    st.markdown(f"- [{title}]({url}) — *{src}*{age_str}")
+                                else:
+                                    st.markdown(f"- **{title}** — *{src}*{age_str}")
+                        else:
+                            st.warning(
+                                f"⚠️ Inga nyheter hittades för **{news_ticker}**. "
+                                "Kontrollera att FINNHUB_API_KEY är satt i .env, "
+                                "eller prova med ett annat sökord."
+                            )
                     except Exception as e:
                         st.error(f"❌ Nyhetsanalys misslyckades: {e}")
 
-            with st.expander("Visa senaste nyheter utan AI-analys"):
+            with st.expander("🔍 Visa råa nyheter (utan AI)", expanded=False):
                 try:
                     from core.news_fetcher import fetch_company_news
-                    if 'news_ticker' in dir() and news_ticker:
-                        raw_news = fetch_company_news(news_ticker, days_back=3)
-                        if raw_news:
-                            for n in raw_news[:5]:
-                                title = n.get("headline", n.get("title", "—"))
-                                st.markdown(f"- {title}")
-                        else:
-                            st.caption("Inga nyheter hittade.")
+                    raw_news = fetch_company_news(news_ticker, days_back=3) or []
+                    if raw_news:
+                        for n in raw_news[:8]:
+                            title = n.get("headline", n.get("title", "—"))
+                            src = n.get("source", "?")
+                            url = n.get("url", "")
+                            if url:
+                                st.markdown(f"- [{title}]({url}) — *{src}*")
+                            else:
+                                st.markdown(f"- {title} — *{src}*")
                     else:
-                        st.caption("Välj en ticker först.")
+                        st.caption("Inga nyheter hittade för senaste 3 dagar.")
                 except Exception:
-                    st.caption("Kunde inte hämta nyheter (news_fetcher saknas eller API-nyckel ej konfigurerad).")
+                    st.caption("Kunde inte hämta nyheter.")
