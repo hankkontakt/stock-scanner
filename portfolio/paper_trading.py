@@ -265,30 +265,38 @@ def record_weekly_picks(
     top_n: int = 10,
     capital: float = DEFAULT_CAPITAL,
     verbose: bool = True,
+    universe: str = "universe",
 ) -> dict:
     """
     Registrerar veckans topp-N rekommendationer som simulerade köp.
-    Anropas automatiskt i slutet av scan.py.
-    
+    Anropas från daily_pipeline för både stora universumet och småbolag.
+
+    universe: "universe" (stora scan) eller "smallcap"
     V2: Sätter stop-loss, take-profit, trailing-stop vid köp.
     V3: Half-Kelly positionsstorlek + dynamisk ATR stop.
     """
     week_str = date.today().isoformat()
     trades = _load(TRADES_FILE)
 
-    # Kolla om vi redan kört denna vecka
-    existing_weeks = {t["week"] for t in trades if t.get("exit_reason") != "DCA"}
-    if week_str in existing_weeks:
+    # Kolla om vi redan kört denna vecka för detta universum
+    existing = {(t.get("week"), t.get("universe", "universe"))
+                for t in trades if t.get("exit_reason") != "DCA"}
+    if (week_str, universe) in existing:
         if verbose:
-            print(f"  ℹ Paper trading: redan registrerat för {week_str}")
+            print(f"  ℹ Paper trading ({universe}): redan registrerat för {week_str}")
         return {}
 
     # Hämta topp-N med STARK eller OK entry-signal
+    # Välj rätt score-kolumn (smallcap kan använda sc_total)
+    score_col = "sc_total" if universe == "smallcap" and "sc_total" in scored_df.columns else "score_total"
     candidates = scored_df.copy()
     if "entry_signal" in candidates.columns:
         priority = {"STARK": 0, "OK": 1, "VÄNTA": 2, "EJ AKTUELL": 3}
         candidates["_prio"] = candidates["entry_signal"].map(priority).fillna(3)
-        candidates = candidates.sort_values(["_prio", "score_total"], ascending=[True, False])
+        candidates = candidates.sort_values(["_prio", score_col], ascending=[True, False])
+    else:
+        if score_col in candidates.columns:
+            candidates = candidates.sort_values(score_col, ascending=False)
 
     top = candidates.head(top_n)
 
@@ -324,14 +332,16 @@ def record_weekly_picks(
 
         week_trades.append({
             "week":          week_str,
+            "universe":      universe,
             "ticker":        ticker,
             "name":          str(row.get("name", "")),
             "sector":        str(row.get("sector", "")),
             "buy_price":     buy_price,
+            "buy_date":      date.today().isoformat(),
             "shares":        shares,
             "original_shares": shares,
             "capital":       round(capital_per_stock, 2),
-            "score":         round(float(row.get("score_total", 0)), 1),
+            "score":         round(float(row.get(score_col, 0)), 1),
             "entry_signal":  str(row.get("entry_signal", "—")),
 
             # Risk management
@@ -368,8 +378,11 @@ def record_weekly_picks(
     if isinstance(portfolio, list):
         portfolio = {}
 
-    portfolio[week_str] = {
+    # Spara per universum så båda syns i portfölj-filen
+    port_key = week_str if universe == "universe" else f"{week_str}_{universe}"
+    portfolio[port_key] = {
         "capital":       capital,
+        "universe":      universe,
         "n_picks":       len(week_trades),
         "benchmark_buy": bench_price,
         "tickers":       [t["ticker"] for t in week_trades],
@@ -380,7 +393,7 @@ def record_weekly_picks(
     _save(PORTFOLIO_FILE, portfolio)
 
     if verbose:
-        print(f"  ✓ Paper trading v2: registrerade {len(week_trades)} positioner för {week_str}")
+        print(f"  ✓ Paper trading ({universe}): registrerade {len(week_trades)} positioner för {week_str}")
         for t in week_trades[:5]:
             sl = f"SL:{t['stop_loss']:.2f}" if t.get('stop_loss') else ""
             tp = f"TP:{t['take_profit']:.2f}" if t.get('take_profit') else ""

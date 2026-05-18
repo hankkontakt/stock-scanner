@@ -844,6 +844,19 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         except Exception as e:
             logger.warning(f"  ⚠ ML paper trading hoppades över: {e}")
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # 1e. KLASSISK PAPER TRADING (score-baserad, körs för weekly + smallcap)
+    # ═══════════════════════════════════════════════════════════════════════
+    if mode in ("weekly", "smallcap") and not scored.empty:
+        try:
+            from portfolio.paper_trading import record_weekly_picks
+            pt_universe = "smallcap" if mode == "smallcap" else "universe"
+            n_pt = len(record_weekly_picks(scored, top_n=10, universe=pt_universe, verbose=False))
+            if n_pt:
+                logger.info(f"  📊 Klassisk paper trading: {n_pt} positioner registrerade ({pt_universe})")
+        except Exception as e:
+            logger.warning(f"  ⚠ Klassisk paper trading hoppades över: {e}")
+
     # Portfölj & watchlist
     holdings = _load_portfolio()
     watchlist_raw = _load_watchlist()
