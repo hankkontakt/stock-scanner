@@ -1021,7 +1021,7 @@ def page_admin():
                     elif len(new_pw) < 6:
                         st.error("Lösenordet måste vara minst 6 tecken.")
                     else:
-                        hashed_pw = stauth.Hasher([new_pw]).generate()[0]
+                        hashed_pw = stauth.Hasher.hash(new_pw)
                         users.append({
                             "username": uname_clean,
                             "name":     new_name.strip() or uname_clean.capitalize(),
@@ -1075,7 +1075,7 @@ def page_admin():
                                 if len(new_pw2) < 6:
                                     st.error("Lösenordet måste vara minst 6 tecken.")
                                 else:
-                                    sel_user["password"] = stauth.Hasher([new_pw2]).generate()[0]
+                                    sel_user["password"] = stauth.Hasher.hash(new_pw2)
                                     _save_users_config(users)
                                     st.session_state.pop("user_pw_change_target", None)
                                     st.success(f"✅ Lösenord uppdaterat för `{sel_uname}`.")
