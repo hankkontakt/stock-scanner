@@ -1,6 +1,11 @@
 # Känsliga filer – commit ALDRIG dessa
 .env
 *.env
+.streamlit/secrets.toml
+.streamlit/secrets.toml.local
+
+# Per-user data (aldrig committa andra användares data)
+data/users/
 
 # Cache-data (aldrig committa, kan vara GB-stora)
 data/cache/

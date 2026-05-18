@@ -75,10 +75,15 @@ def page_paper_trading():
         STOP_LOSS_PCT, TAKE_PROFIT_PCT, PARTIAL_PROFIT_PCT,
         TRAILING_DISTANCE, CLOSE_AFTER_WEEKS,
     )
+    from web.utils import _active_data_dir
+    from pathlib import Path
 
     st.title("📄 Paper Trading – Track Record")
 
-    trades_all = _load(TRADES_FILE)
+    # Ladda trades från användarens katalog (admin → data/, övriga → data/users/{username}/)
+    user_dir = _active_data_dir()
+    user_trades_file = user_dir / "paper_trades.json"
+    trades_all = _load(user_trades_file)
 
     if not trades_all:
         st.info("Inga trades registrerade ännu. Kör en scan för att generera köpsignaler.")

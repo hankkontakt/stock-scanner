@@ -62,31 +62,42 @@ def _get_github_token() -> str:
 
 
 def _save_holdings_df(df: pd.DataFrame) -> bool:
-    """Spara holdings.csv lokalt och committa till GitHub för Streamlit Cloud-persistens."""
+    """Spara holdings.csv lokalt och committa till GitHub för Streamlit Cloud-persistens.
+    Sparar i användarens katalog (admin → data/, övriga → data/users/{username}/).
+    GitHub-commit görs bara för admin (den globala data/holdings.csv speglas i repot)."""
+    from web.utils import _active_data_dir
+    user_dir = _active_data_dir()
     csv_content = df.to_csv(index=False)
     try:
-        (DATA_DIR / "holdings.csv").write_text(csv_content, encoding="utf-8")
+        (user_dir / "holdings.csv").write_text(csv_content, encoding="utf-8")
     except Exception:
         pass
-    token = _get_github_token()
-    if token:
-        ok = _github_commit_file("data/holdings.csv", csv_content, token)
-        if not ok:
-            st.warning("⚠️ Kunde inte synka till GitHub – ändringen kan försvinna vid omstart.")
+    # Committa till GitHub bara för admin (data/ finns i repot, data/users/ gör det inte)
+    if st.session_state.get("username", "admin") == "admin":
+        token = _get_github_token()
+        if token:
+            ok = _github_commit_file("data/holdings.csv", csv_content, token)
+            if not ok:
+                st.warning("⚠️ Kunde inte synka till GitHub – ändringen kan försvinna vid omstart.")
     return True
 
 
 def _save_watchlist_data(items: list):
+    """Spara watchlist.json i användarens katalog.
+    GitHub-commit görs bara för admin."""
+    from web.utils import _active_data_dir
+    user_dir = _active_data_dir()
     content = json.dumps(items, indent=2, ensure_ascii=False)
-    path = DATA_DIR / "watchlist.json"
+    path = user_dir / "watchlist.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         path.write_text(content, encoding="utf-8")
     except Exception:
         pass
-    token = _get_github_token()
-    if token:
-        _github_commit_file("data/watchlist.json", content, token)
+    if st.session_state.get("username", "admin") == "admin":
+        token = _get_github_token()
+        if token:
+            _github_commit_file("data/watchlist.json", content, token)
 
 
 def _search_ticker_yfinance(query: str):
@@ -143,54 +154,37 @@ def _search_ticker_yfinance(query: str):
 
 
 def _check_admin_access() -> bool:
-    """Kontrollera om användaren är admin (lösenordsskyddat).
+    """Kontrollera om den inloggade användaren är admin.
 
-    Lösenordet hämtas från:
-    1. Streamlit Secrets: ADMIN_PASSWORD
-    2. Om ej satt → alla är admin (lokalt)
+    - Med multi-user-auth: username == 'admin' i session_state
+    - Lokalt (ingen auth konfigurerad): alltid True
     """
-    admin_pw = st.secrets.get("ADMIN_PASSWORD", "") if hasattr(st, "secrets") else os.getenv("ADMIN_PASSWORD", "")
+    username = st.session_state.get("username", "")
 
-    if not admin_pw:
+    # Om ingen autentisering är aktiv (lokal körning utan credentials-secret)
+    # → kontrollera gammal ADMIN_PASSWORD-logik som fallback
+    if not username:
+        admin_pw = ""
+        try:
+            admin_pw = st.secrets.get("ADMIN_PASSWORD", "")
+        except Exception:
+            pass
+        if not admin_pw:
+            admin_pw = os.getenv("ADMIN_PASSWORD", "")
+        if not admin_pw:
+            return True  # Lokal körning utan lösenord → öppet
+        if st.session_state.get("admin_authenticated", False):
+            return True
+        st.title("🔒 Admin – Lösenordsskyddad sida")
+        st.info("Logga in med admin-kontot för att se den här sidan.")
+        return False
+
+    # Multi-user-läge: kräv username == 'admin'
+    if username == "admin":
         return True
 
-    if st.session_state.get("admin_authenticated", False):
-        return True
-
-    st.title("🔒 Admin – Lösenordsskyddad sida")
-    st.info(
-        "Den här sidan kräver administratörsbehörighet. "
-        "Kontakta administratören för lösenordet."
-    )
-
-    correct_pw = admin_pw
-
-    def _check_pw():
-        pw_in = st.session_state.get("admin_pw_input", "")
-        if pw_in == correct_pw:
-            st.session_state["admin_authenticated"] = True
-        elif pw_in:
-            st.session_state["admin_pw_error"] = True
-        else:
-            st.session_state["admin_pw_error"] = False
-
-    pw_input = st.text_input(
-        "Ange admin-lösenord",
-        type="password",
-        key="admin_pw_input",
-        placeholder="••••••••",
-        on_change=_check_pw,
-    )
-
-    if st.session_state.get("admin_pw_error"):
-        st.error("Fel lösenord")
-    if st.button("🔓 Lås upp", key="btn_admin_unlock", use_container_width=True):
-        import hmac
-        if hmac.compare_digest(str(pw_input), str(admin_pw)):
-            st.session_state["admin_authenticated"] = True
-            st.rerun()
-        else:
-            st.error("❌ Fel lösenord!")
+    st.error("⛔ Åtkomst nekad – endast admin kan se den här sidan.")
+    st.stop()
     return False
 
 

@@ -96,22 +96,39 @@ def _load_nth_latest_scored(n: int = 2) -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def load_portfolio() -> pd.DataFrame:
-    """Laddar holdings.csv och berikar med senaste scan-data.
+def _active_data_dir() -> Path:
+    """Returnerar datakatalogen för den inloggade användaren.
+
+    - Admin (username == 'admin') → DATA_DIR (roten, bakåtkompatibelt)
+    - Övriga användare → DATA_DIR / 'users' / {username}
+    - Ej inloggad / lokal körning → DATA_DIR (fallback)
+    """
+    username = st.session_state.get("username", "")
+    if not username or username == "admin":
+        return DATA_DIR
+    d = DATA_DIR / "users" / username
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def load_portfolio(data_dir: Path | None = None) -> pd.DataFrame:
+    """Laddar holdings.csv för den inloggade användaren.
     Ingen cache – filen ändras när användaren lägger till tickers."""
+    base = data_dir if data_dir is not None else _active_data_dir()
     try:
-        holdings = pd.read_csv(DATA_DIR / "holdings.csv")
+        holdings = pd.read_csv(base / "holdings.csv")
         holdings["ticker"] = holdings["ticker"].str.upper()
         return holdings
     except Exception:
         return pd.DataFrame(columns=["ticker", "shares", "cost_basis"])
 
 
-def load_watchlist() -> list:
-    """Laddar watchlist.json. Ingen cache – filen ändras när användaren lägger till tickers."""
-    wl_path = DATA_DIR / "watchlist.json"
+def load_watchlist(data_dir: Path | None = None) -> list:
+    """Laddar watchlist.json för den inloggade användaren.
+    Ingen cache – filen ändras när användaren lägger till tickers."""
+    base = data_dir if data_dir is not None else _active_data_dir()
     try:
-        return json.loads(wl_path.read_text(encoding="utf-8"))
+        return json.loads((base / "watchlist.json").read_text(encoding="utf-8"))
     except Exception:
         return []
 
