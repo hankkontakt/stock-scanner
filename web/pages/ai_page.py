@@ -411,59 +411,80 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
             is_weekend = "HELG" if now.weekday() >= 5 else "BÖRSDAG"
             context_parts.append(f"Datum: {now.strftime('%Y-%m-%d')} ({day_name}, {is_weekend})")
 
-            # ── Auto-detect ticker mention in prompt → fetch live news ──────
+            # ── Auto-detect tickers → fetch live news ──────────────────────
             news_context_parts = []
             prompt_upper = prompt.upper()
-            # Look for known tickers from df/sc_df, or anything that looks like a ticker
+
+            # Build lookup of all known tickers from current scan
             all_known = set()
             if not df.empty and "ticker" in df.columns:
                 all_known.update(df["ticker"].tolist())
             if not sc_df.empty and "ticker" in sc_df.columns:
                 all_known.update(sc_df["ticker"].tolist())
 
-            mentioned_tickers = [t for t in all_known if t.upper() in prompt_upper or
-                                  t.split(".")[0].upper() in prompt_upper]
+            mentioned_tickers = []
 
-            # Also look for patterns like nyheter/news + word, and explicit ".ST" suffixes
-            ticker_pattern = re.findall(r'\b([A-ZÅÄÖ]{2,6}(?:-[A-Z])?(?:\.ST|\.OL|\.CO|\.HE)?)\b', prompt_upper)
-            for tp in ticker_pattern:
-                if tp not in mentioned_tickers and len(tp) >= 3:
-                    # Validate: is it in all_known or ends with exchange suffix?
-                    if tp in all_known or any(tp.endswith(s) for s in [".ST", ".OL", ".CO", ".HE"]):
-                        mentioned_tickers.append(tp)
+            # 1. Explicit TICKER.EXCHANGE patterns (e.g. VOLV-B.ST, AAPL, ERIC-B.ST)
+            suffix_re = re.compile(
+                r'\b([A-ZÅÄÖ]{1,8}(?:-[A-Z0-9])?)'
+                r'\.(ST|OL|CO|HE|L|DE|PA|AS|TO|AX)\b',
+                re.IGNORECASE,
+            )
+            for base, suffix in suffix_re.findall(prompt):
+                t = f"{base.upper()}.{suffix.upper()}"
+                if t not in mentioned_tickers:
+                    mentioned_tickers.append(t)
 
-            mentioned_tickers = list(dict.fromkeys(mentioned_tickers))[:3]  # max 3
+            # 2. Known tickers from scan (full ticker or base part)
+            for t in all_known:
+                base = t.split(".")[0].upper()
+                if t.upper() in prompt_upper or (len(base) >= 3 and re.search(rf'\b{re.escape(base)}\b', prompt_upper)):
+                    if t not in mentioned_tickers:
+                        mentioned_tickers.append(t)
 
-            if mentioned_tickers:
+            # 3. News keywords trigger → also grab top-scored ticker if no specific one found
+            news_keywords = {"NYHETER", "NYHET", "NYHETSLÄGE", "NEWS", "RUBRIK",
+                             "RAPPORT", "VD", "CEO", "PRESSRELEASE", "FÖRVÄRV"}
+            wants_news = bool(news_keywords & set(re.findall(r'\b\w+\b', prompt_upper)))
+
+            mentioned_tickers = list(dict.fromkeys(mentioned_tickers))[:4]
+
+            if mentioned_tickers or wants_news:
+                fetch_for = mentioned_tickers or []
+                # If no specific ticker but user asks about news → use top scored ticker
+                if not fetch_for and wants_news and not df.empty and "score_total" in df.columns:
+                    fetch_for = [df.nlargest(1, "score_total").iloc[0]["ticker"]]
+
                 try:
                     from core.news_fetcher import fetch_company_news
-                    for mt in mentioned_tickers:
-                        news_list = fetch_company_news(mt, days_back=5) or []
+                    for mt in fetch_for:
+                        news_list = fetch_company_news(mt, days_back=7) or []
                         if news_list:
                             lines = []
-                            for n in news_list[:6]:
+                            for n in news_list[:8]:
                                 title = n.get("headline", n.get("title", "")).strip()
-                                src = n.get("source", "")
-                                age = n.get("age_hours")
-                                age_str = f" ({age:.0f}h sedan)" if age is not None else ""
+                                src   = n.get("source", "")
+                                age   = n.get("age_hours")
+                                age_s = f" ({age:.0f}h sedan)" if age is not None else ""
                                 if title:
-                                    lines.append(f"- {title} [{src}]{age_str}")
+                                    lines.append(f"- {title} [{src}]{age_s}")
                             if lines:
-                                news_context_parts.append(
-                                    f"{mt}:\n" + "\n".join(lines)
-                                )
+                                news_context_parts.append(f"{mt}:\n" + "\n".join(lines))
                 except Exception:
                     pass
 
             context_str = ". ".join(context_parts) + "." if context_parts else ""
             if news_context_parts:
-                # Use the special separator that ai_chat recognises for plain-text news
                 context_str += "\n\nFärska nyheter:\n" + "\n\n".join(news_context_parts)
 
             full_context = context_str
 
             with st.chat_message("assistant"):
-                with st.spinner("AI tanker..."):
+                spinner_msg = "AI analyserar..."
+                if news_context_parts:
+                    tickers_fetched = ", ".join(p.split(":\n")[0] for p in news_context_parts)
+                    spinner_msg = f"Hämtade nyheter för {tickers_fetched} – AI analyserar..."
+                with st.spinner(spinner_msg):
                     try:
                         depth = _get_depth()
                         history_data = st.session_state.get("chat_history", [])
@@ -476,6 +497,12 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                             depth=depth,
                         )
                         st.markdown(result)
+                        # Show fetched news as collapsible source below the answer
+                        if news_context_parts:
+                            total_lines = sum(p.count("\n- ") for p in news_context_parts)
+                            with st.expander(f"📰 {total_lines} nyheter hämtades live", expanded=False):
+                                for block in news_context_parts:
+                                    st.markdown(block)
                     except Exception as e:
                         st.error(f"Chatten misslyckades: {e}")
                         result = f"Fel: {e}"
