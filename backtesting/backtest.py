@@ -182,9 +182,13 @@ def run_backtest(
     if prices.empty:
         return {}
 
-    # Hämta benchmark
+    # Hämta benchmark – säkerställ att bench_prices alltid är en 1D Series
+    # (nya yfinance-versioner returnerar MultiIndex-DataFrame för "Close")
     bench_data = yf.download(benchmark, period=f"{years+1}y", auto_adjust=True, progress=False)
-    bench_prices = bench_data["Close"] if not bench_data.empty else None
+    bench_prices = None
+    if not bench_data.empty:
+        _bc = bench_data["Close"] if "Close" in bench_data.columns else bench_data.iloc[:, 0]
+        bench_prices = _bc.iloc[:, 0] if isinstance(_bc, pd.DataFrame) else _bc
 
     # Skapa rebalanserings-datum (månatliga)
     end_date   = prices.index[-1]

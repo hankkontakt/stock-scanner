@@ -435,12 +435,12 @@ BENCHMARK_LABEL  = "OMXS30"
 SMALLCAP_CONFIG = {
 
     # ── Hårda filter (bolag som inte uppfyller dessa stryks innan scoring) ───
-    "min_daily_turnover_sek":  500_000,         # Daglig omsättning ≥ 500k SEK
-    "min_market_cap_sek":      30_000_000,      # Börsvärde ≥ 30 MSEK
+    "min_daily_turnover_sek":  150_000,         # Daglig omsättning ≥ 150k SEK (sänkt från 500k för bredare täckning)
+    "min_market_cap_sek":      20_000_000,      # Börsvärde ≥ 20 MSEK (sänkt från 30 MSEK)
     "max_market_cap_sek":      10_000_000_000,  # Börsvärde ≤ 10 GSEK (annars mid/large cap)
     "max_debt_to_equity":      300,             # D/E > 300 % = skuldfälla
     "min_current_ratio":       0.5,             # CR < 0.5 = akut likviditetskris
-    "min_cash_runway_months":  12,              # Kassan måste räcka ≥ 12 månader
+    "min_cash_runway_months":  6,               # Kassan måste räcka ≥ 6 månader (sänkt från 12; många saknar kassadata)
     "max_piotroski_skip":      2,               # F-Score ≤ 2 = eliminera helt
     "max_dilution_pct":        0.20,            # Aktieantal +20 % på 1 år = röd flagga
 

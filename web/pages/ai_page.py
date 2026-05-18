@@ -407,6 +407,23 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                     )
                     context_parts.append(f"Topp {top_n} smabolag: {sc_lista}")
 
+            # ── Portfölj ────────────────────────────────────────────────────
+            if holdings is not None and not holdings.empty:
+                owned = holdings["ticker"].tolist()
+                context_parts.append(
+                    f"Användarens portfölj ({len(owned)} innehav): " + ", ".join(owned[:40])
+                )
+                # Add current scores for held stocks
+                if not df.empty and "score_total" in df.columns:
+                    score_lu = df.set_index("ticker")["score_total"].to_dict()
+                    scored_holdings = [
+                        f"{t}({score_lu[t]:.0f}p)" for t in owned if t in score_lu
+                    ]
+                    if scored_holdings:
+                        context_parts.append(
+                            f"Portfölj-scores: " + "; ".join(scored_holdings[:25])
+                        )
+
             now = datetime.now()
             days = ["måndag","tisdag","onsdag","torsdag","fredag","lördag","söndag"]
             day_name = days[now.weekday()]
@@ -437,10 +454,15 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 if t not in mentioned_tickers:
                     mentioned_tickers.append(t)
 
-            # 2. Known tickers from scan (full ticker or base part)
+            # 2. Known tickers from scan (full ticker or base part).
+            # Guard: only match if base is ≥3 chars — prevents single-letter tickers
+            # like "V" (Visa), "D" (Dominion), "T" (AT&T) from matching as substrings
+            # of common Swedish words ("VAD", "AKTIER", etc.)
             for t in all_known:
                 base = t.split(".")[0].upper()
-                if t.upper() in prompt_upper or (len(base) >= 3 and re.search(rf'\b{re.escape(base)}\b', prompt_upper)):
+                if len(base) < 3:
+                    continue  # skip 1-2 char tickers – too many false positives
+                if t.upper() in prompt_upper or re.search(rf'\b{re.escape(base)}\b', prompt_upper):
                     if t not in mentioned_tickers:
                         mentioned_tickers.append(t)
 
