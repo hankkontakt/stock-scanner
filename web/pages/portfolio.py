@@ -32,123 +32,260 @@ def _save_holdings_user(df: pd.DataFrame):
         df.to_csv(user_dir / "holdings.csv", index=False)
 
 
-def _avanza_import_section(holdings: pd.DataFrame):
-    """Sektion för att importera portfölj från Avanza CSV – synlig för alla användare."""
+def _upsert_holding(holdings: pd.DataFrame, ticker: str,
+                    shares: float, cost_basis: float) -> pd.DataFrame:
+    """Lägg till eller uppdatera en aktie i portföljen."""
+    h = holdings.copy() if not holdings.empty else pd.DataFrame(
+        columns=["ticker", "shares", "cost_basis"]
+    )
+    if ticker in h["ticker"].values:
+        h.loc[h["ticker"] == ticker, "shares"]     = shares
+        h.loc[h["ticker"] == ticker, "cost_basis"] = cost_basis
+    else:
+        h = pd.concat([h, pd.DataFrame([{
+            "ticker": ticker, "shares": shares, "cost_basis": cost_basis
+        }])], ignore_index=True)
+    return h
+
+
+def _manage_portfolio_section(holdings: pd.DataFrame):
+    """Tabbar för att hantera portföljen: Avanza-import | Sök & lägg till | Manuell | Ta bort."""
     from data_management import avanza_import
     from web.pages.admin import _search_ticker_yfinance
 
-    with st.expander(
-        "📥 Importera från Avanza" if not holdings.empty else "📥 Importera från Avanza  ← kom igång här",
-        expanded=holdings.empty,
-    ):
-        # ── Steg-för-steg guide ───────────────────────────────────────────────
-        st.markdown("""
+    label = "➕ Hantera portfölj" if not holdings.empty else "➕ Kom igång – lägg till dina aktier"
+    with st.expander(label, expanded=holdings.empty):
+
+        tab_avanza, tab_search, tab_manual, tab_remove = st.tabs([
+            "📥 Importera från Avanza",
+            "🔍 Sök & lägg till",
+            "✏️ Lägg till manuellt",
+            "🗑️ Ta bort aktie",
+        ])
+
+        # ══════════════════════════════════════════════════════════════════════
+        # FLIK 1 – AVANZA IMPORT
+        # ══════════════════════════════════════════════════════════════════════
+        with tab_avanza:
+            st.markdown("""
 <div style="background:#1a2235;border:1px solid #2d3250;border-radius:10px;
-     padding:16px 20px;margin-bottom:16px;">
-<div style="font-size:13px;font-weight:600;color:#e8eaf0;margin-bottom:10px;">
-  📋 Så här exporterar du din portfölj från Avanza
+     padding:14px 18px;margin-bottom:14px;">
+<div style="font-size:13px;font-weight:600;color:#e8eaf0;margin-bottom:8px;">
+  Så här laddar du ner din portfölj från Avanza
 </div>
-<ol style="font-size:13px;color:#a0aec0;margin:0;padding-left:18px;line-height:2;">
+<ol style="font-size:13px;color:#a0aec0;margin:0;padding-left:18px;line-height:2.1;">
   <li>Logga in på <strong style="color:#e8eaf0;">avanza.se</strong></li>
   <li>Gå till <strong style="color:#e8eaf0;">Konto → din depå/ISK</strong></li>
   <li>Klicka på fliken <strong style="color:#e8eaf0;">Innehav</strong></li>
-  <li>Scrolla längst ner och klicka <strong style="color:#4c9be8;">Exportera</strong></li>
-  <li>Spara filen (slutar på <code>.csv</code>) och ladda upp den nedan</li>
+  <li>Scrolla längst ner → klicka <strong style="color:#4c9be8;">Exportera</strong></li>
+  <li>Spara filen och ladda upp den nedan</li>
 </ol>
 </div>
 """, unsafe_allow_html=True)
 
-        uploaded = st.file_uploader(
-            "Välj din Avanza-fil",
-            type=["csv"],
-            key="avanza_csv_user",
-            help="Filen laddas inte upp till något server – den bearbetas direkt i din webbläsare.",
-        )
-
-        if uploaded is not None:
-            try:
-                with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
-                    tmp.write(uploaded.getvalue())
-                    tmp_path = tmp.name
+            uploaded = st.file_uploader(
+                "Välj Avanza-filen (CSV)",
+                type=["csv"],
+                key="avanza_csv_user",
+                help="Filen laddas inte upp till någon server – den läses direkt i din webbläsare.",
+            )
+            if uploaded is not None:
                 try:
-                    df_avanza = avanza_import.parse_avanza_csv(tmp_path)
-                finally:
-                    os.unlink(tmp_path)
+                    with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
+                        tmp.write(uploaded.getvalue())
+                        tmp_path = tmp.name
+                    try:
+                        df_az = avanza_import.parse_avanza_csv(tmp_path)
+                    finally:
+                        os.unlink(tmp_path)
 
-                if df_avanza.empty:
-                    st.error(
-                        "Kunde inte läsa filen. Kontrollera att du valde rätt fil "
-                        "(Avanza-export med kolumner: Värdepapper, Antal, Köpkurs)."
-                    )
-                    return holdings
+                    if df_az.empty:
+                        st.error("Kunde inte läsa filen. Är det en Avanza-export?")
+                    else:
+                        st.success(f"Hittade **{len(df_az)} innehav**. Granska och bekräfta:")
+                        import_data = []
+                        for i, r in df_az.iterrows():
+                            hits      = _search_ticker_yfinance(r.get("name", ""))
+                            suggested = hits[0]["ticker"] if hits else ""
+                            with st.container(border=True):
+                                c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 2, 1])
+                                c1.markdown(f"**{r.get('name','?')}**")
+                                c2.caption(f"Antal: {r.get('shares',0)}")
+                                c3.caption(f"Pris: {r.get('cost_basis',0)}")
+                                ticker_val = c4.text_input(
+                                    "Ticker", value=suggested, key=f"az_t_{i}",
+                                    label_visibility="collapsed",
+                                    placeholder="t.ex. VOLV-B.ST",
+                                ).upper().strip()
+                                do_it = c5.checkbox("Ta med", value=bool(suggested), key=f"az_ok_{i}")
+                            import_data.append({"row": r, "ticker": ticker_val, "import": do_it})
 
-                st.success(f"✅ Hittade **{len(df_avanza)} innehav** i filen. Granska och bekräfta nedan.")
+                        if st.button("💾 Importera markerade", key="btn_az_save",
+                                     type="primary", use_container_width=True):
+                            h = holdings.copy() if not holdings.empty else pd.DataFrame(
+                                columns=["ticker", "shares", "cost_basis"])
+                            n_add = n_upd = 0
+                            for item in import_data:
+                                if not item["import"] or not item["ticker"]:
+                                    continue
+                                t = item["ticker"]
+                                s = float(item["row"].get("shares", 0))
+                                c = float(item["row"].get("cost_basis", 0))
+                                was_new = t not in h["ticker"].values
+                                h = _upsert_holding(h, t, s, c)
+                                if was_new: n_add += 1
+                                else:       n_upd += 1
+                            _save_holdings_user(h)
+                            st.success(f"✅ Klart! {n_add} nya, {n_upd} uppdaterade.")
+                            st.rerun()
+                except Exception as e:
+                    st.error(f"Fel: {e}")
 
-                rows_preview = []
-                import_data  = []
-                for i, r in df_avanza.iterrows():
-                    hits      = _search_ticker_yfinance(r.get("name", ""))
-                    suggested = hits[0]["ticker"] if hits else ""
+        # ══════════════════════════════════════════════════════════════════════
+        # FLIK 2 – SÖK & LÄGG TILL
+        # ══════════════════════════════════════════════════════════════════════
+        with tab_search:
+            st.caption("Sök på aktiens namn eller ticker och fyll i hur många du köpt och till vilket pris.")
+            search_q = st.text_input(
+                "Sök aktie",
+                key="port_search_q",
+                placeholder="t.ex. Volvo, AAPL, Investor...",
+            )
+            if search_q:
+                with st.spinner("Söker..."):
+                    hits = _search_ticker_yfinance(search_q)
+                if hits:
+                    options = {
+                        f"{h['ticker']}  —  {h.get('name','')[:35]}  ({h.get('exchange','')})": h
+                        for h in hits
+                    }
+                    chosen_label = st.selectbox("Välj aktie", list(options.keys()),
+                                                key="port_search_sel")
+                    chosen = options[chosen_label]
+
                     with st.container(border=True):
-                        c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 2, 1])
-                        with c1:
-                            st.markdown(f"**{r.get('name', '?')}**")
-                        with c2:
-                            st.caption(f"Antal: {r.get('shares', 0)}")
-                        with c3:
-                            st.caption(f"Snittpris: {r.get('cost_basis', 0)}")
-                        with c4:
-                            ticker_val = st.text_input(
-                                "Ticker", value=suggested,
-                                key=f"u_ticker_{i}",
-                                label_visibility="collapsed",
-                                placeholder="t.ex. VOLV-B.ST",
-                            ).upper().strip()
-                        with c5:
-                            do_import = st.checkbox("Ta med", value=bool(suggested),
-                                                    key=f"u_ok_{i}")
-                    import_data.append({
-                        "row": r, "ticker": ticker_val, "import": do_import,
-                    })
+                        st.markdown(
+                            f"**{chosen.get('name', chosen['ticker'])}**  "
+                            f"`{chosen['ticker']}`  ·  {chosen.get('exchange','')}"
+                        )
+                        col_s, col_p, col_d = st.columns(3)
+                        with col_s:
+                            antal = st.number_input(
+                                "Antal aktier",
+                                min_value=0.0, value=0.0, step=1.0,
+                                key="port_add_shares",
+                                help="Hur många aktier du äger totalt av detta bolag.",
+                            )
+                        with col_p:
+                            pris = st.number_input(
+                                "Genomsnittligt inköpspris (kr/st)",
+                                min_value=0.0, value=0.0, step=0.01,
+                                key="port_add_price",
+                                help="Ditt genomsnittliga inköpspris per aktie, inklusive courtage.",
+                            )
+                        with col_d:
+                            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+                            if st.button("➕ Lägg till i portfölj", key="btn_port_add_search",
+                                         type="primary", use_container_width=True):
+                                if antal <= 0:
+                                    st.error("Ange antal aktier.")
+                                elif pris <= 0:
+                                    st.error("Ange inköpspris.")
+                                else:
+                                    h = _upsert_holding(holdings, chosen["ticker"], antal, pris)
+                                    _save_holdings_user(h)
+                                    st.success(
+                                        f"✅ **{chosen['ticker']}** tillagd "
+                                        f"({antal:.0f} st à {pris:.2f} kr)!"
+                                    )
+                                    st.rerun()
+                else:
+                    st.info("Inga resultat. Försök med tickern direkt, t.ex. `VOLV-B.ST`.")
 
-                if st.button("💾 Spara portfölj", key="btn_avanza_save",
-                             type="primary", use_container_width=True):
-                    new_holdings = holdings.copy() if not holdings.empty else pd.DataFrame(
-                        columns=["ticker", "shares", "cost_basis"]
+        # ══════════════════════════════════════════════════════════════════════
+        # FLIK 3 – MANUELL INMATNING
+        # ══════════════════════════════════════════════════════════════════════
+        with tab_manual:
+            st.caption("Vet du tickern? Fyll i direkt utan att söka.")
+            with st.form("form_manual_add", clear_on_submit=True):
+                c1, c2, c3 = st.columns([2, 2, 2])
+                with c1:
+                    m_ticker = st.text_input(
+                        "Ticker *",
+                        placeholder="t.ex. VOLV-B.ST",
+                        help="Yahoo Finance-ticker. Svenska aktier slutar på .ST",
+                    ).upper().strip()
+                with c2:
+                    m_shares = st.number_input(
+                        "Antal aktier *",
+                        min_value=0.0, value=0.0, step=1.0,
                     )
-                    n_add = n_upd = 0
-                    for item in import_data:
-                        if not item["import"] or not item["ticker"]:
-                            continue
-                        t = item["ticker"]
-                        s = float(item["row"].get("shares", 0))
-                        c = item["row"].get("cost_basis", 0)
-                        if t in new_holdings["ticker"].values:
-                            new_holdings.loc[new_holdings["ticker"] == t, "shares"]     = s
-                            new_holdings.loc[new_holdings["ticker"] == t, "cost_basis"] = c
-                            n_upd += 1
-                        else:
-                            new_holdings = pd.concat([
-                                new_holdings,
-                                pd.DataFrame([{"ticker": t, "shares": s, "cost_basis": c}])
-                            ], ignore_index=True)
-                            n_add += 1
-                    _save_holdings_user(new_holdings)
-                    st.success(f"✅ Portfölj sparad! {n_add} nya, {n_upd} uppdaterade.")
-                    st.rerun()
+                with c3:
+                    m_price = st.number_input(
+                        "Inköpspris per aktie (kr) *",
+                        min_value=0.0, value=0.0, step=0.01,
+                    )
+                if st.form_submit_button("➕ Lägg till", type="primary", use_container_width=True):
+                    if not m_ticker:
+                        st.error("Ange ticker.")
+                    elif m_shares <= 0:
+                        st.error("Ange antal.")
+                    elif m_price <= 0:
+                        st.error("Ange inköpspris.")
+                    else:
+                        h = _upsert_holding(holdings, m_ticker, m_shares, m_price)
+                        _save_holdings_user(h)
+                        st.success(f"✅ **{m_ticker}** tillagd ({m_shares:.0f} st à {m_price:.2f} kr)!")
+                        st.rerun()
 
-            except Exception as e:
-                st.error(f"❌ Fel vid import: {e}")
+        # ══════════════════════════════════════════════════════════════════════
+        # FLIK 4 – TA BORT / REDIGERA
+        # ══════════════════════════════════════════════════════════════════════
+        with tab_remove:
+            if holdings.empty:
+                st.info("Portföljen är tom – ingenting att ta bort.")
+            else:
+                tickers = holdings["ticker"].tolist()
+                sel = st.selectbox("Välj aktie att hantera", tickers, key="port_remove_sel")
+                row = holdings[holdings["ticker"] == sel].iloc[0]
 
-    return holdings
+                with st.container(border=True):
+                    st.markdown(f"**{sel}** · {float(row['shares']):.0f} st · inköp {float(row['cost_basis']):.2f} kr/st")
+                    col_edit, col_del = st.columns(2)
+
+                    with col_edit:
+                        with st.expander("✏️ Ändra antal / pris"):
+                            with st.form(f"form_edit_{sel}"):
+                                e_shares = st.number_input(
+                                    "Antal", value=float(row["shares"]),
+                                    min_value=0.0, step=1.0, key=f"e_s_{sel}",
+                                )
+                                e_price = st.number_input(
+                                    "Inköpspris (kr/st)", value=float(row["cost_basis"]),
+                                    min_value=0.0, step=0.01, key=f"e_p_{sel}",
+                                )
+                                if st.form_submit_button("💾 Spara", use_container_width=True):
+                                    h = _upsert_holding(holdings, sel, e_shares, e_price)
+                                    _save_holdings_user(h)
+                                    st.success(f"✅ {sel} uppdaterad.")
+                                    st.rerun()
+
+                    with col_del:
+                        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+                        if st.button(f"🗑️ Ta bort {sel}", key=f"btn_del_{sel}",
+                                     use_container_width=True):
+                            h = holdings[holdings["ticker"] != sel].reset_index(drop=True)
+                            _save_holdings_user(h)
+                            st.success(f"✅ {sel} borttagen.")
+                            st.rerun()
 
 
 def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
                    sc_df: pd.DataFrame = None):
     st.title("💼 Portfölj & Bevakningslista")
 
-    # ── Avanza-import (synlig för alla användare) ─────────────────────────────
-    _avanza_import_section(holdings)
+    # ── Portföljhantering (synlig för alla användare) ─────────────────────────
+    _manage_portfolio_section(holdings)
     # Ladda om portföljen om den just sparades
     holdings = load_portfolio()
 
