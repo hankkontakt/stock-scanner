@@ -707,26 +707,54 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame, company_na
                 st.warning("Skriv en fråga först.")
                 return
             # Använd chat-funktionen för egen fråga
-            with st.spinner(f"🤖 AI (via {provider}) analyserar..."):
+            with st.spinner(f"🤖 Hämtar nyheter och analyserar {ticker}..."):
                 try:
-                    context = {}
-                    for field in ["score_total", "sector", "current_price",
-                                  "pe_trailing", "rsi_14", "trend_signal",
-                                  "entry_signal", "piotroski_f"]:
+                    # Bygg stockdata-kontext
+                    context_fields = {}
+                    for field in ["score_total", "sector", "current_price", "name",
+                                  "pe_trailing", "roe", "rsi_14", "trend_signal",
+                                  "entry_signal", "piotroski_f", "return_1m",
+                                  "return_3m", "return_12m", "price_vs_ma200"]:
                         v = row.get(field)
                         if v is not None and not pd.isna(v):
-                            context[field] = float(v) if isinstance(v, (int, float)) else v
+                            context_fields[field] = float(v) if isinstance(v, (int, float)) else v
+
+                    stock_json = ai_analysis._safe_json(context_fields, ensure_ascii=False)
+
+                    # Hämta live-nyheter
+                    news_lines = []
+                    if _fetch_news is not None:
+                        try:
+                            raw = _fetch_news(ticker, days_back=7, company_name=company_name) or []
+                            for n in raw[:8]:
+                                title = n.get("headline", n.get("title", "")).strip()
+                                src   = n.get("source", "")
+                                age   = n.get("age_hours")
+                                age_s = f" ({age:.0f}h sedan)" if age is not None else ""
+                                if title:
+                                    news_lines.append(f"- {title} [{src}]{age_s}")
+                        except Exception:
+                            pass
+
+                    # Slå ihop: stock-JSON + nyheter med separator som ai_chat förstår
+                    full_context = stock_json
+                    if news_lines:
+                        full_context += "\n\nFärska nyheter:\n" + "\n".join(news_lines)
 
                     depth = _get_depth()
                     result = ai_analysis.ai_chat(
-                        custom_question,
-                        context=ai_analysis._safe_json(context, ensure_ascii=False),
+                        f"Aktie: {ticker}\n\n{custom_question}",
+                        context=full_context,
                         force_refresh=force_refresh,
                         provider=provider,
                         depth=depth,
                     )
                     with st.container(border=True):
                         st.markdown(result)
+                    if news_lines:
+                        with st.expander(f"📋 {len(news_lines)} nyheter hämtades", expanded=False):
+                            for line in news_lines:
+                                st.markdown(line)
                 except Exception as e:
                     st.error(f"❌ {e}")
         else:
