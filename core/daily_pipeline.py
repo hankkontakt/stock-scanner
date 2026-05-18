@@ -581,6 +581,22 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             scored = score_universe(raw_df, regime=regime)
             logger.info(f"  ✅ Scorat {len(scored)} tickers")
 
+            # Piotroski F-Score (fundamental quality 0–9)
+            try:
+                from core import piotroski as _piotroski
+                scored = _piotroski.add_piotroski_to_universe(scored, verbose=True)
+                logger.info(f"  ✅ Piotroski beräknat")
+            except Exception as _pe:
+                logger.warning(f"  ⚠ Piotroski misslyckades: {_pe}")
+
+            # Entry-signal, trend-signal, confidence-label
+            try:
+                from core import filters as _filters
+                scored = _filters.apply_all_filters(scored, verbose=True)
+                logger.info(f"  ✅ Filter/signaler applicerade: {len(scored)} tickers")
+            except Exception as _fe:
+                logger.warning(f"  ⚠ apply_all_filters misslyckades: {_fe}")
+
             csv_path = REPORT_DIR / f"scored_universe_{date_str}.csv"
             scored.to_csv(csv_path, index=False)
             logger.info(f"  💾 Sparade {csv_path.name}")
