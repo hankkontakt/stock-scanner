@@ -298,9 +298,6 @@ def run_backtest(
     drawdowns   = (cum_values - rolling_max) / rolling_max
     max_dd      = drawdowns.min()
 
-    # Konvertera period_details lista till DataFrame direkt
-    period_df = pd.DataFrame(period_details) if period_details else pd.DataFrame()
-
     results = {
         "perioder":             len(port_arr),
         "år_testat":            round(n_years, 1),
@@ -313,7 +310,7 @@ def run_backtest(
         "hit_rate_pct":         round(hit_rate * 100, 1) if hit_rate is not None else None,
         "max_drawdown_pct":     round(max_dd * 100, 1),
         "snitt_månadsret":      round(port_arr.mean() * 100, 2),
-        "period_details":       period_df,
+        "period_details":       period_details,  # list of dicts — UI converts to DataFrame
     }
 
     return results
