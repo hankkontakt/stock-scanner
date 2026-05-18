@@ -753,13 +753,15 @@ def _read_cache_long(key: str, max_age_hours: int = 720) -> object:
 def _resolve_company_name(ticker: str) -> str | None:
     """
     Look up the real company name for a ticker using yfinance.
-    Cached for 30 days – company names almost never change.
+    Cached for 30 days when found – only successful lookups are cached.
+    Failures are NOT cached, so transient errors don't lock in indefinitely.
     Returns None if lookup fails.
     """
     cache_key = f"cname:{ticker}"
     cached = _read_cache_long(cache_key, max_age_hours=720)
-    if cached is not None:
-        return cached or None  # empty string means "tried and failed" → None
+    # Only treat non-empty strings as a valid cache hit; never persist failures
+    if isinstance(cached, str) and cached.strip():
+        return cached
 
     name = None
     try:
@@ -775,7 +777,8 @@ def _resolve_company_name(ticker: str) -> str | None:
     except Exception:
         pass
 
-    _write_cache(cache_key, name or "")
+    if name:  # Only cache successful lookups
+        _write_cache(cache_key, name)
     return name or None
 
 
