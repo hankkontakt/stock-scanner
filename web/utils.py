@@ -279,12 +279,65 @@ def _get_depth() -> str:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def kpi_row(metrics: list):
-    """Visar en rad med st.metric-kort. metrics = [(label, value, delta[, help]), ...]"""
+    """Custom HTML KPI-kort. metrics = [(label, value, delta[, help]), ...]"""
     cols = st.columns(len(metrics))
     for col, item in zip(cols, metrics):
-        label, value, delta = item[0], item[1], item[2]
-        help_text = item[3] if len(item) > 3 else None
-        col.metric(label, value, delta, help=help_text)
+        label     = item[0]
+        value     = item[1]
+        delta     = item[2]
+        help_t    = item[3] if len(item) > 3 else None
+
+        delta_html = ""
+        if delta:
+            color = "#4caf50" if not str(delta).startswith("-") else "#ef5350"
+            delta_html = (
+                f'<div style="font-size:12px;color:{color};margin-top:5px;'
+                f'font-weight:500;">{delta}</div>'
+            )
+
+        title_attr = f'title="{help_t}"' if help_t else ""
+        col.markdown(
+            f'<div {title_attr} style="'
+            f'background:#1e2230;border:1px solid #2d3250;border-radius:10px;'
+            f'padding:18px 20px;cursor:default;">'
+            f'<div style="font-size:10px;font-weight:600;color:#8892a4;'
+            f'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">'
+            f'{label}</div>'
+            f'<div style="font-size:26px;font-weight:700;color:#e8eaf0;line-height:1;">'
+            f'{value}</div>'
+            f'{delta_html}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+
+def section_divider():
+    """Gradient-avdelare — ersätter st.markdown('---')."""
+    st.markdown(
+        '<div style="height:1px;background:linear-gradient(to right,transparent,'
+        '#2d3250 20%,#2d3250 80%,transparent);margin:28px 0 20px 0;"></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _apply_chart_style(fig: "go.Figure") -> "go.Figure":
+    """Applicera gemensamt Inter-typsnitt och finare gridlines på alla Plotly-figurer."""
+    fig.update_layout(
+        font=dict(family="Inter, -apple-system, sans-serif", size=12, color="#8892a4"),
+        title_font=dict(
+            family="Inter, -apple-system, sans-serif", size=14,
+            color="#c8cfe0",
+        ),
+        xaxis=dict(
+            gridcolor="#252b3b", linecolor="#2d3250",
+            tickfont=dict(size=11, color="#8892a4"),
+        ),
+        yaxis=dict(
+            gridcolor="#252b3b", linecolor="#2d3250",
+            tickfont=dict(size=11, color="#8892a4"),
+        ),
+    )
+    return fig
 
 
 def score_distribution_chart(df: pd.DataFrame, score_col: str = "score_total") -> go.Figure:
@@ -305,7 +358,7 @@ def score_distribution_chart(df: pd.DataFrame, score_col: str = "score_total") -
         height=260,
         xaxis=dict(range=[0, 100], dtick=10),
     )
-    return fig
+    return _apply_chart_style(fig)
 
 
 def sector_bar_chart(df: pd.DataFrame, score_col: str = "score_total") -> go.Figure:
@@ -333,7 +386,7 @@ def sector_bar_chart(df: pd.DataFrame, score_col: str = "score_total") -> go.Fig
         height=max(200, len(agg) * 28),
         yaxis_title="",
     )
-    return fig
+    return _apply_chart_style(fig)
 
 
 def scatter_momentum_value(df: pd.DataFrame) -> go.Figure:
@@ -362,7 +415,7 @@ def scatter_momentum_value(df: pd.DataFrame) -> go.Figure:
         xaxis_title="Värderingspoäng",
         yaxis_title="Momentumpoäng",
     )
-    return fig
+    return _apply_chart_style(fig)
 
 
 def holdings_pie(df: pd.DataFrame) -> go.Figure:
@@ -381,4 +434,4 @@ def holdings_pie(df: pd.DataFrame) -> go.Figure:
         paper_bgcolor="#131722",
         height=300,
     )
-    return fig
+    return _apply_chart_style(fig)

@@ -57,21 +57,37 @@ st.set_page_config(
 # ── Global CSS ────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-  /* Kompaktare tabeller */
-  .stDataFrame thead th { font-size: 12px !important; }
-  .stDataFrame tbody td { font-size: 12px !important; }
-
-  /* Metrik-kort */
-  div[data-testid="metric-container"] {
-    background: #1e2230;
-    border: 1px solid #2d3250;
-    border-radius: 8px;
-    padding: 12px 16px;
+  /* ── Typsnitt: Inter ──────────────────────────────────────────────────────── */
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  html, body, *, *[class] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
   }
-  div[data-testid="metric-container"] label { color: #8892a4 !important; font-size: 12px; }
-  div[data-testid="metric-container"] div[data-testid="stMetricValue"] { color: #e8eaf0; }
+  h1, h2, h3 { font-weight: 700 !important; letter-spacing: -0.02em !important; }
 
-  /* Taggar */
+  /* ── Tabeller ────────────────────────────────────────────────────────────── */
+  .stDataFrame thead th {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #8892a4 !important;
+    background: #1a1f2e !important;
+    border-bottom: 2px solid #2d3250 !important;
+  }
+  .stDataFrame tbody td { font-size: 13px !important; }
+  .stDataFrame tbody tr:hover td {
+    background: rgba(76,155,232,0.04) !important;
+  }
+
+  /* ── Avdelare (st.markdown("---")) ──────────────────────────────────────── */
+  hr {
+    border: none !important;
+    height: 1px !important;
+    background: linear-gradient(to right, transparent, #2d3250 20%, #2d3250 80%, transparent) !important;
+    margin: 28px 0 20px 0 !important;
+  }
+
+  /* ── Taggar ──────────────────────────────────────────────────────────────── */
   .tag-green  { background:#1a3a2a; color:#4caf50; border:1px solid #4caf50;
                 border-radius:4px; padding:1px 7px; font-size:11px; }
   .tag-yellow { background:#3a3010; color:#ffc107; border:1px solid #ffc107;
@@ -83,8 +99,36 @@ st.markdown("""
   .tag-grey   { background:#1e2230; color:#8892a4; border:1px solid #4a5568;
                 border-radius:4px; padding:1px 7px; font-size:11px; }
 
-  /* Sidebar navigation */
+  /* ── Sidebar ─────────────────────────────────────────────────────────────── */
   div[data-testid="stSidebarContent"] { background: #131722; }
+
+  /* Nav-knappar: transparent bakgrund, vänsterkant hover */
+  div[data-testid="stSidebarContent"] .stButton button {
+    background: transparent !important;
+    border: none !important;
+    border-left: 3px solid transparent !important;
+    border-radius: 0 6px 6px 0 !important;
+    text-align: left !important;
+    font-weight: 400 !important;
+    font-size: 13px !important;
+    color: #8892a4 !important;
+    padding: 7px 12px !important;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
+    width: 100% !important;
+  }
+  div[data-testid="stSidebarContent"] .stButton button:hover {
+    background: rgba(76,155,232,0.08) !important;
+    border-left-color: #4c9be8 !important;
+    color: #e8eaf0 !important;
+  }
+  /* Expander-rubriker i sidebar */
+  div[data-testid="stSidebarContent"] .streamlit-expanderHeader {
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.12em !important;
+    text-transform: uppercase !important;
+    color: #4a5568 !important;
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -96,11 +140,20 @@ st.markdown("""
 def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
     """Bygger sidebar och returnerar (page, scan_date, sc_date, filters)."""
     with st.sidebar:
-        st.markdown("## 📊 MarketScan")
-        st.markdown("---")
+        # ── Wordmark ────────────────────────────────────────────────────────
+        st.markdown("""
+<div style="padding:16px 0 12px 0;border-bottom:1px solid #2d3250;margin-bottom:14px;">
+  <div style="font-size:22px;font-weight:800;letter-spacing:-0.03em;line-height:1;">
+    <span style="color:#e8eaf0;">Market</span><span style="color:#4c9be8;">Scan</span>
+  </div>
+  <div style="font-size:10px;color:#4a5568;letter-spacing:0.14em;margin-top:4px;text-transform:uppercase;">
+    Aktieanalys &amp; Portfölj
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
         # ── Global sökning (ALLTID synlig) ──────────────────────────────────
-        st.markdown("### 🔍 Sök")
+        st.markdown('<div style="font-size:10px;font-weight:600;color:#4a5568;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px;">Sök</div>', unsafe_allow_html=True)
         _search_q = st.text_input("", placeholder="Ticker eller bolag...", key="global_search", label_visibility="collapsed")
         _search_val = st.session_state.get("global_search", "").strip()
         if len(_search_val) >= 2:
@@ -111,51 +164,70 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                         st.session_state["nav_page"] = "🔍 Aktie-sök"
                         st.session_state["search_ticker"] = _h["ticker"]; st.session_state["selected_stock_ticker"] = ""; st.session_state["selected_stock_name"] = ""
                         st.rerun()
-        st.markdown("---")
+        st.markdown('<div style="height:1px;background:linear-gradient(to right,transparent,#2d3250 30%,#2d3250 70%,transparent);margin:6px 0 12px 0;"></div>', unsafe_allow_html=True)
 
         # ── Navigation ──────────────────────────────────────────────────────
         if "nav_page" not in st.session_state:
             st.session_state["nav_page"] = "📊 Översikt"
 
-        # Översikt – alltid synlig
-        if st.button("📊 Översikt", key="nav_overview", use_container_width=True):
+        # Översikt & Guide – alltid synliga
+        if st.button("Översikt", key="nav_overview", use_container_width=True):
             st.session_state["nav_page"] = "📊 Översikt"
             st.rerun()
-
-        if st.button("📚 Guide & Hjälp", key="nav_guide", use_container_width=True):
+        if st.button("Guide & Hjälp", key="nav_guide", use_container_width=True):
             st.session_state["nav_page"] = "📚 Guide & Hjälp"
             st.rerun()
 
-        # MARKNAD / PORTFÖLJ / ANALYS – använder enkla knappar (inga radio/on_change) för att
+        # MARKNAD / PORTFÖLJ / ANALYS – enkla knappar (inga radio/on_change) för att
         # undvika att st.rerun() från andra widgets ändrar nav_page.
-        with st.expander("📈 MARKNAD", expanded=True):
-            for label in ["🔍 Veckoscanner", "🏦 Småbolag", "🔍 Aktie-sök", "⭐ Bevakningar", "🌍 Globala marknader", "🏭 Sektorrotation", "📈 Backtesting"]:
-                if st.button(label, key=f"sb_{label}", use_container_width=True):
-                    st.session_state["nav_page"] = label
+        _MARKNAD_PAGES = [
+            ("🔍 Veckoscanner",    "Veckoscanner"),
+            ("🏦 Småbolag",        "Småbolag"),
+            ("🔍 Aktie-sök",       "Aktie-sök"),
+            ("⭐ Bevakningar",     "Bevakningar"),
+            ("🌍 Globala marknader","Globala marknader"),
+            ("🏭 Sektorrotation",  "Sektorrotation"),
+            ("📈 Backtesting",     "Backtesting"),
+        ]
+        _PORTFÖLJ_PAGES = [
+            ("💼 Portfölj",        "Portfölj"),
+            ("📄 Paper Trading",   "Paper Trading"),
+            ("🤖 AI Paper Trading","AI Paper Trading"),
+            ("🚨 Larm & Notiser",  "Larm & Notiser"),
+        ]
+        _ANALYS_PAGES = [
+            ("📈 Teknisk analys",  "Teknisk analys"),
+            ("🤖 AI",              "AI-analys"),
+        ]
+
+        with st.expander("MARKNAD", expanded=True):
+            for nav_key, display in _MARKNAD_PAGES:
+                if st.button(display, key=f"sb_{nav_key}", use_container_width=True):
+                    st.session_state["nav_page"] = nav_key
                     st.rerun()
 
-        with st.expander("💼 PORTFÖLJ", expanded=True):
-            for label in ["💼 Portfölj", "📄 Paper Trading", "🤖 AI Paper Trading", "🚨 Larm & Notiser"]:
-                if st.button(label, key=f"sb_{label}", use_container_width=True):
-                    st.session_state["nav_page"] = label
+        with st.expander("PORTFÖLJ", expanded=True):
+            for nav_key, display in _PORTFÖLJ_PAGES:
+                if st.button(display, key=f"sb_{nav_key}", use_container_width=True):
+                    st.session_state["nav_page"] = nav_key
                     st.rerun()
 
-        with st.expander("📈 ANALYS", expanded=False):
-            for label in ["📈 Teknisk analys", "🤖 AI"]:
-                if st.button(label, key=f"sb_{label}", use_container_width=True):
-                    st.session_state["nav_page"] = label
+        with st.expander("ANALYS", expanded=False):
+            for nav_key, display in _ANALYS_PAGES:
+                if st.button(display, key=f"sb_{nav_key}", use_container_width=True):
+                    st.session_state["nav_page"] = nav_key
                     st.rerun()
 
         # Admin – alltid synlig längst ner
-        if st.button("🔧 Admin", key="nav_admin", use_container_width=True):
+        if st.button("Admin", key="nav_admin", use_container_width=True):
             st.session_state["nav_page"] = "🔧 Admin"
             st.rerun()
 
         page = st.session_state["nav_page"]
 
         # ── Datumval (alltid synligt) ───────────────────────────────────────
-        st.markdown("---")
-        with st.expander("📅 Datum", expanded=False):
+        st.markdown('<div style="height:1px;background:linear-gradient(to right,transparent,#2d3250 30%,#2d3250 70%,transparent);margin:10px 0;"></div>', unsafe_allow_html=True)
+        with st.expander("Datum", expanded=False):
             scan_date = st.selectbox("Scan", scan_dates if scan_dates else ["Ingen data"], key="scan_date", label_visibility="collapsed")
             sc_date = st.selectbox("Småbolag", sc_dates if sc_dates else ["Ingen data"], key="sc_date", label_visibility="collapsed")
 
