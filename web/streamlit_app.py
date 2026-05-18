@@ -428,13 +428,43 @@ def _has_credentials_configured() -> bool:
         return False
 
 
+def _load_managed_users() -> dict:
+    """Laddar användare som skapats via admin-sidan (data/users_config.json).
+
+    Returnerar dict på formatet:
+        {"username": {"name": ..., "email": ..., "password": "<bcrypt>"}}
+    Ignorerar inaktiva användare och 'admin' (den hanteras alltid via secrets).
+    """
+    try:
+        import json as _json
+        path = DATA_DIR / "users_config.json"
+        data = _json.loads(path.read_text(encoding="utf-8"))
+        result = {}
+        for user in data.get("users", []):
+            uname = user.get("username", "").strip().lower()
+            if not uname or uname == "admin":
+                continue
+            if not user.get("active", True):
+                continue
+            result[uname] = {
+                "name":     user.get("name", uname),
+                "email":    user.get("email", ""),
+                "password": user.get("password", ""),
+            }
+        return result
+    except Exception:
+        return {}
+
+
 def _run_auth() -> bool:
     """Hanterar inloggning med streamlit-authenticator (cookie-baserade sessioner).
 
     Flöde:
     1. Om credentials INTE är konfigurerade i secrets → öppen åtkomst (lokal körning)
-    2. Om redan inloggad via cookie → True direkt
-    3. Annars → visa inloggningsformulär
+    2. Admin-credentials läses från Streamlit Secrets
+    3. Övriga användare läses från data/users_config.json (hanteras via admin-sidan)
+    4. Om redan inloggad via cookie → True direkt
+    5. Annars → visa inloggningsformulär
 
     Sätter session_state["username"] efter lyckad inloggning.
     """
@@ -450,7 +480,7 @@ def _run_auth() -> bool:
         st.error("❌ streamlit-authenticator saknas. Kör: pip install streamlit-authenticator")
         return False
 
-    # Bygg credentials-dict från secrets
+    # Bygg credentials-dict: admin från secrets + övriga från users_config.json
     try:
         raw_creds = st.secrets["credentials"]
         credentials = {
@@ -462,6 +492,10 @@ def _run_auth() -> bool:
     except Exception as e:
         st.error(f"❌ Fel vid läsning av credentials från secrets: {e}")
         return False
+
+    # Slå samman med admin-hanterade användare (läses från data/users_config.json)
+    managed = _load_managed_users()
+    credentials["usernames"].update(managed)
 
     cookie_cfg = {}
     try:
