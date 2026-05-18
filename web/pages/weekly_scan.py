@@ -207,7 +207,7 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
     st.title("🔍 Veckoscanner")
 
     if df.empty:
-        st.warning("Ingen veckodata. Kör `python scan.py` för att generera.")
+        st.warning("Aktiedata håller på att laddas in. Systemet uppdateras automatiskt varje vecka — prova igen om en stund.")
         return
 
     if "sector" in df.columns:

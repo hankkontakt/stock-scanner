@@ -36,7 +36,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
     st.title("📊 Översikt")
 
     if df.empty and sc_df.empty:
-        st.warning("Ingen scandata hittad. Kör `python scan.py` och `python smallcap/scanner.py` först.")
+        st.warning("Aktiedata håller på att laddas in. Systemet uppdateras automatiskt varje vecka — kom tillbaka snart.")
         return
 
     # ── KPI-rad ──────────────────────────────────────────────────────────────

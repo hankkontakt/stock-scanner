@@ -86,7 +86,7 @@ def page_paper_trading():
     trades_all = _load(user_trades_file)
 
     if not trades_all:
-        st.info("Inga trades registrerade ännu. Kör en scan för att generera köpsignaler.")
+        st.info("Inga trades registrerade ännu. Systemet öppnar automatiskt positioner varje vecka baserat på de starkaste aktierna — kom tillbaka på måndag för att se de första positionerna.")
         return
 
     # ── Universum-filter ────────────────────────────────────────────────────
@@ -221,7 +221,7 @@ def page_paper_trading():
 
     with st.expander(f"📋 Öppna positioner ({len(open_pos)})", expanded=len(open_pos) > 0 and len(closed) == 0):
         if not open_pos:
-            st.caption("Inga öppna positioner.")
+            st.caption("Inga öppna positioner just nu.")
         else:
             rows = []
             for t in sorted(open_pos, key=lambda x: x.get("pnl_pct", 0) or 0, reverse=True):
@@ -252,7 +252,7 @@ def page_paper_trading():
     # ══════════════════════════════════════════════════════════════════════════
     with st.expander(f"✅ Stängda positioner ({len(closed)})", expanded=False):
         if not closed:
-            st.caption("Inga stängda positioner ännu.")
+            st.caption("Inga stängda positioner ännu — positioner hålls i upp till 30 dagar innan de stängs.")
         else:
             rows_c = []
             for t in sorted(closed, key=lambda x: x.get("sell_date", ""), reverse=True)[:50]:
