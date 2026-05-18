@@ -214,9 +214,12 @@ Mellan 300-500 ord. Använd fetstil för viktiga punkter."""
 SYSTEM_PROMPT_CHAT = """Du är MarketScan AI - en personlig börsanalytiker.
 Du kan svara på frågor om aktier, marknader, sektorer och portföljer.
 
-Du har tillgång till data när användaren bifogar den.
-Håll svar koncisa, korrekta och användbara för en privatsparare.
+Du har tillgång till data när användaren bifogar den i sitt meddelande.
+Detta inkluderar scandata, nyckeltal OCH nyhetsrubriker som hämtats live via API.
+När nyheter finns med i kontexten ska du referera till dem direkt och konkret.
+Säg ALDRIG att du saknar tillgång till nyheter – om nyheter bifogas i meddelandet har du dem.
 
+Håll svar koncisa, korrekta och användbara för en privatsparare.
 Skriv på svenska om inte annat anges. Var gärna lite underhållande och använd emojis."""
 
 SYSTEM_PROMPT_NEWS_ANALYSIS = """Du är en finansiell nyhetsanalytiker.
@@ -912,7 +915,19 @@ def ai_chat(question: str, context: str = "", force_refresh: bool = False,
     """
     user_message = question
     if context:
-        user_message = f"{question}\n\nKontextdata:\n```json\n{context}\n```"
+        # News sections should NOT be in a JSON code block — use plain text
+        if "Färska nyheter:" in context:
+            # Split: scan data vs news
+            parts = context.split("\n\nFärska nyheter:", 1)
+            scan_part = parts[0].strip()
+            news_part = parts[1].strip() if len(parts) > 1 else ""
+            user_message = question
+            if scan_part:
+                user_message += f"\n\nMarknadsdata:\n```\n{scan_part}\n```"
+            if news_part:
+                user_message += f"\n\n📰 Färska nyheter (hämtade live via API just nu):\n{news_part}"
+        else:
+            user_message = f"{question}\n\nKontextdata:\n```\n{context}\n```"
     
     # Bygg meddelanden med historik
     messages = []

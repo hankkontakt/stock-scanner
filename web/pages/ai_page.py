@@ -440,17 +440,25 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                     for mt in mentioned_tickers:
                         news_list = fetch_company_news(mt, days_back=5) or []
                         if news_list:
-                            headlines = "; ".join(
-                                n.get("headline", n.get("title", ""))[:100]
-                                for n in news_list[:5]
-                            )
-                            news_context_parts.append(f"Senaste nyheter {mt}: {headlines}")
+                            lines = []
+                            for n in news_list[:6]:
+                                title = n.get("headline", n.get("title", "")).strip()
+                                src = n.get("source", "")
+                                age = n.get("age_hours")
+                                age_str = f" ({age:.0f}h sedan)" if age is not None else ""
+                                if title:
+                                    lines.append(f"- {title} [{src}]{age_str}")
+                            if lines:
+                                news_context_parts.append(
+                                    f"{mt}:\n" + "\n".join(lines)
+                                )
                 except Exception:
                     pass
 
             context_str = ". ".join(context_parts) + "." if context_parts else ""
             if news_context_parts:
-                context_str += "\n\nFärska nyheter:\n" + "\n".join(news_context_parts)
+                # Use the special separator that ai_chat recognises for plain-text news
+                context_str += "\n\nFärska nyheter:\n" + "\n\n".join(news_context_parts)
 
             full_context = context_str
 

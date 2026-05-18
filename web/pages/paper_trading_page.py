@@ -133,9 +133,28 @@ def page_paper_trading():
             st.plotly_chart(fig_eq, use_container_width=True)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # ÖPPNA POSITIONER (expandable)
+    # ÖPPNA POSITIONER – metrics + tabell
     # ══════════════════════════════════════════════════════════════════════════
-    with st.expander(f"📋 Öppna positioner ({len(open_pos)})", expanded=len(open_pos) > 0 and len(open_pos) <= 15):
+    if open_pos:
+        st.markdown("---")
+
+        # Unrealized P&L metrics (visas även utan stängda trades)
+        pnls = [t.get("pnl_pct", 0) or 0 for t in open_pos]
+        pnl_pos = sum(1 for p in pnls if p > 0)
+        pnl_neg = sum(1 for p in pnls if p < 0)
+        avg_pnl_open = sum(pnls) / len(pnls) if pnls else 0
+
+        oc1, oc2, oc3, oc4 = st.columns(4)
+        with oc1:
+            st.metric("Öppna positioner", len(open_pos))
+        with oc2:
+            st.metric("Snitt P&L (öppna)", f"{avg_pnl_open:+.1f}%")
+        with oc3:
+            st.metric("🟢 I vinst", pnl_pos)
+        with oc4:
+            st.metric("🔴 Med förlust", pnl_neg)
+
+    with st.expander(f"📋 Öppna positioner ({len(open_pos)})", expanded=len(open_pos) > 0):
         if not open_pos:
             st.caption("Inga öppna positioner.")
         else:
