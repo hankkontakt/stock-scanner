@@ -26,14 +26,23 @@ def _fetch_news_for(ticker: str, days_back: int = 3) -> list:
 
 def _collect_mover_news(tickers: list[str], days_back: int = 2, max_per_ticker: int = 3) -> dict[str, list]:
     """
-    Fetch news for a list of tickers (notable movers).
+    Fetch news for a list of tickers in parallel.
     Returns {ticker: [news_items]} — skips empties.
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     result = {}
-    for t in tickers:
-        news = _fetch_news_for(t, days_back=days_back)
-        if news:
-            result[t] = news[:max_per_ticker]
+    if not tickers:
+        return result
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = {ex.submit(_fetch_news_for, t, days_back): t for t in tickers}
+        for fut in as_completed(futures):
+            t = futures[fut]
+            try:
+                news = fut.result(timeout=20)
+                if news:
+                    result[t] = news[:max_per_ticker]
+            except Exception:
+                pass
     return result
 
 
@@ -324,11 +333,10 @@ def page_alerts_notices(df: pd.DataFrame):
                                 )
                                 summary_context.append(f"Stora kursrörelser: {big_str}")
 
-                            # ── Hämta nyheter för noterbara tickers ──────────
-                            # 1) Live-nyheter för mover-tickers (max 12 tickers)
+                            # ── Hämta nyheter för noterbara tickers (parallellt) ─
                             news_map = _collect_mover_news(notable_tickers[:12], days_back=2)
 
-                            # 2) Komplettera med cachar nyheter för portfölj/bevakningslista
+                            # Komplettera med portfölj/bevakningslista (parallellt)
                             port_tickers = (
                                 list(holdings["ticker"].tolist()) if not holdings.empty else []
                             )
@@ -337,13 +345,12 @@ def page_alerts_notices(df: pd.DataFrame):
                                 t for t in port_tickers + watch_tickers_cached
                                 if t not in news_map and t not in notable_tickers
                             ][:8]
-                            for _t in extra_tickers:
-                                # Använd cache-only (days_back=7 nyttjar 24h-cachen om den finns)
-                                _extra_news = _fetch_news_for(_t, days_back=7)
-                                if _extra_news:
-                                    news_map[_t] = _extra_news[:2]  # max 2 per extra ticker
+                            if extra_tickers:
+                                extra_map = _collect_mover_news(extra_tickers, days_back=7, max_per_ticker=2)
+                                news_map.update(extra_map)
 
                             news_ctx = _format_news_context(news_map)
+                            _n_articles = sum(len(v) for v in news_map.values())
 
                             # ── Bygg fullständigt context ─────────────────────
                             ctx_parts = ["\n".join(summary_context)]
@@ -351,16 +358,46 @@ def page_alerts_notices(df: pd.DataFrame):
                                 ctx_parts.append(news_ctx)
                             ctx = "\n\n".join(ctx_parts)
 
+                            # Bygg prompt – tvinga nyhetsanvändning om sådana finns
+                            if news_ctx:
+                                _user_prompt = (
+                                    f"Sammanfatta vad som stack ut på börsen idag. "
+                                    f"Du har fått {_n_articles} färska nyhetsartiklar "
+                                    f"för {len(news_map)} bolag (se 'Färska nyheter:' nedan). "
+                                    "VIKTIGT: Du MÅSTE referera till minst 3 specifika nyheter "
+                                    "och koppla dem till respektive akties rörelse. "
+                                    "Citera nyhetstitel eller källa när du nämner en nyhet. "
+                                    "Struktur: 1) Översikt av rörelserna (2 meningar), "
+                                    "2) Specifika nyhetshändelser och vilka aktier de påverkar, "
+                                    "3) Kort slutsats. Totalt 6-10 meningar."
+                                )
+                            else:
+                                _user_prompt = (
+                                    "Sammanfatta vad som stack ut på börsen idag baserat på dessa data. "
+                                    "Ge en kortfattad analys (4-6 meningar) av de viktigaste rörelserna "
+                                    "och vad de kan signalera. OBS: Inga färska nyheter hittades, "
+                                    "spekulera inte om nyhetshändelser."
+                                )
+
                             result = ai_analysis.ai_chat(
-                                "Sammanfatta vad som stack ut på börsen idag baserat på dessa data. "
-                                "Ge en kortfattad analys (4-6 meningar) av de viktigaste rörelserna "
-                                "och vad de kan signalera. Om det finns nyheter, koppla dem till "
-                                "respektive aktie och förklara om de kan förklara rörelsen.",
+                                _user_prompt,
                                 context=ctx,
                                 provider=_get_provider(),
                                 depth="Snabb",
                                 force_refresh=True,
                             )
+
+                            # Status-rad om nyhetstillgång
+                            if news_map:
+                                st.success(
+                                    f"📰 {_n_articles} nyheter från {len(news_map)} bolag inkluderades i analysen."
+                                )
+                            else:
+                                st.warning(
+                                    "⚠️ Inga nyheter kunde hämtas för dagens rörare. "
+                                    "Analysen är baserad endast på score-/kursdata."
+                                )
+
                             st.markdown(
                                 '<div style="background:#1a2332;border:1px solid #2d3250;'
                                 'border-radius:8px;padding:12px 18px;margin-bottom:16px">',
