@@ -288,9 +288,10 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                 if st.button(display, key=f"sb_{nav_key}", use_container_width=True):
                     _navigate_to(nav_key)
 
-        # Admin – alltid synlig längst ner
-        if st.button("Admin", key="nav_admin", use_container_width=True):
-            _navigate_to("🔧 Admin")
+        # Admin – bara synlig för admin-användaren
+        if st.session_state.get("username", "admin") == "admin":
+            if st.button("Admin", key="nav_admin", use_container_width=True):
+                _navigate_to("🔧 Admin")
 
         page = st.session_state["nav_page"]
 
@@ -419,113 +420,104 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
 # ÅTKOMSTKONTROLL
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _check_site_access() -> bool:
-    """Kräver lösenord för att överhuvudtaget komma in på sidan.
-
-    Lösenordet hämtas från:
-    1. Streamlit Secrets: SITE_PASSWORD (prioriteras)
-    2. Miljövariabel: SITE_PASSWORD
-    3. Fallback: STREAMLIT_APP_PASSWORD
-    4. Om inget är satt → fri åtkomst (lokalt/utveckling)
-
-    Användaren måste autentisera en gång per session.
-    """
-    # Hämta lösenord från secrets eller miljövariabel
-    pw = ""
+def _has_credentials_configured() -> bool:
+    """Returnerar True om credentials-sektionen finns i Streamlit Secrets."""
     try:
-        import streamlit as st
-        pw = st.secrets.get("SITE_PASSWORD", "") or \
-             st.secrets.get("STREAMLIT_APP_PASSWORD", "")
+        return bool(st.secrets.get("credentials"))
+    except Exception:
+        return False
+
+
+def _run_auth() -> bool:
+    """Hanterar inloggning med streamlit-authenticator (cookie-baserade sessioner).
+
+    Flöde:
+    1. Om credentials INTE är konfigurerade i secrets → öppen åtkomst (lokal körning)
+    2. Om redan inloggad via cookie → True direkt
+    3. Annars → visa inloggningsformulär
+
+    Sätter session_state["username"] efter lyckad inloggning.
+    """
+    if not _has_credentials_configured():
+        # Lokal körning utan secrets – öppen åtkomst, sätt admin som default-användare
+        if not st.session_state.get("username"):
+            st.session_state["username"] = "admin"
+        return True
+
+    try:
+        import streamlit_authenticator as stauth
+    except ImportError:
+        st.error("❌ streamlit-authenticator saknas. Kör: pip install streamlit-authenticator")
+        return False
+
+    # Bygg credentials-dict från secrets
+    try:
+        raw_creds = st.secrets["credentials"]
+        credentials = {
+            "usernames": {
+                uname: dict(udata)
+                for uname, udata in raw_creds.get("usernames", {}).items()
+            }
+        }
+    except Exception as e:
+        st.error(f"❌ Fel vid läsning av credentials från secrets: {e}")
+        return False
+
+    cookie_cfg = {}
+    try:
+        cookie_cfg = dict(st.secrets.get("cookie", {}))
     except Exception:
         pass
-    if not pw:
-        import os
-        pw = os.getenv("SITE_PASSWORD", "") or \
-             os.getenv("STREAMLIT_APP_PASSWORD", "")
 
-    # Inget lösenord satt → öppen åtkomst (t.ex. lokalt eller om användaren
-    # explicit vill ha öppen site)
-    if not pw:
-        return True
-
-    # Kolla om redan autentiserad i denna session
-    if st.session_state.get("site_authenticated", False):
-        return True
-
-    # Visa inloggningsruta
-    st.markdown("""
-    <style>
-    .login-wrapper {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 80vh;
-    }
-    .login-box {
-        background: #1e2230;
-        border: 1px solid #2d3250;
-        border-radius: 12px;
-        padding: 40px 36px;
-        max-width: 380px;
-        width: 100%;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    }
-    .login-logo {
-        text-align: center;
-        font-size: 22px;
-        font-weight: 700;
-        letter-spacing: 4px;
-        color: #e8eaf0;
-        margin-bottom: 4px;
-    }
-    .login-logo span { color: #00d4aa; }
-    .login-sub {
-        text-align: center;
-        font-size: 12px;
-        color: #64748b;
-        margin-bottom: 28px;
-        letter-spacing: 1.5px;
-        text-transform: uppercase;
-    }
-    </style>
-    <div class="login-wrapper">
-    <div class="login-box">
-        <div class="login-logo">MARKET<span>SCAN</span></div>
-        <div class="login-sub">Inloggning krävs</div>
-    </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    def _check_site_pw():
-        pw_in = st.session_state.get("site_pw_input", "")
-        if pw_in == pw:
-            st.session_state["site_authenticated"] = True
-        elif pw_in:
-            st.session_state["site_pw_error"] = True
-        else:
-            st.session_state["site_pw_error"] = False
-
-    pw_input = st.text_input(
-        "Lösenord",
-        type="password",
-        key="site_pw_input",
-        placeholder="Ange lösenord",
-        label_visibility="collapsed",
-        on_change=_check_site_pw,
+    authenticator = stauth.Authenticate(
+        credentials=credentials,
+        cookie_name=cookie_cfg.get("name", "marketscan_auth"),
+        key=cookie_cfg.get("key", "marketscan_default_key_change_me"),
+        cookie_expiry_days=int(cookie_cfg.get("expiry_days", 30)),
     )
 
-    if st.session_state.get("site_pw_error"):
-        st.error("❌ Fel lösenord!")
+    # Visa inloggningsformulär centrerat med varumärkeslogotyp
+    if st.session_state.get("authentication_status") is not True:
+        st.markdown("""
+        <style>
+        [data-testid="stForm"] {
+            max-width: 380px;
+            margin: 80px auto 0 auto;
+            background: #1e2230;
+            border: 1px solid #2d3250;
+            border-radius: 12px;
+            padding: 40px 36px 32px;
+        }
+        </style>
+        <div style="text-align:center; padding: 60px 0 0 0;">
+          <div style="font-size:24px; font-weight:800; letter-spacing:3px; color:#e8eaf0;">
+            MARKET<span style="color:#00d4aa;">SCAN</span>
+          </div>
+          <div style="font-size:11px; color:#64748b; letter-spacing:2px;
+                      text-transform:uppercase; margin-top:4px; margin-bottom:32px;">
+            Aktieanalys & Portfölj
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("🔓 Lås upp", key="btn_site_unlock", use_container_width=True, type="primary"):
-            if pw_input == pw:
-                st.session_state["site_authenticated"] = True
-                st.rerun()
-            else:
-                st.error("❌ Fel lösenord!")
+    authenticator.login(location="main")
 
+    status = st.session_state.get("authentication_status")
+
+    if status is True:
+        username = st.session_state.get("username", "admin")
+        # Lägg till utloggningsknapp i sidofältet
+        with st.sidebar:
+            st.markdown(
+                f"<div style='font-size:12px;color:#8892a4;padding:4px 0 8px;'>"
+                f"Inloggad som <b style='color:#e8eaf0;'>{username}</b></div>",
+                unsafe_allow_html=True,
+            )
+            authenticator.logout("🚪 Logga ut", location="sidebar")
+        return True
+    elif status is False:
+        st.error("❌ Fel användarnamn eller lösenord")
+    # status is None → väntar på input
     return False
 
 
@@ -551,8 +543,8 @@ def main():
     # Initiera session_state med defaults
     _init_session_state()
 
-    # Global lösenordsskydd – körs innan allt annat
-    if not _check_site_access():
+    # Global inloggning – körs innan allt annat
+    if not _run_auth():
         st.stop()
 
     # Ladda all data
