@@ -222,7 +222,14 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
         st.markdown("---")
         _latest_scan_file = None
         if scan_dates:
-            _latest_scan_file = max(REPORT_DIR.glob("scored_universe_*.csv"), key=lambda f: f.stat().st_mtime, default=None)
+            _latest_scan_file = None
+            # Prioritera .parquet, fallback till .csv
+            parquet_files = list(REPORT_DIR.glob("scored_universe_*.parquet"))
+            csv_files = list(REPORT_DIR.glob("scored_universe_*.csv"))
+            if parquet_files:
+                _latest_scan_file = max(parquet_files, key=lambda f: f.stat().st_mtime)
+            elif csv_files:
+                _latest_scan_file = max(csv_files, key=lambda f: f.stat().st_mtime)
         _time_str = "—"
         if _latest_scan_file:
             _mt = datetime.fromtimestamp(_latest_scan_file.stat().st_mtime)
@@ -399,63 +406,68 @@ def main():
     if not sc_df.empty and "sector" in sc_df.columns and page == "🏦 Småbolag":
         secs = sorted(sc_df["sector"].dropna().unique().tolist())
 
-    # Router
-    if page == "📚 Guide & Hjälp":
-        page_guide()
+    # ── Anti-ghosting: rensa förra sidans DOM helt innan nya sidan ritas ─────
+    # st.empty() skapar en slot vars innehåll Streamlit garanterat byter ut
+    # mellan rerendringar. Utan denna kan widgets från föregående sida ligga
+    # kvar i DOM:en under sidbyten ("ghosting").
+    _page_slot = st.empty()
+    with _page_slot.container():
+        if page == "📚 Guide & Hjälp":
+            page_guide()
 
-    elif page == "📊 Översikt":
-        page_overview(df, sc_df)
+        elif page == "📊 Översikt":
+            page_overview(df, sc_df)
 
-    elif page == "🔍 Veckoscanner":
-        # Injicera faktiska sektorer i filter
-        if not df.empty and "sector" in df.columns:
-            secs = sorted(df["sector"].dropna().unique().tolist())
-            if not filters.get("sector"):
-                filters["sector"] = []  # visa alla
-        page_weekly_scan(df, filters, holdings, watchlist)
+        elif page == "🔍 Veckoscanner":
+            # Injicera faktiska sektorer i filter
+            if not df.empty and "sector" in df.columns:
+                secs = sorted(df["sector"].dropna().unique().tolist())
+                if not filters.get("sector"):
+                    filters["sector"] = []  # visa alla
+            page_weekly_scan(df, filters, holdings, watchlist)
 
-    elif page == "🏦 Småbolag":
-        if not sc_df.empty and "sector" in sc_df.columns:
-            secs = sorted(sc_df["sector"].dropna().unique().tolist())
-        page_smallcap(sc_df, filters)
+        elif page == "🏦 Småbolag":
+            if not sc_df.empty and "sector" in sc_df.columns:
+                secs = sorted(sc_df["sector"].dropna().unique().tolist())
+            page_smallcap(sc_df, filters)
 
-    elif page == "🔍 Aktie-sök":
-        page_stock_search()
+        elif page == "🔍 Aktie-sök":
+            page_stock_search()
 
-    elif page == "⭐ Bevakningar":
-        page_watchlist_detail(df, watchlist)
+        elif page == "⭐ Bevakningar":
+            page_watchlist_detail(df, watchlist)
 
-    elif page == "🌍 Globala marknader":
-        page_global_markets()
+        elif page == "🌍 Globala marknader":
+            page_global_markets()
 
-    elif page == "💼 Portfölj":
-        page_portfolio(df, holdings, watchlist, sc_df=sc_df)
+        elif page == "💼 Portfölj":
+            page_portfolio(df, holdings, watchlist, sc_df=sc_df)
 
-    elif page == "📄 Paper Trading":
-        page_paper_trading()
+        elif page == "📄 Paper Trading":
+            page_paper_trading()
 
-    elif page == "🤖 AI Paper Trading":
-        page_ml_paper_trading()
+        elif page == "🤖 AI Paper Trading":
+            page_ml_paper_trading()
 
-    elif page == "🏭 Sektorrotation":
-        page_sector_rotation(df)
+        elif page == "🏭 Sektorrotation":
+            page_sector_rotation(df)
 
-    elif page == "🚨 Larm & Notiser":
-        page_alerts_notices(df)
+        elif page == "🚨 Larm & Notiser":
+            page_alerts_notices(df)
 
-    elif page == "📈 Backtesting":
-        page_backtesting()
+        elif page == "📈 Backtesting":
+            page_backtesting()
 
-    elif page == "📈 Teknisk analys":
-        if not df.empty and "sector" in df.columns:
-            secs = sorted(df["sector"].dropna().unique().tolist())
-        page_technical(df, filters)
+        elif page == "📈 Teknisk analys":
+            if not df.empty and "sector" in df.columns:
+                secs = sorted(df["sector"].dropna().unique().tolist())
+            page_technical(df, filters)
 
-    elif page == "🤖 AI":
-        page_ai(df, sc_df, holdings)
+        elif page == "🤖 AI":
+            page_ai(df, sc_df, holdings)
 
-    elif page == "🔧 Admin":
-        page_admin()
+        elif page == "🔧 Admin":
+            page_admin()
 
 
 if __name__ == "__main__":
