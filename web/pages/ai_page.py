@@ -378,6 +378,127 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
             top_n = int(match_num.group(1)) if match_num else 10
             top_n = max(3, min(top_n, 200))
 
+            def _fmt_val(v, pct=False, decimals=1, prefix="", suffix=""):
+                """Format a value cleanly; return '' if missing/NaN."""
+                import math
+                if v is None:
+                    return ""
+                try:
+                    f = float(v)
+                    if math.isnan(f) or math.isinf(f):
+                        return ""
+                    if pct:
+                        return f"{prefix}{f*100:.{decimals}f}%{suffix}"
+                    return f"{prefix}{f:.{decimals}f}{suffix}"
+                except (TypeError, ValueError):
+                    s = str(v).strip()
+                    return f"{prefix}{s}{suffix}" if s and s not in ("nan", "None", "") else ""
+
+            def _stock_card(r: dict, score_col: str) -> str:
+                """Build a rich one-line data card for a stock row (dict)."""
+                parts = []
+
+                # Score + ticker
+                import math as _math
+                score = r.get(score_col)
+                ticker = r.get("ticker", "")
+                try:
+                    score_s = f"({float(score):.0f}p)" if score is not None and not _math.isnan(float(score)) else ""
+                except (TypeError, ValueError):
+                    score_s = ""
+                parts.append(f"{ticker} {score_s}".strip())
+
+                # Name (truncated)
+                name = str(r.get("name") or "").strip()
+                if name and name != "nan":
+                    parts.append(name[:28])
+
+                # Sector (short)
+                sector = str(r.get("sector") or "").strip()
+                if sector and sector not in ("nan", "Unknown", "N/A"):
+                    parts.append(sector[:20])
+
+                # Entry + Trend signals
+                entry = str(r.get("entry_signal") or "").strip()
+                trend = str(r.get("trend_signal") or "").strip()
+                sig_parts = []
+                if entry and entry not in ("nan", ""):
+                    sig_parts.append(f"Entry:{entry}")
+                if trend and trend not in ("nan", ""):
+                    sig_parts.append(f"Trend:{trend}")
+                if sig_parts:
+                    parts.append(" ".join(sig_parts))
+
+                # Price + Analyst target
+                price = r.get("current_price")
+                currency = str(r.get("currency") or "").strip()
+                cur_sym = {"SEK": "kr", "USD": "$", "EUR": "€", "GBP": "£",
+                           "NOK": "kr", "DKK": "kr"}.get(currency, currency)
+                p_s = _fmt_val(price, decimals=1)
+                if p_s:
+                    parts.append(f"Kurs:{cur_sym}{p_s}")
+
+                target = r.get("target_mean_price")
+                t_s = _fmt_val(target, decimals=0)
+                if t_s:
+                    parts.append(f"Mål:{cur_sym}{t_s}")
+
+                # Valuation
+                pe = _fmt_val(r.get("pe_trailing"), decimals=1)
+                if pe:
+                    parts.append(f"PE:{pe}")
+
+                ev_ebitda = _fmt_val(r.get("ev_to_ebitda"), decimals=1)
+                if ev_ebitda:
+                    parts.append(f"EV/EBITDA:{ev_ebitda}")
+
+                # Quality
+                roe = _fmt_val(r.get("roe"), pct=True, decimals=0)
+                if roe:
+                    parts.append(f"ROE:{roe}")
+
+                # Growth
+                rev_g = _fmt_val(r.get("revenue_growth"), pct=True, decimals=0)
+                if rev_g:
+                    parts.append(f"Rev:{rev_g}")
+
+                # Momentum
+                rsi = _fmt_val(r.get("rsi_14"), decimals=0)
+                if rsi:
+                    parts.append(f"RSI:{rsi}")
+
+                ma200 = _fmt_val(r.get("price_vs_ma200"), pct=True, decimals=0)
+                if ma200:
+                    parts.append(f"MA200:{ma200}")
+
+                ret_1m = _fmt_val(r.get("return_1m"), pct=True, decimals=1)
+                if ret_1m:
+                    parts.append(f"1m:{ret_1m}")
+
+                ret_3m = _fmt_val(r.get("return_3m"), pct=True, decimals=1)
+                if ret_3m:
+                    parts.append(f"3m:{ret_3m}")
+
+                # Dividend (already stored as %, e.g. 2.68 = 2.68%)
+                div_raw = r.get("dividend_yield")
+                try:
+                    div_f = float(div_raw) if div_raw is not None else None
+                    if div_f is not None and not _math.isnan(div_f) and div_f > 0.05:
+                        parts.append(f"Utd:{div_f:.1f}%")
+                except (TypeError, ValueError):
+                    pass
+
+                # Piotroski
+                pio = r.get("piotroski_f")
+                if pio is not None:
+                    try:
+                        if not __import__("math").isnan(float(pio)):
+                            parts.append(f"Pio:{int(float(pio))}/9")
+                    except Exception:
+                        pass
+
+                return " | ".join(parts)
+
             if not df.empty:
                 context_parts.append(f"Global scan: {len(df)} bolag scannade")
                 if "score_total" in df.columns:
@@ -389,11 +510,8 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 score_col = "score_total"
                 if score_col in df.columns:
                     top_df = df.nlargest(top_n, score_col)
-                    topp_lista = "; ".join(
-                        f"{r['ticker']} ({r[score_col]:.0f}p)"
-                        for _, r in top_df.iterrows()
-                    )
-                    context_parts.append(f"Topp {top_n}: {topp_lista}")
+                    cards = [_stock_card(r.to_dict(), score_col) for _, r in top_df.iterrows()]
+                    context_parts.append(f"Topp {top_n} aktier (ticker | score | namn | sektor | signaler | kurs | mål | PE | EV/EBITDA | ROE | rev-tillväxt | RSI | MA200 | 1m | 3m | utd | Piotroski):\n" + "\n".join(cards))
 
             if not sc_df.empty:
                 sc_col = "sc_total" if "sc_total" in sc_df.columns else "score_total"
@@ -401,28 +519,31 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 if sc_col in sc_df.columns:
                     context_parts.append(f"smabolagssnitt: {sc_df[sc_col].mean():.1f}")
                     sc_top = sc_df.nlargest(top_n, sc_col)
-                    sc_lista = "; ".join(
-                        f"{r['ticker']} ({r[sc_col]:.0f}p)"
-                        for _, r in sc_top.iterrows()
-                    )
-                    context_parts.append(f"Topp {top_n} smabolag: {sc_lista}")
+                    sc_cards = [_stock_card(r.to_dict(), sc_col) for _, r in sc_top.iterrows()]
+                    context_parts.append(f"Topp {top_n} småbolag:\n" + "\n".join(sc_cards))
 
             # ── Portfölj ────────────────────────────────────────────────────
             if holdings is not None and not holdings.empty:
                 owned = holdings["ticker"].tolist()
-                context_parts.append(
-                    f"Användarens portfölj ({len(owned)} innehav): " + ", ".join(owned[:40])
-                )
-                # Add current scores for held stocks
-                if not df.empty and "score_total" in df.columns:
-                    score_lu = df.set_index("ticker")["score_total"].to_dict()
-                    scored_holdings = [
-                        f"{t}({score_lu[t]:.0f}p)" for t in owned if t in score_lu
-                    ]
-                    if scored_holdings:
-                        context_parts.append(
-                            f"Portfölj-scores: " + "; ".join(scored_holdings[:25])
-                        )
+                # Build rich data cards for portfolio holdings from the scored universe
+                if not df.empty and "ticker" in df.columns:
+                    df_lu = df.set_index("ticker")
+                    holding_cards = []
+                    for t in owned[:30]:
+                        if t in df_lu.index:
+                            card = _stock_card(df_lu.loc[t].to_dict(), "score_total")
+                            holding_cards.append(card)
+                        else:
+                            holding_cards.append(t)
+                    context_parts.append(
+                        f"Användarens portfölj ({len(owned)} innehav):\n"
+                        + "\n".join(holding_cards)
+                    )
+                else:
+                    context_parts.append(
+                        f"Användarens portfölj ({len(owned)} innehav): "
+                        + ", ".join(owned[:40])
+                    )
 
             now = datetime.now()
             days = ["måndag","tisdag","onsdag","torsdag","fredag","lördag","söndag"]
