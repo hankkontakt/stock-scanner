@@ -29,9 +29,12 @@ MAX_ARTICLES     = 5   # Max artiklar per aktie i rapporten
 
 # Publika RSS-flöden för svenska börsnyheter (ingen API-nyckel krävs)
 SWEDISH_RSS_FEEDS = [
-    ("Placera",         "https://www.placera.se/placera/atom.xml"),
-    ("Dagens Industri", "https://digital.di.se/rss"),
-    ("Realtid",         "https://www.realtid.se/rss.xml"),
+    ("Placera",          "https://www.placera.se/placera/atom.xml"),
+    ("Realtid",          "https://www.realtid.se/rss.xml"),
+    ("Affärsvärlden",    "https://www.affarsvarlden.se/rss.xml"),
+    ("SvD Näringsliv",   "https://www.svd.se/feed/section/naringsliv"),
+    ("Privata Affärer",  "https://www.privataaffarer.se/rss"),
+    ("Dagens Industri",  "https://digital.di.se/rss"),
 ]
 
 Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
@@ -431,20 +434,37 @@ def fetch_swedish_market_news(max_articles: int = 5) -> list:
 
     results = sorted(results, key=lambda x: x["age_hours"])[:max_articles]
 
-    # Fallback: Google News RSS om svenska RSS-källor inte gav något
+    # Fallback 1: Google News RSS
     if len(results) < max_articles:
+        for gq in ["Stockholmsbörsen", "börsen Sverige aktier"]:
+            try:
+                google = fetch_google_news_rss(
+                    gq, max_items=max_articles - len(results), lang="sv", days_back=3
+                )
+                for g in google:
+                    h = g.get("headline", g.get("title", ""))[:130]
+                    if h and not any(r["headline"][:60] == h[:60] for r in results):
+                        results.append({
+                            "headline":     h,
+                            "source":       g.get("source", "Google News"),
+                            "url":          g.get("url", ""),
+                            "datetime_str": g.get("datetime_str", "—"),
+                            "age_hours":    g.get("age_hours", 999),
+                        })
+            except Exception:
+                pass
+            if len(results) >= max_articles:
+                break
+
+    # Fallback 2: DuckDuckGo News (ingen API-nyckel, alltid tillgänglig)
+    if len(results) < 2:
         try:
-            google = fetch_google_news_rss(
-                "börsen aktier Sverige", max_items=max_articles, lang="sv", days_back=2
-            )
-            for g in google:
-                results.append({
-                    "headline":     g.get("headline", g.get("title", ""))[:130],
-                    "source":       g.get("source", "Google News"),
-                    "url":          g.get("url", ""),
-                    "datetime_str": g.get("datetime_str", "—"),
-                    "age_hours":    g.get("age_hours", 999),
-                })
+            # .ST-suffix → funktionen väljer svenska sökfrågor ("börsen aktier nyheter")
+            ddg = _fetch_duckduckgo_news("OMXS30.ST", "Stockholmsbörsen", max_items=max_articles)
+            for d in ddg:
+                h = d.get("headline", "")[:130]
+                if h and not any(r["headline"][:60] == h[:60] for r in results):
+                    results.append(d)
         except Exception:
             pass
 
