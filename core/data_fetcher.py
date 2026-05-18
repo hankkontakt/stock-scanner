@@ -752,11 +752,15 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         if shares and shares > 0:
             metrics["market_cap"] = float(shares) * current
 
-        # Returns over different periods
-        metrics["return_1m"]  = _safe_return(close, 21)
-        metrics["return_3m"]  = _safe_return(close, 63)
-        metrics["return_6m"]  = _safe_return(close, 126)
-        metrics["return_12m"] = _safe_return(close, 252)
+        # Returns over different periods — stored as PERCENTAGE (e.g. 3.5 = 3.5%)
+        _r1m  = _safe_return(close, 21)
+        _r3m  = _safe_return(close, 63)
+        _r6m  = _safe_return(close, 126)
+        _r12m = _safe_return(close, 252)
+        metrics["return_1m"]  = round(_r1m  * 100, 2) if _r1m  is not None else None
+        metrics["return_3m"]  = round(_r3m  * 100, 2) if _r3m  is not None else None
+        metrics["return_6m"]  = round(_r6m  * 100, 2) if _r6m  is not None else None
+        metrics["return_12m"] = round(_r12m * 100, 2) if _r12m is not None else None
 
         # Distance from 52-week high (negative is below)
         if metrics["52_week_high"]:
