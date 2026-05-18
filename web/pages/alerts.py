@@ -272,7 +272,7 @@ def page_alerts_notices(df: pd.DataFrame):
         yest_scored    = _load_nth_latest_scored(n=2)
 
         if today_scored.empty:
-            st.info("Ingen scandata tillgänglig. Kör en weekly scan för att generera data.")
+            st.info("Aktiedata saknas ännu — systemet uppdateras automatiskt varje vecka. Kom tillbaka snart.")
             st.stop()
 
         if yest_scored.empty:
@@ -614,7 +614,7 @@ def page_alerts_notices(df: pd.DataFrame):
                     else:
                         st.info("Inga rapporter de närmsta 14 dagarna.")
                 else:
-                    st.info("Kör en scan för att se kommande rapporter.")
+                    st.info("Rapportkalendern uppdateras automatiskt när ny aktiedata finns tillgänglig.")
             except Exception as _e:
                 st.caption(f"Rapportkalender ej tillgänglig: {_e}")
 

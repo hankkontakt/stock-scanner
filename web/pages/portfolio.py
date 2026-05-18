@@ -82,13 +82,13 @@ def _show_scan_pending_notifications():
         if k.startswith("scan_pending_") and v
     ]
     if pending:
-        tickers_str = ", ".join(f"`{t}`" for t in pending)
+        tickers_str = ", ".join(f"**{t}**" for t in pending)
+        n = len(pending)
         st.info(
-            f"⏳ **{tickers_str}** är {'nya' if len(pending) > 1 else 'ny'} i ditt universum "
-            "och läggs till i nästa scan. "
-            "Score, signaler och nyckeltal visas fullt ut efter nästa scan "
-            "(lördag för storbolag, måndag för småbolag). "
-            "Grundläggande prisinformation hämtas live från yfinance redan nu."
+            f"⏳ {tickers_str} {'har lagts' if n == 1 else 'har lagts'} till i din portfölj! "
+            "Detaljerad analys — som rekommendationer, score och signaler — "
+            "uppdateras automatiskt inom några dagar när systemet kör sin nästa analys. "
+            "Pris och grundläggande information visas redan nu."
         )
 
 
@@ -408,7 +408,7 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
             t  = r["Ticker"]
             sc = score_data.get(t, {})
             if not sc:
-                st.markdown(f"⚪ **`{t}`** — Ej i senaste scan (kör en ny scanning för att få rekommendation)")
+                st.markdown(f"⚪ **`{t}`** — Data uppdateras automatiskt inom kort (veckovis analys pågår)")
                 continue
             entry = sc.get("entry_signal", "—")
             score = sc.get("score_total", 0) or 0

@@ -73,9 +73,7 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
     st.title("🏦 Småbolag – svenska small/micro cap")
 
     if sc_df.empty:
-        st.warning(
-            "Ingen smallcap-data hittad. Kör `python smallcap/scanner.py` för att generera."
-        )
+        st.warning("Småbolagsdata håller på att laddas in. Systemet uppdateras automatiskt varje måndag — kom tillbaka då för de senaste analyserna.")
         return
 
     if "sector" in sc_df.columns:

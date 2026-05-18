@@ -540,6 +540,21 @@ def _run_auth() -> bool:
 
     status = st.session_state.get("authentication_status")
 
+    # Visa kontaktinfo under inloggningsformuläret (men bara när ej inloggad)
+    if status is not True:
+        st.markdown("""
+        <div style="text-align:center; margin-top:24px; padding: 0 20px;">
+          <div style="font-size:12px; color:#64748b; line-height:1.9;">
+            Inget konto? Kontakta
+            <a href="mailto:h.thurner@hotmail.com"
+               style="color:#4c9be8; text-decoration:none;">
+              h.thurner@hotmail.com
+            </a>
+            för att få tillgång.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     if status is True:
         username = st.session_state.get("username", "admin")
         # Lägg till utloggningsknapp i sidofältet

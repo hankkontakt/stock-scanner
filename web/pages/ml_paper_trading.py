@@ -83,13 +83,13 @@ def page_ml_paper_trading():
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Ingen equity-historik ännu. Pipeline registrerar trades vid varje körning.")
+            st.info("Ingen historik ännu — systemet börjar automatiskt registrera positioner varje vecka. Kom tillbaka om några dagar för att se hur det går.")
 
         # Öppna positioner
         open_df = mlpt.get_trades_df(universe, only_open=True)
         with st.expander(f"📋 Öppna positioner ({len(open_df)})", expanded=False):
             if open_df.empty:
-                st.caption("Inga öppna positioner.")
+                st.caption("Inga öppna positioner just nu.")
             else:
                 st.dataframe(open_df, use_container_width=True, hide_index=True, height=300)
 
@@ -98,7 +98,7 @@ def page_ml_paper_trading():
         closed_df = all_df[all_df["exit_date"].notna()] if not all_df.empty and "exit_date" in all_df.columns else pd.DataFrame()
         with st.expander(f"✅ Stängda positioner ({len(closed_df)})", expanded=False):
             if closed_df.empty:
-                st.caption("Inga stängda positioner ännu (positioner stängs efter 30 dagar).")
+                st.caption("Inga stängda positioner ännu — positioner hålls i upp till 30 dagar innan de stängs automatiskt.")
             else:
                 show = closed_df.copy()
                 if "realized_return" in show.columns:
