@@ -220,47 +220,86 @@ def page_alerts_notices(df: pd.DataFrame):
 
         st.markdown("---")
 
-        # ── Prislarm från bevakningslista ──────────────────────────────────
-        st.subheader("🚨 Prislarm – bevakningslista")
+        # ── STARK-signaler från bevakningslista ────────────────────────────
+        st.subheader("⚡ Köpsignaler – bevakningslista")
 
         if watchlist and not df.empty and "ticker" in df.columns:
             score_lu = df.set_index("ticker").to_dict("index")
-            alarms, normal = [], []
+            stark_hits, alarms, normal = [], [], []
+
             for item in watchlist:
-                t = item["ticker"]
-                sc = score_lu.get(t, {})
+                t     = item["ticker"]
+                sc    = score_lu.get(t, {})
                 price = sc.get("current_price") or sc.get("close")
                 change = sc.get("change_pct") or sc.get("day_change_pct")
-                entry = sc.get("entry_signal", "—")
-                if change is not None and abs(change) >= 3:
-                    alarms.append({
+                entry  = sc.get("entry_signal", "—")
+                score  = sc.get("score_total", 0) or 0
+                trend  = sc.get("trend_signal", "—")
+                conf   = sc.get("confidence_label", "—")
+
+                if entry == "STARK" and score >= 60:
+                    stark_hits.append({
                         "Ticker": t,
-                        "Bolag": item.get("name", t)[:35],
-                        "Pris": f"{price:.2f}" if price else "—",
-                        "Förändring": f"{change:+.1f}%",
-                        "Entry": entry,
-                        "Status": "🔴 Stor rörelse" if abs(change) >= 5 else "🟡 Rörelse",
+                        "Bolag":  item.get("name", t)[:30],
+                        "Score":  f"{score:.0f}",
+                        "Trend":  trend,
+                        "Konfidens": conf,
+                        "Pris":   f"{price:.2f}" if price else "—",
+                        "Dag":    f"{change:+.1f}%" if change is not None else "—",
+                    })
+                elif change is not None and abs(change) >= 3:
+                    alarms.append({
+                        "Ticker":      t,
+                        "Bolag":       item.get("name", t)[:30],
+                        "Pris":        f"{price:.2f}" if price else "—",
+                        "Dag":         f"{change:+.1f}%",
+                        "Entry":       entry,
+                        "Status":      "🔴 Stor rörelse" if abs(change) >= 5 else "🟡 Rörelse",
                     })
                 else:
                     normal.append({
                         "Ticker": t,
-                        "Bolag": item.get("name", t)[:35],
-                        "Pris": f"{price:.2f}" if price else "—",
-                        "Dag": f"{change:+.1f}%" if change is not None else "—",
-                        "Entry": entry,
+                        "Bolag":  item.get("name", t)[:30],
+                        "Pris":   f"{price:.2f}" if price else "—",
+                        "Dag":    f"{change:+.1f}%" if change is not None else "—",
+                        "Entry":  entry,
+                        "Score":  f"{score:.0f}" if score else "—",
                     })
 
-            if alarms:
-                st.warning(f"⚠️ {len(alarms)} aktie(r) med prislarm idag!")
-                st.dataframe(pd.DataFrame(alarms), use_container_width=True, hide_index=True)
+            # STARK-signaler — framhäv tydligt
+            if stark_hits:
+                st.markdown(
+                    f'<div style="background:#0d2a1a;border:2px solid #4caf50;border-radius:10px;'
+                    f'padding:14px 18px;margin-bottom:12px;">'
+                    f'<div style="font-size:14px;font-weight:700;color:#4caf50;margin-bottom:8px;">'
+                    f'⚡ {len(stark_hits)} aktie(r) på din bevakning har STARK köpsignal nu!</div>'
+                    f'<div style="font-size:12px;color:#a0c4a0;">Score ≥ 60 + STARK-signal = systemets starkaste köprekommendation. '
+                    f'Kontrollera alltid trend och nyheter innan du agerar.</div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.dataframe(
+                    pd.DataFrame(stark_hits),
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.0f"),
+                    },
+                )
             else:
-                st.success("✅ Inga prislarm – lugnt på bevakningslistan idag.")
+                st.info("Inga STARK-signaler på bevakningslistan just nu — systemet bevakar åt dig.")
 
+            # Prislarm
+            if alarms:
+                st.markdown("---")
+                st.markdown(f"**⚠️ Prislarm — {len(alarms)} aktie(r) med stor rörelse idag**")
+                st.dataframe(pd.DataFrame(alarms), use_container_width=True, hide_index=True)
+
+            # Alla övriga
             if normal:
-                with st.expander(f"📋 Alla bevakade ({len(normal)} aktier, inga larm)", expanded=False):
+                with st.expander(f"📋 Resten av bevakningslistan ({len(normal)} aktier)", expanded=False):
                     st.dataframe(pd.DataFrame(normal), use_container_width=True, hide_index=True)
         else:
-            st.info("Lägg till aktier i bevakningslistan för att se prislarm.")
+            st.info("Lägg till aktier i bevakningslistan (⭐ Bevakningar) för att få signaler och larm här.")
 
     # ══════════════════════════════════════════════════════════════════════
     # TAB 2 — Vad stack ut idag?
