@@ -164,6 +164,7 @@ OMX_SE = [
     "ATCO-A.ST", "ATCO-B.ST", "HEXA-B.ST", "EPIR-B.ST", "SWEC-B.ST",
     "NCC-B.ST", "SSAB-A.ST", "SSAB-B.ST", "BOLM.ST", "THULE.ST",
     "HUSQ-B.ST", "TROAX.ST", "DIOS.ST", "AFRY.ST", "MSAB-B.ST",
+    "NCAB.ST", "TAGM-B.ST",
 
     # Finans & Bank
     "SEB-A.ST", "SHB-A.ST", "SWED-A.ST", "NDA-SE.ST", "INVE-A.ST",

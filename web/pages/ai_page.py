@@ -525,25 +525,51 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
             # ── Portfölj ────────────────────────────────────────────────────
             if holdings is not None and not holdings.empty:
                 owned = holdings["ticker"].tolist()
-                # Build rich data cards for portfolio holdings from the scored universe
-                if not df.empty and "ticker" in df.columns:
-                    df_lu = df.set_index("ticker")
-                    holding_cards = []
-                    for t in owned[:30]:
-                        if t in df_lu.index:
-                            card = _stock_card(df_lu.loc[t].to_dict(), "score_total")
-                            holding_cards.append(card)
-                        else:
-                            holding_cards.append(t)
-                    context_parts.append(
-                        f"Användarens portfölj ({len(owned)} innehav):\n"
-                        + "\n".join(holding_cards)
-                    )
-                else:
-                    context_parts.append(
-                        f"Användarens portfölj ({len(owned)} innehav): "
-                        + ", ".join(owned[:40])
-                    )
+
+                # Build lookup from both scan universes
+                df_lu = df.set_index("ticker") if not df.empty and "ticker" in df.columns else None
+                sc_lu = sc_df.set_index("ticker") if not sc_df.empty and "ticker" in sc_df.columns else None
+                sc_score_col = "sc_total" if sc_lu is not None and "sc_total" in sc_df.columns else "score_total"
+
+                def _live_card_fallback(ticker: str) -> str:
+                    """Fetch basic data from yfinance for tickers not in the scan."""
+                    try:
+                        import yfinance as yf
+                        info = yf.Ticker(ticker).info or {}
+                        r = {
+                            "ticker":           ticker,
+                            "name":             info.get("longName") or info.get("shortName", ""),
+                            "sector":           info.get("sector", ""),
+                            "current_price":    info.get("currentPrice") or info.get("regularMarketPrice"),
+                            "currency":         info.get("currency", ""),
+                            "pe_trailing":      info.get("trailingPE"),
+                            "roe":              info.get("returnOnEquity"),
+                            "revenue_growth":   info.get("revenueGrowth"),
+                            "rsi_14":           None,
+                            "target_mean_price": info.get("targetMeanPrice"),
+                            "dividend_yield":   info.get("dividendYield") or 0,  # yfinance returns as %, e.g. 1.49 = 1.49%
+                            "market_cap":       info.get("marketCap"),
+                            "entry_signal":     "ej scannad",
+                            "trend_signal":     "",
+                        }
+                        return _stock_card(r, "score_total")
+                    except Exception:
+                        return ticker
+
+                holding_cards = []
+                for t in owned[:30]:
+                    if df_lu is not None and t in df_lu.index:
+                        holding_cards.append(_stock_card(df_lu.loc[t].to_dict(), "score_total"))
+                    elif sc_lu is not None and t in sc_lu.index:
+                        holding_cards.append(_stock_card(sc_lu.loc[t].to_dict(), sc_score_col))
+                    else:
+                        # Not in any scan — fetch live from yfinance
+                        holding_cards.append(_live_card_fallback(t))
+
+                context_parts.append(
+                    f"Användarens portfölj ({len(owned)} innehav):\n"
+                    + "\n".join(holding_cards)
+                )
 
             now = datetime.now()
             days = ["måndag","tisdag","onsdag","torsdag","fredag","lördag","söndag"]
