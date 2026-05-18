@@ -349,11 +349,38 @@ def calc_dividend_score(df: pd.DataFrame) -> pd.Series:
     return percentile_rank(yield_capped, ascending=True)
 
 
+def _insider_decay_weight(df: pd.DataFrame) -> pd.Series:
+    """
+    Beräkna time-based decay weight för insider-signaler.
+    Nyinsider-signaler får full vikt, men avtar linjärt mot 0 efter 180 dagar.
+    Detta eftersom forskning visar att insider alpha decayar inom 3-6 månader.
+    
+    Returnerar pd.Series med decay weights (0.0–1.0).
+    Om datum saknas → weight = 1.0 (full boost, bakåtkompatibelt).
+    """
+    if "insider_recent_date" not in df.columns:
+        return pd.Series(1.0, index=df.index)
+    
+    now = pd.Timestamp.now()
+    dates = pd.to_datetime(df["insider_recent_date"], errors="coerce")
+    
+    days_since = (now - dates).dt.days
+    decay = 1.0 - (days_since / 180.0)  # Linjär decay: 1.0 dag 0 → 0.0 dag 180
+    decay = decay.clip(lower=0.0, upper=1.0)
+    # NaT = datum saknas (t.ex. gammal cachad data utan datumsupport).
+    # Bakåtkompatibelt beteende: behåll full boost (1.0) så att befintliga
+    # insider-signaler utan datum inte tystnar plötsligt vid uppgradering.
+    # Ny data har alltid insider_recent_date satt av _get_insider_signal().
+    return decay.fillna(1.0)
+
+
 def calc_sentiment_score(df: pd.DataFrame) -> pd.Series:
     """
     Sentiment score från Finnhub-nyhetsdata + insiderhandelssignaler.
     'sentiment_raw' = -1 till +1 från Finnhub.
     Insider-boost: VD/CFO-köp → +20 poäng, cluster-köp → +30 poäng.
+    Insider-boosten är tidsdämpad (decay över 180 dagar) enligt forskning
+    som visar att insider alpha förfaller inom 3-6 månader.
     """
     if "sentiment_raw" not in df.columns or df["sentiment_raw"].isna().all():
         score = _neutral_series(df.index)
@@ -366,15 +393,18 @@ def calc_sentiment_score(df: pd.DataFrame) -> pd.Series:
         else:
             score = linear
 
-    # ── Insider-boost ────────────────────────────────────────────────────────
-    # VD/CFO köper: starkt bullish signal (+20, capped 95)
-    # Cluster (≥3 insiders inom 30d): ännu starkare (+30, capped 98)
+    # ── Insider-boost med tidsdämpning ──────────────────────────────────────
+    # VD/CFO köper: starkt bullish signal (+20 base, capped 95)
+    # Cluster (≥3 insiders inom 30d): ännu starkare (+30 base, capped 98)
+    # Båda dämpas linjärt över 180 dagar via _insider_decay_weight()
     if "insider_executive_buy" in df.columns:
         exec_mask    = df["insider_executive_buy"].fillna(False).astype(bool)
         cluster_mask = df.get("insider_cluster", pd.Series(False, index=df.index)).fillna(False).astype(bool)
+        decay_w      = _insider_decay_weight(df)
+        
         score = score.copy()
-        score[exec_mask]    = (score[exec_mask]    + 20).clip(upper=95)
-        score[cluster_mask] = (score[cluster_mask] + 30).clip(upper=98)
+        score[exec_mask]    = (score[exec_mask]    + 20 * decay_w[exec_mask]).clip(upper=95)
+        score[cluster_mask] = (score[cluster_mask] + 30 * decay_w[cluster_mask]).clip(upper=98)
 
     return score
 

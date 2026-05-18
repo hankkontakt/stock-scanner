@@ -7,6 +7,20 @@ from web.utils import (
     kpi_row, sector_bar_chart, score_distribution_chart, pct_fmt,
 )
 from web.stock_detail import render_stock_detail
+from core.country_flags import flag_for_ticker
+
+
+_COUNTRY_SUFFIX_MAP = {
+    "🇸🇪 Sverige":  ".ST",
+    "🇬🇧 UK":       ".L",
+    "🇩🇪 Tyskland": ".DE",
+    "🇫🇮 Finland":  ".HE",
+    "🇩🇰 Danmark":  ".CO",
+    "🇳🇴 Norge":    ".OL",
+    "🇨🇳 Kina":     ".SS",
+    "🇯🇵 Japan":    ".T",
+}
+_ALL_NON_US_SUFFIXES = set(_COUNTRY_SUFFIX_MAP.values())
 
 
 def _apply_sc_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
@@ -37,6 +51,20 @@ def _apply_sc_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     max_de = filters.get("sc_max_de", 300)
     if "debt_to_equity" in out.columns:
         out = out[out["debt_to_equity"].fillna(0) <= max_de]
+
+    # Landfilter
+    if filters.get("sc_only_swedish") and "ticker" in out.columns:
+        out = out[out["ticker"].str.endswith(".ST", na=False)]
+    else:
+        sel_countries = filters.get("sc_countries", [])
+        if sel_countries and "ticker" in out.columns:
+            us_sel   = "🇺🇸 USA" in sel_countries
+            suffixes = [_COUNTRY_SUFFIX_MAP[c] for c in sel_countries if c in _COUNTRY_SUFFIX_MAP]
+            def _cm(t: str) -> bool:
+                if any(t.endswith(s) for s in suffixes):   return True
+                if us_sel and not any(t.endswith(s) for s in _ALL_NON_US_SUFFIXES): return True
+                return False
+            out = out[out["ticker"].apply(_cm)]
 
     return out.reset_index(drop=True)
 
@@ -120,6 +148,10 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
                 "piotroski_score": "Piotroski",
             }
             rank_disp = rank_disp.rename(columns=rename)
+            if "Ticker" in rank_disp.columns:
+                rank_disp["Ticker"] = rank_disp["Ticker"].apply(
+                    lambda t: f"{flag_for_ticker(t)} {t}"
+                )
             for c in ["Dag%", "Vecka%", "6m%", "12m%"]:
                 if c in rank_disp.columns:
                     rank_disp[c] = rank_disp[c].apply(lambda v: pct_fmt(v))
@@ -151,10 +183,13 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
                 st.plotly_chart(score_distribution_chart(filt, score_col), use_container_width=True)
 
             if sc_event and sc_event.selection and sc_event.selection.rows:
-                sc_detail_ticker = rank_disp.iloc[sc_event.selection.rows[0]]["Ticker"]
+                idx = sc_event.selection.rows[0]
+                # filt har reset index från _apply_sc_filters → iloc matchar rank_disp
+                sc_detail_ticker = filt.iloc[idx]["ticker"]       # råticker, ingen flagg
+                sc_display_name  = rank_disp.iloc[idx]["Ticker"]  # med flagg, för titel
                 sc_row = sc_df[sc_df["ticker"] == sc_detail_ticker]
                 if not sc_row.empty:
-                    with st.expander(f"🔍 Detaljvy: {sc_detail_ticker}", expanded=True):
+                    with st.expander(f"🔍 Detaljvy: {sc_display_name}", expanded=True):
                         render_stock_detail(
                             sc_detail_ticker, row=sc_row.iloc[0], df=sc_df,
                             show_ai=True, show_news=False, show_chart=True, show_detail_data=True,
@@ -170,7 +205,9 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
                 "debt_to_equity", "current_ratio",
                 "free_cash_flow", "total_cash",
             ] if c in filt.columns]
-            kn = filt[key_cols].copy().rename(columns={
+            kn = filt[key_cols].copy()
+            kn["ticker"] = kn["ticker"].apply(lambda t: f"{flag_for_ticker(t)} {t}")
+            kn = kn.rename(columns={
                 "ticker": "Ticker", "sc_stars": "⭐",
                 "current_price": "Pris", "market_cap": "Mkap (USD)",
                 "ev_to_ebitda": "EV/EBITDA", "price_to_book": "P/B",
@@ -199,6 +236,7 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
             }
             fact_cols = [c for c in sc_factor_map if c in filt.columns]
             fact = filt[["ticker"] + fact_cols].copy()
+            fact["ticker"] = fact["ticker"].apply(lambda t: f"{flag_for_ticker(t)} {t}")
             fact = fact.rename(columns={"ticker": "Ticker", **{c: sc_factor_map[c] for c in fact_cols}})
             col_cfg2 = {lbl: st.column_config.ProgressColumn(lbl, min_value=0, max_value=100, format="%.0f")
                         for lbl in sc_factor_map.values() if lbl in fact.columns}
@@ -212,7 +250,9 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
                 "insider_net_buy_6m", "insider_buy_count", "insider_sell_count",
             ] if c in filt.columns]
             if ins_cols:
-                ins = filt[ins_cols].copy().rename(columns={
+                ins = filt[ins_cols].copy()
+                ins["ticker"] = ins["ticker"].apply(lambda t: f"{flag_for_ticker(t)} {t}")
+                ins = ins.rename(columns={
                     "ticker": "Ticker",
                     "insider_pct": "Insiders äger%",
                     "insider_signal": "Signal",

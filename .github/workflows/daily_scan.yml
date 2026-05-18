@@ -113,6 +113,15 @@ jobs:
           path: reports/*.md
           retention-days: 30
 
+      - name: 🧹 Rensa gamla rapporter (>14 dagar)
+        run: |
+          find reports/ -name "scored_universe_*.csv" -mtime +14 -delete 2>/dev/null || true
+          find reports/ -name "scored_universe_*.parquet" -mtime +14 -delete 2>/dev/null || true
+          find reports/ -name "smallcap_scored_*.csv" -mtime +14 -delete 2>/dev/null || true
+          find reports/ -name "smallcap_scored_*.parquet" -mtime +14 -delete 2>/dev/null || true
+          find reports/ -name "*.md" -mtime +7 -delete 2>/dev/null || true
+          echo "🧹 Retention policy executed"
+
       - name: 💾 Committa CSV- och rapportdata
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"

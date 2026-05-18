@@ -18,6 +18,7 @@ import json
 import os
 import hashlib
 import tempfile
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -26,6 +27,15 @@ import numpy as np
 import pandas as pd
 
 from . import config
+
+# Import news_fetcher (graceful if unavailable)
+try:
+    from core.news_fetcher import fetch_company_news as _fetch_news_ai
+except ImportError:
+    _fetch_news_ai = None
+
+_logger = logging.getLogger(__name__)
+_token_sanitize = __import__("re").compile(r"(sk-[a-zA-Z0-9]{10,}|AIza[a-zA-Z0-9_-]{20,})")
 
 
 # ── Runtime-säker secret-läsare ────────────────────────────────────────────
@@ -171,15 +181,16 @@ GEMINI_FALLBACK_MODELS = [
 # ══════════════════════════════════════════════════════════════════════════════
 
 SYSTEM_PROMPT_STOCK_ANALYSIS = """Du är en professionell aktieanalytiker som arbetar för MarketScan.
-Din uppgift är att analysera en enskild aktie baserat på kvantitativ data och ge en tydlig rekommendation.
+Din uppgift är att analysera en enskild aktie baserat på kvantitativ data och nyheter, och ge en tydlig rekommendation.
 
 Du ska:
 1. Analysera aktiens 8 faktorer (value, quality, momentum, growth, risk, size, dividend, sentiment)
 2. Kommentera Piotroski F-Score och vad den säger om redovisningskvalitet
 3. Analysera tekniska indikatorer (RSI, MACD, MA200, trend)
 4. Tolka entry-signalen (STARK/OK/VÄNTA/EJ AKTUELL)
-5. Ge en övergripande bedömning och tydlig rekommendation (STARKT KÖP / KÖP / BEVAKA / UNDVIK / SÄLJ)
-6. Nämn specifika styrkor och svagheter
+5. **Väg in nyheterna** – om nyheter finns med i datan, bedöm hur de påverkar aktien positivt eller negativt
+6. Ge en övergripande bedömning och tydlig rekommendation (STARKT KÖP / KÖP / BEVAKA / UNDVIK / SÄLJ)
+7. Nämn specifika styrkor och svagheter
 
 Håll analysen koncis men informativ. Skriv på svenska.
 Använd fetstil för att betona nyckelinsikter. 
@@ -294,10 +305,8 @@ def _resolve_provider(provider: str = "auto", task_type: str = "light") -> str:
         return "deepseek"
     
     # "hybrid" (default): light->gemini, heavy/deep->deepseek
-    if task_type in ("deep",):
-        # Djupa analyser använder alltid DeepSeek
-        return getattr(config, "AI_DEEP_PROVIDER", "deepseek") or "deepseek"
-    elif task_type == "heavy":
+    if task_type in ("deep", "heavy"):
+        # Djupa/tunga analyser använder alltid DeepSeek
         return getattr(config, "AI_DEEP_PROVIDER", "deepseek") or "deepseek"
     else:
         # "light": använd standard-provider (nu gemini)
@@ -370,6 +379,7 @@ def _deepseek_call(messages: list, system_prompt: str = "",
                     body = resp.json().get("error", {}).get("message", resp.text[:200])
                 except Exception:
                     body = resp.text[:200]
+                body = _token_sanitize.sub("***", body)
                 return f"❌ **DeepSeek nekade åtkomst ({resp.status_code}):** {body}"
 
             # ❌ 429 – rate-limit, vänta längre (exponential backoff)
@@ -429,7 +439,8 @@ def _deepseek_call(messages: list, system_prompt: str = "",
 
 
 def _gemini_call(messages: list, system_prompt: str = "",
-                 max_tokens: int = None, temperature: float = None) -> str:
+                 max_tokens: int = None, temperature: float = None,
+                 use_grounding: bool = False) -> str:
     """
     Anropa Google Gemini API med meddelanden via REST.
     Vid 404 (deprecation) provas automatiskt nästa modell i GEMINI_FALLBACK_MODELS.
@@ -473,6 +484,12 @@ def _gemini_call(messages: list, system_prompt: str = "",
         payload["systemInstruction"] = {
             "parts": [{"text": system_prompt}]
         }
+
+    # Google Search Grounding: Gemini söker automatiskt på Google under inference
+    # när konfidensen i träningsdata är låg (t.ex. för oklara nyheter om aktier).
+    # Gratis upp till 50 grounded queries/dag; triggas bara vid Djup/Extra djup + inget nyhetsflöde.
+    if use_grounding:
+        payload["tools"] = [{"google_search": {}}]
 
     import time
     import requests
@@ -599,7 +616,7 @@ def _gemini_call(messages: list, system_prompt: str = "",
 
 def _ai_call(messages: list, system_prompt: str = "",
              max_tokens: int = None, temperature: float = None,
-             provider: str = "auto") -> str:
+             provider: str = "auto", use_grounding: bool = False) -> str:
     """
     Anropa vald AI-provider med meddelanden.
     Routar automatiskt till DeepSeek eller Gemini baserat på provider-parametern.
@@ -613,6 +630,7 @@ def _ai_call(messages: list, system_prompt: str = "",
         max_tokens: Max tokens i svaret
         temperature: Kreativitet (0.0 = deterministisk, 1.0 = slumpmässig)
         provider: "auto", "deepseek" eller "gemini"
+        use_grounding: Om True och provider==gemini: aktivera Google Search Grounding
 
     Returns:
         AI-svar som formaterad text
@@ -620,7 +638,8 @@ def _ai_call(messages: list, system_prompt: str = "",
     resolved = _resolve_provider(provider)
 
     if resolved == "gemini":
-        result = _gemini_call(messages, system_prompt, max_tokens, temperature)
+        result = _gemini_call(messages, system_prompt, max_tokens, temperature,
+                              use_grounding=use_grounding)
         # Fallback till DeepSeek om Gemini misslyckas:
         #   - tomt svar ""  (ogiltig nyckel, 429 uttömd, 403)
         #   - felmeddelande som börjar med "⚠️" (rate-limit, timeout, blockering)
@@ -683,14 +702,16 @@ def _set_cache(cache_key: str, response: str):
 def _call_with_cache(system_prompt: str, messages: list, cache_key: str,
                      max_tokens: int = None, temperature: float = None,
                      force_refresh: bool = False,
-                     provider: str = "auto") -> str:
+                     provider: str = "auto",
+                     use_grounding: bool = False) -> str:
     """Anropa AI med caching. Om force_refresh=True, hoppa över cache."""
     if not force_refresh:
         cached = _get_cached(cache_key)
         if cached:
             return cached
 
-    response = _ai_call(messages, system_prompt, max_tokens, temperature, provider=provider)
+    response = _ai_call(messages, system_prompt, max_tokens, temperature,
+                        provider=provider, use_grounding=use_grounding)
     _set_cache(cache_key, response)
     return response
 
@@ -784,13 +805,46 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None,
     data_str = _safe_json(filtered_data, indent=2, ensure_ascii=False) if filtered_data else "Ingen data tillgänglig för denna aktie."
     user_message = f"Analysera aktien **{ticker}**.\n\nTillgänglig data:\n```json\n{data_str}\n```"
 
+    # Hämta nyheter automatiskt för alla djupnivåer
+    news_lines = []
+    company_name = stock_data.get("Company Name", "")
+    if _fetch_news_ai is not None:
+        try:
+            news_items = _fetch_news_ai(ticker, days_back=7, company_name=company_name) or []
+            for n in news_items[:6]:
+                title = n.get("headline", n.get("title", "")).strip()
+                src = n.get("source", "")
+                age = n.get("age_hours")
+                age_s = f" ({age:.0f}h sedan)" if age is not None else ""
+                if title:
+                    news_lines.append(f"- {title} [{src}]{age_s}")
+        except Exception as e:
+            _logger.warning("Kunde inte hämta nyheter för %s: %s", ticker, e)
+
+    if news_lines:
+        user_message += "\n\n📰 **Senaste nyheter:**\n" + "\n".join(news_lines)
+
     # Djupanpassad system-prompt
     k3_note = _k3_accounting_note(ticker, depth)
     system_prompt = SYSTEM_PROMPT_STOCK_ANALYSIS + _depth_system_prompt_addon(depth) + k3_note
 
-    # depth ingår i cache-nyckeln så olika djupnivåer cachas separat
-    cache_key = _make_cache_key("analyze_stock", ticker, data_str[:500] if filtered_data else "no_data",
-                                _resolve_provider(provider), depth)
+    # Gemini Search Grounding: Aktiveras vid Djup/Extra djup om inga nyheter hittades.
+    # Gemini söker då automatiskt på Google under inference för att komplettera analysen.
+    # Gratis upp till 50 queries/dag — täcker normalt 5-20 djupanalyser per dag.
+    _use_grounding = (
+        not news_lines
+        and depth in ("Djup", "Extra djup")
+        and _resolve_provider(provider) == "gemini"
+    )
+    if _use_grounding:
+        _logger.info("Activating Gemini grounding for %s (depth=%s, no news found)", ticker, depth)
+
+    # depth + grounding + datum ingår i cache-nyckeln
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    data_hash = hashlib.md5(data_str.encode()).hexdigest()[:12] if filtered_data else "no_data"
+    cache_key = _make_cache_key("analyze_stock", ticker, data_hash, today_str,
+                                _resolve_provider(provider), depth,
+                                "grounded" if _use_grounding else "")
     return _call_with_cache(
         system_prompt,
         [{"role": "user", "content": user_message}],
@@ -798,6 +852,7 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None,
         max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
+        use_grounding=_use_grounding,
     )
 
 

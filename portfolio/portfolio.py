@@ -144,11 +144,22 @@ def _atr_stop(ticker: str, price: float, mult: float = 2.5) -> tuple:
     return round(stop, 2), round((stop / price - 1) * 100, 1)
 
 
-def _half_kelly(portfolio_value: float) -> dict:
+def _shrinkage_kelly(portfolio_value: float, num_positions: int = 10) -> dict:
     """
-    Half-Kelly positionsstorlek baserat på paper trading-historik.
-    Formel: Kelly = win_rate - (1-win_rate)/win_loss_ratio; Half = Kelly × 0.5
-    Klamrat 2–10 % av portföljvärdet.
+    Kelly-kriterium med shrinkage mot equal weight enligt Baker & McHale (2013).
+    
+    Formel: w_opt = (1-φ) × w_kelly + φ × (1/N)
+    där:
+      - w_kelly = Half-Kelly (standard)
+      - 1/N     = equal weight
+      - φ       = shrinkage intensity (0=full Kelly, 1=full equal weight)
+    
+    φ bestäms av estimeringsosäkerhet:
+      - φ = 0.7 när using_defaults (för få trades för pålitlig estimation)
+      - φ = 0.5 när vi har ≥20 trades (viss tilltro till datan)
+      - φ minskar mot 0.2 när n_trades → 100+
+    
+    Detta skyddar mot estimation error som annars leder till överbetting.
     """
     try:
         from portfolio.paper_trading import get_kelly_inputs
@@ -158,14 +169,37 @@ def _half_kelly(portfolio_value: float) -> dict:
 
     wr = ki["win_rate"]
     wl = ki["win_loss_ratio"]
+    n_trades = ki.get("n_trades", 0)
+    using_defaults = ki.get("using_defaults", True)
+    
+    # Half-Kelly
     kelly = max(0.0, wr - (1 - wr) / wl) if wl else 0.0
-    hk    = max(0.02, min(0.10, kelly * 0.5))
-
+    hk = max(0.02, min(0.10, kelly * 0.5))
+    
+    # Equal weight (1/N, clamped to reasonable range)
+    ew = max(0.02, min(0.25, 1.0 / max(num_positions, 1)))
+    
+    # Shrinkage intensity φ baserat på antal trades
+    if using_defaults or n_trades < 20:
+        phi = 0.7  # Hög osäkerhet → mest equal weight
+    elif n_trades < 50:
+        phi = 0.5  # Viss data → 50/50
+    elif n_trades < 100:
+        phi = 0.3  # Mer data → mer Kelly
+    else:
+        phi = 0.2  # Mycket data → mest Kelly
+    
+    # Shrinkage: blanda Kelly och equal weight
+    shrunk = (1 - phi) * hk + phi * ew
+    
     return {
-        "pct":          round(hk * 100, 1),
-        "sek":          round(portfolio_value * hk),
-        "n_trades":     ki.get("n_trades", 0),
-        "using_defaults": ki.get("using_defaults", True),
+        "pct":          round(shrunk * 100, 1),
+        "sek":          round(portfolio_value * shrunk),
+        "n_trades":     n_trades,
+        "using_defaults": using_defaults,
+        "shrinkage_phi": phi,
+        "kelly_raw":    round(hk * 100, 1),
+        "equal_weight": round(ew * 100, 1),
     }
 
 
@@ -268,13 +302,18 @@ def get_buy_recommendations(
     if portfolio_value <= 0 and "market_value" in analysis.columns:
         portfolio_value = float(analysis["market_value"].sum(skipna=True))
 
-    ki = _half_kelly(portfolio_value)
+    n_pos = len(analysis)
+    ki = _shrinkage_kelly(portfolio_value, num_positions=n_pos)
     analysis["kelly_pct"]           = ki["pct"]
     analysis["kelly_suggested_sek"] = ki["sek"]
+    
+    phi_note = f" (φ={ki['shrinkage_phi']:.0f})" if ki.get("shrinkage_phi") is not None else ""
     analysis["kelly_note"] = (
-        f"Half-Kelly: {ki['pct']:.0f}% av portföljvärdet = {ki['sek']:,.0f} kr"
+        f"Shrinkage-Kelly: {ki['pct']:.0f}% av portföljvärdet = {ki['sek']:,.0f} kr"
+        + phi_note
         + (" (standardvärden – för få trades)" if ki.get("using_defaults") else
            f" ({ki['n_trades']} stängda trades)")
+        + f" | Kelly raw: {ki['kelly_raw']:.0f}% | Equal weight: {ki['equal_weight']:.0f}%"
     )
 
     def _fmt_stop(row) -> str:
