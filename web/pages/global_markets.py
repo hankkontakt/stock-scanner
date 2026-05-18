@@ -97,7 +97,14 @@ def page_global_markets():
         with st.spinner("Hämtar marknadsnyheter..."):
             try:
                 from core.news_fetcher import fetch_swedish_market_news, fetch_global_market_news
-                _fh_key = config.FINNHUB_API_KEY
+                import os as _os
+                # Läs nyckeln fresh vid körtid (inte cachad modulnivå-variabel),
+                # eftersom st.secrets kan bli tillgängligt efter att config.py importerades.
+                _fh_key = (
+                    _os.getenv("FINNHUB_API_KEY", "")
+                    or config.FINNHUB_API_KEY
+                    or (st.secrets.get("FINNHUB_API_KEY", "") if hasattr(st, "secrets") else "")
+                )
                 swedish = fetch_swedish_market_news(max_articles=8)
                 global_n = fetch_global_market_news(_fh_key, max_articles=6)
 
@@ -128,6 +135,11 @@ def page_global_markets():
                         if _fh_key:
                             st.info("Inga globala nyheter just nu.")
                         else:
-                            st.info("Inga globala nyheter — FINNHUB_API_KEY saknas i secrets.")
+                            st.warning(
+                                "**FINNHUB_API_KEY saknas.** "
+                                "Lägg till nyckeln under **Streamlit Cloud → App settings → Secrets** "
+                                "(inte GitHub Secrets — de är separata). "
+                                "Format: `FINNHUB_API_KEY = \"din_nyckel\"`"
+                            )
             except Exception as e:
                 st.warning(f"Nyheter ej tillgängliga: {e}")
