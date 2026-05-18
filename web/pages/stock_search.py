@@ -295,18 +295,36 @@ def page_stock_search():
                     context_lines.append(f"Tid: {day_name} {swedish_time} ({is_weekend})")
                     context_str = "\n".join(context_lines)
 
-                    full_prompt = f"""Du är en professionell aktieanalytiker. Här är live-data för {ticker} ({name}):
+                    # Fetch live news so AI can reference current headlines
+                    news_lines = []
+                    try:
+                        from core.news_fetcher import fetch_company_news
+                        raw_news = fetch_company_news(ticker, days_back=7, company_name=name) or []
+                        for n in raw_news[:8]:
+                            title = n.get("headline", n.get("title", "")).strip()
+                            src   = n.get("source", "")
+                            age   = n.get("age_hours")
+                            age_s = f" ({age:.0f}h sedan)" if age is not None else ""
+                            if title:
+                                news_lines.append(f"- {title} [{src}]{age_s}")
+                    except Exception:
+                        pass
 
-{context_str}
+                    # Build context using the "Färska nyheter:" separator that ai_chat understands
+                    chat_context = context_str
+                    if news_lines:
+                        chat_context += "\n\nFärska nyheter:\n" + "\n".join(news_lines)
 
-Användaren frågar: {prompt}
-
-Svara detaljerat med siffror från datan ovan. Ge investeringsrekommendation om möjligt."""
+                    user_question = f"Aktie: {ticker} ({name})\n\n{prompt}"
 
                     result = ai_analysis.ai_chat(
-                        full_prompt, context="",
+                        user_question, context=chat_context,
                         history=st.session_state["stock_chat"],
                         provider=provider, depth=_get_depth())
+                    if news_lines:
+                        with st.expander(f"📰 {len(news_lines)} nyheter hämtades live", expanded=False):
+                            for line in news_lines:
+                                st.markdown(line)
                     st.markdown(result)
                 except Exception as e:
                     st.error(f"Fel: {e}")

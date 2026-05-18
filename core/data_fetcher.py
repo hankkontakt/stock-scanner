@@ -153,6 +153,51 @@ class _RateLimitError(Exception):
     pass
 
 
+# ── Thread-local rate-limit flag set by yfinance log handler ─────────────
+# yfinance v0.2.x silently catches 429s and only logs a warning – it does
+# NOT raise. We install a logging handler on the "yfinance" logger that
+# sets a thread-local flag when a "Too Many Requests" message appears.
+# _fetch_single_ticker checks this flag after each fetch and treats empty
+# results as RATE_LIMITED (for pass-2 retry) instead of generic FAILED.
+_RATE_LIMIT_TLS = threading.local()
+
+
+class _YFinanceRateLimitDetector(__import__("logging").Handler):
+    """Logging handler that flips a thread-local flag on 429 warnings."""
+    def emit(self, record):
+        try:
+            msg = record.getMessage().lower()
+            if "too many requests" in msg or "rate limit" in msg or "429" in msg:
+                _RATE_LIMIT_TLS.hit = True
+        except Exception:
+            pass
+
+
+def _install_yf_rate_limit_detector():
+    """Install detector exactly once on yfinance's root logger."""
+    import logging
+    yf_logger = logging.getLogger("yfinance")
+    # Avoid duplicate handlers if module reloaded
+    if not any(isinstance(h, _YFinanceRateLimitDetector) for h in yf_logger.handlers):
+        handler = _YFinanceRateLimitDetector()
+        handler.setLevel(logging.WARNING)
+        yf_logger.addHandler(handler)
+        # Make sure yfinance logger actually emits warnings
+        if yf_logger.level == logging.NOTSET or yf_logger.level > logging.WARNING:
+            yf_logger.setLevel(logging.WARNING)
+
+
+_install_yf_rate_limit_detector()
+
+
+def _reset_rate_limit_flag():
+    _RATE_LIMIT_TLS.hit = False
+
+
+def _rate_limit_was_hit() -> bool:
+    return getattr(_RATE_LIMIT_TLS, "hit", False)
+
+
 def _retry(fn, *args, timeout_sec=12, **kwargs):
     """
     Kör fn() med retry-logik. TimeoutError = direkt fail, ingen retry.
@@ -233,7 +278,14 @@ def fetch_stock_info(ticker: str) -> dict:
         _write_cache(dynamic_key, dynamic_data)
         return info
 
+    except _RateLimitError:
+        # Re-raise so caller (_fetch_single_ticker) can mark as RATE_LIMITED
+        # for pass-2 retry. Otherwise the failure looks like a generic error.
+        raise
     except Exception as e:
+        err_str = str(e)
+        if "429" in err_str or "too many requests" in err_str.lower() or "rate limit" in err_str.lower():
+            raise _RateLimitError(err_str) from e
         print(f"  ⚠ Failed to fetch info for {ticker}: {e}")
         merged = {**(static_cached or {}), **(dynamic_cached or {})}
         return merged if merged else {}
@@ -320,7 +372,12 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
         _write_cache(cache_key, hist)
         return hist
 
+    except _RateLimitError:
+        raise  # Let caller mark as RATE_LIMITED for pass-2 retry
     except Exception as e:
+        err_str = str(e)
+        if "429" in err_str or "too many requests" in err_str.lower() or "rate limit" in err_str.lower():
+            raise _RateLimitError(err_str) from e
         print(f"  ⚠ Failed to fetch prices for {ticker}: {e}")
         return pd.DataFrame()
 
@@ -757,6 +814,9 @@ def _fetch_single_ticker(
     if ticker in blacklist:
         return (ticker, None, "SKIPPED")
 
+    # Reset thread-local rate-limit flag before each ticker
+    _reset_rate_limit_flag()
+
     try:
         # Rate-limit före varje tickers anrop totalt (info + history)
         _YAHOO_RATE_LIMITER.acquire()
@@ -778,6 +838,12 @@ def _fetch_single_ticker(
         history = fetch_price_history(ticker, period="1y")
 
         if not info and history.empty:
+            # Check if yfinance log handler caught a rate-limit warning
+            # during these fetches (yfinance silently swallows 429s and only logs)
+            if _rate_limit_was_hit():
+                with _RATE_LIMIT_LOCK:
+                    _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
+                return (ticker, None, "RATE_LIMITED")
             with _RATE_LIMIT_LOCK:
                 _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
             return (ticker, None, "FAILED")

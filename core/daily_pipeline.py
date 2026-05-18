@@ -993,10 +993,64 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     # 3. AI-ANROP
     # ═══════════════════════════════════════════════════════════════════════
 
+    # ─── Fetch live news for AI context (portfolio + watchlist + top-5) ─────
+    pipeline_news_text = ""
+    try:
+        from core.news_fetcher import fetch_company_news
+        # Build set of tickers worth fetching news for – keep small to avoid rate limits
+        news_tickers: list[tuple[str, str | None]] = []
+        seen = set()
+        # Portfolio holdings
+        for h in (enriched or [])[:10]:
+            t = h.get("ticker")
+            if t and t not in seen:
+                seen.add(t)
+                news_tickers.append((t, h.get("name")))
+        # Watchlist
+        for t in (watchlist_tickers or [])[:5]:
+            if t and t not in seen:
+                seen.add(t)
+                news_tickers.append((t, None))
+        # Top-5 picks
+        for tp in (top_10 or [])[:5]:
+            t = tp.get("ticker") if isinstance(tp, dict) else None
+            if t and t not in seen:
+                seen.add(t)
+                news_tickers.append((t, tp.get("name") if isinstance(tp, dict) else None))
+
+        news_blocks = []
+        for ticker_, cname in news_tickers[:15]:
+            try:
+                items = fetch_company_news(ticker_, days_back=3, company_name=cname) or []
+                if items:
+                    lines = []
+                    for n in items[:4]:
+                        title = n.get("headline", n.get("title", "")).strip()
+                        src = n.get("source", "")
+                        age = n.get("age_hours")
+                        age_s = f" ({age:.0f}h sedan)" if age is not None else ""
+                        if title:
+                            lines.append(f"- {title} [{src}]{age_s}")
+                    if lines:
+                        news_blocks.append(f"{ticker_}:\n" + "\n".join(lines))
+            except Exception:
+                continue
+        if news_blocks:
+            pipeline_news_text = "\n\n".join(news_blocks)
+            logger.info(f"  📰 Hämtade nyheter för {len(news_blocks)} tickers (AI-kontext)")
+    except Exception as e:
+        logger.warning(f"  ⚠ Kunde inte hämta nyheter för AI: {e}")
+
     ai_section = ""
     try:
         logger.info("  🤖 Anropar AI...")
         provider = os.getenv("AI_PROVIDER", "auto") or "auto"
+
+        def _add_news(base_ctx: str) -> str:
+            """Append fetched news to the context using the separator ai_chat understands."""
+            if pipeline_news_text:
+                return base_ctx + "\n\nFärska nyheter:\n" + pipeline_news_text
+            return base_ctx
 
         if mode == "morning":
             ctx = _build_ai_morning_context(
@@ -1005,7 +1059,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             )
             result = ai_analysis.ai_chat(
                 "Skapa dagens morgonbrief. Analysera datan och ge mig en personlig rapport.",
-                context=ctx,
+                context=_add_news(ctx),
                 provider=provider,
                 depth="Djup",
             )
@@ -1023,7 +1077,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             )
             result = ai_analysis.ai_chat(
                 "Skapa dagens kvällsrapport. Analysera datan och ge mig en personlig sammanfattning.",
-                context=ctx,
+                context=_add_news(ctx),
                 provider=provider,
                 depth="Djup",
             )
@@ -1036,7 +1090,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             )
             result = ai_analysis.ai_chat(
                 "Skapa en djup veckoanalys. Analysera datan och ge mig en fullständig rapport med rekommendationer.",
-                context=ctx,
+                context=_add_news(ctx),
                 provider=provider,
                 depth="Extra djup",
             )
@@ -1049,7 +1103,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             )
             result = ai_analysis.ai_chat(
                 "Skapa en småbolagsanalys. Identifiera de bästa köpkandidaterna och ge konkreta rekommendationer.",
-                context=ctx,
+                context=_add_news(ctx),
                 system_prompt_override=SMALLCAP_AI_SYSTEM_PROMPT,
                 provider=provider,
                 depth="Djup",
