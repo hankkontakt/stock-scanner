@@ -180,11 +180,13 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                          type="primary", use_container_width=True):
                 with st.spinner(f"Hämtar nyheter och analyserar {sel_ticker}..."):
                     try:
-                        # Fetch live news first
+                        # Fetch live news first (look up company name for better search)
                         fetched_news = []
                         try:
                             from core.news_fetcher import fetch_company_news
-                            fetched_news = fetch_company_news(sel_ticker, days_back=7) or []
+                            _cname_row = df[df["ticker"] == sel_ticker]
+                            _cname = str(_cname_row.iloc[0]["name"]) if not _cname_row.empty and "name" in _cname_row.columns else None
+                            fetched_news = fetch_company_news(sel_ticker, days_back=7, company_name=_cname) or []
                         except Exception:
                             pass
 
@@ -455,10 +457,20 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 if not fetch_for and wants_news and not df.empty and "score_total" in df.columns:
                     fetch_for = [df.nlargest(1, "score_total").iloc[0]["ticker"]]
 
+                # Build ticker → company name lookup from both scored DataFrames
+                name_lookup: dict[str, str] = {}
+                for _sdf in (df, sc_df):
+                    if not _sdf.empty and "ticker" in _sdf.columns and "name" in _sdf.columns:
+                        for _, _row in _sdf[["ticker", "name"]].dropna().iterrows():
+                            t_key = str(_row["ticker"]).upper()
+                            if t_key not in name_lookup and _row["name"]:
+                                name_lookup[t_key] = str(_row["name"])
+
                 try:
                     from core.news_fetcher import fetch_company_news
                     for mt in fetch_for:
-                        news_list = fetch_company_news(mt, days_back=7) or []
+                        cname = name_lookup.get(mt.upper())
+                        news_list = fetch_company_news(mt, days_back=7, company_name=cname) or []
                         if news_list:
                             lines = []
                             for n in news_list[:8]:
@@ -597,7 +609,13 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                         fetched = []
                         try:
                             from core.news_fetcher import fetch_company_news
-                            fetched = fetch_company_news(news_ticker, days_back=7) or []
+                            _nt_row = df[df["ticker"] == news_ticker] if not df.empty and "ticker" in df.columns else pd.DataFrame()
+                            _nt_name = str(_nt_row.iloc[0]["name"]) if not _nt_row.empty and "name" in _nt_row.columns else None
+                            # Also check news_options if ticker came from search
+                            if not _nt_name and news_search.strip() and "news_options" in dir():
+                                _selected_hit = news_options.get(news_label, {})
+                                _nt_name = _selected_hit.get("name")
+                            fetched = fetch_company_news(news_ticker, days_back=7, company_name=_nt_name) or []
                         except Exception:
                             pass
 
@@ -647,7 +665,9 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
             with st.expander("🔍 Visa råa nyheter (utan AI)", expanded=False):
                 try:
                     from core.news_fetcher import fetch_company_news
-                    raw_news = fetch_company_news(news_ticker, days_back=3) or []
+                    _raw_row = df[df["ticker"] == news_ticker] if not df.empty and "ticker" in df.columns else pd.DataFrame()
+                    _raw_name = str(_raw_row.iloc[0]["name"]) if not _raw_row.empty and "name" in _raw_row.columns else None
+                    raw_news = fetch_company_news(news_ticker, days_back=3, company_name=_raw_name) or []
                     if raw_news:
                         for n in raw_news[:8]:
                             title = n.get("headline", n.get("title", "—"))
