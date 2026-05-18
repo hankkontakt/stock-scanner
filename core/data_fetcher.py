@@ -40,28 +40,58 @@ socket.setdefaulttimeout(7)
 
 # ── Lager 2: requests.Session.send-patch ─────────────────────────────────
 # Sätter explicit (connect, read)-timeout på alla requests-anrop som
-# yfinance gör utan att ange timeout själv.
+# yfinance gör utan att ange timeout själv. Inspekterar också HTTP-status
+# för att flippa thread-local flaggor vid 429 (rate-limit) och 404 (delisted).
+# yfinance v0.2.x sväljer dessa fel silently, så detta är vår enda
+# tillförlitliga signal innan yfinance returnerar tom data.
 _original_session_send = requests.sessions.Session.send
 
 def _timeout_session_send(self, request, **kwargs):
     if kwargs.get("timeout") is None:
-        # (3 sekunder connect, 5 sekunder read)
         kwargs["timeout"] = (3, 5)
-    return _original_session_send(self, request, **kwargs)
+    response = _original_session_send(self, request, **kwargs)
+    # Inspect status code to set thread-local flags – referenced later by
+    # _fetch_single_ticker. The flags are initialised in _reset_rate_limit_flag().
+    try:
+        sc = getattr(response, "status_code", None)
+        if sc == 429:
+            import threading as _t
+            _tls = globals().get("_RATE_LIMIT_TLS")
+            if _tls is not None:
+                _tls.hit = True
+        elif sc == 404:
+            _tls = globals().get("_RATE_LIMIT_TLS")
+            if _tls is not None:
+                _tls.delisted = True
+    except Exception:
+        pass
+    return response
 
 requests.sessions.Session.send = _timeout_session_send
 
-# ── curl_cffi timeout-patch ──────────────────────────────────────────────
+# ── curl_cffi timeout-patch + status-code-detektion ──────────────────────
 # yfinance 0.2.37+ använder curl_cffi som HTTP-backend. Den kringgår
-# socket.setdefaulttimeout() och requests.Session-patchen ovan.
-# Patch: sätt hård (connect=10s, read=20s) timeout på alla curl_cffi-anrop.
+# requests.Session-patchen ovan, så vi måste patcha den separat.
 try:
     import curl_cffi.requests as _cf_req
     _original_cf_request = _cf_req.Session.request
     def _patched_cf_request(self, method, url, *args, **kwargs):
         if kwargs.get("timeout") is None:
             kwargs["timeout"] = (10, 20)
-        return _original_cf_request(self, method, url, *args, **kwargs)
+        response = _original_cf_request(self, method, url, *args, **kwargs)
+        try:
+            sc = getattr(response, "status_code", None)
+            if sc == 429:
+                _tls = globals().get("_RATE_LIMIT_TLS")
+                if _tls is not None:
+                    _tls.hit = True
+            elif sc == 404:
+                _tls = globals().get("_RATE_LIMIT_TLS")
+                if _tls is not None:
+                    _tls.delisted = True
+        except Exception:
+            pass
+        return response
     _cf_req.Session.request = _patched_cf_request
 except Exception:
     pass  # curl_cffi saknas – inget att patcha
@@ -153,33 +183,53 @@ class _RateLimitError(Exception):
     pass
 
 
-# ── Thread-local rate-limit flag set by yfinance log handler ─────────────
-# yfinance v0.2.x silently catches 429s and only logs a warning – it does
+class _DelistedError(Exception):
+    """Raised when Yahoo Finance returns HTTP 404 – ticker is delisted/unknown."""
+    pass
+
+
+# ── Thread-local flags set by yfinance log handler ───────────────────────
+# yfinance v0.2.x silently catches errors and only logs warnings – it does
 # NOT raise. We install a logging handler on the "yfinance" logger that
-# sets a thread-local flag when a "Too Many Requests" message appears.
-# _fetch_single_ticker checks this flag after each fetch and treats empty
-# results as RATE_LIMITED (for pass-2 retry) instead of generic FAILED.
+# sets thread-local flags when matching messages appear.
+# _fetch_single_ticker checks the flags after each fetch and classifies
+# the result accordingly (RATE_LIMITED for pass-2 retry, DELISTED for
+# auto-blacklisting, FAILED for unknown errors).
 _RATE_LIMIT_TLS = threading.local()
 
 
-class _YFinanceRateLimitDetector(__import__("logging").Handler):
-    """Logging handler that flips a thread-local flag on 429 warnings."""
+def _is_delist_message(msg: str) -> bool:
+    """Detect 404/delisted/unknown-symbol messages from yfinance output."""
+    msg = msg.lower()
+    return (
+        "possibly delisted" in msg
+        or "no data found, symbol may be delisted" in msg
+        or "quote not found for symbol" in msg
+        or "no fundamentals data found for symbol" in msg
+        or "404" in msg and "not found" in msg
+    )
+
+
+class _YFinanceLogDetector(__import__("logging").Handler):
+    """Logging handler that flips thread-local flags on relevant warnings."""
     def emit(self, record):
         try:
             msg = record.getMessage().lower()
-            if "too many requests" in msg or "rate limit" in msg or "429" in msg:
+            if "too many requests" in msg or "rate limit" in msg or " 429 " in f" {msg} ":
                 _RATE_LIMIT_TLS.hit = True
+            if _is_delist_message(msg):
+                _RATE_LIMIT_TLS.delisted = True
         except Exception:
             pass
 
 
-def _install_yf_rate_limit_detector():
+def _install_yf_log_detector():
     """Install detector exactly once on yfinance's root logger."""
     import logging
     yf_logger = logging.getLogger("yfinance")
     # Avoid duplicate handlers if module reloaded
-    if not any(isinstance(h, _YFinanceRateLimitDetector) for h in yf_logger.handlers):
-        handler = _YFinanceRateLimitDetector()
+    if not any(isinstance(h, _YFinanceLogDetector) for h in yf_logger.handlers):
+        handler = _YFinanceLogDetector()
         handler.setLevel(logging.WARNING)
         yf_logger.addHandler(handler)
         # Make sure yfinance logger actually emits warnings
@@ -187,15 +237,20 @@ def _install_yf_rate_limit_detector():
             yf_logger.setLevel(logging.WARNING)
 
 
-_install_yf_rate_limit_detector()
+_install_yf_log_detector()
 
 
 def _reset_rate_limit_flag():
     _RATE_LIMIT_TLS.hit = False
+    _RATE_LIMIT_TLS.delisted = False
 
 
 def _rate_limit_was_hit() -> bool:
     return getattr(_RATE_LIMIT_TLS, "hit", False)
+
+
+def _delisted_was_hit() -> bool:
+    return getattr(_RATE_LIMIT_TLS, "delisted", False)
 
 
 def _retry(fn, *args, timeout_sec=12, **kwargs):
@@ -279,13 +334,14 @@ def fetch_stock_info(ticker: str) -> dict:
         return info
 
     except _RateLimitError:
-        # Re-raise so caller (_fetch_single_ticker) can mark as RATE_LIMITED
-        # for pass-2 retry. Otherwise the failure looks like a generic error.
         raise
     except Exception as e:
         err_str = str(e)
-        if "429" in err_str or "too many requests" in err_str.lower() or "rate limit" in err_str.lower():
+        low = err_str.lower()
+        if "429" in err_str or "too many requests" in low or "rate limit" in low:
             raise _RateLimitError(err_str) from e
+        if "404" in err_str or _is_delist_message(low):
+            raise _DelistedError(err_str) from e
         print(f"  ⚠ Failed to fetch info for {ticker}: {e}")
         merged = {**(static_cached or {}), **(dynamic_cached or {})}
         return merged if merged else {}
@@ -373,11 +429,14 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
         return hist
 
     except _RateLimitError:
-        raise  # Let caller mark as RATE_LIMITED for pass-2 retry
+        raise
     except Exception as e:
         err_str = str(e)
-        if "429" in err_str or "too many requests" in err_str.lower() or "rate limit" in err_str.lower():
+        low = err_str.lower()
+        if "429" in err_str or "too many requests" in low or "rate limit" in low:
             raise _RateLimitError(err_str) from e
+        if "404" in err_str or _is_delist_message(low):
+            raise _DelistedError(err_str) from e
         print(f"  ⚠ Failed to fetch prices for {ticker}: {e}")
         return pd.DataFrame()
 
@@ -783,8 +842,54 @@ class _RateLimiter:
 _YAHOO_RATE_LIMITER = _RateLimiter(calls_per_sec=config.PARALLEL_WORKERS)
 
 # Rate-limit detection state
-_RATE_LIMIT_COUNTER = {"consecutive_failures": 0, "last_rate_limit_time": 0.0}
+_RATE_LIMIT_COUNTER = {
+    "consecutive_failures":   0,
+    "consecutive_429":        0,    # Räknare specifikt för 429-träffar i rad
+    "global_pause_until":     0.0,  # Unix-tidsstämpel: alla workers pausar tills denna tid
+    "last_rate_limit_time":   0.0,
+}
 _RATE_LIMIT_LOCK = threading.Lock()
+
+# Threshold: hur många 429:or i rad innan alla workers tvångspausar
+_RATE_LIMIT_CLUSTER_THRESHOLD = 5
+# Hur länge pausen ska vara (Yahoo:s rate-limit-fönster är typiskt ~30-60s)
+_RATE_LIMIT_PAUSE_SEC         = 30.0
+
+
+def _record_rate_limit_hit():
+    """Räkna en 429-träff. Trigga global paus om många kommer i klump."""
+    now = time.time()
+    with _RATE_LIMIT_LOCK:
+        _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
+        _RATE_LIMIT_COUNTER["consecutive_429"] += 1
+        _RATE_LIMIT_COUNTER["last_rate_limit_time"] = now
+        if _RATE_LIMIT_COUNTER["consecutive_429"] >= _RATE_LIMIT_CLUSTER_THRESHOLD:
+            # Kluster av 429 → tvångspausa alla workers
+            new_until = now + _RATE_LIMIT_PAUSE_SEC
+            if new_until > _RATE_LIMIT_COUNTER["global_pause_until"]:
+                _RATE_LIMIT_COUNTER["global_pause_until"] = new_until
+                print(f"  ⏸  Rate-limit-kluster upptäckt ({_RATE_LIMIT_COUNTER['consecutive_429']} i rad) "
+                      f"– alla workers pausar {_RATE_LIMIT_PAUSE_SEC:.0f}s")
+            # Återställ räknaren så vi inte triggar paus om och om igen
+            _RATE_LIMIT_COUNTER["consecutive_429"] = 0
+
+
+def _record_success():
+    """Återställ klustret-räknaren vid lyckat anrop."""
+    with _RATE_LIMIT_LOCK:
+        _RATE_LIMIT_COUNTER["consecutive_failures"] = 0
+        _RATE_LIMIT_COUNTER["consecutive_429"] = 0
+
+
+def _wait_if_globally_paused():
+    """Om global paus är aktiv, vänta tills den är över."""
+    while True:
+        with _RATE_LIMIT_LOCK:
+            until = _RATE_LIMIT_COUNTER["global_pause_until"]
+        remaining = until - time.time()
+        if remaining <= 0:
+            return
+        time.sleep(min(remaining, 2.0))
 
 def _is_rate_limited(failed_tickers_n: int, total_tickers: int) -> bool:
     """
@@ -818,14 +923,11 @@ def _fetch_single_ticker(
     _reset_rate_limit_flag()
 
     try:
-        # Rate-limit före varje tickers anrop totalt (info + history)
-        _YAHOO_RATE_LIMITER.acquire()
+        # Vänta om global rate-limit-paus är aktiv (alla workers respekterar den)
+        _wait_if_globally_paused()
 
-        # Rate-limit detection: om ≥3 tickers i rad har misslyckats,
-        # lägg på extra fördröjning för att ge Yahoo API tid att återhämta sig
-        with _RATE_LIMIT_LOCK:
-            if _RATE_LIMIT_COUNTER["consecutive_failures"] >= 3:
-                time.sleep(5.0)
+        # Per-anrop-throttle (calls_per_sec) över hela poolen
+        _YAHOO_RATE_LIMITER.acquire()
 
         info = fetch_stock_info(ticker)
 
@@ -838,37 +940,41 @@ def _fetch_single_ticker(
         history = fetch_price_history(ticker, period="1y")
 
         if not info and history.empty:
-            # Check if yfinance log handler caught a rate-limit warning
-            # during these fetches (yfinance silently swallows 429s and only logs)
+            # Check thread-local flags set by yfinance log handler
             if _rate_limit_was_hit():
-                with _RATE_LIMIT_LOCK:
-                    _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
+                _record_rate_limit_hit()
                 return (ticker, None, "RATE_LIMITED")
+            if _delisted_was_hit():
+                # Don't increment 429 counter for delisted – different problem
+                return (ticker, None, "DELISTED")
             with _RATE_LIMIT_LOCK:
                 _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
             return (ticker, None, "FAILED")
 
-        # Success – reset consecutive failure counter
-        with _RATE_LIMIT_LOCK:
-            _RATE_LIMIT_COUNTER["consecutive_failures"] = 0
+        # Success – reset all failure counters
+        _record_success()
         metrics = extract_metrics(ticker, info, history)
         return (ticker, metrics, "OK")
 
     except _RateLimitError:
-        with _RATE_LIMIT_LOCK:
-            _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
+        _record_rate_limit_hit()
         return (ticker, None, "RATE_LIMITED")
+    except _DelistedError:
+        return (ticker, None, "DELISTED")
     except TimeoutError:
         with _RATE_LIMIT_LOCK:
             _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
         return (ticker, None, "TIMEOUT")
     except Exception as e:
         err_str = str(e)
+        low = err_str.lower()
+        if "429" in err_str or "too many requests" in low or "rate limit" in low:
+            _record_rate_limit_hit()
+            return (ticker, None, "RATE_LIMITED")
+        if "404" in err_str or _is_delist_message(low):
+            return (ticker, None, "DELISTED")
         with _RATE_LIMIT_LOCK:
             _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
-        # Also catch rate limits that slip through (e.g. from fetch_stock_info directly)
-        if "429" in err_str or "Too Many Requests" in err_str.lower() or "rate limit" in err_str.lower():
-            return (ticker, None, "RATE_LIMITED")
         return (ticker, None, f"ERROR: {e}")
 
 
@@ -896,6 +1002,7 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
     rows = []
     failed = []
     rate_limited = []  # Tickers that got 429 – will retry in pass 2
+    delisted = []      # Tickers that got 404 – will be auto-blacklisted
     completed = 0
 
     # ── Pass 1: parallell hämtning med PARALLEL_WORKERS ────────────────────────
@@ -917,6 +1024,8 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
                 rows.append(metrics)
             elif status == "RATE_LIMITED":
                 rate_limited.append(ticker)
+            elif status == "DELISTED":
+                delisted.append(ticker)
             else:
                 failed.append(ticker)
 
@@ -949,6 +1058,8 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
                 time.sleep(2)
                 if metrics is not None:
                     rows.append(metrics)
+                elif status == "DELISTED":
+                    delisted.append(ticker)
                 else:
                     still_failed.append(ticker)
 
@@ -957,15 +1068,48 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
                   f"{', '.join(still_failed[:10])}{'...' if len(still_failed) > 10 else ''}")
         failed.extend(still_failed)
 
+    # ── Auto-blacklist delisted tickers så de hoppas över nästa körning ─────
+    if delisted:
+        try:
+            from datetime import date as _date
+            _bl_path.parent.mkdir(parents=True, exist_ok=True)
+            existing = {}
+            if _bl_path.exists():
+                try:
+                    existing = json.loads(_bl_path.read_text())
+                except Exception:
+                    existing = {}
+            today_iso = _date.today().isoformat()
+            new_count = 0
+            for t in delisted:
+                if t not in existing:
+                    existing[t] = {
+                        "reason": "Yahoo Finance returnerade 404 (delisted/uppköpt/okänd ticker)",
+                        "date":   today_iso,
+                        "auto":   True,
+                    }
+                    new_count += 1
+            if new_count:
+                _bl_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False))
+                if verbose:
+                    print(f"  🚫 Auto-blacklistade {new_count} delistade tickers: "
+                          f"{', '.join(delisted[:8])}{'...' if len(delisted) > 8 else ''}")
+        except Exception as e:
+            if verbose:
+                print(f"  ⚠ Kunde inte uppdatera blacklist.json: {e}")
+
     df = pd.DataFrame(rows)
 
-    if failed and verbose:
-        n = len(failed)
-        print(f"  ⚠ {n} tickers misslyckades totalt: "
-              f"{', '.join(failed[:10])}{'...' if n > 10 else ''}")
-        if n > 15:
-            print(f"  💡 Tips: Kör filters.clear_blacklist() om välkända aktier är med i listan")
     if verbose:
+        if delisted:
+            print(f"  🚫 {len(delisted)} delistade tickers (auto-blacklistade): "
+                  f"{', '.join(delisted[:10])}{'...' if len(delisted) > 10 else ''}")
+        if failed:
+            n = len(failed)
+            print(f"  ⚠ {n} tickers misslyckades (övriga fel): "
+                  f"{', '.join(failed[:10])}{'...' if n > 10 else ''}")
+            if n > 15:
+                print(f"  💡 Tips: Kör filters.clear_blacklist() om välkända aktier är med i listan")
         print(f"  ✓ {len(df)}/{total} aktier hämtade")
 
     return df
