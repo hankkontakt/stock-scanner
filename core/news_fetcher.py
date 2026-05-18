@@ -736,27 +736,72 @@ def fetch_yfinance_news(ticker: str, max_items: int = 5) -> list:
 
 def fetch_company_news(ticker: str, days_back: int = 7, company_name: str = None) -> list:
     """
-    Hämtar bolagsspecifika nyheter via Finnhub + Google News RSS och slår ihop resultaten.
-    Kompletterar med Yahoo Finance-nyheter om Finnhub + Google ger < 3 resultat.
+    Hämtar bolagsspecifika nyheter via flera källor och slår ihop resultaten.
+
+    Källprioritet:
+      1. Finnhub (bäst för US/globala aktier)
+      2. Google News RSS – svenska (med riktigt bolagsnamn om tillgängligt)
+      3. Google News RSS – engelska (fallback för internationell täckning)
+      4. Nasdaq Nordic officiella börsmeddelanden (för .ST-aktier)
+      5. Yahoo Finance (sista utväg)
 
     Args:
-        ticker:       Ticker-symbol (t.ex. "INVE-B.ST")
+        ticker:       Ticker-symbol (t.ex. "CLAS-B.ST")
         days_back:    Hur långt bakåt att söka nyheter
-        company_name: Bolagsnamn för Google-sökning (t.ex. "Investor AB").
-                      Om None används en förenklad ticker-baserad sökterm.
+        company_name: Bolagsnamn för Google-sökning (t.ex. "Clas Ohlson AB").
+                      Om None används en förenklad ticker-baserad sökterm – sämre träffsäkerhet!
 
     Returnerar [{headline, source, url, datetime_str, age_hours}] nyast först.
     """
     import os
     api_key = os.getenv("FINNHUB_API_KEY", "")
+
+    # 1. Finnhub
     finnhub_results = fetch_news(ticker, api_key, days=days_back) if api_key else []
+
+    # 2. Google News svenska
     search_term = company_name.strip() if company_name and company_name.strip() else _google_search_term(ticker)
-    google_results = fetch_google_news_rss(search_term, max_items=5, days_back=days_back)
-    merged = _merge_news(finnhub_results, google_results, max_total=7)
-    # Supplement with Yahoo Finance headlines if Finnhub + Google returned few results
+    google_sv = fetch_google_news_rss(search_term, max_items=5, days_back=days_back, lang="sv")
+
+    merged = _merge_news(finnhub_results, google_sv, max_total=8)
+
+    # 3. Google News engelska (fallback – different results than Swedish)
+    if len(merged) < 3 and company_name:
+        # Strip "AB", "publ" etc. for cleaner English search
+        en_term = company_name.strip().replace(" AB", "").replace(" (publ)", "").strip()
+        google_en = fetch_google_news_rss(en_term, max_items=4, days_back=days_back, lang="en")
+        merged = _merge_news(merged, google_en, max_total=8)
+
+    # 4. Nasdaq Nordic officiella pressreleaser (Swedish stocks only)
+    if len(merged) < 4 and ticker.upper().endswith(".ST") and company_name:
+        try:
+            nasdaq_all = fetch_nasdaq_nordic_news(market="SSE", max_items=50, hours_back=days_back * 24)
+            # Filter to this company by name match
+            cname_lower = company_name.lower()
+            # Strip legal suffixes for fuzzy match
+            cname_short = cname_lower.replace(" ab", "").replace(" (publ)", "").strip()
+            company_news = [
+                {
+                    "headline":     n["headline"],
+                    "source":       "Nasdaq Nordic",
+                    "url":          n.get("url", ""),
+                    "datetime_str": n.get("datetime_str", "—"),
+                    "age_hours":    n.get("age_hours", 999),
+                }
+                for n in nasdaq_all
+                if cname_short in n.get("company", "").lower()
+                   or cname_short in n.get("headline", "").lower()
+            ]
+            if company_news:
+                merged = _merge_news(merged, company_news, max_total=8)
+        except Exception:
+            pass
+
+    # 5. Yahoo Finance (sista utväg)
     if len(merged) < 3:
         yf_news = fetch_yfinance_news(ticker, max_items=5)
-        merged = _merge_news(merged, yf_news, max_total=7)
+        merged = _merge_news(merged, yf_news, max_total=8)
+
     return merged
 
 
