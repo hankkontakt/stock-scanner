@@ -226,8 +226,10 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
         }
         _reverse_map = {v: k for k, v in _known_pages.items()}
 
-        # Läs query_param "p" – om den finns och matchar en känd sida,
-        # använd den som nav_page (stöd för tillbaka-knapp i webbläsaren)
+        # Läs query_param "p" från URL:en.
+        # Webbläsaren sparar automatiskt en historikentry när query_params
+        # ändras (Streamlit ≥1.31). JavaScript nedan lyssnar på popstate
+        # (tillbaka/forward) och laddar om sidan med rätt ?p=.
         _qp = st.query_params.get_all("p")
         _qp_page = _qp[0] if _qp else None
         if _qp_page and _qp_page in _known_pages:
@@ -236,8 +238,8 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             st.session_state["nav_page"] = "📊 Översikt"
 
         def _navigate_to(page_title: str):
-            """Navigera till en sida – uppdaterar både session_state och URL.
-            Detta gör att webbläsarens historik fungerar (tillbaka-knappen)."""
+            """Navigera till en sida – query_params skapar automatiskt
+            en historikentry i webbläsaren → tillbaka-knappen fungerar."""
             st.session_state["nav_page"] = page_title
             qp_key = _reverse_map.get(page_title, "overview")
             st.query_params["p"] = qp_key
@@ -641,6 +643,39 @@ def main():
 
         elif page == "🔧 Admin":
             page_admin()
+
+    # ── Webbläsarens tillbaka/forward-knapp ──────────────────────────────
+    # Använder JavaScript för att pusha till browser-historik via
+    # history.pushState + lyssna på popstate (tillbaka/forward).
+    # Detta krävs eftersom st.query_params i sig inte enough för att
+    # pusha till webbläsarens historikstack i alla Streamlit-versioner.
+    _cur_page_key = "overview"
+    for _title, _key in [
+        ("📊 Översikt","overview"),("📚 Guide & Hjälp","guide"),
+        ("🔍 Veckoscanner","weekly-scan"),("🏦 Småbolag","smallcap"),
+        ("🔍 Aktie-sök","stock-search"),("⭐ Bevakningar","watchlist"),
+        ("🌍 Globala marknader","global-markets"),("🏭 Sektorrotation","sector-rotation"),
+        ("📈 Backtesting","backtesting"),("💼 Portfölj","portfolio"),
+        ("📄 Paper Trading","paper-trading"),("🤖 AI Paper Trading","ai-paper-trading"),
+        ("🚨 Larm & Notiser","alerts"),("📈 Teknisk analys","technical"),
+        ("🤖 AI","ai"),("🔧 Admin","admin"),
+    ]:
+        if _title == page:
+            _cur_page_key = _key
+            break
+
+    st.markdown(f"""<script>
+try {{
+    var p = '{_cur_page_key}';
+    var u = new URLSearchParams(window.location.search);
+    if (u.get('p') !== p) {{
+        window.history.pushState({{p:p}},'','?p='+p);
+    }}
+    window.addEventListener('popstate',function(e){{
+        if(e.state&&e.state.p) window.location.search='p='+e.state.p;
+    }});
+}}catch(e){{}}
+</script>""", unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
