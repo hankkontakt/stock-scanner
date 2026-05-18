@@ -165,6 +165,142 @@ Baseras på 50- och 200-dagars glidande medelvärden:
 Köp helst i upptrend — "the trend is your friend".
         """)
 
+    # ── Inloggning & konton ───────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("🔑 Inloggning & konton")
+
+    with st.expander("Hur loggar jag in?", expanded=False):
+        st.markdown("""
+Appen kräver ett personligt konto med användarnamn och lösenord.
+
+1. Öppna appen i webbläsaren
+2. Fyll i ditt **användarnamn** och **lösenord** på inloggningssidan
+3. Klicka **Logga in**
+
+En inloggningscookie sparas i 90 dagar — du behöver inte logga in igen på samma enhet.
+        """)
+
+    with st.expander("Varje användare har egna data", expanded=False):
+        st.markdown("""
+Varje inloggad användare har sin **egna** portfölj, bevakningslista och paper trading-historik.
+Inga data delas mellan användare.
+
+- Scandata (scores, signaler, historik) är delad — samma för alla
+- Portfölj, bevakning och paper trading är personligt per inloggning
+        """)
+
+    with st.expander("Glömt lösenord / ny användare", expanded=False):
+        st.markdown("""
+Kontakta administratören för att:
+- Återställa ditt lösenord
+- Skapa ett nytt konto
+
+Admin-sidan nås bara av admin-kontot (du ser ingen admin-knapp annars).
+        """)
+
+    # ── Portföljhantering ─────────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("💼 Portföljhantering")
+
+    with st.expander("Importera från Avanza (rekommenderat)", expanded=False):
+        st.markdown("""
+Det enklaste sättet att lägga in dina aktier är att importera direkt från Avanza:
+
+1. Logga in på **avanza.se**
+2. Gå till **Konto → din depå/ISK**
+3. Klicka på fliken **Innehav**
+4. Scrolla längst ner → klicka **Exportera**
+5. Spara filen (.csv) på din dator
+6. Gå till **💼 Portfölj → Importera från Avanza** i MarketScan
+7. Ladda upp filen — verifiera och bekräfta varje rad
+
+Filen läses lokalt i din webbläsare och skickas inte vidare.
+        """)
+
+    with st.expander("Lägg till via sök", expanded=False):
+        st.markdown("""
+I **💼 Portfölj → Sök & lägg till** kan du söka på bolagsnamn (t.ex. "Volvo", "Apple") eller ticker
+(t.ex. VOLV-B.ST, AAPL). Välj aktie från listan, fyll i **antal** och **genomsnittligt inköpspris**
+och klicka Lägg till.
+        """)
+
+    with st.expander("Lägg till manuellt (med ticker)", expanded=False):
+        st.markdown("""
+Vet du exakt vilket Yahoo Finance-ticker aktien har? Använd **✏️ Lägg till manuellt**:
+
+- Svenska aktier slutar på `.ST` — t.ex. `VOLV-B.ST`, `ERIC-B.ST`, `SEB-A.ST`
+- Amerikanska: `AAPL`, `MSFT`, `NVDA`
+- Övriga: sök på finance.yahoo.com för korrekt ticker
+
+Fyll i ticker, antal aktier och genomsnittligt inköpspris per aktie.
+        """)
+
+    with st.expander("Redigera eller ta bort en aktie", expanded=False):
+        st.markdown("""
+Gå till **💼 Portfölj → Ta bort aktie**, välj aktien i listan och klicka antingen:
+
+- **✏️ Ändra antal / pris** — uppdatera om du köpt fler eller snittar ner
+- **🗑️ Ta bort** — ta bort aktien helt ur portföljen
+        """)
+
+    # ── E-postnotiser ─────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("📧 E-postnotiser")
+
+    with st.expander("Vilka rapporter skickas?", expanded=False):
+        st.markdown("""
+| Rapport | Frekvens | Innehåll |
+|---|---|---|
+| 🌅 Morgonbrief | Varje vardag ~7:00 | STARK-signaler, portföljstatus, marknad |
+| 🌆 Kvällsuppdatering | Varje vardag ~18:00 | Daglig sammanfattning, movers |
+| 📊 Veckosammanfattning | Fredag | AI-veckoanalys, topplistor, portfölj |
+| 🏦 Småbolagsrapport | Måndag | Senaste småbolagsscan |
+| ⚡ STARK-signaler | Vid signal | Omedelbart när en stark köpsignal dyker upp |
+| 💼 Portföljlarm | Vid händelse | Stop-loss eller take-profit nått |
+| 🚨 Tekniska fel | Vid fel | Pipeline-problem |
+        """)
+
+    with st.expander("Hur aktiverar jag/inaktiverar notiser?", expanded=False):
+        st.markdown("""
+Gå till **⚙️ Inställningar** i sidofältet under PORTFÖLJ:
+
+1. Fyll i din e-postadress
+2. Bocka i de rapporter du vill ha
+3. Klicka **Spara inställningar**
+
+Dina inställningar sparas omedelbart och tas i bruk vid nästa utskick.
+        """)
+
+    with st.expander("Personliga portföljdata i e-posten", expanded=False):
+        st.markdown("""
+I morgonbriefet och veckorapporten inkluderas automatiskt **dina egna innehav och bevakningar**:
+
+- Aktuell P&L per aktie
+- Senaste score och entrysignal
+- Din bevakningslista med signaler
+
+Ingen annan användare ser din portföljdata — rapporterna är personaliserade per konto.
+        """)
+
+    # ── Scan-fördröjning ──────────────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("⏳ Ny aktie i universumet — scan-fördröjning")
+
+    with st.expander("Varför ser jag inte data direkt för en nylagd aktie?", expanded=False):
+        st.markdown("""
+När du lägger till en aktie i din portfölj eller bevakningslista som **inte tidigare funnits i
+systemets universum**, läggs den automatiskt till i nästa schemalagda scan.
+
+**Tidplan:**
+- **Storbolag** (index-aktier): scan körs **lördag** ~06:00
+- **Småbolag** (First North/Spotlight): scan körs **måndag** ~06:00
+
+Tills dess är **live-prisinformation** (från yfinance) tillgänglig direkt — men fullständiga
+score, signaler och nyckeltal saknas.
+
+Du ser ett blått infofält (**⏳**) bredvid aktien tills nästa scan är klar.
+        """)
+
     # ── Sidorna ──────────────────────────────────────────────────────────────
     st.markdown("---")
     st.subheader("🗺️ Sidornas funktioner")
@@ -187,10 +323,11 @@ Köp helst i upptrend — "the trend is your friend".
 
     with tab_p:
         pages_p = [
-            ("💼 Portfölj", "Hantera dina riktiga innehav. Lägg till aktier du köpt, se orealiserad vinst/förlust, och få rekommendationer om när det kan vara dags att agera. Portföljdata sparas i GitHub-repot."),
+            ("💼 Portfölj", "Hantera dina riktiga innehav. Importera från Avanza, sök & lägg till, eller ange manuellt. Se orealiserad vinst/förlust och portföljanalys. Data är personlig per inloggning."),
             ("📄 Paper Trading", "Simulera handel utan riktiga pengar. Systemet öppnar och stänger positioner automatiskt baserat på klassisk score-strategi. Starta 100 000 kr och se hur strategin presterar."),
             ("🤖 AI Paper Trading", "Samma som Paper Trading men driven av ML-modellen (XGBoost). Kör parallellt med klassisk paper trading för att se om maskininlärning tillför värde. Positioner stängs efter 30 dagar."),
             ("🚨 Larm & Notiser", "Visa aktier i din portfölj som är nära stop-loss eller take-profit. Se också senaste nyheterna för dina innehav och bevakade aktier."),
+            ("⚙️ Inställningar", "Konfigurera din e-postadress och välj vilka rapporter du vill ta emot: morgonbrief, veckosammanfattning, STARK-signaler, portföljlarm m.m. Rapporterna inkluderar din personliga portfölj."),
         ]
         for name, desc in pages_p:
             with st.expander(name, expanded=False):

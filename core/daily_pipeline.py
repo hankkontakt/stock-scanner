@@ -1349,16 +1349,55 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     sub_type = subscription_type_map.get(mode, "morning_report")
 
     try:
-        email_sent = send_email(
-            subject=subject,
-            body_markdown=report_text,
-            from_name="MarketScan",
-            subscription_type=sub_type,
-        )
-        if email_sent:
-            logger.info(f"  ✉ Mail skickat: {subject}")
+        from core.email_template import load_subscribers, build_personal_portfolio_section
+
+        # Skicka personaliserade mail per prenumerant
+        subscribers = load_subscribers()
+        active_subs = [
+            s for s in subscribers
+            if s.get("active", True) and s.get("subscriptions", {}).get(sub_type, False) and s.get("email")
+        ]
+
+        if active_subs:
+            email_sent = False
+            for sub in active_subs:
+                try:
+                    # Bygg personlig portföljsektion om användaren har ett konto
+                    personal_section = ""
+                    uname = sub.get("username")
+                    if uname and mode in ("morning", "weekly"):
+                        personal_section = build_personal_portfolio_section(uname, scored if not scored.empty else None)
+
+                    body = report_text
+                    if personal_section:
+                        body = body + "\n\n---\n\n" + personal_section
+
+                    ok = send_email(
+                        subject=subject,
+                        body_markdown=body,
+                        from_name="MarketScan",
+                        recipients=[sub["email"]],
+                    )
+                    if ok:
+                        logger.info(f"  ✉ Mail skickat till {sub['email']}")
+                        email_sent = True
+                    else:
+                        logger.warning(f"  ⚠ Mail misslyckades för {sub['email']}")
+                except Exception as sub_e:
+                    logger.error(f"  ❌ Mail-fel för {sub.get('email','?')}: {sub_e}")
         else:
-            logger.warning("  ⚠ Mail kunde inte skickas (kontrollera EMAIL-inställningar)")
+            # Fallback: skicka till konfigurerat EMAIL_TO om inga prenumeranter
+            email_sent = send_email(
+                subject=subject,
+                body_markdown=report_text,
+                from_name="MarketScan",
+                subscription_type=sub_type,
+            )
+            if email_sent:
+                logger.info(f"  ✉ Mail skickat: {subject}")
+            else:
+                logger.warning("  ⚠ Mail kunde inte skickas (kontrollera EMAIL-inställningar)")
+
     except Exception as e:
         logger.error(f"  ❌ Mail-fel: {e}")
 

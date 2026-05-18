@@ -220,6 +220,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             "paper-trading":  "📄 Paper Trading",
             "ai-paper-trading":"🤖 AI Paper Trading",
             "alerts":         "🚨 Larm & Notiser",
+            "settings":       "⚙️ Inställningar",
             "technical":      "📈 Teknisk analys",
             "ai":             "🤖 AI",
             "admin":          "🔧 Admin",
@@ -267,6 +268,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             ("📄 Paper Trading",   "Paper Trading"),
             ("🤖 AI Paper Trading","AI Paper Trading"),
             ("🚨 Larm & Notiser",  "Larm & Notiser"),
+            ("⚙️ Inställningar",   "Inställningar"),
         ]
         _ANALYS_PAGES = [
             ("📈 Teknisk analys",  "Teknisk analys"),
@@ -666,6 +668,10 @@ def main():
 
         elif page == "🤖 AI":
             page_ai(df, sc_df, holdings)
+
+        elif page == "⚙️ Inställningar":
+            from web.pages.settings_page import page_settings
+            page_settings()
 
         elif page == "🔧 Admin":
             page_admin()

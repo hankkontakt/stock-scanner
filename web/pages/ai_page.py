@@ -191,10 +191,25 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                             pass
 
                         depth = _get_depth()
+                        # Kolla om användaren äger tickern – skicka i så fall position till AI
+                        user_pos = None
+                        if holdings is not None and not holdings.empty and sel_ticker in holdings["ticker"].values:
+                            h_row = holdings[holdings["ticker"] == sel_ticker].iloc[0]
+                            cur_p = None
+                            if df is not None and not df.empty and "ticker" in df.columns:
+                                price_rows = df[df["ticker"] == sel_ticker]
+                                if not price_rows.empty:
+                                    cur_p = price_rows.iloc[0].get("current_price") or price_rows.iloc[0].get("close")
+                            user_pos = {
+                                "shares":        float(h_row.get("shares", 0)),
+                                "cost_basis":    float(h_row.get("cost_basis", 0)),
+                                "current_price": float(cur_p) if cur_p is not None else None,
+                            }
                         result = ai_analysis.analyze_stock(
                             sel_ticker, df=df, force_refresh=force_refresh,
                             provider=provider,
                             depth=depth,
+                            user_position=user_pos,
                         )
 
                         # If we have news, append a news analysis below the stock analysis
