@@ -471,11 +471,31 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 if ma200:
                     parts.append(f"MA200:{ma200}")
 
-                ret_1m = _fmt_val(r.get("return_1m"), pct=True, decimals=1)
+                def _ret_str(val, max_pct=150):
+                    """Smart return formatter: auto-detects decimal vs % storage.
+                    Values with abs < 1 are treated as decimals (×100).
+                    Values with abs >= 1 are treated as already in %.
+                    Clips anything beyond ±max_pct as likely corrupt data.
+                    """
+                    if val is None:
+                        return ""
+                    try:
+                        f = float(val)
+                        if _math.isnan(f) or _math.isinf(f):
+                            return ""
+                        pct = f * 100 if abs(f) < 1.0 else f
+                        if abs(pct) > max_pct:
+                            return ""   # discard corrupt/extreme data
+                        sign = "+" if pct > 0 else ""
+                        return f"{sign}{pct:.1f}%"
+                    except (TypeError, ValueError):
+                        return ""
+
+                ret_1m = _ret_str(r.get("return_1m"))
                 if ret_1m:
                     parts.append(f"1m:{ret_1m}")
 
-                ret_3m = _fmt_val(r.get("return_3m"), pct=True, decimals=1)
+                ret_3m = _ret_str(r.get("return_3m"))
                 if ret_3m:
                     parts.append(f"3m:{ret_3m}")
 
