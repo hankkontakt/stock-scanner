@@ -381,9 +381,12 @@ AI_MAX_TOKENS     = 4096                     # Max tokens per svar
 AI_TEMPERATURE    = 0.3                      # Låg temperatur = mer deterministiska svar
 
 # ════════════════ PARALLELLA INSTÄLLNINGAR ════════════════
-PARALLEL_WORKERS          = 8   # Antal parallella trådar för yfinance-datahämtning
+# Yahoo Finance: informell gräns ~5-10 req/sek per IP. 8 workers hamrar för hårt
+# och triggar 429-klumpar. 4 workers + 0.5s delay = ~8 req/sek totalt, vilket
+# Yahoo i praktiken accepterar utan rate-limit.
+PARALLEL_WORKERS          = 4   # Antal parallella trådar för yfinance-datahämtning
 PARALLEL_TICKER_TIMEOUT   = 30  # Max sekunder per ticker (ersätter SIGALRM)
-REQUEST_DELAY_SEC         = 0.3 # Fördröjning per anrop i trådpoolen (total delay = delay * workers)
+REQUEST_DELAY_SEC         = 0.5 # Fördröjning per anrop i trådpoolen (total delay = delay * workers)
 MAX_RETRIES               = 2
 RETRY_BACKOFF_SEC         = 3
 
