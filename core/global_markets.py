@@ -53,8 +53,24 @@ def fetch_global_indices(timeout: int = 15) -> dict:
     Returns:
         dict: {ticker: {"name": str, "change_pct": float, "close": float, "open": float}}
               None-värden om indexet inte kunde hämtas.
+
+    Cache: 15 min disk-baserad. Förhindrar att ~17 yfinance-anrop görs
+    vid varje sidladdning (vilket annars ofta triggar 429 rate-limits
+    på Streamlit Clouds delade IP).
     """
     import yfinance as yf
+
+    # Disk-cache: persisterar mellan sessioner, delas mellan alla användare
+    # på samma container. 15 min är rimligt eftersom index inte rör sig
+    # dramatiskt på 15 min och vi prioriterar att inte triggar rate-limits.
+    try:
+        from core.data_fetcher import _read_cache, _write_cache
+        cached = _read_cache("global_indices:v1", max_age_hours=0.25)  # 15 min
+        if cached is not None:
+            return cached
+    except Exception:
+        _read_cache = None
+        _write_cache = None
 
     results = {}
     errors = []
@@ -82,6 +98,13 @@ def fetch_global_indices(timeout: int = 15) -> dict:
         logging.getLogger(__name__).warning(
             f"Kunde inte hämta {len(errors)} index: {', '.join(errors[:5])}"
         )
+
+    # Skriv till disk-cache så nästa sidladdning slipper anropa Yahoo
+    if results and _write_cache is not None:
+        try:
+            _write_cache("global_indices:v1", results)
+        except Exception:
+            pass
 
     return results
 
