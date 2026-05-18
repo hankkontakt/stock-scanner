@@ -6,6 +6,7 @@ import streamlit as st
 import yfinance as yf
 
 from web.utils import FX_PAIRS, fetch_fx_rows, fetch_rate_rows
+from core import config
 
 
 def page_global_markets():
@@ -96,14 +97,7 @@ def page_global_markets():
         with st.spinner("Hämtar marknadsnyheter..."):
             try:
                 from core.news_fetcher import fetch_swedish_market_news, fetch_global_market_news
-                import os as _os
-                # Läs nyckeln vid körtid (inte från modulcache) så st.secrets är tillgängligt
-                _fh_key = _os.getenv("FINNHUB_API_KEY", "")
-                if not _fh_key:
-                    try:
-                        _fh_key = st.secrets.get("FINNHUB_API_KEY", "")
-                    except Exception:
-                        pass
+                _fh_key = config.FINNHUB_API_KEY
                 swedish = fetch_swedish_market_news(max_articles=8)
                 global_n = fetch_global_market_news(_fh_key, max_articles=6)
 
