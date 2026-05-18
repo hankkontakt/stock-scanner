@@ -10,10 +10,32 @@ import requests
 import streamlit as st
 import yfinance as yf
 
+from pathlib import Path
+
 from web.utils import (
     DATA_DIR, REPORT_DIR, load_watchlist, load_portfolio, _get_provider,
 )
 from core import config
+
+USERS_CONFIG_FILE = DATA_DIR / "users_config.json"
+
+
+def _load_users_config() -> list:
+    """Ladda listan med admin-hanterade användare från data/users_config.json."""
+    try:
+        return json.loads(USERS_CONFIG_FILE.read_text(encoding="utf-8")).get("users", [])
+    except Exception:
+        return []
+
+
+def _save_users_config(users: list):
+    """Spara användarkonfigurationen lokalt och committa till GitHub."""
+    content = json.dumps({"users": users}, indent=2, ensure_ascii=False)
+    USERS_CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    USERS_CONFIG_FILE.write_text(content, encoding="utf-8")
+    token = _get_github_token()
+    if token:
+        _github_commit_file("data/users_config.json", content, token)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -227,9 +249,9 @@ def page_admin():
 
     st.title("🔧 Admin – Hantera portfölj, bevakning & scannar")
 
-    tab_wl, tab_hold, tab_scan, tab_import, tab_health, tab_email = st.tabs([
+    tab_wl, tab_hold, tab_scan, tab_import, tab_health, tab_email, tab_users = st.tabs([
         "⭐ Bevakningslista", "💼 Portfölj", "🚀 Starta scan", "📥 Avanza-import",
-        "🩺 Universe Health", "📧 E-post"
+        "🩺 Universe Health", "📧 E-post", "👥 Användare"
     ])
 
     # ── Flik 1: Bevakningslista ────────────────────────────────────────────────
@@ -922,3 +944,150 @@ def page_admin():
             st.metric("Aktiva", sum(1 for s in subs if s.get("active", True)))
         with col_s3:
             st.metric("Email konfigurerat", "✅ Ja" if email_configured() else "❌ Nej")
+
+    # ── Flik 7: Användare ─────────────────────────────────────────────────────
+    with tab_users:
+        st.subheader("👥 Användare")
+        st.caption(
+            "Lägg till och hantera inloggningsuppgifter för andra användare. "
+            "Varje användare får sin egen portfölj, bevakningslista och paper trading. "
+            "Admin-kontot hanteras separat via Streamlit Secrets."
+        )
+
+        try:
+            import streamlit_authenticator as stauth
+            _stauth_ok = True
+        except ImportError:
+            st.error("❌ `streamlit-authenticator` saknas. Kör: `pip install streamlit-authenticator`")
+            _stauth_ok = False
+
+        if _stauth_ok:
+            users = _load_users_config()
+            active_users = [u for u in users if u.get("active", True)]
+            inactive_users = [u for u in users if not u.get("active", True)]
+
+            # ── Nuvarande användare ──────────────────────────────────────────
+            st.markdown(f"**{len(active_users)} aktiva användare** (utöver admin)")
+            if active_users:
+                user_rows = [
+                    {
+                        "Användarnamn": u["username"],
+                        "Namn":         u.get("name", ""),
+                        "E-post":       u.get("email", ""),
+                        "Tillagd":      u.get("added", ""),
+                        "Aktiv":        "✅",
+                    }
+                    for u in active_users
+                ]
+                st.dataframe(pd.DataFrame(user_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("Inga extra användare tillagda ännu.")
+
+            # ── Lägg till ny användare ───────────────────────────────────────
+            st.markdown("---")
+            st.markdown("### ➕ Lägg till ny användare")
+            with st.form("form_add_user", clear_on_submit=True):
+                col_u, col_n = st.columns(2)
+                with col_u:
+                    new_uname = st.text_input(
+                        "Användarnamn *",
+                        placeholder="t.ex. hans",
+                        help="Gemener, inga mellanslag. Används vid inloggning.",
+                    )
+                with col_n:
+                    new_name = st.text_input("Visningsnamn", placeholder="t.ex. Hans")
+
+                col_e, col_p = st.columns(2)
+                with col_e:
+                    new_email = st.text_input("E-post (valfritt)", placeholder="hans@example.com")
+                with col_p:
+                    new_pw = st.text_input(
+                        "Lösenord *",
+                        type="password",
+                        placeholder="Minst 6 tecken",
+                        help="Lagras krypterat (bcrypt). Du ser det aldrig igen.",
+                    )
+
+                submitted_add = st.form_submit_button("➕ Skapa användare", type="primary")
+                if submitted_add:
+                    uname_clean = new_uname.strip().lower().replace(" ", "_")
+                    existing_names = [u["username"] for u in users]
+                    if not uname_clean:
+                        st.error("Ange ett användarnamn.")
+                    elif uname_clean == "admin":
+                        st.error("Användarnamnet 'admin' är reserverat.")
+                    elif uname_clean in existing_names:
+                        st.error(f"Användarnamnet `{uname_clean}` används redan.")
+                    elif len(new_pw) < 6:
+                        st.error("Lösenordet måste vara minst 6 tecken.")
+                    else:
+                        hashed_pw = stauth.Hasher([new_pw]).generate()[0]
+                        users.append({
+                            "username": uname_clean,
+                            "name":     new_name.strip() or uname_clean.capitalize(),
+                            "email":    new_email.strip().lower(),
+                            "password": hashed_pw,
+                            "active":   True,
+                            "added":    str(date.today()),
+                        })
+                        _save_users_config(users)
+                        st.success(
+                            f"✅ Användaren **{uname_clean}** skapad! "
+                            f"De kan nu logga in med det valda lösenordet."
+                        )
+                        st.rerun()
+
+            # ── Hantera befintliga användare ─────────────────────────────────
+            if users:
+                st.markdown("---")
+                st.markdown("### Hantera befintliga användare")
+                manage_options = [u["username"] for u in users]
+                sel_uname = st.selectbox("Välj användare", manage_options, key="user_manage_sel")
+                sel_user = next((u for u in users if u["username"] == sel_uname), None)
+
+                if sel_user:
+                    is_active = sel_user.get("active", True)
+                    col_tog, col_del, col_pw = st.columns(3)
+
+                    with col_tog:
+                        btn_lbl = "⏸ Inaktivera" if is_active else "▶️ Aktivera"
+                        if st.button(btn_lbl, key="btn_user_toggle", use_container_width=True):
+                            sel_user["active"] = not is_active
+                            _save_users_config(users)
+                            st.success(f"{'Inaktiverad' if not sel_user['active'] else 'Aktiverad'}: {sel_uname}")
+                            st.rerun()
+
+                    with col_del:
+                        if st.button("🗑️ Ta bort", key="btn_user_delete", use_container_width=True):
+                            users = [u for u in users if u["username"] != sel_uname]
+                            _save_users_config(users)
+                            st.success(f"✅ `{sel_uname}` borttagen.")
+                            st.rerun()
+
+                    with col_pw:
+                        if st.button("🔑 Byt lösenord", key="btn_user_pw", use_container_width=True):
+                            st.session_state["user_pw_change_target"] = sel_uname
+
+                    if st.session_state.get("user_pw_change_target") == sel_uname:
+                        with st.form(f"form_pw_{sel_uname}"):
+                            new_pw2 = st.text_input("Nytt lösenord", type="password", key=f"pw2_{sel_uname}")
+                            if st.form_submit_button("💾 Spara nytt lösenord"):
+                                if len(new_pw2) < 6:
+                                    st.error("Lösenordet måste vara minst 6 tecken.")
+                                else:
+                                    sel_user["password"] = stauth.Hasher([new_pw2]).generate()[0]
+                                    _save_users_config(users)
+                                    st.session_state.pop("user_pw_change_target", None)
+                                    st.success(f"✅ Lösenord uppdaterat för `{sel_uname}`.")
+                                    st.rerun()
+
+            if inactive_users:
+                with st.expander(f"Inaktiva användare ({len(inactive_users)})", expanded=False):
+                    st.dataframe(
+                        pd.DataFrame([
+                            {"Användarnamn": u["username"], "Namn": u.get("name", ""),
+                             "E-post": u.get("email", ""), "Tillagd": u.get("added", "")}
+                            for u in inactive_users
+                        ]),
+                        use_container_width=True, hide_index=True,
+                    )
