@@ -413,6 +413,9 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
               and "förändring" not in c
               and "resultat" not in c):
             target = "current_price"
+        # Marknadsvärde (totalt marknadsvärde för positionen)
+        elif "marknadsvärde" in c or "market value" in c or c == "värde":
+            target = "market_value"
 
         # Registrera mappningen bara om output-namnet inte redan är använt
         if target and target not in used_targets:
@@ -450,7 +453,7 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
         except ValueError:
             return None
 
-    for col in ["shares", "cost_basis", "current_price"]:
+    for col in ["shares", "cost_basis", "current_price", "market_value"]:
         if col in df.columns:
             df[col] = df[col].apply(parse_swedish_number)
 
