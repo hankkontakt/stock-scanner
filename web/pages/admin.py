@@ -75,6 +75,17 @@ def _github_commit_file(repo_path: str, content: str, token: str,
         return False
 
 
+def _get_st_secret(key: str) -> str:
+    """Läs ett secret från miljövariabel eller Streamlit Secrets."""
+    val = os.getenv(key, "")
+    if val:
+        return val
+    try:
+        return st.secrets.get(key, "") or ""
+    except Exception:
+        return ""
+
+
 def _get_github_token() -> str:
     """Hämtar GITHUB_TOKEN från miljövariabel eller Streamlit Secrets."""
     return _get_st_secret("GITHUB_TOKEN")

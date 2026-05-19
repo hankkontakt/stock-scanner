@@ -221,18 +221,6 @@ def _render_overview_tab():
         st.info("Ingen aktivitet loggad ännu")
 
 
-def _get_st_secret(key: str) -> str:
-    """Läs ett secret från miljövariabel eller Streamlit Secrets (returnerar '' om det misslyckas).
-    Prioriterar os.environ (fungerar i GitHub Actions och lokal .env) och faller tillbaka
-    till st.secrets (Streamlit Cloud runtime). Samma beteende som _get_secret i ai_analysis.py."""
-    val = os.getenv(key, "")
-    if val:
-        return val
-    try:
-        return st.secrets.get(key, "") or ""
-    except Exception:
-        return ""
-
 
 def _render_ai_log_tab():
     st.subheader("🤖 AI-användning")
