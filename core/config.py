@@ -531,7 +531,7 @@ _SCORING_CONFIG_FILE = Path(__file__).parent.parent / "data" / "scoring_config.j
 try:
     _override = _json.loads(_SCORING_CONFIG_FILE.read_text(encoding="utf-8")) if _SCORING_CONFIG_FILE.exists() else {}
     if "factor_weights" in _override:
-        FACTOR_WEIGHTS = _override["factor_weights"]
+        FACTOR_WEIGHTS.update(_override["factor_weights"])
     if "smallcap_config" in _override:
         for _k, _v in _override["smallcap_config"].items():
             if _k in SMALLCAP_CONFIG:
