@@ -9,6 +9,7 @@ Handles all data fetching from yfinance with:
 - Data quality validation
 """
 
+import asyncio
 import os
 import sys
 import time
@@ -22,6 +23,13 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+try:
+    import aiohttp as _aiohttp
+    _AIOHTTP_AVAILABLE = True
+except ImportError:
+    _aiohttp = None
+    _AIOHTTP_AVAILABLE = False
 
 import yfinance as yf
 import pandas as pd
