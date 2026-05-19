@@ -251,7 +251,8 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
     Avanza varianter:
     - Semikolon-separerad
     - Svenska decimaler (komma) och tusentalsavgränsare (mellanslag)
-    - Kolumnnamn kan variera något mellan kontotyper
+    - Kolumnnamn kan variera något mellan kontotyper (ISK, Depå, KF)
+    - Kan ha metadata-rader i toppen (depånamn, datum) som hoppas över
     """
     path = Path(filepath)
     if not path.exists():
@@ -265,41 +266,96 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
     except UnicodeDecodeError:
         text = raw.decode("latin-1")
 
-    # Detektera separator
-    first_line = text.split("\n")[0]
-    sep = ";" if ";" in first_line else ","
+    lines = text.splitlines()
 
-    # Läs CSV
+    # ── Detektera separator från första icke-tomma raden ──────────────────────
+    first_nonempty = next((l for l in lines if l.strip()), lines[0] if lines else "")
+    sep = ";" if ";" in first_nonempty else ","
+
+    # ── Hitta rubrikraden (hoppa över eventuella metadata-rader i toppen) ─────
+    # Avanza kan exportera med metadata i toppen, t.ex.:
+    #   "ISK: MinDepå"
+    #   "Datum: 2026-05-19"
+    #   (tom rad)
+    #   Värdepapper;Antal;Kurs;...
+    _HEADER_KEYWORDS = {"värdepapper", "antal", "security", "quantity", "name", "isin"}
+    skip_rows = 0
+    for i, line in enumerate(lines):
+        cols_in_line = {c.strip().lower().strip('"') for c in line.split(sep)}
+        if cols_in_line & _HEADER_KEYWORDS:
+            skip_rows = i
+            break
+
+    # Läs CSV med rätt startrad
     import io
-    df = pd.read_csv(io.StringIO(text), sep=sep, encoding=None)
+    df = pd.read_csv(
+        io.StringIO(text),
+        sep=sep,
+        skiprows=skip_rows,
+        encoding=None,
+        on_bad_lines="skip",  # hoppa över korrupta rader
+    )
 
-    # Normalisera kolumnnamn
-    col_map = {}
+    # ── Normalisera kolumnnamn (unik mappning – en output per input) ──────────
+    # Bugfix: om två kolumner mappas till samma namn (t.ex. "Kurs" och
+    # "Förändring kurs" → båda "current_price") returnerar df["current_price"]
+    # en DataFrame istället för en Series, vilket orsakar "has no attribute 'str'".
+    # Lösning: spåra vilka output-namn som redan är använda och skippa dubletter.
+    col_map: dict[str, str] = {}
+    used_targets: set[str] = set()
+
     for col in df.columns:
-        c = col.lower().strip()
-        if "värdepapper" in c or "namn" in c or "security" in c:
-            col_map[col] = "name"
-        elif "antal" in c or "quantity" in c:
-            col_map[col] = "shares"
-        elif "köpkurs" in c or "genomsnittlig" in c or "purchase" in c:
-            col_map[col] = "cost_basis"
-        elif "kurs" in c and "köp" not in c:
-            col_map[col] = "current_price"
+        c = col.lower().strip().strip('"')
+        target = None
+
+        # Värdepappersnamn
+        if any(kw in c for kw in ("värdepapper", "security")) or c in ("namn", "name"):
+            target = "name"
+        # Antal
+        elif any(kw in c for kw in ("antal", "quantity", "shares")):
+            target = "shares"
+        # Köpkurs / anskaffningskurs (cost basis per share)
+        elif any(kw in c for kw in ("köpkurs", "genomsnittlig", "purchase", "anskaffningskurs")):
+            target = "cost_basis"
+        # Aktuell kurs — matchar "kurs" men INTE köp/anskaff-varianter
+        elif ("kurs" in c
+              and "köp" not in c
+              and "anskaff" not in c
+              and "förändring" not in c
+              and "resultat" not in c):
+            target = "current_price"
+
+        # Registrera mappningen bara om output-namnet inte redan är använt
+        if target and target not in used_targets:
+            col_map[col] = target
+            used_targets.add(target)
 
     df = df.rename(columns=col_map)
 
-    # Kontrollera obligatoriska kolumner
+    # ── Kontrollera obligatoriska kolumner ────────────────────────────────────
     if "name" not in df.columns:
-        raise ValueError(
-            "Kunde inte hitta kolumn för värdepappersnamn. "
-            "Förväntade: 'Värdepapper', 'Namn' eller liknande."
-        )
+        # Sista utväg: om ingen kolumn matchar, ta den första kolumnen som "name"
+        first_col = df.columns[0] if not df.columns.empty else None
+        if first_col:
+            df = df.rename(columns={first_col: "name"})
+        else:
+            raise ValueError(
+                "Kunde inte hitta kolumn för värdepappersnamn. "
+                "Förväntade: 'Värdepapper', 'Namn', 'Security' eller liknande."
+            )
 
-    # Konvertera siffror (svenska format: "1 234,56" → 1234.56)
+    # ── Se till att "name" är en Series, inte en DataFrame ───────────────────
+    # (extra skydd ifall ovanstående mappning ändå skapar dubbletter)
+    if isinstance(df["name"], pd.DataFrame):
+        df = df.copy()
+        # Behåll bara den första av de duplicerade kolumnerna
+        df = df.loc[:, ~df.columns.duplicated()]
+
+    # ── Konvertera siffror (svenska format: "1 234,56" → 1234.56) ────────────
     def parse_swedish_number(s) -> float | None:
         if pd.isna(s):
             return None
-        s = str(s).strip().replace("\xa0", "").replace(" ", "").replace(",", ".")
+        s = str(s).strip().replace("\xa0", "").replace(" ", "").replace(" ", "").replace(",", ".")
         try:
             return float(s)
         except ValueError:
@@ -309,8 +365,14 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].apply(parse_swedish_number)
 
-    # Rensa tomma rader
+    # ── Rensa tomma rader ─────────────────────────────────────────────────────
     df = df.dropna(subset=["name"])
+    # Säkerställ att "name"-kolumnen är en Series innan .str används
+    name_col = df["name"]
+    if isinstance(name_col, pd.DataFrame):
+        name_col = name_col.iloc[:, 0]
+        df = df.drop(columns="name")
+        df.insert(0, "name", name_col)
     df = df[df["name"].astype(str).str.strip() != ""]
 
     return df
