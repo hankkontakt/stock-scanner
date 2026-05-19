@@ -462,6 +462,205 @@ def _has_credentials_configured() -> bool:
         return False
 
 
+# ── Lösenordsåterställning via e-post ────────────────────────────────────────
+
+_RESET_TOKENS_PATH = DATA_DIR / "password_reset_tokens.json"
+
+
+def _load_reset_tokens() -> dict:
+    try:
+        import json as _j
+        if _RESET_TOKENS_PATH.exists():
+            return _j.loads(_RESET_TOKENS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _save_reset_tokens(tokens: dict):
+    import json as _j
+    _RESET_TOKENS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _RESET_TOKENS_PATH.write_text(_j.dumps(tokens, indent=2, ensure_ascii=False),
+                                  encoding="utf-8")
+
+
+def _find_user_by_email(email: str) -> tuple[str, dict] | tuple[None, None]:
+    """Hitta användarnamn + userdata för en given e-postadress.
+    Söker i users_config.json (ej admin — den har lösenord i Secrets)."""
+    email_lower = email.strip().lower()
+    try:
+        import json as _j
+        data = _j.loads((DATA_DIR / "users_config.json").read_text(encoding="utf-8"))
+        for user in data.get("users", []):
+            if user.get("email", "").strip().lower() == email_lower:
+                return user.get("username"), user
+    except Exception:
+        pass
+    return None, None
+
+
+def _send_reset_email(to_email: str, username: str, token: str) -> bool:
+    """Skickar återställningslänk via e-post. Returnerar True vid lyckat utskick."""
+    try:
+        from core.email_template import send_email
+        app_url = "https://marketscan.streamlit.app"  # uppdatera vid annan domän
+        reset_url = f"{app_url}?reset_token={token}"
+        body = f"""# 🔐 Återställ ditt lösenord
+
+Hej **{username}**,
+
+Du (eller någon annan) begärde att återställa lösenordet för ditt MarketScan-konto.
+
+**[Klicka här för att välja nytt lösenord]({reset_url})**
+
+Länken är giltig i **1 timme**. Om du inte begärde detta kan du ignorera detta mail —
+ditt konto är oförändrat.
+
+---
+*MarketScan · Automatiskt utskick*
+"""
+        return send_email(
+            subject="🔐 MarketScan – återställ lösenord",
+            body_markdown=body,
+            recipients=[to_email],
+        )
+    except Exception:
+        return False
+
+
+def _update_user_password(username: str, new_hashed: str) -> bool:
+    """Uppdaterar lösenord i users_config.json. Returnerar True vid lyckat sparande."""
+    try:
+        import json as _j
+        path = DATA_DIR / "users_config.json"
+        data = _j.loads(path.read_text(encoding="utf-8"))
+        for user in data.get("users", []):
+            if user.get("username", "").strip().lower() == username.strip().lower():
+                user["password"] = new_hashed
+                path.write_text(_j.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _handle_password_reset_flow() -> bool:
+    """
+    Kontrollerar om URL:en innehåller en reset_token och hanterar i så fall
+    hela lösenordsåterställningssidan.
+
+    Returnerar True om sidan tas över (token hittades i URL) → anroparen ska stopa appen.
+    Returnerar False om ingen token finns i URL → normal inloggning fortsätter.
+    """
+    from datetime import datetime
+
+    try:
+        token_from_url = st.query_params.get("reset_token", "")
+    except Exception:
+        token_from_url = ""
+
+    if not token_from_url:
+        return False
+
+    # ── Lösenordsåterställning via länk ───────────────────────────────────────
+    st.markdown("""
+    <style>
+    [data-testid="stForm"] {
+        max-width: 380px; margin: 80px auto 0 auto;
+        background: #1e2230; border: 1px solid #2d3250;
+        border-radius: 12px; padding: 40px 36px 32px;
+    }
+    </style>
+    <div style="text-align:center; padding:60px 0 0 0;">
+      <div style="font-size:24px;font-weight:800;letter-spacing:3px;color:#e8eaf0;">
+        MARKET<span style="color:#00d4aa;">SCAN</span>
+      </div>
+      <div style="font-size:11px;color:#64748b;letter-spacing:2px;
+                  text-transform:uppercase;margin-top:4px;margin-bottom:32px;">
+        Välj nytt lösenord
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    tokens = _load_reset_tokens()
+    token_data = tokens.get(token_from_url)
+
+    if not token_data:
+        st.error("❌ Ogiltig eller redan använd återställningslänk.")
+        if st.button("↩ Gå till inloggning"):
+            st.query_params.clear()
+            st.rerun()
+        return True
+
+    expires = datetime.fromisoformat(token_data["expires"])
+    if datetime.utcnow() > expires:
+        st.error("⌛ Länken har gått ut (giltig 1 timme). Begär en ny nedan.")
+        if st.button("↩ Gå till inloggning"):
+            st.query_params.clear()
+            st.rerun()
+        return True
+
+    username = token_data["username"]
+    with st.form("reset_pw_form", clear_on_submit=True):
+        st.markdown(f"**Välj ett nytt lösenord för kontot `{username}`**")
+        pw1 = st.text_input("Nytt lösenord", type="password", placeholder="Minst 8 tecken")
+        pw2 = st.text_input("Upprepa lösenord", type="password")
+        submitted = st.form_submit_button("💾 Spara nytt lösenord",
+                                          use_container_width=True, type="primary")
+        if submitted:
+            if len(pw1) < 8:
+                st.error("Lösenordet måste vara minst 8 tecken.")
+            elif pw1 != pw2:
+                st.error("Lösenorden matchar inte.")
+            else:
+                try:
+                    import streamlit_authenticator as stauth
+                    new_hash = stauth.Hasher.hash(pw1)
+                except Exception:
+                    import bcrypt
+                    new_hash = bcrypt.hashpw(pw1.encode(), bcrypt.gensalt()).decode()
+                if _update_user_password(username, new_hash):
+                    tokens.pop(token_from_url, None)
+                    _save_reset_tokens(tokens)
+                    st.success("✅ Lösenordet har uppdaterats! Du kan nu logga in.")
+                    st.query_params.clear()
+                    st.balloons()
+                else:
+                    st.error("❌ Kunde inte spara lösenordet. Kontakta administratören.")
+    return True
+
+
+def _show_forgot_password_form():
+    """Visar 'Glömt lösenord?'-expander under inloggningsformuläret."""
+    import uuid
+    from datetime import datetime, timedelta
+
+    with st.expander("🔑 Glömt lösenord?", expanded=False):
+        st.caption("Ange din e-postadress så skickar vi en länk för att välja nytt lösenord.")
+        with st.form("forgot_pw_form", clear_on_submit=True):
+            reset_email = st.text_input("E-postadress", placeholder="din@email.se")
+            send_btn = st.form_submit_button("📧 Skicka återställningslänk",
+                                             use_container_width=True)
+            if send_btn:
+                if not reset_email.strip():
+                    st.warning("Ange din e-postadress.")
+                else:
+                    uname, _ = _find_user_by_email(reset_email)
+                    # Alltid samma meddelande (undviker user enumeration)
+                    st.success("Om e-postadressen finns registrerad skickar vi en länk inom kort.")
+                    if uname is not None:
+                        token = str(uuid.uuid4())
+                        expires = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+                        tokens = _load_reset_tokens()
+                        # Rensa gamla tokens för denna användare
+                        tokens = {k: v for k, v in tokens.items()
+                                  if v.get("username") != uname
+                                  or datetime.fromisoformat(v["expires"]) > datetime.utcnow()}
+                        tokens[token] = {"username": uname, "expires": expires}
+                        _save_reset_tokens(tokens)
+                        _send_reset_email(reset_email.strip(), uname, token)
+
+
 def _load_managed_users() -> dict:
     """Laddar användare som skapats via admin-sidan (data/users_config.json).
 
@@ -544,6 +743,10 @@ def _run_auth() -> bool:
         cookie_expiry_days=int(cookie_cfg.get("expiry_days", 30)),
     )
 
+    # Om URL har reset_token → visa lösenordsåterställning istället för inloggning
+    if _handle_password_reset_flow():
+        return False
+
     # Visa inloggningsformulär centrerat med varumärkeslogotyp
     if st.session_state.get("authentication_status") is not True:
         st.markdown("""
@@ -572,7 +775,7 @@ def _run_auth() -> bool:
 
     status = st.session_state.get("authentication_status")
 
-    # Visa kontaktinfo under inloggningsformuläret (men bara när ej inloggad)
+    # Visa kontaktinfo + "Glömt lösenord?" under inloggningsformuläret (ej inloggad)
     if status is not True:
         st.markdown("""
         <div style="text-align:center; margin-top:24px; padding: 0 20px;">
@@ -585,7 +788,10 @@ def _run_auth() -> bool:
             för att få tillgång.
           </div>
         </div>
+        <div style="max-width:380px; margin:16px auto 0 auto; padding:0 20px;">
+        </div>
         """, unsafe_allow_html=True)
+        _show_forgot_password_form()
 
     if status is True:
         username = st.session_state.get("username", "admin")

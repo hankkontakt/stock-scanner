@@ -47,6 +47,101 @@ def _calc_atr_stop(ticker: str, current_price: float, mult: float = 2.5) -> tupl
         return None, None
 
 
+def _calc_dividend_summary(holdings: pd.DataFrame, score_data: dict) -> dict:
+    """
+    Beräknar utdelningsöversikt för portföljen baserat på yfinance-data.
+    Returnerar dict med:
+        total_annual_sek  — förväntad total årsutdelning i SEK
+        avg_yield_on_cost — snittavkastning på anskaffningsvärdet
+        per_holding       — lista med {ticker, annual_div, yield_on_cost}
+    Använder dividend_rate från yfinance info (annualiserad).
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        return {"total_annual_sek": 0, "avg_yield_on_cost": 0, "per_holding": []}
+
+    total_annual = 0.0
+    yoc_values: list[float] = []
+    per_holding: list[dict] = []
+
+    for _, h in holdings.iterrows():
+        ticker = str(h.get("ticker", "")).upper()
+        shares = float(h.get("shares", 0) or 0)
+        cost   = float(h.get("cost_basis", 0) or 0)
+        if shares <= 0:
+            continue
+        # Check score_data first (faster — already loaded)
+        sc = score_data.get(ticker, {})
+        div_rate = sc.get("dividend_rate") or sc.get("forward_annual_dividend_rate")
+        if div_rate is None:
+            # Fallback: fetch from yfinance (cached internally by yfinance)
+            try:
+                info = yf.Ticker(ticker).fast_info
+                div_rate = getattr(info, "last_dividend_value", None)
+                # Try full info for annual rate
+                if not div_rate:
+                    full = yf.Ticker(ticker).info
+                    div_rate = full.get("dividendRate") or full.get("trailingAnnualDividendRate")
+            except Exception:
+                div_rate = None
+        if not div_rate:
+            per_holding.append({"ticker": ticker, "annual_div": None, "yield_on_cost": None})
+            continue
+        annual = float(div_rate) * shares
+        total_annual += annual
+        yoc = (float(div_rate) / cost * 100) if cost > 0 else None
+        if yoc is not None:
+            yoc_values.append(yoc)
+        per_holding.append({"ticker": ticker, "annual_div": annual, "yield_on_cost": yoc})
+
+    avg_yoc = sum(yoc_values) / len(yoc_values) if yoc_values else 0.0
+    return {
+        "total_annual_sek": total_annual,
+        "avg_yield_on_cost": avg_yoc,
+        "per_holding": per_holding,
+    }
+
+
+def _portfolio_excel_bytes(port_df: pd.DataFrame, rows: list, score_data: dict) -> bytes:
+    """Genererar en Excel-fil med portföljdata. Returnerar bytes."""
+    import io
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        # Sheet 1: Innehav
+        port_df.to_excel(writer, sheet_name="Innehav", index=False)
+        # Sheet 2: Rekommendationer
+        rec_rows = []
+        for r in rows:
+            t = r["Ticker"]
+            sc = score_data.get(t, {})
+            entry = sc.get("entry_signal", "—")
+            score = sc.get("score_total", 0) or 0
+            if score >= 70 and entry == "STARK":
+                rec = "Behåll / Köp mer"
+            elif score >= 55:
+                rec = "Behåll"
+            elif score >= 40:
+                rec = "Avvakta"
+            else:
+                rec = "Minska / Sälj"
+            rec_rows.append({
+                "Ticker": t, "Bolag": r.get("Bolag", ""),
+                "Score": score, "Signal": entry,
+                "Trend": sc.get("trend_signal", "—"),
+                "Rekommendation": rec,
+                "Pris": sc.get("current_price", ""),
+            })
+        pd.DataFrame(rec_rows).to_excel(writer, sheet_name="Rekommendationer", index=False)
+        # Sheet 3: Metadata
+        meta = pd.DataFrame([{
+            "Exporterad": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
+            "Antal innehav": len(rows),
+        }])
+        meta.to_excel(writer, sheet_name="Info", index=False)
+    return buf.getvalue()
+
+
 def _suggested_position_pct(score: float, entry: str) -> tuple[float, float]:
     """
     Föreslår positionsstorlek (% av portföljvärde) baserat på score + entry.
@@ -390,6 +485,21 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
         else:
             score_data = {}
 
+        # ── Utdelningsdata — beräkna/cachas innan tabellen byggs ──────────────
+        # Cachas per unik holdings-sammansättning så yfinance-anrop sker max en gång.
+        _holdings_hash = str(sorted(holdings["ticker"].tolist()))
+        if st.session_state.get("div_summary_hash") != _holdings_hash:
+            with st.spinner("Hämtar utdelningsdata…"):
+                _div_summary = _calc_dividend_summary(holdings, score_data)
+                st.session_state["div_summary"] = _div_summary
+                st.session_state["div_summary_hash"] = _holdings_hash
+        else:
+            _div_summary = st.session_state.get("div_summary", {})
+
+        _div_ph_map: dict = {}
+        for _ph in _div_summary.get("per_holding", []):
+            _div_ph_map[_ph["ticker"]] = _ph
+
         rows = []
         for _, h in holdings.iterrows():
             t     = str(h["ticker"]).upper()
@@ -400,6 +510,7 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
             pnl_pct = ((price / float(cost)) - 1) * 100 \
                 if price and cost and float(cost) > 0 else None
             mv = price * float(shares) if price and shares else None
+            _yoc = _div_ph_map.get(t, {}).get("yield_on_cost")
             rows.append({
                 "Ticker":    t,
                 "Bolag":     sc.get("name", t)[:30],
@@ -409,6 +520,7 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
                 "Pris nu":   f"{price:.2f}" if price else "—",
                 "P&L %":     f"{pnl_pct:+.1f}%" if pnl_pct is not None else "—",
                 "Marknadsvärde": f"{mv:,.0f}" if mv else "—",
+                "Yield/cost": f"{_yoc:.1f}%" if _yoc is not None else "—",
                 "Score":     sc.get("score_total"),
                 "Entry":     sc.get("entry_signal", "—"),
                 "Trend":     sc.get("trend_signal", "—"),
@@ -437,6 +549,30 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
             ("Bäst / Sämst",     f"+{best:.1f}% / {worst:.1f}%", None,
              "Din bästa respektive sämsta position i procent. Bra för att identifiera vinnare och förlorare i portföljen."),
         ])
+
+        _total_div = _div_summary.get("total_annual_sek", 0)
+        _avg_yoc   = _div_summary.get("avg_yield_on_cost", 0)
+        if _total_div > 0 or _avg_yoc > 0:
+            kpi_row([
+                ("Årsutdelning (est.)", f"{_total_div:,.0f} kr", None,
+                 "Förväntad total årsutdelning baserat på aktuell utdelningsnivå för dina innehav."),
+                ("Snitt yield on cost", f"{_avg_yoc:.1f}%", None,
+                 "Genomsnittlig direktavkastning beräknad på ditt inköpspris — visar avkastningen på investerat kapital."),
+            ])
+
+        # ── Exportknapp ────────────────────────────────────────────────────────
+        try:
+            _excel_bytes = _portfolio_excel_bytes(port_df, rows, score_data)
+            st.download_button(
+                label="📥 Exportera portfölj (Excel)",
+                data=_excel_bytes,
+                file_name=f"portfolio_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="dl_portfolio_excel",
+                help="Ladda ner portföljdata som Excel-fil med innehav + rekommendationer.",
+            )
+        except Exception:
+            pass  # openpyxl kanske saknas – tyst fel
 
         col_cfg = {}
         if "Score" in port_df.columns:
