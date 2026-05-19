@@ -1,12 +1,15 @@
 """web/pages/weekly_scan.py – Sida 2: Veckoscanner"""
 
+import glob as _glob
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from pathlib import Path
 
 from web.utils import (
     kpi_row, sector_bar_chart, score_distribution_chart,
-    scatter_momentum_value, pct_fmt,
+    scatter_momentum_value, pct_fmt, REPORT_DIR,
+    conviction_meter_chart, conviction_meter_breakdown,
 )
 from web.stock_detail import render_stock_detail
 from core.country_flags import flag_for_ticker
@@ -212,6 +215,61 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
                 )
 
 
+def _build_signal_scorecard() -> pd.DataFrame:
+    """
+    Loads all available scored_universe CSV files and calculates:
+    - For each entry_signal value: how many stocks, avg return_1m, avg return_3m, win_rate
+    Returns a DataFrame or empty DataFrame.
+    """
+    files = sorted(_glob.glob(str(REPORT_DIR / "scored_universe_*.csv")), reverse=True)
+
+    if len(files) < 1:
+        return pd.DataFrame()
+
+    dfs = []
+    for f in files[:10]:  # max 10 files for performance
+        try:
+            df_f = pd.read_csv(f, usecols=lambda c: c in [
+                "ticker", "entry_signal", "score_total", "return_1m", "return_3m",
+                "confidence_label", "trend_signal", "sector"
+            ])
+            df_f["_file"] = Path(f).stem.replace("scored_universe_", "")
+            dfs.append(df_f)
+        except Exception:
+            continue
+
+    if not dfs:
+        return pd.DataFrame()
+
+    combined = pd.concat(dfs, ignore_index=True)
+
+    # Only rows with actual return data
+    has_returns = combined["return_1m"].notna() | combined["return_3m"].notna()
+    combined = combined[has_returns]
+
+    if combined.empty:
+        return pd.DataFrame()
+
+    rows = []
+    for signal in ["STARK", "OK", "VÄNTA", "EJ AKTUELL"]:
+        sub = combined[combined["entry_signal"] == signal]
+        if sub.empty:
+            continue
+        r1 = sub["return_1m"].dropna()
+        r3 = sub["return_3m"].dropna()
+        rows.append({
+            "Signal": signal,
+            "Antal observationer": len(sub),
+            "Avg 1m avkastning %": round(r1.mean(), 2) if len(r1) else None,
+            "Avg 3m avkastning %": round(r3.mean(), 2) if len(r3) else None,
+            "Win rate 1m %": round((r1 > 0).mean() * 100, 1) if len(r1) else None,
+            "Win rate 3m %": round((r3 > 0).mean() * 100, 1) if len(r3) else None,
+            "Median score": round(sub["score_total"].median(), 1),
+        })
+
+    return pd.DataFrame(rows) if rows else pd.DataFrame()
+
+
 def page_weekly_scan(df: pd.DataFrame, filters: dict,
                      holdings: pd.DataFrame, watchlist: list):
     st.title("🔍 Veckoscanner")
@@ -270,8 +328,8 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
          "Antal bolag med STARK köpsignal bland filtrerade bolag. Dessa är de starkaste köpkandidaterna just nu."),
     ])
 
-    tab1, tab2, tab3, tab4 = st.tabs(
-        ["📋 Ranking", "📊 Fundamental", "📈 Momentum & Teknisk", "🔬 Score-detalj"]
+    tab1, tab2, tab3, tab4, tab_scorecard = st.tabs(
+        ["📋 Ranking", "📊 Fundamental", "📈 Momentum & Teknisk", "🔬 Score-detalj", "📊 Signal Scorecard"]
     )
 
     with tab1:
@@ -306,6 +364,21 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
                         ws_ticker, row=ws_row.iloc[0], df=df,
                         show_ai=True, show_news=False, show_chart=True, show_detail_data=True,
                     )
+
+        st.markdown("---")
+        st.subheader("🎯 Conviction Meter")
+        st.caption("Radar-diagram med de 8 faktorscore för en enskild aktie.")
+        if not filt_df.empty and "ticker" in filt_df.columns:
+            cm_ticker = st.selectbox("Välj aktie för conviction meter",
+                                     sorted(filt_df["ticker"].tolist()),
+                                     key="ws_conviction_ticker")
+            cm_row = filt_df[filt_df["ticker"] == cm_ticker]
+            if not cm_row.empty:
+                cm_fig = conviction_meter_chart(cm_row.iloc[0])
+                st.plotly_chart(cm_fig, use_container_width=True)
+                breakdown = conviction_meter_breakdown(cm_row.iloc[0])
+                if breakdown:
+                    st.markdown(breakdown)
 
     with tab2:
         if filt_df.empty:
@@ -374,6 +447,10 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
         if filt_df.empty:
             st.info("Inga data.")
         else:
+            # Feature 4: ML caption
+            has_ml_data = "predicted_return" in filt_df.columns and filt_df["predicted_return"].notna().any()
+            if has_ml_data:
+                st.caption("AI rank = ML-modellens 30-dagars avkastningsprediktion. Lägre rank = bättre förutsagd avkastning.")
             score_cols_map = {
                 "score_value":    "Värdering",
                 "score_quality":  "Kvalitet",
@@ -430,3 +507,50 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
                     margin=dict(t=40, b=20, l=40, r=40),
                 )
                 st.plotly_chart(fig_rad, use_container_width=True)
+
+    # ── Tab: Signal Scorecard (Feature 2) ─────────────────────────────────────
+    with tab_scorecard:
+        st.subheader("📊 Entry Signal Scorecard")
+        st.caption("Historisk träffsäkerhet per entry-signal baserat på tillgängliga scan-filer.")
+
+        sc_df_card = _build_signal_scorecard()
+        if sc_df_card.empty:
+            st.info("Inte tillräckligt med historisk data ännu. Scorecard byggs upp automatiskt över tid.")
+        else:
+            st.dataframe(sc_df_card, use_container_width=True, hide_index=True)
+
+            # Bar chart of avg returns
+            colors_map = {"STARK": "#4caf50", "OK": "#4c9be8", "VÄNTA": "#ff9800", "EJ AKTUELL": "#ef5350"}
+            fig_sc = go.Figure()
+            for _, sc_row in sc_df_card.iterrows():
+                signal = sc_row["Signal"]
+                val = sc_row.get("Avg 1m avkastning %")
+                if val is not None and not pd.isna(val):
+                    fig_sc.add_trace(go.Bar(
+                        name=signal, x=[signal],
+                        y=[val],
+                        marker_color=colors_map.get(signal, "#8892a4"),
+                        hovertemplate=f"{signal}: %{{y:.2f}}%<extra></extra>",
+                    ))
+            fig_sc.update_layout(
+                title="Genomsnittlig 1-månadsavkastning per signal",
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#8892a4"), xaxis=dict(gridcolor="#252b3b"),
+                yaxis=dict(gridcolor="#252b3b", title="%"), height=300,
+                showlegend=False, margin=dict(l=0, r=0, t=40, b=0),
+            )
+            st.plotly_chart(fig_sc, use_container_width=True)
+
+        # Also show by sector for STARK signals
+        st.markdown("---")
+        st.markdown("**STARK-signaler per sektor (nuvarande scan)**")
+        if not filt_df.empty and "entry_signal" in filt_df.columns and "sector" in filt_df.columns:
+            stark_df = filt_df[filt_df["entry_signal"] == "STARK"]
+            if not stark_df.empty:
+                by_sector = stark_df.groupby("sector").agg(
+                    Antal=("ticker", "count"),
+                    Avg_score=("score_total", "mean"),
+                ).round(1).sort_values("Antal", ascending=False)
+                st.dataframe(by_sector, use_container_width=True)
+            else:
+                st.info("Inga STARK-signaler i nuvarande scan")

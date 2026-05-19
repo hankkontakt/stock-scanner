@@ -435,6 +435,80 @@ def scatter_momentum_value(df: pd.DataFrame) -> go.Figure:
     return _apply_chart_style(fig)
 
 
+def conviction_meter_chart(row) -> "go.Figure":
+    """
+    Radar/spider chart for the 8 factor scores of a single stock.
+    row: dict or Series with score_value, score_quality, etc.
+    Returns a Plotly figure ready for st.plotly_chart().
+    """
+    factors = [
+        ("Värde",      row.get("score_value",    50) or 50),
+        ("Kvalitet",   row.get("score_quality",  50) or 50),
+        ("Momentum",   row.get("score_momentum", 50) or 50),
+        ("Tillväxt",   row.get("score_growth",   50) or 50),
+        ("Risk",       row.get("score_risk",     50) or 50),
+        ("Storlek",    row.get("score_size",     50) or 50),
+        ("Utdelning",  row.get("score_dividend", 50) or 50),
+        ("Sentiment",  row.get("score_sentiment",50) or 50),
+    ]
+    labels = [f[0] for f in factors]
+    values = [round(float(f[1]), 1) for f in factors]
+    # Close the polygon
+    labels_closed = labels + [labels[0]]
+    values_closed = values + [values[0]]
+
+    # Color based on average
+    avg = sum(values) / len(values)
+    color = "#4caf50" if avg >= 65 else ("#ff9800" if avg >= 45 else "#ef5350")
+
+    fill_color = color + "26"  # ~15% opacity hex
+
+    fig = go.Figure(go.Scatterpolar(
+        r=values_closed,
+        theta=labels_closed,
+        fill="toself",
+        fillcolor=fill_color,
+        line=dict(color=color, width=2),
+        hovertemplate="%{theta}: %{r:.0f}<extra></extra>",
+    ))
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100], gridcolor="#252b3b",
+                           tickfont=dict(color="#8892a4", size=9), showticklabels=True,
+                           tickvals=[25, 50, 75, 100]),
+            angularaxis=dict(gridcolor="#252b3b", tickfont=dict(color="#e8eaf0", size=11)),
+            bgcolor="rgba(0,0,0,0)",
+        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#8892a4", family="Inter, sans-serif"),
+        margin=dict(l=50, r=50, t=30, b=30),
+        height=320,
+        showlegend=False,
+    )
+    return fig
+
+
+def conviction_meter_breakdown(row) -> str:
+    """Returns a short markdown text explaining the conviction meter."""
+    factors = {
+        "Värde": row.get("score_value", 50),
+        "Kvalitet": row.get("score_quality", 50),
+        "Momentum": row.get("score_momentum", 50),
+        "Tillväxt": row.get("score_growth", 50),
+        "Risk": row.get("score_risk", 50),
+        "Sentiment": row.get("score_sentiment", 50),
+    }
+    valid = {k: float(v) for k, v in factors.items() if v is not None and not (isinstance(v, float) and np.isnan(v))}
+    if not valid:
+        return ""
+    top = sorted(valid.items(), key=lambda x: x[1], reverse=True)[:2]
+    bot = sorted(valid.items(), key=lambda x: x[1])[:2]
+    top_str = " · ".join(f"**{k}** ({v:.0f})" for k, v in top)
+    bot_str = " · ".join(f"**{k}** ({v:.0f})" for k, v in bot)
+    return f"Styrkor: {top_str}   Svagheter: {bot_str}"
+
+
 def holdings_pie(df: pd.DataFrame) -> go.Figure:
     if "sector" not in df.columns:
         return go.Figure()

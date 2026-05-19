@@ -65,7 +65,7 @@ def page_sector_rotation(df: pd.DataFrame):
              "Skillnad mellan sektorer i upptrend minus nedtrend. Positivt = fler sektorer stiger. Negativt = marknaden roterar nedåt. ±3 eller mer = tydlig signal."),
         ])
 
-    tab1, tab2, tab3 = st.tabs(["🔥 Heatmap", "📋 Momentum-tabell", "🏆 Topp/botten sektorer"])
+    tab1, tab2, tab3, tab4 = st.tabs(["🔥 Heatmap", "📋 Momentum-tabell", "🏆 Topp/botten sektorer", "💡 Handelssignaler"])
 
     with tab1:
         # Heatmap: sektor → signaler
@@ -155,6 +155,92 @@ def page_sector_rotation(df: pd.DataFrame):
                     st.markdown(f"**{sec}** — {mom:+.1f}%" if mom else f"**{sec}** — —")
         else:
             st.info("Hämtar data...")
+
+    with tab4:
+        st.subheader("💡 Sektorrotation – Handelssignaler")
+        st.caption("Baserat på sektors ETF-momentum och styrkerankning.")
+
+        if not trends:
+            st.info("Ingen sektordata tillgänglig.")
+        else:
+            # Build recommendations
+            buy_sectors = []
+            avoid_sectors = []
+            neutral_sectors = []
+
+            for sec, data in trends.items():
+                # signal in trends is a string like "STARK UPPTREND", "UPPTREND", "NEUTRAL" etc.
+                sig_str = data.get("signal", "NEUTRAL")
+                sig_score = data.get("signal_score", 2)
+                mom3m = data.get("momentum_3m", 0) or 0
+                etf = etf_map.get(sec, "—")
+
+                if sig_score >= 3 and mom3m > 3:
+                    buy_sectors.append({"Sektor": sec, "ETF": etf, "Signal": "ÖVERVIKTA",
+                                         "3m momentum": f"+{mom3m:.1f}%",
+                                         "Motivering": "Stark upptrend + positivt momentum"})
+                elif sig_score <= 1 or mom3m < -3:
+                    avoid_sectors.append({"Sektor": sec, "ETF": etf, "Signal": "UNDERVIKTA",
+                                           "3m momentum": f"{mom3m:.1f}%",
+                                           "Motivering": "Nedtrend eller negativt momentum"})
+                else:
+                    neutral_sectors.append({"Sektor": sec, "ETF": etf, "Signal": "NEUTRAL",
+                                             "3m momentum": f"{mom3m:+.1f}%"})
+
+            col1_sr, col2_sr = st.columns(2)
+            with col1_sr:
+                st.markdown("**Övervikta (starka sektorer)**")
+                if buy_sectors:
+                    st.dataframe(pd.DataFrame(buy_sectors), use_container_width=True, hide_index=True)
+                else:
+                    st.info("Inga sektorer uppfyller överviktskriterierna just nu")
+
+            with col2_sr:
+                st.markdown("**Undervikta (svaga sektorer)**")
+                if avoid_sectors:
+                    st.dataframe(pd.DataFrame(avoid_sectors), use_container_width=True, hide_index=True)
+                else:
+                    st.info("Inga sektorer i tydlig nedtrend just nu")
+
+            if neutral_sectors:
+                with st.expander("Neutrala sektorer", expanded=False):
+                    st.dataframe(pd.DataFrame(neutral_sectors), use_container_width=True, hide_index=True)
+
+            # Stock picks from strong sectors
+            st.markdown("---")
+            st.markdown("**Bästa aktier från starka sektorer**")
+            if buy_sectors and not df.empty and "sector" in df.columns:
+                strong_sector_names = [s["Sektor"] for s in buy_sectors]
+                strong_stocks = df[df["sector"].isin(strong_sector_names)].copy() if strong_sector_names else pd.DataFrame()
+
+                # Also try partial match
+                if strong_stocks.empty and strong_sector_names:
+                    try:
+                        mask = df["sector"].str.contains("|".join(strong_sector_names[:3]), case=False, na=False)
+                        strong_stocks = df[mask].copy()
+                    except Exception:
+                        pass
+
+                if not strong_stocks.empty:
+                    show_cols_sr = [c for c in ["ticker", "name", "sector", "score_total", "entry_signal", "return_3m"]
+                                    if c in strong_stocks.columns]
+                    if "score_total" in strong_stocks.columns:
+                        top_strong = strong_stocks.sort_values("score_total", ascending=False).head(10)
+                    else:
+                        top_strong = strong_stocks.head(10)
+                    st.dataframe(top_strong[show_cols_sr], use_container_width=True, hide_index=True)
+                else:
+                    st.info("Ingen direktmatchning mellan ETF-sektorer och universumsektorer just nu")
+
+            # Rotation summary
+            st.markdown("---")
+            rotation_score = len(buy_sectors) - len(avoid_sectors)
+            if rotation_score >= 3:
+                st.success(f"Bred bull-marknad — {len(buy_sectors)} sektorer i upptrend, {len(avoid_sectors)} i nedtrend")
+            elif rotation_score <= -3:
+                st.error(f"Bred bear-marknad — {len(avoid_sectors)} sektorer i nedtrend")
+            else:
+                st.info(f"Blandad marknad — {len(buy_sectors)} upp, {len(avoid_sectors)} ned, {len(neutral_sectors)} neutrala")
 
     # AI-knapp
     if trends:

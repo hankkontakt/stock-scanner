@@ -235,6 +235,27 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                         st.markdown(full_result)
                         st.markdown(_ai_section_footer(), unsafe_allow_html=True)
 
+                        # Log to AI trade journal
+                        try:
+                            from web.pages.ai_journal import log_ai_recommendation
+                            rec_text = result.upper()
+                            if "STARKT KÖP" in rec_text or "STARK KÖP" in rec_text:
+                                rec = "STARKT KÖP"
+                            elif "KÖP" in rec_text:
+                                rec = "KÖP"
+                            elif "SÄLJ" in rec_text:
+                                rec = "SÄLJ"
+                            elif "VÄNTA" in rec_text:
+                                rec = "VÄNTA"
+                            else:
+                                rec = "NEUTRAL"
+                            _ticker_rows = df[df["ticker"] == sel_ticker]
+                            _cur_price = float(_ticker_rows.iloc[0].get("current_price") or _ticker_rows.iloc[0].get("close") or 0) if not _ticker_rows.empty else 0
+                            _score = float(_ticker_rows.iloc[0].get("score_total") or 0) if not _ticker_rows.empty else 0
+                            log_ai_recommendation(sel_ticker, rec, _score, _cur_price, result[:300])
+                        except Exception:
+                            pass
+
                         if fetched_news:
                             with st.expander(f"📋 Källnyheter ({len(fetched_news)} artiklar)", expanded=False):
                                 for n in fetched_news[:8]:

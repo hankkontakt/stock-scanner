@@ -73,6 +73,120 @@ def _pct_color(val: float) -> str:
 # MAIN PAGE
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _watchlist_health_check(watchlist: list, df_today: pd.DataFrame, df_yesterday: pd.DataFrame) -> list:
+    """
+    For each watchlist item, check:
+    - Score change vs yesterday
+    - Entry signal change
+    - Entered STARK / left STARK
+    Returns list of alert dicts.
+    """
+    alerts = []
+    if not watchlist or df_today.empty:
+        return []
+
+    wl_tickers = [w.get("ticker", "") for w in watchlist if w.get("ticker")]
+    today_wl = df_today[df_today["ticker"].isin(wl_tickers)].set_index("ticker")
+    yest_wl = df_yesterday[df_yesterday["ticker"].isin(wl_tickers)].set_index("ticker") if not df_yesterday.empty else pd.DataFrame()
+
+    for ticker in wl_tickers:
+        if ticker not in today_wl.index:
+            continue
+        today_row = today_wl.loc[ticker]
+        alert = {"ticker": ticker, "changes": []}
+
+        score_today = today_row.get("score_total")
+        entry_today = today_row.get("entry_signal", "")
+
+        if not yest_wl.empty and ticker in yest_wl.index:
+            yest_row = yest_wl.loc[ticker]
+            score_yest = yest_row.get("score_total")
+            entry_yest = yest_row.get("entry_signal", "")
+
+            # Score delta
+            if pd.notna(score_today) and pd.notna(score_yest):
+                delta = float(score_today) - float(score_yest)
+                if abs(delta) >= 10:
+                    direction = "Upp" if delta > 0 else "Ned"
+                    alert["changes"].append(f"{direction} {abs(delta):.0f}p (score: {score_yest:.0f}→{score_today:.0f})")
+                    alert["delta"] = delta
+
+            # Signal change
+            if entry_today != entry_yest and entry_today and entry_yest:
+                if entry_today == "STARK":
+                    alert["changes"].append(f"Ny STARK-signal! (från {entry_yest})")
+                    alert["priority"] = "high"
+                elif entry_yest == "STARK" and entry_today != "STARK":
+                    alert["changes"].append(f"Lämnat STARK (nu: {entry_today})")
+                    alert["priority"] = "medium"
+                else:
+                    alert["changes"].append(f"Signal: {entry_yest}→{entry_today}")
+
+        # Current state info
+        alert["score"] = float(score_today) if pd.notna(score_today) else None
+        alert["entry_signal"] = entry_today
+        alert["name"] = today_row.get("name", ticker)
+
+        alerts.append(alert)
+
+    return alerts
+
+
+def _get_insider_alerts(df: pd.DataFrame) -> pd.DataFrame:
+    """Get stocks with recent insider buying signals from scored universe."""
+    if df.empty:
+        return pd.DataFrame()
+
+    conditions = []
+
+    # Executive buy signal
+    if "insider_executive_buy" in df.columns:
+        exec_buy = df["insider_executive_buy"].fillna(False).astype(bool)
+        conditions.append(exec_buy)
+
+    # Insider cluster (3+ insiders buying)
+    if "insider_cluster" in df.columns:
+        cluster = df["insider_cluster"].fillna(False).astype(bool)
+        conditions.append(cluster)
+
+    # High insider ownership + recent activity
+    if "insider_pct" in df.columns:
+        high_pct = df["insider_pct"].fillna(0) > 0.15  # >15% owned by insiders
+        conditions.append(high_pct)
+
+    if not conditions:
+        return pd.DataFrame()
+
+    # Any condition triggers
+    mask = conditions[0].copy()
+    for cond in conditions[1:]:
+        mask = mask | cond
+
+    result = df[mask].copy()
+    if result.empty:
+        return pd.DataFrame()
+
+    # Add signal type column
+    def _signal_type(row):
+        types = []
+        if row.get("insider_executive_buy"):
+            types.append("VD/CFO köp")
+        if row.get("insider_cluster"):
+            types.append("Kluster (3+ insiders)")
+        if (row.get("insider_pct") or 0) > 0.15:
+            types.append(f"Högt ägande ({row.get('insider_pct', 0) * 100:.0f}%)")
+        return " · ".join(types) if types else "Insynsägande"
+
+    result["Insynssignal"] = result.apply(_signal_type, axis=1)
+
+    show_cols = ["ticker", "name", "Insynssignal", "score_total", "entry_signal",
+                 "insider_pct", "return_1m", "return_3m"]
+    available = [c for c in show_cols if c in result.columns or c == "Insynssignal"]
+    if "score_total" in result.columns:
+        return result[available].sort_values("score_total", ascending=False)
+    return result[available]
+
+
 def page_alerts_notices(df: pd.DataFrame):
     """Larm & Notiser – ombyggd för bättre läsbarhet."""
     st.title("🚨 Larm & Notiser")
@@ -90,10 +204,15 @@ def page_alerts_notices(df: pd.DataFrame):
 
     st.markdown("---")
 
-    tab_pos, tab_movers, tab_events = st.tabs([
+    # Load yesterday's data for watchlist health check
+    df_yesterday = _load_nth_latest_scored(n=2)
+
+    tab_pos, tab_movers, tab_events, tab_watchlist, tab_insider = st.tabs([
         "⚡ Signaler & Larm",
         "🔥 Vad stack ut idag?",
         "📅 Kommande händelser",
+        "⭐ Bevakningslista",
+        "👔 Insynsköp",
     ])
 
     # ══════════════════════════════════════════════════════════════════════
@@ -578,3 +697,92 @@ def page_alerts_notices(df: pd.DataFrame):
                 st.info("Lägg till innehav för att se kommande utdelningar.")
         except Exception as _e:
             st.caption(f"Utdelningskalender ej tillgänglig: {_e}")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # TAB 4 — Bevakningslista Hälsokoll (Feature 3)
+    # ══════════════════════════════════════════════════════════════════════
+    with tab_watchlist:
+        st.subheader("⭐ Bevakningslista – Hälsokoll")
+
+        if not watchlist:
+            st.info("Din bevakningslista är tom. Lägg till aktier via Bevakningslistan.")
+        else:
+            wl_alerts = _watchlist_health_check(watchlist, df, df_yesterday)
+
+            # Highlight high-priority first
+            high = [a for a in wl_alerts if a.get("priority") == "high"]
+            medium = [a for a in wl_alerts if a.get("priority") == "medium"]
+
+            if high:
+                st.markdown("**Nya köpsignaler**")
+                for a in high:
+                    score_val = a.get("score") or 0
+                    st.success(f"**{a['ticker']}** — {a['name']} | Score: {score_val:.0f} | " + " | ".join(a["changes"]))
+
+            if medium:
+                st.markdown("**Förändrade signaler**")
+                for a in medium:
+                    score_val = a.get("score") or 0
+                    st.warning(f"**{a['ticker']}** — {a['name']} | Score: {score_val:.0f} | " + " | ".join(a["changes"]))
+
+            # Full overview table
+            st.markdown("---")
+            st.markdown("**Alla bevakade aktier**")
+            wl_tickers_list = [w.get("ticker", "") for w in watchlist]
+            wl_data = df[df["ticker"].isin(wl_tickers_list)].copy() if not df.empty else pd.DataFrame()
+            if not wl_data.empty:
+                show_cols_wl = [c for c in ["ticker", "name", "score_total", "entry_signal", "trend_signal",
+                                            "return_1m", "return_3m", "confidence_label"]
+                                if c in wl_data.columns]
+                if "score_total" in wl_data.columns:
+                    wl_data = wl_data.sort_values("score_total", ascending=False)
+                st.dataframe(wl_data[show_cols_wl], use_container_width=True, hide_index=True)
+            else:
+                st.info("Inga av dina bevakade aktier hittades i nuvarande scan.")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # TAB 5 — Insynsköp (Feature 7)
+    # ══════════════════════════════════════════════════════════════════════
+    with tab_insider:
+        st.subheader("👔 Insynsköp – Signaler")
+        st.caption("Aktier där insiders (VD, CFO, styrelse) nyligen köpt aktier eller har högt ägande.")
+
+        insider_df = _get_insider_alerts(df)
+        if insider_df.empty:
+            st.info("Inga insynssignaler hittades i nuvarande scan. Data uppdateras varje vecka.")
+        else:
+            n_exec = int((df.get("insider_executive_buy", pd.Series(dtype=bool)).fillna(False)).sum()) if "insider_executive_buy" in df.columns else 0
+            n_cluster = int((df.get("insider_cluster", pd.Series(dtype=bool)).fillna(False)).sum()) if "insider_cluster" in df.columns else 0
+
+            col1, col2, col3 = st.columns(3)
+            col1.metric("VD/CFO-köp", n_exec)
+            col2.metric("Klusterköp (3+)", n_cluster)
+            col3.metric("Totalt insynssignaler", len(insider_df))
+
+            st.markdown("---")
+            st.dataframe(insider_df, use_container_width=True, hide_index=True)
+
+            # Link to Finansinspektionen
+            st.markdown("[Finansinspektionens Insynsregister](https://www.fi.se/sv/vara-register/insynsregistret/) — officiell källa för svenska insynsaffärer")
+
+        st.markdown("---")
+        # Short squeeze opportunities
+        st.markdown("**Hög blankningsandel (Short Squeeze-risk)**")
+        if "short_pct_float" in df.columns:
+            high_short = df[df["short_pct_float"].fillna(0) > 0.05].copy()  # >5% float shorted
+            if not high_short.empty:
+                show_short = [c for c in ["ticker", "name", "short_pct_float", "short_ratio", "score_total", "return_1m"]
+                              if c in high_short.columns]
+                high_short = high_short.copy()
+                high_short["short_pct_float"] = (high_short["short_pct_float"] * 100).round(1)
+                st.dataframe(
+                    high_short[show_short].rename(columns={
+                        "short_pct_float": "Blankat % av float",
+                        "short_ratio": "Days to cover"
+                    }).sort_values("Blankat % av float", ascending=False).head(15),
+                    use_container_width=True, hide_index=True
+                )
+            else:
+                st.info("Inga aktier med hög blankningsandel (>5%) i nuvarande scan")
+        else:
+            st.info("Short-data ej tillgänglig i nuvarande scan")
