@@ -660,14 +660,42 @@ def send_email(
             server.login(sender, password)
             server.sendmail(sender, recipients, msg.as_string())
         print(f"  ✉ Email skickat till {', '.join(recipients)}")
+        for _r in recipients:
+            _log_email_delivery(_r, subject, subscription_type or "direct", True)
         return True
     except smtplib.SMTPAuthenticationError:
         print("  ❌ Email-autentisering misslyckades")
         print("     Kontrollera EMAIL_SENDER och EMAIL_PASSWORD i config.py")
+        for _r in recipients:
+            _log_email_delivery(_r, subject, subscription_type or "direct", False, "SMTPAuthenticationError")
         return False
     except Exception as e:
         print(f"  ❌ Email-fel: {e}")
+        for _r in recipients:
+            _log_email_delivery(_r, subject, subscription_type or "direct", False, str(e))
         return False
+
+
+def _log_email_delivery(recipient: str, subject: str, email_type: str, success: bool, error: str = ""):
+    """Log email delivery attempt to data/email_delivery_log.json."""
+    try:
+        log_path = Path(__file__).resolve().parent.parent / "data" / "email_delivery_log.json"
+        try:
+            log = json.loads(log_path.read_text(encoding="utf-8")) if log_path.exists() else []
+        except Exception:
+            log = []
+        log = log[-499:]
+        log.append({
+            "timestamp": datetime.now().isoformat()[:19],
+            "recipient": recipient,
+            "subject": str(subject)[:80],
+            "type": email_type,
+            "success": success,
+            "error": error[:200] if error else "",
+        })
+        log_path.write_text(json.dumps(log, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def send_failure_alert(workflow: str, run_id: str = "", repo: str = "") -> bool:

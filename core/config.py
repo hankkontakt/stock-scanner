@@ -524,3 +524,17 @@ try:
         pass
 except Exception:
     pass
+
+# ── Scoring-config override (sätts via admin-UI, sparas i data/scoring_config.json) ──
+import json as _json
+_SCORING_CONFIG_FILE = Path(__file__).parent.parent / "data" / "scoring_config.json"
+try:
+    _override = _json.loads(_SCORING_CONFIG_FILE.read_text(encoding="utf-8")) if _SCORING_CONFIG_FILE.exists() else {}
+    if "factor_weights" in _override:
+        FACTOR_WEIGHTS = _override["factor_weights"]
+    if "smallcap_config" in _override:
+        for _k, _v in _override["smallcap_config"].items():
+            if _k in SMALLCAP_CONFIG:
+                SMALLCAP_CONFIG[_k] = _v
+except Exception:
+    pass

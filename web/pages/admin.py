@@ -3,7 +3,8 @@
 import json
 import os
 import tempfile
-from datetime import date
+import time
+from datetime import date, datetime
 
 import pandas as pd
 import requests
@@ -331,6 +332,523 @@ def _trigger_targeted_refresh(tickers: list[str]) -> bool:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# HJÄLPFUNKTIONER FÖR NYA FLIKAR
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _load_scan_log() -> list:
+    path = DATA_DIR / "scan_log.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    except Exception:
+        return []
+
+
+def _load_ai_usage_log() -> list:
+    path = DATA_DIR / "ai_usage_log.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    except Exception:
+        return []
+
+
+def _load_activity_log() -> list:
+    path = DATA_DIR / "activity_log.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    except Exception:
+        return []
+
+
+def _load_email_delivery_log() -> list:
+    path = DATA_DIR / "email_delivery_log.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    except Exception:
+        return []
+
+
+def _render_github_sync_status():
+    """Show which key data files are committed to GitHub vs local-only."""
+    token = _get_github_token()
+    owner = os.getenv("GITHUB_OWNER") or "hankkontakt"
+    repo  = os.getenv("GITHUB_REPO")  or "stock-scanner"
+
+    key_files = [
+        ("data/scan_log.json",              DATA_DIR / "scan_log.json"),
+        ("data/watchlist.json",             DATA_DIR / "watchlist.json"),
+        ("data/holdings.csv",               DATA_DIR / "holdings.csv"),
+        ("data/email_subscribers.json",     DATA_DIR / "email_subscribers.json"),
+        ("data/custom_universe.json",       DATA_DIR / "custom_universe.json"),
+        ("data/blacklist.json",             DATA_DIR / "blacklist.json"),
+    ]
+
+    if not token:
+        st.warning("⚠️ Ingen GitHub-token — kan inte kontrollera synkstatus")
+        return
+
+    rows = []
+    for github_path, local_path in key_files:
+        local_exists = local_path.exists()
+        local_mtime = (
+            datetime.fromtimestamp(local_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+            if local_exists else "—"
+        )
+        gh_committed = "—"
+        try:
+            import requests as _req
+            r = _req.get(
+                f"https://api.github.com/repos/{owner}/{repo}/commits",
+                params={"path": github_path, "per_page": 1},
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+                timeout=5,
+            )
+            if r.status_code == 200 and r.json():
+                gh_committed = r.json()[0]["commit"]["committer"]["date"][:10]
+        except Exception:
+            gh_committed = "?"
+        rows.append({
+            "Fil":                       github_path,
+            "Lokal":                     "✅" if local_exists else "❌",
+            "Senast ändrad (lokal)":     local_mtime,
+            "Senast commitad (GitHub)":  gh_committed,
+        })
+
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
+def _render_overview_tab():
+    st.subheader("📊 Systemoversikt")
+
+    # Row 1: 4 KPI metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    scan_log = _load_scan_log()
+    last_scan = scan_log[-1] if scan_log else {}
+    last_scan_time = last_scan.get("timestamp", "Aldrig")[:16] if last_scan else "Aldrig"
+    last_scan_mode = last_scan.get("mode", "—")
+
+    users = _load_users_config()
+    active_users = sum(1 for u in users if u.get("active", True))
+
+    try:
+        from core.email_template import load_subscribers
+        subs = load_subscribers()
+        active_subs = sum(1 for s in subs if s.get("active", True))
+    except Exception:
+        active_subs = 0
+
+    ai_log = _load_ai_usage_log()
+    today_str = date.today().isoformat()
+    ai_today = sum(1 for e in ai_log if e.get("date", "").startswith(today_str))
+
+    with col1:
+        st.metric("🕐 Senaste scan", last_scan_time, last_scan_mode)
+    with col2:
+        st.metric("👥 Aktiva användare", active_users)
+    with col3:
+        st.metric("📧 E-postprenumeranter", active_subs)
+    with col4:
+        st.metric("🤖 AI-anrop idag", ai_today)
+
+    st.markdown("---")
+
+    # Row 2: API-nyckelstatus
+    st.markdown("**🔑 API-nyckelstatus**")
+    api_cols = st.columns(5)
+    keys = [
+        ("GitHub",   bool(os.getenv("GITHUB_TOKEN") or _get_st_secret("GITHUB_TOKEN"))),
+        ("Finnhub",  bool(os.getenv("FINNHUB_API_KEY") or _get_st_secret("FINNHUB_API_KEY"))),
+        ("DeepSeek", bool(os.getenv("DEEPSEEK_API_KEY") or _get_st_secret("DEEPSEEK_API_KEY"))),
+        ("Gemini",   bool(os.getenv("GEMINI_API_KEY") or _get_st_secret("GEMINI_API_KEY"))),
+        ("E-post",   bool(os.getenv("EMAIL_SENDER") or _get_st_secret("EMAIL_SENDER"))),
+    ]
+    for col, (name, ok) in zip(api_cols, keys):
+        col.markdown(f"{'✅' if ok else '❌'} **{name}**")
+
+    st.markdown("---")
+
+    # Row 3: Senaste skanningar
+    st.markdown("**📋 Senaste körningar**")
+    if scan_log:
+        df_log = pd.DataFrame(scan_log[-10:][::-1])
+        show_cols = [c for c in ["timestamp", "mode", "status", "duration_sec", "n_holdings", "n_stoploss"] if c in df_log.columns]
+        st.dataframe(df_log[show_cols] if show_cols else df_log, use_container_width=True, hide_index=True)
+    else:
+        st.info("Inga körningar loggade ännu")
+
+    # Row 4: Scan-prestanda (Item 7)
+    if scan_log and len(scan_log) > 2:
+        try:
+            import plotly.graph_objects as go
+            st.markdown("**📈 Scan-prestanda (senaste 30 körningar)**")
+            df_perf = pd.DataFrame(scan_log[-30:])
+            if "duration_sec" in df_perf.columns and "timestamp" in df_perf.columns:
+                df_perf["ts"] = pd.to_datetime(df_perf["timestamp"], errors="coerce")
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=df_perf["ts"], y=df_perf["duration_sec"],
+                    mode="lines+markers", name="Körtid (sek)",
+                    line=dict(color="#4c9be8"),
+                ))
+                fig.update_layout(
+                    height=200, margin=dict(l=0, r=0, t=20, b=0),
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis=dict(gridcolor="#252b3b"),
+                    yaxis=dict(gridcolor="#252b3b", title="sekunder"),
+                    font=dict(color="#8892a4"),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+                if len(df_perf) >= 5:
+                    avg_recent = df_perf["duration_sec"].tail(5).mean()
+                    avg_baseline = df_perf["duration_sec"].mean()
+                    if avg_recent > avg_baseline * 1.5:
+                        st.warning(
+                            f"⚠️ Scan-körtid har ökat: senaste 5 körningar avg {avg_recent:.0f}s "
+                            f"vs historiskt {avg_baseline:.0f}s"
+                        )
+        except ImportError:
+            pass  # plotly ej installerat
+
+    # Row 5: GitHub sync status
+    st.markdown("---")
+    st.markdown("**🔄 GitHub-synkstatus**")
+    _render_github_sync_status()
+
+    # Row 6: Senaste aktivitet (Item 4b)
+    st.markdown("---")
+    st.markdown("**👤 Senaste aktivitet**")
+    activity_log = _load_activity_log()
+    if activity_log:
+        df_act = pd.DataFrame(activity_log[-20:][::-1])
+        st.dataframe(df_act, use_container_width=True, hide_index=True)
+    else:
+        st.info("Ingen aktivitet loggad ännu")
+
+
+def _get_st_secret(key: str) -> str:
+    """Läs ett Streamlit-secret säkert (returnerar '' om det misslyckas)."""
+    try:
+        return st.secrets.get(key, "") or ""
+    except Exception:
+        return ""
+
+
+def _render_ai_log_tab():
+    st.subheader("🤖 AI-användning")
+
+    ai_log = _load_ai_usage_log()
+    if not ai_log:
+        st.info("Ingen AI-användning loggad ännu. Loggen skapas automatiskt vid nästa AI-anrop.")
+        return
+
+    df = pd.DataFrame(ai_log)
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+    col1, col2, col3, col4 = st.columns(4)
+    today = pd.Timestamp.now().date()
+    week_ago = today - pd.Timedelta(days=7)
+
+    cached_col = df.get("cached", pd.Series([False] * len(df), index=df.index)).fillna(False)
+    df_real = df[~cached_col]
+
+    with col1:
+        st.metric("Totalt anrop", len(df))
+    with col2:
+        st.metric("Idag", len(df[df["date"].dt.date == today]))
+    with col3:
+        cache_rate = (cached_col.sum() / len(df) * 100) if len(df) > 0 else 0
+        st.metric("Cache-träffar", f"{cache_rate:.0f}%")
+    with col4:
+        if "est_cost_usd" in df.columns:
+            cost_7d = df_real[df_real["date"].dt.date >= week_ago]["est_cost_usd"].sum()
+        else:
+            cost_7d = 0.0
+        st.metric("Uppsk. kostnad (7d)", f"${cost_7d:.4f}")
+
+    st.markdown("---")
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("**Anrop per provider**")
+        if "provider" in df.columns:
+            st.dataframe(df.groupby("provider").size().reset_index(name="Antal"),
+                         use_container_width=True, hide_index=True)
+    with col_b:
+        st.markdown("**Mest analyserade tickers**")
+        if "ticker" in df.columns:
+            top_tickers = df[df["ticker"] != ""]["ticker"].value_counts().head(10).reset_index()
+            top_tickers.columns = ["Ticker", "Antal"]
+            st.dataframe(top_tickers, use_container_width=True, hide_index=True)
+
+    st.markdown("**Senaste anrop**")
+    show = df.sort_values("date", ascending=False).head(50)
+    show_cols = [c for c in ["date", "provider", "function", "ticker", "cached", "est_cost_usd"] if c in show.columns]
+    st.dataframe(show[show_cols], use_container_width=True, hide_index=True)
+
+
+def _render_config_tab():
+    st.subheader("⚙️ Scoringkonfiguration")
+    st.info(
+        "Ändringar sparas till data/scoring_config.json och används av nästa pipeline-körning "
+        "(override av defaultvärden i config.py)."
+    )
+
+    config_path = DATA_DIR / "scoring_config.json"
+    try:
+        override = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
+    except Exception:
+        override = {}
+
+    from core.config import FACTOR_WEIGHTS, SMALLCAP_CONFIG
+    current_weights = override.get("factor_weights", dict(FACTOR_WEIGHTS))
+
+    st.markdown("### 📊 Stora scannen — Faktorsikter")
+    st.markdown("Summerar till 1.0. Ändra fördelningen mellan faktorerna.")
+
+    factor_labels = {
+        "value":     "Värdering (P/E, P/B, EV/EBITDA)",
+        "quality":   "Kvalitet (ROE, ROA, marginaler)",
+        "momentum":  "Momentum (12m avkastning, trend)",
+        "growth":    "Tillväxt (omsättning, vinst YoY)",
+        "sentiment": "Sentiment (insider, nyheter)",
+        "risk":      "Risk (volatilitet, D/E)",
+        "dividend":  "Utdelning (yield, payout ratio)",
+        "size":      "Storlek (market cap)",
+    }
+
+    new_weights = {}
+    factor_items = list(current_weights.items())
+    cols_per_row = 2
+    for i in range(0, len(factor_items), cols_per_row):
+        row_cols = st.columns(cols_per_row)
+        for j, (factor, default_w) in enumerate(factor_items[i:i + cols_per_row]):
+            label = factor_labels.get(factor, factor)
+            new_weights[factor] = row_cols[j].slider(
+                label, min_value=0.0, max_value=0.40,
+                value=float(current_weights.get(factor, default_w)),
+                step=0.01, key=f"weight_{factor}",
+            )
+
+    total = sum(new_weights.values())
+    color = "green" if abs(total - 1.0) < 0.01 else "red"
+    st.markdown(f"**Total: :{color}[{total:.2f}]** (måste vara 1.00)")
+
+    st.markdown("---")
+    st.markdown("### 🏦 Småbolag — Filtertröskelvar")
+
+    sc_cfg = override.get("smallcap_config", {})
+    sc_defaults = dict(SMALLCAP_CONFIG)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        new_min_turnover = st.number_input(
+            "Min daglig omsättning (SEK)",
+            value=int(sc_cfg.get("min_daily_turnover_sek", sc_defaults.get("min_daily_turnover_sek", 150000))),
+            step=10000, min_value=0, key="sc_min_turnover",
+        )
+        new_min_mcap = st.number_input(
+            "Min börsvärde (SEK)",
+            value=int(sc_cfg.get("min_market_cap_sek", sc_defaults.get("min_market_cap_sek", 20000000))),
+            step=1000000, min_value=0, key="sc_min_mcap",
+        )
+        new_max_mcap = st.number_input(
+            "Max börsvärde (SEK)",
+            value=int(sc_cfg.get("max_market_cap_sek", sc_defaults.get("max_market_cap_sek", 10000000000))),
+            step=100000000, min_value=0, key="sc_max_mcap",
+        )
+    with col2:
+        new_max_de = st.number_input(
+            "Max skuldsättning D/E (%)",
+            value=int(sc_cfg.get("max_debt_to_equity", sc_defaults.get("max_debt_to_equity", 300))),
+            step=10, min_value=0, key="sc_max_de",
+        )
+        new_min_cr = st.number_input(
+            "Min current ratio",
+            value=float(sc_cfg.get("min_current_ratio", sc_defaults.get("min_current_ratio", 0.5))),
+            step=0.1, min_value=0.0, key="sc_min_cr",
+        )
+        new_max_piotroski_skip = st.number_input(
+            "Max Piotroski F-Score för eliminering",
+            value=int(sc_cfg.get("max_piotroski_skip", sc_defaults.get("max_piotroski_skip", 2))),
+            step=1, min_value=0, max_value=4, key="sc_piotroski",
+        )
+
+    if st.button(
+        "💾 Spara konfiguration", key="btn_save_config", type="primary",
+        disabled=(abs(total - 1.0) >= 0.01),
+    ):
+        new_override = {
+            "factor_weights": new_weights,
+            "smallcap_config": {
+                "min_daily_turnover_sek": new_min_turnover,
+                "min_market_cap_sek":     new_min_mcap,
+                "max_market_cap_sek":     new_max_mcap,
+                "max_debt_to_equity":     new_max_de,
+                "min_current_ratio":      new_min_cr,
+                "max_piotroski_skip":     new_max_piotroski_skip,
+            },
+        }
+        config_path.write_text(json.dumps(new_override, indent=2, ensure_ascii=False), encoding="utf-8")
+        token = _get_github_token()
+        if token:
+            _github_commit_file(
+                "data/scoring_config.json",
+                json.dumps(new_override, indent=2, ensure_ascii=False),
+                token,
+            )
+        st.success("✅ Konfiguration sparad och commitad till GitHub!")
+        st.rerun()
+
+    if config_path.exists():
+        if st.button("🔄 Återställ till standardvärden", key="btn_reset_config"):
+            config_path.unlink()
+            st.success("Standardvärden återställda")
+            st.rerun()
+
+
+def _render_cache_tab():
+    st.subheader("🗄️ Cache-hantering")
+
+    cache_dir    = DATA_DIR / "cache"
+    ai_cache_dir = DATA_DIR / "ai_cache"
+
+    def _cache_stats(d: Path) -> dict:
+        if not d.exists():
+            return {"count": 0, "size_mb": 0, "oldest": None, "newest": None}
+        files = list(d.glob("*"))
+        if not files:
+            return {"count": 0, "size_mb": 0, "oldest": None, "newest": None}
+        mtimes = [f.stat().st_mtime for f in files]
+        sizes  = [f.stat().st_size  for f in files]
+        return {
+            "count":    len(files),
+            "size_mb":  round(sum(sizes) / 1024 / 1024, 1),
+            "oldest":   datetime.fromtimestamp(min(mtimes)).strftime("%Y-%m-%d"),
+            "newest":   datetime.fromtimestamp(max(mtimes)).strftime("%Y-%m-%d"),
+        }
+
+    price_stats = _cache_stats(cache_dir)
+    ai_stats    = _cache_stats(ai_cache_dir)
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Priscache-filer",    price_stats["count"])
+    col2.metric("Priscache-storlek",  f"{price_stats['size_mb']} MB")
+    col3.metric("AI-cache-filer",     ai_stats["count"])
+    col4.metric("AI-cache-storlek",   f"{ai_stats['size_mb']} MB")
+
+    st.markdown("---")
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.markdown("**🗑️ Rensa priscache**")
+        days_old = st.slider("Rensa filer äldre än (dagar)", 1, 90, 30, key="cache_days_slider")
+        if st.button(f"🗑️ Rensa priscache > {days_old} dagar", key="btn_clear_price_cache"):
+            if cache_dir.exists():
+                cutoff = time.time() - days_old * 86400
+                removed = sum(1 for f in cache_dir.glob("*") if f.stat().st_mtime < cutoff and not f.unlink())
+                st.success(f"✅ Raderade {removed} cache-filer")
+                st.rerun()
+
+        st.markdown("**🗑️ Rensa cache för specifik ticker**")
+        clear_ticker = st.text_input("Ticker (t.ex. VOLV-B.ST)", key="cache_clear_ticker").upper().strip()
+        if st.button("🗑️ Rensa", key="btn_clear_ticker_cache") and clear_ticker:
+            if cache_dir.exists():
+                safe = clear_ticker.replace(".", "_").replace("-", "_").replace("/", "_")
+                removed = 0
+                for pattern in [f"{safe}*", f"*{safe}*"]:
+                    for f in cache_dir.glob(pattern):
+                        if f.exists():
+                            f.unlink()
+                            removed += 1
+                st.success(f"✅ Raderade {removed} cache-filer för {clear_ticker}")
+
+    with col_b:
+        st.markdown("**🗑️ Rensa AI-cache**")
+        ai_days = st.slider("Rensa AI-cache äldre än (dagar)", 1, 30, 7, key="ai_cache_days_slider")
+        if st.button(f"🗑️ Rensa AI-cache > {ai_days} dagar", key="btn_clear_ai_cache"):
+            if ai_cache_dir.exists():
+                cutoff = time.time() - ai_days * 86400
+                removed = sum(1 for f in ai_cache_dir.glob("*") if f.stat().st_mtime < cutoff and not f.unlink())
+                st.success(f"✅ Raderade {removed} AI-cache-filer")
+                st.rerun()
+
+        st.markdown("**⚠️ Rensa ALL cache**")
+        if st.button("🔴 Rensa ALL priscache (alla filer)", key="btn_clear_all_cache"):
+            if cache_dir.exists():
+                removed = 0
+                for f in cache_dir.glob("*"):
+                    f.unlink()
+                    removed += 1
+                st.success(f"✅ All priscache rensad ({removed} filer)")
+                st.rerun()
+
+
+def _render_alarms_tab():
+    st.subheader("🚨 Aktiva larm (alla användare)")
+
+    all_alarms = []
+    users_dir = DATA_DIR / "users"
+
+    def _load_alarms_from_dir(d: Path, username: str) -> list:
+        alarm_files = ["alarms.json", "price_alarms.json", "news_alarms.json", "stop_loss.json"]
+        result = []
+        for fname in alarm_files:
+            p = d / fname
+            if p.exists():
+                try:
+                    data = json.loads(p.read_text(encoding="utf-8"))
+                    if isinstance(data, list):
+                        for item in data:
+                            if isinstance(item, dict):
+                                item["_username"] = username
+                                item["_file"] = fname
+                                result.append(item)
+                    elif isinstance(data, dict):
+                        for k, v in data.items():
+                            if isinstance(v, list):
+                                for item in v:
+                                    if isinstance(item, dict):
+                                        item["_username"] = username
+                                        item["_file"] = fname
+                                        result.append(item)
+                except Exception:
+                    pass
+        return result
+
+    all_alarms.extend(_load_alarms_from_dir(DATA_DIR, "admin"))
+    if users_dir.exists():
+        for user_dir in users_dir.iterdir():
+            if user_dir.is_dir():
+                all_alarms.extend(_load_alarms_from_dir(user_dir, user_dir.name))
+
+    if all_alarms:
+        df_alarms = pd.DataFrame(all_alarms)
+        st.dataframe(df_alarms, use_container_width=True, hide_index=True)
+        st.caption(f"Totalt {len(all_alarms)} aktiva larmregler")
+    else:
+        st.info("Inga aktiva larm hittades")
+
+    st.markdown("---")
+    st.markdown("**📄 Paper Trading — Aktiva positioner med stop-loss**")
+    paper_path = DATA_DIR / "paper_trades.json"
+    if paper_path.exists():
+        try:
+            trades = json.loads(paper_path.read_text(encoding="utf-8"))
+            active = [t for t in trades if t.get("status") in ("OPEN", "open", None)]
+            if active:
+                df_pt = pd.DataFrame(active)
+                show_cols = [c for c in ["ticker", "entry_price", "stop_loss", "take_profit", "entry_date", "status"] if c in df_pt.columns]
+                st.dataframe(df_pt[show_cols] if show_cols else df_pt, use_container_width=True, hide_index=True)
+            else:
+                st.info("Inga öppna paper trading-positioner")
+        except Exception as e:
+            st.warning(f"Kunde inte läsa paper_trades.json: {e}")
+    else:
+        st.info("Ingen paper trading-fil hittades")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # ADMIN-SIDA
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -346,10 +864,17 @@ def page_admin():
 
     st.title("🔧 Admin – Hantera portfölj, bevakning & scannar")
 
-    tab_wl, tab_hold, tab_scan, tab_import, tab_health, tab_email, tab_users = st.tabs([
-        "⭐ Bevakningslista", "💼 Portfölj", "🚀 Starta scan", "📥 Avanza-import",
-        "🩺 Universe Health", "📧 E-post", "👥 Användare"
+    (tab_overview, tab_wl, tab_hold, tab_scan, tab_import,
+     tab_health, tab_email, tab_users,
+     tab_config, tab_cache, tab_ai_log, tab_alarms) = st.tabs([
+        "📊 Översikt", "⭐ Bevakningslista", "💼 Portfölj", "🚀 Starta scan",
+        "📥 Avanza-import", "🩺 Universe Health", "📧 E-post", "👥 Användare",
+        "⚙️ Konfiguration", "🗄️ Cache", "🤖 AI-logg", "🚨 Larm",
     ])
+
+    # ── Flik 0: Översikt ─────────────────────────────────────────────────────
+    with tab_overview:
+        _render_overview_tab()
 
     # ── Flik 1: Bevakningslista ────────────────────────────────────────────────
     with tab_wl:
@@ -1042,6 +1567,19 @@ def page_admin():
         with col_s3:
             st.metric("Email konfigurerat", "✅ Ja" if email_configured() else "❌ Nej")
 
+        # ── Leveranshistorik (Item 8b) ──────────────────────────────────────
+        st.markdown("---")
+        st.markdown("**📬 Leveranshistorik**")
+        delivery_log = _load_email_delivery_log()
+        if delivery_log:
+            df_del = pd.DataFrame(delivery_log[-50:][::-1])
+            st.dataframe(df_del, use_container_width=True, hide_index=True)
+            total_del = len(delivery_log)
+            successes = sum(1 for e in delivery_log if e.get("success"))
+            st.caption(f"Totalt: {total_del} utskick | ✅ {successes} lyckade | ❌ {total_del - successes} misslyckade")
+        else:
+            st.info("Ingen leveranshistorik ännu — loggas automatiskt vid nästa utskick")
+
     # ── Flik 7: Användare ─────────────────────────────────────────────────────
     with tab_users:
         st.subheader("👥 Användare")
@@ -1188,3 +1726,76 @@ def page_admin():
                         ]),
                         use_container_width=True, hide_index=True,
                     )
+
+            # ── Portföljöversikt per användare (Item 3) ──────────────────────
+            st.markdown("---")
+            st.markdown("**💼 Portföljöversikt per användare**")
+
+            all_usernames = ["admin"] + [u["username"] for u in users if u.get("username") != "admin"]
+            for uname in all_usernames:
+                user_dir = DATA_DIR if uname == "admin" else DATA_DIR / f"users/{uname}"
+                holdings_path  = user_dir / "holdings.csv"
+                watchlist_path = user_dir / "watchlist.json"
+
+                has_holdings  = holdings_path.exists()
+                has_watchlist = watchlist_path.exists()
+
+                label = f"**{uname}**"
+                if has_holdings:
+                    try:
+                        h = pd.read_csv(holdings_path)
+                        label += f" — {len(h)} innehav"
+                    except Exception:
+                        pass
+                else:
+                    label += " — inga innehav"
+
+                with st.expander(label, expanded=False):
+                    col_h, col_w = st.columns(2)
+                    with col_h:
+                        st.markdown("**💼 Innehav**")
+                        if has_holdings:
+                            try:
+                                h = pd.read_csv(holdings_path)
+                                st.dataframe(h, use_container_width=True, hide_index=True)
+                                if st.button(f"🔄 Refresh data ({uname})", key=f"refresh_user_{uname}"):
+                                    tickers = h["ticker"].dropna().tolist()
+                                    if _trigger_targeted_refresh(tickers):
+                                        st.toast(f"Startar refresh för {uname}s {len(tickers)} innehav", icon="🔄")
+                            except Exception as e:
+                                st.warning(f"Kunde inte läsa holdings.csv: {e}")
+                        else:
+                            st.info("Inga innehav sparade")
+
+                    with col_w:
+                        st.markdown("**⭐ Bevakningslista**")
+                        if has_watchlist:
+                            try:
+                                wl = json.loads(watchlist_path.read_text(encoding="utf-8"))
+                                if wl:
+                                    wl_df = pd.DataFrame(wl)
+                                    show_wl_cols = [c for c in ["ticker", "name"] if c in wl_df.columns]
+                                    st.dataframe(wl_df[show_wl_cols] if show_wl_cols else wl_df,
+                                                 use_container_width=True, hide_index=True)
+                                else:
+                                    st.info("Tom bevakningslista")
+                            except Exception as e:
+                                st.warning(f"Kunde inte läsa watchlist.json: {e}")
+                        else:
+                            st.info("Ingen bevakningslista")
+
+    # ── Flik 8: Konfiguration ─────────────────────────────────────────────────
+    with tab_config:
+        _render_config_tab()
+
+    # ── Flik 9: Cache ─────────────────────────────────────────────────────────
+    with tab_cache:
+        _render_cache_tab()
+
+    # ── Flik 10: AI-logg ─────────────────────────────────────────────────────
+    with tab_ai_log:
+        _render_ai_log_tab()
+
+    # ── Flik 11: Larm ────────────────────────────────────────────────────────
+    with tab_alarms:
+        _render_alarms_tab()
