@@ -289,11 +289,9 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
             h.loc[mask, "typ"] = typ
         if market_value is not None:
             h.loc[mask, "market_value"] = market_value
-        # Uppdatera buy_date bara om den skickas in OCH befintlig rad har tomt datum
+        # Uppdatera buy_date om ett datum skickas in (tillåt att skriva över fel datum)
         if buy_date:
-            existing_bd = str(h.loc[mask, "buy_date"].iloc[0]).strip()
-            if not existing_bd:
-                h.loc[mask, "buy_date"] = buy_date
+            h.loc[mask, "buy_date"] = buy_date
     else:
         h = pd.concat([h, pd.DataFrame([{
             "ticker": ticker, "shares": shares,
