@@ -35,7 +35,8 @@ from web.pages.smallcap        import page_smallcap
 from web.pages.portfolio       import page_portfolio
 from web.pages.technical       import page_technical
 from web.pages.ai_page         import page_ai
-from web.pages.admin           import page_admin, _search_ticker_yfinance
+from web.pages.admin           import _search_ticker_yfinance
+from web.pages.admin_page      import page_admin
 from web.pages.guide           import page_guide
 from web.pages.backtesting_page import page_backtesting
 from web.pages.sector_rotation import page_sector_rotation
