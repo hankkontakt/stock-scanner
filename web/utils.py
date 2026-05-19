@@ -608,33 +608,39 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
         return go.Figure()
 
     def _calc_portfolio_series(ph: pd.DataFrame) -> pd.Series:
-        """Summera portföljvärde per tidpunkt. buy_date används bara för ▲-markeringar."""
+        """Summera portföljvärde per tidpunkt. Varje aktie räknas från sin buy_date."""
         pv = pd.Series(0.0, index=ph.index)
         for _, row in holdings.iterrows():
             t = row["ticker"].upper()
             s = float(row.get("shares", 0) or 0)
             if t not in ph.columns or s <= 0:
                 continue
-            pv = pv + ph[t].ffill() * s
+            ser = ph[t].ffill() * s
+            bd = str(row.get("buy_date", "")).strip()
+            if bd:
+                try:
+                    buy_ts = pd.Timestamp(bd).normalize()
+                    ser = ser.where(ser.index >= buy_ts, 0.0)
+                except Exception:
+                    pass
+            pv = pv + ser
+        # Klipp till första dagen då något innehav faktiskt ägdes
+        first_nz = pv[pv > 0].index.min() if (pv > 0).any() else None
+        if first_nz is not None:
+            pv = pv[pv.index >= first_nz]
         return pv[pv > 0]
 
     portfolio_values = _calc_portfolio_series(price_hist)
+    _intraday = False
 
-    # För korta innehavsperioder (< 5 datapunkter): byt till timdata för snygg chart
+    # Om perioden gav för få punkter, utöka price_hist med längre datahämtning
     if len(portfolio_values) < 5 and tickers:
-        ph_intraday = _fetch_price_history(tickers, period="5d", interval="1h")
-        if not ph_intraday.empty:
-            pv_intra = _calc_portfolio_series(ph_intraday)
-            if not pv_intra.empty:
-                price_hist = ph_intraday
-                portfolio_values = pv_intra
-                _intraday = True
-            else:
-                _intraday = False
-        else:
-            _intraday = False
-    else:
-        _intraday = False
+        ph_long = _fetch_price_history(tickers, period="max")
+        if not ph_long.empty:
+            pv_long = _calc_portfolio_series(ph_long)
+            if not pv_long.empty:
+                price_hist = ph_long
+                portfolio_values = pv_long
 
     if fund_constant > 0:
         if portfolio_values.empty:
