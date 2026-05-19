@@ -951,7 +951,8 @@ def _is_rate_limited(failed_tickers_n: int, total_tickers: int) -> bool:
     1. ≥3 tickers i rad misslyckas med TIMEOUT/ERROR → trolig rate-limit
     2. ≥30% av tickers hittills har misslyckats → trolig rate-limit
     """
-    consecutive = _RATE_LIMIT_COUNTER["consecutive_failures"]
+    with _RATE_LIMIT_LOCK:
+        consecutive = _RATE_LIMIT_COUNTER["consecutive_failures"]
     if consecutive >= 3:
         return True
     # Om många av totalen har misslyckats, bromsa
