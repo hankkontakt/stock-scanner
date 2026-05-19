@@ -843,8 +843,10 @@ def calc_period_returns(holdings: pd.DataFrame) -> dict:
         t = row["ticker"].upper()
         s = float(row.get("shares", 0) or 0)
         if t in price_hist.columns and s > 0:
-            p = price_hist[t].dropna().iloc[-1]
-            today_val += float(p) * s
+            _series = price_hist[t].dropna()
+            if _series.empty:
+                continue
+            today_val += float(_series.iloc[-1]) * s
 
     if today_val <= 0:
         return {}
