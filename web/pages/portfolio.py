@@ -618,7 +618,9 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                     s = float(item["row"].get("shares") or 0)
                     c = float(item["row"].get("cost_basis") or 0)
                     row_typ = item.get("security_type", "")
-                    if row_typ not in ("aktier", "fond", "etf", "certificate"):
+                    if row_typ == "fund":
+                        row_typ = "fond"
+                    elif row_typ not in ("aktier", "fond", "etf", "certificate"):
                         row_typ = ""
                     h = _upsert_holding(h, t, s, c, konto=konto_name, typ=row_typ,
                                         buy_date=today_iso)

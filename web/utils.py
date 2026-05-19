@@ -616,14 +616,28 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
     if price_hist.empty:
         return go.Figure()
 
-    # Beräkna portföljvärde per dag
+    # Beräkna portföljvärde per dag — varje holding bidrar först från sitt buy_date
     portfolio_values = pd.Series(0.0, index=price_hist.index)
     for _, row in holdings.iterrows():
         ticker = row["ticker"].upper()
         shares = float(row.get("shares", 0) or 0)
-        if ticker in price_hist.columns and shares > 0:
-            portfolio_values = portfolio_values + price_hist[ticker].ffill() * shares
+        if ticker not in price_hist.columns or shares <= 0:
+            continue
+        series = price_hist[ticker].ffill() * shares
+        # Nollställ dagar före köpdatum
+        buy_date_str = str(row.get("buy_date", "")).strip()
+        if buy_date_str:
+            try:
+                buy_ts = pd.Timestamp(buy_date_str)
+                series = series.where(series.index >= buy_ts, 0.0)
+            except Exception:
+                pass
+        portfolio_values = portfolio_values + series
 
+    # Ta bort ledande nollor (perioder innan första köpet)
+    first_nonzero = portfolio_values[portfolio_values > 0].index.min() if (portfolio_values > 0).any() else None
+    if first_nonzero is not None:
+        portfolio_values = portfolio_values[portfolio_values.index >= first_nonzero]
     portfolio_values = portfolio_values[portfolio_values > 0]
 
     if fund_constant > 0:
@@ -701,37 +715,72 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
 def calc_period_returns(holdings: pd.DataFrame) -> dict:
     """
     Beräknar portföljens avkastning för standardperioder.
+    För holdings köpta efter periodens start används cost_basis som referenspris
+    (visar verklig avkastning sedan köp, inte hypotetisk historik).
     Returnerar: {"1D": (kr, pct), "1V": ..., "1M": ..., "3M": ..., "ÅTD": ..., "1Å": ...}
     """
     if holdings.empty:
         return {}
-    tickers = tuple(holdings["ticker"].str.upper().tolist())
+
+    # Bara aktieposter med yfinance-tickers (fonder med namn-som-ticker hoppas över)
+    stock_h = holdings[~holdings["ticker"].str.upper().str.contains(r"\s", na=False)].copy()
+    if stock_h.empty:
+        return {}
+
+    tickers = tuple(stock_h["ticker"].str.upper().tolist())
     price_hist = _fetch_price_history(tickers, period="1y")
     if price_hist.empty:
         return {}
 
-    def _portfolio_value_at(dt: pd.Timestamp):
+    def _ref_value_at(dt: pd.Timestamp) -> float:
+        """
+        Portföljvärde vid datum dt.
+        Om ett innehav köptes EFTER dt → använd cost_basis som referens
+        (vi hade inte positionen vid dt, men tar hänsyn till inköpspriset).
+        """
         try:
             idx = price_hist.index.searchsorted(dt)
             if idx >= len(price_hist.index):
                 idx = len(price_hist.index) - 1
             actual = price_hist.index[idx]
-            if abs((actual - dt).days) > 5:
-                return None
             total = 0.0
-            for _, row in holdings.iterrows():
+            for _, row in stock_h.iterrows():
                 t = row["ticker"].upper()
                 s = float(row.get("shares", 0) or 0)
-                if t in price_hist.columns:
+                cost = float(row.get("cost_basis", 0) or 0)
+                if t not in price_hist.columns or s <= 0:
+                    continue
+                buy_date_str = str(row.get("buy_date", "")).strip()
+                bought_after = False
+                if buy_date_str:
+                    try:
+                        bought_after = pd.Timestamp(buy_date_str) > dt
+                    except Exception:
+                        pass
+                if bought_after:
+                    # Inte ägd vid dt — referens = vad vi betalade
+                    total += cost * s
+                else:
                     p = price_hist[t].iloc[idx]
                     if pd.notna(p):
-                        total += p * s
-            return total if total > 0 else None
+                        total += float(p) * s
+            return total if total > 0 else 0.0
         except Exception:
-            return None
+            return 0.0
 
     today = price_hist.index[-1]
-    today_val = _portfolio_value_at(today) or 0
+
+    # Nuvarande värde (sista tillgängliga kurs)
+    today_val = 0.0
+    for _, row in stock_h.iterrows():
+        t = row["ticker"].upper()
+        s = float(row.get("shares", 0) or 0)
+        if t in price_hist.columns and s > 0:
+            p = price_hist[t].dropna().iloc[-1]
+            today_val += float(p) * s
+
+    if today_val <= 0:
+        return {}
 
     periods = {
         "1D":  today - pd.Timedelta(days=1),
@@ -744,9 +793,9 @@ def calc_period_returns(holdings: pd.DataFrame) -> dict:
 
     result = {}
     for label, past_dt in periods.items():
-        past_val = _portfolio_value_at(past_dt)
-        if past_val and past_val > 0 and today_val > 0:
-            kr_diff = today_val - past_val
+        past_val = _ref_value_at(past_dt)
+        if past_val > 0:
+            kr_diff  = today_val - past_val
             pct_diff = (kr_diff / past_val) * 100
             result[label] = (round(kr_diff), round(pct_diff, 1))
 
