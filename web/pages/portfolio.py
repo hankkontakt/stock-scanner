@@ -504,11 +504,52 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
 
         # ── Filuppladdning ──────────────────────────────────────────────────
         uploaded = st.file_uploader(
-            "Välj Avanza-filen (CSV)",
+            "📄 Portföljfil — Mitt innehav fördelat per konto (CSV)",
             type=["csv"],
             key="avanza_csv_user",
             help="Filen laddas inte upp till någon server – den läses direkt i din webbläsare.",
         )
+
+        # ── Historiska inköpskurser (valfri tilläggsfil) ─────────────────
+        with st.expander("📅 Lägg även till 'Historiska inköpskurser' för exakta köpdatum (valfritt)"):
+            st.markdown("""
+<div style="background:#0f1a2e;border:1px solid #2a4a2a;border-radius:8px;
+     padding:12px 16px;margin-bottom:10px;font-size:13px;color:#a0aec0;line-height:1.9;">
+<div style="font-size:12px;font-weight:700;color:#4ade80;text-transform:uppercase;
+     letter-spacing:0.08em;margin-bottom:8px;">Fördelar med att ladda upp båda filerna</div>
+<ul style="margin:0;padding-left:16px;">
+  <li><strong style="color:#e8eaf0;">Rätt köpdatum i portföljcharten</strong> — varje aktie
+      markeras med ett ▲ på datumet du faktiskt köpte den, inte importdagen.</li>
+  <li><strong style="color:#e8eaf0;">Korrekt P&L-tidslinje</strong> — avkastning räknas från
+      verklig inköpsdag, ger en rättvisande bild av hur länge du hållit varje position.</li>
+  <li><strong style="color:#e8eaf0;">Fungerar automatiskt</strong> — du behöver inte fylla i
+      datum manuellt; filen matchas mot dina innehav via ISIN.</li>
+</ul>
+<div style="margin-top:10px;font-size:12px;color:#64748b;">
+  Ladda ner: <strong>Min ekonomi → Analys → Exportera data →
+  "Historiska inköpskurser (GAV)"</strong>
+</div>
+</div>
+""", unsafe_allow_html=True)
+            uploaded_ink = st.file_uploader(
+                "Historiska inköpskurser (CSV)",
+                type=["csv"],
+                key="avanza_inkopskurser",
+                help="Valfri — ger exakta köpdatum. Filen laddas inte upp till någon server.",
+            )
+
+        # Parsa inkopskurser om uppladdad
+        inkopskurser_data: dict = {}
+        if uploaded_ink is not None:
+            try:
+                inkopskurser_data = avanza_import.parse_inkopskurser_csv(uploaded_ink.getvalue())
+                if inkopskurser_data:
+                    st.success(f"✅ Historiska inköpskurser laddade — {len(inkopskurser_data)} ISIN-poster hittades.")
+                else:
+                    st.warning("Kunde inte läsa inköpskurser-filen. Kontrollera att det är rätt export.")
+            except Exception:
+                pass
+
         if uploaded is not None:
             raw_bytes = uploaded.getvalue()
             _is_positioner = avanza_import.is_positioner_format(raw_bytes)
@@ -690,6 +731,14 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                                         isin=str(r.get("isin", "")) or None,
                                     ) or ""
                                     sec_type = classify_security(str(r.get("name", "")), suggested or None)
+                                _isin_a = str(r.get("isin", "")).strip()
+                                _shares_a = float(r.get("shares") or 0)
+                                _bd_a = (
+                                    avanza_import.get_buy_date_from_inkopskurser(
+                                        _isin_a, _shares_a, inkopskurser_data
+                                    ) if inkopskurser_data and _isin_a
+                                    else None
+                                ) or datetime.date.today().isoformat()
                                 rows_enriched.append({
                                     "name":         r.get("name"),
                                     "shares":       r.get("shares"),
@@ -698,7 +747,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                                     "isin":         r.get("isin"),
                                     "_suggested_ticker": suggested,
                                     "_security_type":    sec_type,
-                                    "buy_date":     datetime.date.today().isoformat(),
+                                    "buy_date":     _bd_a,
                                 })
                             df_enriched = pd.DataFrame(rows_enriched)
 
@@ -811,11 +860,19 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                             isin = str(r.get("isin", "")) if "isin" in df_az.columns else None
                             suggested = find_ticker(name, custom_map, isin=isin or None) or ""
                             sec_type  = classify_security(name, suggested or None)
+                            _isin_b = str(r.get("isin", "")).strip() if "isin" in df_az.columns else ""
+                            _shares_b = float(r.get("shares") or 0)
+                            _bd_b = (
+                                avanza_import.get_buy_date_from_inkopskurser(
+                                    _isin_b, _shares_b, inkopskurser_data
+                                ) if inkopskurser_data and _isin_b
+                                else None
+                            ) or datetime.date.today().isoformat()
                             rows_enriched2.append({
                                 **r.to_dict(),
                                 "_suggested_ticker": suggested,
                                 "_security_type": sec_type,
-                                "buy_date": datetime.date.today().isoformat(),
+                                "buy_date": _bd_b,
                             })
                         df_enriched2 = pd.DataFrame(rows_enriched2)
                         import_data2 = _build_holding_rows(df_enriched2, az_konto, "az")
