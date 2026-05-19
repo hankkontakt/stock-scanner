@@ -216,14 +216,21 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
             with st.expander("Tillgängliga sektorer", expanded=False):
                 st.write(", ".join(secs))
 
-    has_ml = "predicted_return" in df.columns
+    has_ml = "predicted_return" in df.columns and df["predicted_return"].notna().any()
     if has_ml:
         rank_mode = st.radio(
             "🤖 Ranking-läge",
             ["Klassisk score", "AI prediction", "Båda (side-by-side)"],
             horizontal=True,
             key="weekly_rank_mode",
-            help="AI-modellen (XGBoost) lär sig från historisk prishistorik och förutspår 30-dagars avkastning."
+            help=(
+                "**Klassisk score** rankar på fundamenta + värdering + momentum (bred, stabil).\n\n"
+                "**AI prediction** (XGBoost) rankar på tekniska mönster i prishistorik — "
+                "förutspår 30-dagars avkastning. Modellen kan prioritera aktier annorlunda "
+                "än klassisk score: t.ex. en aktie med stark teknisk momentum men svag "
+                "fundamental kan hamna högt i AI-ranken och tvärtom. "
+                "Använd helst **Båda** för att jämföra."
+            )
         )
     else:
         rank_mode = "Klassisk score"
@@ -231,7 +238,10 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
     filt_df = _apply_weekly_filters(df, filters, holdings, watchlist)
 
     if rank_mode == "AI prediction" and "predicted_return" in filt_df.columns:
-        filt_df = filt_df.sort_values("predicted_return", ascending=False)
+        # Filtrera bort aktier utan giltig prediktion (NaN = ingen prisdata i cache)
+        filt_df = filt_df[filt_df["predicted_return"].notna()].sort_values(
+            "predicted_return", ascending=False
+        )
     elif rank_mode == "Båda (side-by-side)" and "predicted_return" in filt_df.columns:
         pass
 
@@ -262,7 +272,9 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
                 _main_ranking_table(filt_df, holdings, watchlist)
             with col_ml:
                 st.subheader("🤖 ML-prediktion")
-                ml_sorted = filt_df.sort_values("predicted_return", ascending=False)
+                ml_sorted = filt_df[filt_df["predicted_return"].notna()].sort_values(
+                    "predicted_return", ascending=False
+                )
                 _main_ranking_table(ml_sorted, holdings, watchlist, table_key="main_ranking_table_ml")
         else:
             _main_ranking_table(filt_df, holdings, watchlist)

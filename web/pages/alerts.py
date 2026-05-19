@@ -8,14 +8,6 @@ from web.utils import kpi_row, load_portfolio, load_watchlist, _load_nth_latest_
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _load_trades():
-    try:
-        from portfolio.paper_trading import _load, TRADES_FILE
-        return _load(TRADES_FILE)
-    except Exception:
-        return []
-
-
 def _fetch_news_for(ticker: str, days_back: int = 3) -> list:
     try:
         from core.news_fetcher import fetch_company_news
@@ -85,140 +77,29 @@ def page_alerts_notices(df: pd.DataFrame):
     """Larm & Notiser – ombyggd för bättre läsbarhet."""
     st.title("🚨 Larm & Notiser")
 
-    trades = _load_trades()
     holdings = load_portfolio()
     watchlist = load_watchlist()
 
     # ── KPI-rad ────────────────────────────────────────────────────────────
-    n_open = sum(1 for t in trades if t["status"] == "OPEN")
-    n_near_stop = sum(
-        1 for t in trades
-        if t["status"] == "OPEN"
-        and t.get("stop_loss") and t.get("current_price")
-        and t["current_price"] <= t["stop_loss"] * 1.1
-    )
-    n_near_tp = sum(
-        1 for t in trades
-        if t["status"] == "OPEN"
-        and t.get("take_profit") and t.get("current_price")
-        and t["current_price"] >= t["take_profit"] * 0.9
-    )
-
     kpi_row([
-        ("🟢 Öppna positioner", n_open, None,
-         "Antal aktiva paper trading-positioner."),
-        ("🔴 Nära stop-loss", n_near_stop, None,
-         "Positioner vars kurs är inom 10 % av stop-loss-nivån."),
-        ("🟢 Nära take-profit", n_near_tp, None,
-         "Positioner vars kurs är inom 10 % av take-profit-nivån."),
-        ("⭐ Bevakade", len(watchlist), None,
-         "Antal aktier på bevakningslistan."),
+        ("⭐ Bevakade aktier", len(watchlist), None,
+         "Antal aktier på din bevakningslista."),
+        ("💼 Portföljinnehav", len(holdings) if not holdings.empty else 0, None,
+         "Antal aktier i din portfölj."),
     ])
 
     st.markdown("---")
 
     tab_pos, tab_movers, tab_events = st.tabs([
-        "📊 Positioner & Prislarm",
+        "⚡ Signaler & Larm",
         "🔥 Vad stack ut idag?",
         "📅 Kommande händelser",
     ])
 
     # ══════════════════════════════════════════════════════════════════════
-    # TAB 1 — Positioner & Prislarm
+    # TAB 1 — Signaler & Larm (f.d. Positioner & Prislarm)
     # ══════════════════════════════════════════════════════════════════════
     with tab_pos:
-
-        # ── Stop-loss / Take-profit ────────────────────────────────────────
-        st.subheader("🛡 Stop-loss & Take-profit (paper trading)")
-
-        if not trades:
-            st.info("Inga paper trading-positioner ännu.")
-        else:
-            open_t = [t for t in trades if t["status"] == "OPEN"]
-
-            near_stop = [
-                t for t in open_t
-                if t.get("stop_loss") and t.get("current_price")
-                and t["current_price"] <= t["stop_loss"] * 1.15
-            ]
-            near_tp = [
-                t for t in open_t
-                if t.get("take_profit") and t.get("current_price")
-                and t["current_price"] >= t["take_profit"] * 0.85
-            ]
-            safe = [t for t in open_t if t not in near_stop and t not in near_tp]
-
-            col_a, col_b, col_c = st.columns(3)
-
-            with col_a:
-                st.markdown(f"#### 🔴 Nära stop-loss ({len(near_stop)})")
-                if near_stop:
-                    for t in sorted(near_stop, key=lambda x: x.get("pnl_pct", 0) or 0):
-                        pnl = t.get("pnl_pct", 0) or 0
-                        sl = t.get("stop_loss", 0)
-                        cur = t.get("current_price", 0)
-                        dist = ((cur - sl) / sl * 100) if sl else 0
-                        st.markdown(
-                            f"**{t['ticker']}** &nbsp; {pnl:+.1f}%  \n"
-                            f"Kurs: {cur:.2f} · SL: {sl:.2f} · "
-                            f"Dist: {dist:.1f}%",
-                            unsafe_allow_html=True,
-                        )
-                        st.divider()
-                else:
-                    st.caption("Inga positioner nära stop-loss.")
-
-            with col_b:
-                st.markdown(f"#### 🟢 Nära take-profit ({len(near_tp)})")
-                if near_tp:
-                    for t in sorted(near_tp, key=lambda x: -(x.get("pnl_pct", 0) or 0)):
-                        pnl = t.get("pnl_pct", 0) or 0
-                        tp = t.get("take_profit", 0)
-                        cur = t.get("current_price", 0)
-                        dist = ((tp - cur) / tp * 100) if tp else 0
-                        st.markdown(
-                            f"**{t['ticker']}** &nbsp; {pnl:+.1f}%  \n"
-                            f"Kurs: {cur:.2f} · TP: {tp:.2f} · "
-                            f"Kvar: {dist:.1f}%",
-                            unsafe_allow_html=True,
-                        )
-                        st.divider()
-                else:
-                    st.caption("Inga positioner nära take-profit.")
-
-            with col_c:
-                trailing = [t for t in open_t if t.get("trailing_stop")]
-                st.markdown(f"#### 🔻 Trailing stop ({len(trailing)})")
-                if trailing:
-                    for t in sorted(trailing, key=lambda x: -(x.get("pnl_pct", 0) or 0)):
-                        ts = t.get("trailing_stop", 0)
-                        cur = t.get("current_price", 0)
-                        pnl = t.get("pnl_pct", 0) or 0
-                        st.markdown(
-                            f"**{t['ticker']}** &nbsp; {pnl:+.1f}%  \n"
-                            f"Kurs: {cur:.2f} · Trail: {ts:.2f}",
-                            unsafe_allow_html=True,
-                        )
-                        st.divider()
-                else:
-                    st.caption("Inga trailing stops aktiva.")
-
-            # Senaste triggade
-            triggered = [
-                t for t in trades
-                if t["status"] == "CLOSED"
-                and "stop" in (t.get("exit_reason", "") or "")
-            ]
-            if triggered:
-                st.markdown("---")
-                st.markdown("#### 💀 Senast triggade stop-loss")
-                for t in sorted(triggered, key=lambda x: x.get("sell_date", ""), reverse=True)[:5]:
-                    st.markdown(
-                        f"**{t['ticker']}** såldes {t.get('sell_date', '?')} · "
-                        f"{t.get('pnl_pct', 0):+.1f}% · _{t.get('exit_reason', '?')}_"
-                    )
-
-        st.markdown("---")
 
         # ── STARK-signaler från bevakningslista ────────────────────────────
         st.subheader("⚡ Köpsignaler – bevakningslista")
