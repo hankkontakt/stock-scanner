@@ -608,27 +608,14 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
         return go.Figure()
 
     def _calc_portfolio_series(ph: pd.DataFrame) -> pd.Series:
-        """Summera portföljvärde per tidpunkt, filtrera på buy_date."""
-        last_ts = ph.index[-1] if not ph.empty else pd.Timestamp.now()
+        """Summera portföljvärde per tidpunkt. buy_date används bara för ▲-markeringar."""
         pv = pd.Series(0.0, index=ph.index)
         for _, row in holdings.iterrows():
             t = row["ticker"].upper()
             s = float(row.get("shares", 0) or 0)
             if t not in ph.columns or s <= 0:
                 continue
-            ser = ph[t].ffill() * s
-            bd = str(row.get("buy_date", "")).strip()
-            if bd:
-                try:
-                    buy_ts = pd.Timestamp(bd).normalize()
-                    if buy_ts <= last_ts:
-                        ser = ser.where(ser.index >= buy_ts, 0.0)
-                except Exception:
-                    pass
-            pv = pv + ser
-        first_nz = pv[pv > 0].index.min() if (pv > 0).any() else None
-        if first_nz is not None:
-            pv = pv[pv.index >= first_nz]
+            pv = pv + ph[t].ffill() * s
         return pv[pv > 0]
 
     portfolio_values = _calc_portfolio_series(price_hist)
