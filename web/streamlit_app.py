@@ -801,6 +801,10 @@ def _run_auth() -> bool:
 
     if status is True:
         username = st.session_state.get("username", "admin")
+        # Logga inloggning (en gång per session via session_state-flagga)
+        if not st.session_state.get("_login_logged"):
+            _log_activity(username, "login")
+            st.session_state["_login_logged"] = True
         # Lägg till utloggningsknapp i sidofältet
         with st.sidebar:
             st.markdown(
@@ -814,6 +818,27 @@ def _run_auth() -> bool:
         st.error("❌ Fel användarnamn eller lösenord")
     # status is None → väntar på input
     return False
+
+
+def _log_activity(username: str, action: str, detail: str = ""):
+    """Log user activity to data/activity_log.json (last 500 entries)."""
+    try:
+        import json as _j
+        log_path = DATA_DIR / "activity_log.json"
+        try:
+            log = _j.loads(log_path.read_text(encoding="utf-8")) if log_path.exists() else []
+        except Exception:
+            log = []
+        log = log[-499:]
+        log.append({
+            "timestamp": datetime.now().isoformat()[:19],
+            "username": username,
+            "action": action,
+            "detail": detail,
+        })
+        log_path.write_text(_j.dumps(log, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def _init_session_state():

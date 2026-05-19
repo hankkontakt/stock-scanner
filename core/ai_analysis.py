@@ -699,20 +699,68 @@ def _set_cache(cache_key: str, response: str):
         pass
 
 
+def _log_ai_usage(provider: str, function_name: str, ticker: str,
+                   input_tokens: int, output_tokens: int, cached: bool):
+    """Log AI API usage to data/ai_usage_log.json."""
+    try:
+        log_path = _MODULE_DIR / "data" / "ai_usage_log.json"
+        try:
+            log = json.loads(log_path.read_text(encoding="utf-8")) if log_path.exists() else []
+        except Exception:
+            log = []
+        log = log[-999:]
+        log.append({
+            "date": datetime.now().isoformat()[:19],
+            "provider": provider,
+            "function": function_name,
+            "ticker": ticker or "",
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cached": cached,
+            "est_cost_usd": round(
+                (input_tokens * 0.00000027 + output_tokens * 0.0000011), 6
+            ) if provider == "deepseek" else 0.0,
+        })
+        log_path.write_text(json.dumps(log, ensure_ascii=False, indent=None), encoding="utf-8")
+    except Exception:
+        pass  # Never crash on logging
+
+
 def _call_with_cache(system_prompt: str, messages: list, cache_key: str,
                      max_tokens: int = None, temperature: float = None,
                      force_refresh: bool = False,
                      provider: str = "auto",
-                     use_grounding: bool = False) -> str:
+                     use_grounding: bool = False,
+                     _log_function: str = "",
+                     _log_ticker: str = "") -> str:
     """Anropa AI med caching. Om force_refresh=True, hoppa över cache."""
     if not force_refresh:
         cached = _get_cached(cache_key)
         if cached:
+            _log_ai_usage(
+                provider=_resolve_provider(provider),
+                function_name=_log_function or "unknown",
+                ticker=_log_ticker,
+                input_tokens=0,
+                output_tokens=0,
+                cached=True,
+            )
             return cached
 
     response = _ai_call(messages, system_prompt, max_tokens, temperature,
                         provider=provider, use_grounding=use_grounding)
     _set_cache(cache_key, response)
+    # Estimate tokens for logging (rough: ~4 chars per token)
+    _in_tokens = sum(len(m.get("content", "")) for m in messages) // 4
+    _out_tokens = len(response) // 4 if response else 0
+    _log_ai_usage(
+        provider=_resolve_provider(provider),
+        function_name=_log_function or "unknown",
+        ticker=_log_ticker,
+        input_tokens=_in_tokens,
+        output_tokens=_out_tokens,
+        cached=False,
+    )
     return response
 
 
@@ -878,6 +926,8 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None,
         force_refresh=force_refresh,
         provider=provider,
         use_grounding=_use_grounding,
+        _log_function="analyze_stock",
+        _log_ticker=ticker,
     )
 
 
@@ -967,6 +1017,7 @@ def analyze_portfolio(holdings: pd.DataFrame, df: pd.DataFrame = None,
         max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
+        _log_function="analyze_portfolio",
     )
 
 
@@ -1105,6 +1156,7 @@ def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
         max_tokens=_resolve_depth(depth),
         force_refresh=True,  # Alltid fräsch data för veckorapport
         provider=provider,
+        _log_function="generate_weekly_report",
     )
     return result
 
@@ -1144,6 +1196,8 @@ def analyze_news(ticker: str, news_items: list = None,
         max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
+        _log_function="analyze_news",
+        _log_ticker=ticker,
     )
 
 
@@ -1189,6 +1243,7 @@ def generate_morning_brief(market_data: dict = None,
         max_tokens=_resolve_depth(depth),
         force_refresh=True,  # Alltid fräsch
         provider=provider,
+        _log_function="morning_brief",
     )
 
 
@@ -1249,6 +1304,7 @@ def analyze_sector(sector_name: str, df: pd.DataFrame = None,
         max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
+        _log_function="analyze_sector",
     )
 
 
@@ -1291,6 +1347,8 @@ def analyze_opportunity(ticker: str, signal_type: str,
         max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
+        _log_function="analyze_opportunity",
+        _log_ticker=ticker,
     )
 
 
@@ -1355,6 +1413,8 @@ Skriv på svenska. Max 300 ord.""" + _depth_system_prompt_addon(depth)
         max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
+        _log_function="compare_stocks",
+        _log_ticker=f"{ticker_a},{ticker_b}",
     )
 
 
@@ -1423,6 +1483,7 @@ Skriv på svenska, använd emojis. 150-300 ord beroende på datatillgång.""" + 
         max_tokens=_resolve_depth(depth),
         force_refresh=force_refresh,
         provider=provider,
+        _log_function="market_summary",
     )
 
 
