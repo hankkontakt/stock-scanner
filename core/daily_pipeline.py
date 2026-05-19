@@ -681,6 +681,46 @@ def _cleanup_old_reports(max_days: int = 60) -> int:
     return removed
 
 
+def _pre_scan_sync_universe():
+    """
+    Synkar portföljinnehav och bevakningslista till custom_universe.json
+    INNAN veckoscannen startar.
+
+    Säkerställer att aktier som lagts till via webbgränssnittet sedan
+    förra scannen inkluderas i DENNA scan — inte bara i nästa.
+    """
+    holdings  = _load_portfolio()
+    watchlist_raw = _load_watchlist()
+    watchlist_tickers = [i.get("ticker", "") for i in watchlist_raw if i.get("ticker")]
+
+    existing  = set(c["ticker"] for c in config.load_custom_universe())
+    universe_set = set(getattr(config, "UNIVERSE", []))
+    added = 0
+
+    all_candidates = []
+    if not holdings.empty and "ticker" in holdings.columns:
+        all_candidates += [str(h).upper().strip() for h in holdings["ticker"].tolist()]
+    all_candidates += [w.upper().strip() for w in watchlist_tickers]
+
+    for ticker in all_candidates:
+        if not ticker:
+            continue
+        if ticker in universe_set or ticker in existing:
+            continue
+        # Kolla om variant med suffix redan finns
+        if any(ticker + sfx in universe_set or ticker + sfx in existing
+               for sfx in (".ST", ".HE", ".CO", ".OL", ".L", ".DE")):
+            continue
+        config.add_custom_to_universe(ticker, "")
+        existing.add(ticker)  # uppdatera lokal set för deduplicering
+        added += 1
+
+    if added:
+        logger.info(f"  ➕ Pre-scan sync: {added} nya tickers tillagda i custom_universe")
+    else:
+        logger.info("  ✓ Pre-scan sync: inga nya tickers att lägga till")
+
+
 def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     """
     Kör dagliga pipeline: hämta data, skapa rapport, skicka mail.
@@ -723,6 +763,12 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         # Körs ~2-3 min med 8 workers + 30-dagars fundamentalcache.
         logger.info("🔄 Full universe scan – hämtar data för alla tickers...")
         from core.macro_regime import detect_regime
+
+        # ── Synka portfolio & bevakningslista till custom_universe FÖR SCAN ──
+        # Viktigt att detta sker INNAN all_tickers byggs, annars saknas
+        # nyligen tillagda tickers i denna scan (de hade annars dykt upp
+        # först i nästa veckas scan).
+        _pre_scan_sync_universe()
 
         custom_tickers = [c["ticker"] for c in config.load_custom_universe()]
         all_tickers = list(dict.fromkeys(config.UNIVERSE + custom_tickers))

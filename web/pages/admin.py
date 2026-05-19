@@ -106,20 +106,34 @@ def _save_holdings_df(df: pd.DataFrame) -> bool:
     return True
 
 
-def _save_watchlist_data(items: list):
+def _save_watchlist_data(items: list, previous_tickers: list | None = None):
     """Spara watchlist.json i användarens katalog.
     GitHub-commit görs för admin (data/watchlist.json) och för andra användare
-    (data/users/{username}/watchlist.json) så att pipeline kan nå datan."""
+    (data/users/{username}/watchlist.json) så att pipeline kan nå datan.
+
+    Nya tickers som inte redan fanns i filen läggs automatiskt till i
+    custom_universe.json och committas till GitHub direkt — inga manuella
+    steg behövs för att en bevakning ska dyka upp i nästa scan.
+    """
     from web.utils import _active_data_dir
     username = st.session_state.get("username", "admin")
     user_dir = _active_data_dir()
-    content = json.dumps(items, indent=2, ensure_ascii=False)
-    path = user_dir / "watchlist.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Läs befintlig bevakningslista för att hitta nya tickers
+    existing_path = user_dir / "watchlist.json"
     try:
-        path.write_text(content, encoding="utf-8")
+        existing_raw = json.loads(existing_path.read_text(encoding="utf-8")) if existing_path.exists() else []
+        existing_ticker_set = set(i.get("ticker", "").upper().strip() for i in existing_raw)
+    except Exception:
+        existing_ticker_set = set(t.upper().strip() for t in (previous_tickers or []))
+
+    content = json.dumps(items, indent=2, ensure_ascii=False)
+    existing_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        existing_path.write_text(content, encoding="utf-8")
     except Exception:
         pass
+
     token = _get_github_token()
     if token:
         if username == "admin":
@@ -131,6 +145,35 @@ def _save_watchlist_data(items: list):
                 token,
                 message=f"Update watchlist for {username}",
             )
+
+    # ── Auto-add nya tickers till custom_universe + committa filen ──────────
+    # Körs bara för admin (custom_universe är global, inte per användare).
+    if username == "admin":
+        try:
+            from core.config import add_custom_to_universe, _CUSTOM_UNIVERSE_FILE
+            incoming_tickers = [
+                i["ticker"].upper().strip()
+                for i in items
+                if i.get("ticker")
+            ]
+            added_to_cu = []
+            for t in incoming_tickers:
+                if t and t not in existing_ticker_set:
+                    if add_custom_to_universe(t, ""):
+                        added_to_cu.append(t)
+            if added_to_cu and token:
+                try:
+                    cu_content = _CUSTOM_UNIVERSE_FILE.read_text(encoding="utf-8")
+                    _github_commit_file(
+                        "data/custom_universe.json",
+                        cu_content,
+                        token,
+                        message=f"Add {', '.join(added_to_cu)} to scan universe",
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
 
 def _search_ticker_yfinance(query: str):
