@@ -124,9 +124,15 @@ def load_portfolio(data_dir: Path | None = None) -> pd.DataFrame:
             holdings["konto"] = "Huvud"
         else:
             holdings["konto"] = holdings["konto"].fillna("Huvud")
+        # typ: per-innehavs-klassificering (aktier/fond/etf/certificate)
+        # Används för att avgöra om scanner-signaler ska visas
+        if "typ" not in holdings.columns:
+            holdings["typ"] = ""   # tomt = bestäms av kontotyp
+        else:
+            holdings["typ"] = holdings["typ"].fillna("")
         return holdings
     except Exception:
-        return pd.DataFrame(columns=["ticker", "shares", "cost_basis", "konto"])
+        return pd.DataFrame(columns=["ticker", "shares", "cost_basis", "konto", "typ"])
 
 
 def load_watchlist(data_dir: Path | None = None) -> list:

@@ -57,6 +57,27 @@ def _is_fund_konto(konto_name: str) -> bool:
     return _load_konton().get(konto_name, {}).get("typ") == "fond"
 
 
+def _is_fund_holding(holding_typ: str, konto_name: str) -> bool:
+    """Avgör om ett enskilt innehav ska behandlas som fond (ingen scanneranalys).
+
+    Prioritetsordning:
+    1. holding_typ är explicit satt (fond/etf/certificate) → styr alltid
+    2. holding_typ är tomt → faller tillbaka på kontotypen
+    3. Kontotyp "aktier" och tomt holding_typ → full scanner-analys
+
+    Det gör att ett blandat konto (aktier + fonder i samma ISK) hanteras
+    korrekt: varje innehavs egen typ styr, inte kontots typ.
+    """
+    if holding_typ in ("fond", "certificate"):
+        return True
+    if holding_typ == "etf":
+        return False   # ETF:er är börshandlade – full analys
+    if holding_typ == "aktier":
+        return False
+    # holding_typ är "" eller okänt → fall tillbaka på kontotypen
+    return _is_fund_konto(konto_name)
+
+
 def _save_watchlist_data(items):
     from web.pages.admin import _save_watchlist_data as _swd
     _swd(items)
@@ -231,16 +252,23 @@ def _save_holdings_user(df: pd.DataFrame):
 
 def _upsert_holding(holdings: pd.DataFrame, ticker: str,
                     shares: float, cost_basis: float,
-                    konto: str = "Huvud") -> pd.DataFrame:
-    """Lägg till eller uppdatera en aktie i portföljen.
+                    konto: str = "Huvud",
+                    typ: str = "") -> pd.DataFrame:
+    """Lägg till eller uppdatera ett innehav i portföljen.
     Om tickern är ny läggs den automatiskt till i nästa scan (custom_universe).
-    konto: vilket konto innehavet tillhör (default 'Huvud')."""
+
+    konto: vilket konto innehavet tillhör (default 'Huvud')
+    typ:   innehavets typ — 'aktier', 'fond', 'etf', 'certificate' eller ''
+           (tomt = bestäms av kontotypen vid visning, se _is_fund_holding)
+    """
     h = holdings.copy() if not holdings.empty else pd.DataFrame(
-        columns=["ticker", "shares", "cost_basis", "konto"]
+        columns=["ticker", "shares", "cost_basis", "konto", "typ"]
     )
-    # Säkerställ att konto-kolumnen finns
+    # Säkerställ att båda kolumnerna finns
     if "konto" not in h.columns:
         h["konto"] = "Huvud"
+    if "typ" not in h.columns:
+        h["typ"] = ""
 
     # Matcha på ticker + konto (samma aktie kan finnas i flera konton)
     mask = (h["ticker"] == ticker) & (h["konto"] == konto)
@@ -248,10 +276,12 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
     if mask.any():
         h.loc[mask, "shares"]     = shares
         h.loc[mask, "cost_basis"] = cost_basis
+        if typ:                          # uppdatera typ bara om den skickas med
+            h.loc[mask, "typ"] = typ
     else:
         h = pd.concat([h, pd.DataFrame([{
             "ticker": ticker, "shares": shares,
-            "cost_basis": cost_basis, "konto": konto
+            "cost_basis": cost_basis, "konto": konto, "typ": typ
         }])], ignore_index=True)
     # Auto-lägg till i scan-universum om det är en ny ticker
     if is_new:
@@ -409,7 +439,10 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                                 ).upper().strip()
                                 default_check = bool(suggested) and security_type != "certificate"
                                 do_it = c5.checkbox("Ta med", value=default_check, key=f"az_ok_{i}")
-                            import_data.append({"row": r, "ticker": ticker_val, "import": do_it})
+                            import_data.append({
+                                "row": r, "ticker": ticker_val,
+                                "import": do_it, "security_type": security_type,
+                            })
 
                         if n_funds > 0 and az_typ != "fond":
                             st.info(
@@ -426,17 +459,22 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                             # Registrera kontot om det är nytt
                             _ensure_konto(az_konto, az_typ)
                             h = holdings.copy() if not holdings.empty else pd.DataFrame(
-                                columns=["ticker", "shares", "cost_basis", "konto"])
+                                columns=["ticker", "shares", "cost_basis", "konto", "typ"])
                             n_add = n_upd = 0
                             for item in import_data:
                                 if not item["import"] or not item["ticker"]:
                                     continue
-                                t = item["ticker"]
-                                s = float(item["row"].get("shares", 0))
-                                c = float(item["row"].get("cost_basis", 0))
-                                mask = (h["ticker"] == t) & (h.get("konto", "Huvud") == az_konto) if "konto" in h.columns else h["ticker"] == t
-                                was_new = not mask.any() if hasattr(mask, "any") else True
-                                h = _upsert_holding(h, t, s, c, konto=az_konto)
+                                t   = item["ticker"]
+                                s   = float(item["row"].get("shares", 0))
+                                c   = float(item["row"].get("cost_basis", 0))
+                                # Per-innehavs typ: detekterad av classify_security
+                                row_typ = item.get("security_type", "")
+                                # Normalisera till de typer vi använder
+                                if row_typ not in ("aktier", "fond", "etf", "certificate"):
+                                    row_typ = ""
+                                mask_ex = (h["ticker"] == t) & (h.get("konto", pd.Series(dtype=str)) == az_konto) if "konto" in h.columns else h["ticker"] == t
+                                was_new = not mask_ex.any() if hasattr(mask_ex, "any") else True
+                                h = _upsert_holding(h, t, s, c, konto=az_konto, typ=row_typ)
                                 if was_new: n_add += 1
                                 else:       n_upd += 1
                             _save_holdings_user(h)
@@ -529,6 +567,18 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                         "Inköpspris per aktie (kr) *",
                         min_value=0.0, value=0.0, step=0.01,
                     )
+                # Kontoväljare + typ för manuell inmatning
+                konton_reg_m = _load_konton()
+                mc1, mc2 = st.columns([2, 1])
+                m_konto = mc1.selectbox(
+                    "Konto", list(konton_reg_m.keys()), key="manual_konto",
+                    help="Vilket konto innehavet tillhör",
+                )
+                m_typ = mc2.selectbox(
+                    "Typ", ["", "aktier", "fond", "etf"],
+                    key="manual_typ",
+                    help="Lämna tomt = bestäms av kontotypen. Välj 'fond' för aktivt förvaltade fonder i ett blandat konto.",
+                )
                 if st.form_submit_button("➕ Lägg till", type="primary", use_container_width=True):
                     if not m_ticker:
                         st.error("Ange ticker.")
@@ -537,7 +587,8 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                     elif m_price <= 0:
                         st.error("Ange inköpspris.")
                     else:
-                        h = _upsert_holding(holdings, m_ticker, m_shares, m_price)
+                        h = _upsert_holding(holdings, m_ticker, m_shares, m_price,
+                                            konto=m_konto, typ=m_typ)
                         _save_holdings_user(h)
                         st.success(f"✅ **{m_ticker}** tillagd ({m_shares:.0f} st à {m_price:.2f} kr)!")
                         st.rerun()
@@ -833,11 +884,13 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
         for _, h in holdings_view.iterrows():
             t      = str(h["ticker"]).upper()
             konto  = str(h.get("konto", "Huvud"))
+            typ    = str(h.get("typ", ""))
             sc     = score_data.get(t, {})
             price  = sc.get("current_price")
             cost   = h.get("cost_basis")
             shares = h.get("shares", 0)
-            is_fund_acc = _is_fund_konto(konto)
+            # Avgör per innehavs-nivå — fungerar för blandade konton
+            is_fund_acc = _is_fund_holding(typ, konto)
             pnl_pct = ((price / float(cost)) - 1) * 100 \
                 if price and cost and float(cost) > 0 else None
             mv = price * float(shares) if price and shares else None
