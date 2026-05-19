@@ -1,5 +1,6 @@
 """web/pages/portfolio.py – Sida 4: Portfölj"""
 
+import datetime
 import json
 import os
 import tempfile
@@ -12,6 +13,7 @@ from web.utils import (
     kpi_row, holdings_pie, num_fmt, pct_fmt,
     load_portfolio, load_watchlist, _get_provider, _get_depth,
     _active_data_dir, DATA_DIR,
+    portfolio_value_chart, calc_period_returns, save_portfolio_snapshot,
 )
 from core import ai_analysis
 
@@ -253,22 +255,26 @@ def _save_holdings_user(df: pd.DataFrame):
 def _upsert_holding(holdings: pd.DataFrame, ticker: str,
                     shares: float, cost_basis: float,
                     konto: str = "Huvud",
-                    typ: str = "") -> pd.DataFrame:
+                    typ: str = "",
+                    buy_date: str = "") -> pd.DataFrame:
     """Lägg till eller uppdatera ett innehav i portföljen.
     Om tickern är ny läggs den automatiskt till i nästa scan (custom_universe).
 
-    konto: vilket konto innehavet tillhör (default 'Huvud')
-    typ:   innehavets typ — 'aktier', 'fond', 'etf', 'certificate' eller ''
-           (tomt = bestäms av kontotypen vid visning, se _is_fund_holding)
+    konto:    vilket konto innehavet tillhör (default 'Huvud')
+    typ:      innehavets typ — 'aktier', 'fond', 'etf', 'certificate' eller ''
+              (tomt = bestäms av kontotypen vid visning, se _is_fund_holding)
+    buy_date: köpdatum i ISO-format (YYYY-MM-DD). Uppdateras bara om befintlig rad har tomt datum.
     """
     h = holdings.copy() if not holdings.empty else pd.DataFrame(
-        columns=["ticker", "shares", "cost_basis", "konto", "typ"]
+        columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date"]
     )
-    # Säkerställ att båda kolumnerna finns
+    # Säkerställ att alla kolumner finns
     if "konto" not in h.columns:
         h["konto"] = "Huvud"
     if "typ" not in h.columns:
         h["typ"] = ""
+    if "buy_date" not in h.columns:
+        h["buy_date"] = ""
 
     # Matcha på ticker + konto (samma aktie kan finnas i flera konton)
     mask = (h["ticker"] == ticker) & (h["konto"] == konto)
@@ -278,10 +284,16 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
         h.loc[mask, "cost_basis"] = cost_basis
         if typ:                          # uppdatera typ bara om den skickas med
             h.loc[mask, "typ"] = typ
+        # Uppdatera buy_date bara om den skickas in OCH befintlig rad har tomt datum
+        if buy_date:
+            existing_bd = str(h.loc[mask, "buy_date"].iloc[0]).strip()
+            if not existing_bd:
+                h.loc[mask, "buy_date"] = buy_date
     else:
         h = pd.concat([h, pd.DataFrame([{
             "ticker": ticker, "shares": shares,
-            "cost_basis": cost_basis, "konto": konto, "typ": typ
+            "cost_basis": cost_basis, "konto": konto, "typ": typ,
+            "buy_date": buy_date,
         }])], ignore_index=True)
     # Auto-lägg till i scan-universum om det är en ny ticker
     if is_new:
@@ -321,6 +333,81 @@ def _show_scan_pending_notifications():
             "uppdateras automatiskt inom några dagar när systemet kör sin nästa analys. "
             "Pris och grundläggande information visas redan nu."
         )
+
+
+def _build_score_data(holdings: pd.DataFrame, df: pd.DataFrame = None,
+                      sc_df: pd.DataFrame = None) -> dict:
+    """Bygg score_data-dict från scanner-DataFrames."""
+    frames = [f for f in [df, sc_df] if f is not None and not getattr(f, "empty", True) and "ticker" in f.columns]
+    if frames:
+        combined = pd.concat(frames, ignore_index=True).drop_duplicates(subset="ticker", keep="first")
+        return combined.set_index("ticker").to_dict("index")
+    return {}
+
+
+def _build_rows(holdings_view: pd.DataFrame, score_data: dict) -> list:
+    """Bygg rad-lista från holdings_view + score_data. Returnerar list[dict]."""
+    rows = []
+    for _, h in holdings_view.iterrows():
+        t      = str(h["ticker"]).upper()
+        konto  = str(h.get("konto", "Huvud"))
+        typ    = str(h.get("typ", ""))
+        sc     = score_data.get(t, {})
+        price  = sc.get("current_price")
+        cost   = h.get("cost_basis")
+        shares = h.get("shares", 0)
+        is_fund_acc = _is_fund_holding(typ, konto)
+        pnl_pct = ((price / float(cost)) - 1) * 100 \
+            if price and cost and float(cost) > 0 else None
+        mv = price * float(shares) if price and shares else None
+        rows.append({
+            "Ticker":    t,
+            "Konto":     konto,
+            "Bolag":     sc.get("name", t)[:30],
+            "Sektor":    sc.get("sector", "—") if not is_fund_acc else "Fond",
+            "Antal":     shares,
+            "Inköpspris": cost,
+            "Pris nu":   f"{price:.2f}" if price else "—",
+            "P&L %":     f"{pnl_pct:+.1f}%" if pnl_pct is not None else "—",
+            "Marknadsvärde": f"{mv:,.0f}" if mv else "—",
+            "Score":     sc.get("score_total") if not is_fund_acc else None,
+            "Entry":     sc.get("entry_signal", "—") if not is_fund_acc else "Fond",
+            "Trend":     sc.get("trend_signal", "—") if not is_fund_acc else "—",
+            "Piotroski": sc.get("piotroski_f") if not is_fund_acc else None,
+            "RS":        sc.get("rs_label", "—") if not is_fund_acc else "—",
+            "_is_fund":  is_fund_acc,
+            "_pnl_pct":  pnl_pct,
+            "_market_value": mv,
+        })
+    return rows
+
+
+def _konto_filter_section(holdings: pd.DataFrame):
+    """Renderar konto-filter-UI och returnerar (holdings_view, sel_konto)."""
+    konton_reg = _load_konton()
+    all_konton = sorted(holdings["konto"].dropna().unique().tolist()) if "konto" in holdings.columns else ["Huvud"]
+    konto_opts = ["Alla konton"] + all_konton
+    konto_badges = "".join(
+        f'<span style="background:{konton_reg.get(k,{}).get("color","#4c9be8")}22;'
+        f'border:1px solid {konton_reg.get(k,{}).get("color","#4c9be8")}55;'
+        f'border-radius:4px;padding:2px 8px;margin:0 4px;font-size:12px;color:#e8eaf0;">'
+        f'{"🏦 " if konton_reg.get(k,{}).get("typ")=="fond" else "📈 "}{k}</span>'
+        for k in all_konton
+    )
+    if len(all_konton) > 1:
+        st.markdown(f"<div style='margin-bottom:8px;'>Konton: {konto_badges}</div>",
+                    unsafe_allow_html=True)
+        sel_konto = st.selectbox("Visa konto:", konto_opts, key="port_konto_filter",
+                                 label_visibility="collapsed")
+    else:
+        sel_konto = "Alla konton"
+
+    if sel_konto != "Alla konton" and "konto" in holdings.columns:
+        holdings_view = holdings[holdings["konto"] == sel_konto].copy()
+    else:
+        holdings_view = holdings.copy()
+
+    return holdings_view, sel_konto
 
 
 def _manage_portfolio_section(holdings: pd.DataFrame):
@@ -506,8 +593,9 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                     elif not holdings.empty:
                         h = holdings.copy()
                     else:
-                        h = pd.DataFrame(columns=["ticker", "shares", "cost_basis", "konto", "typ"])
+                        h = pd.DataFrame(columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date"])
                     n_add = n_upd = 0
+                    today_iso = datetime.date.today().isoformat()
                     for item in import_data:
                         if not item["import"] or not item["ticker"]:
                             continue
@@ -517,7 +605,8 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                         row_typ = item.get("security_type", "")
                         if row_typ not in ("aktier", "fond", "etf", "certificate"):
                             row_typ = ""
-                        h = _upsert_holding(h, t, s, c, konto=konto_name, typ=row_typ)
+                        h = _upsert_holding(h, t, s, c, konto=konto_name, typ=row_typ,
+                                            buy_date=today_iso)
                         if item.get("row_status") == "new": n_add += 1
                         else: n_upd += 1
                     return h, n_add, n_upd
@@ -566,6 +655,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                                         "isin":      r.get("isin"),
                                         "_suggested_ticker": suggested,
                                         "_security_type":    sec_type,
+                                        "buy_date":  datetime.date.today().isoformat(),
                                     })
                                 df_enriched = pd.DataFrame(rows_enriched)
 
@@ -621,7 +711,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                             if st.button("💾 Importera alla markerade", key="btn_pos_save",
                                          type="primary", use_container_width=True):
                                 h_all = holdings.copy() if not holdings.empty else pd.DataFrame(
-                                    columns=["ticker", "shares", "cost_basis", "konto", "typ"])
+                                    columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date"])
                                 total_add = total_upd = 0
                                 for acc_data in all_import_data.values():
                                     h_all, n_a, n_u = _do_import(
@@ -682,6 +772,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                                     **r.to_dict(),
                                     "_suggested_ticker": suggested,
                                     "_security_type": sec_type,
+                                    "buy_date": datetime.date.today().isoformat(),
                                 })
                             df_enriched2 = pd.DataFrame(rows_enriched2)
                             import_data2 = _build_holding_rows(df_enriched2, az_konto, "az")
@@ -787,6 +878,9 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                         "Inköpspris per aktie (kr) *",
                         min_value=0.0, value=0.0, step=0.01,
                     )
+                # Köpdatum
+                buy_date_input = st.date_input("Köpdatum", value=datetime.date.today(),
+                                               key="manual_buy_date")
                 # Kontoväljare + typ för manuell inmatning
                 konton_reg_m = _load_konton()
                 mc1, mc2 = st.columns([2, 1])
@@ -808,7 +902,8 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                         st.error("Ange inköpspris.")
                     else:
                         h = _upsert_holding(holdings, m_ticker, m_shares, m_price,
-                                            konto=m_konto, typ=m_typ)
+                                            konto=m_konto, typ=m_typ,
+                                            buy_date=buy_date_input.isoformat())
                         _save_holdings_user(h)
                         st.success(f"✅ **{m_ticker}** tillagd ({m_shares:.0f} st à {m_price:.2f} kr)!")
                         st.rerun()
@@ -861,78 +956,77 @@ def _portfolio_stress_test(holdings: pd.DataFrame, score_data: dict) -> None:
     if holdings.empty:
         return
 
-    with st.expander("🔥 Stresstesta portföljen", expanded=False):
-        st.caption("Simulerar hur din portfölj påverkas vid marknadsfall, baserat på varje aktiens beta.")
+    st.caption("Simulerar hur din portfölj påverkas vid marknadsfall, baserat på varje aktiens beta.")
 
-        scenarios = {
-            "Liten korrigering (-10%)": -0.10,
-            "Normal björnmarknad (-20%)": -0.20,
-            "Svår krasch (-30%)": -0.30,
-            "Extrem krasch (-40%)": -0.40,
-        }
+    scenarios = {
+        "Liten korrigering (-10%)": -0.10,
+        "Normal björnmarknad (-20%)": -0.20,
+        "Svår krasch (-30%)": -0.30,
+        "Extrem krasch (-40%)": -0.40,
+    }
 
-        rows = []
-        for _, h in holdings.iterrows():
-            ticker = h["ticker"]
-            shares = float(h.get("shares", 0))
-            cost = float(h.get("cost_basis", 0))
+    rows = []
+    for _, h in holdings.iterrows():
+        ticker = h["ticker"]
+        shares = float(h.get("shares", 0))
+        cost = float(h.get("cost_basis", 0))
 
-            # Get beta and current price from score_data
-            sd = score_data.get(ticker, {})
-            beta_val = sd.get("beta")
-            if beta_val is None or (isinstance(beta_val, float) and pd.isna(beta_val)):
-                beta_val = 1.0  # default
-            beta_val = float(beta_val)
+        # Get beta and current price from score_data
+        sd = score_data.get(ticker, {})
+        beta_val = sd.get("beta")
+        if beta_val is None or (isinstance(beta_val, float) and pd.isna(beta_val)):
+            beta_val = 1.0  # default
+        beta_val = float(beta_val)
 
-            current_price = sd.get("current_price") or sd.get("close")
-            if current_price and pd.notna(current_price):
-                market_value = shares * float(current_price)
-            elif cost > 0:
-                market_value = shares * cost
-            else:
-                continue
+        current_price = sd.get("current_price") or sd.get("close")
+        if current_price and pd.notna(current_price):
+            market_value = shares * float(current_price)
+        elif cost > 0:
+            market_value = shares * cost
+        else:
+            continue
 
-            row = {"Ticker": ticker, "Beta": round(beta_val, 2), "Marknadsvärde (SEK)": round(market_value)}
-            for scenario_name, market_drop in scenarios.items():
-                stock_drop = market_drop * beta_val
-                impact = market_value * stock_drop
-                row[scenario_name] = round(impact)
-            rows.append(row)
+        row = {"Ticker": ticker, "Beta": round(beta_val, 2), "Marknadsvärde (SEK)": round(market_value)}
+        for scenario_name, market_drop in scenarios.items():
+            stock_drop = market_drop * beta_val
+            impact = market_value * stock_drop
+            row[scenario_name] = round(impact)
+        rows.append(row)
 
-        if not rows:
-            st.info("Lägg till innehav med kostnadsbas för att stresstesta portföljen.")
-            return
+    if not rows:
+        st.info("Lägg till innehav med kostnadsbas för att stresstesta portföljen.")
+        return
 
-        stress_df = pd.DataFrame(rows)
+    stress_df = pd.DataFrame(rows)
 
-        # Portfolio totals
-        total_value = stress_df["Marknadsvärde (SEK)"].sum()
+    # Portfolio totals
+    total_value = stress_df["Marknadsvärde (SEK)"].sum()
 
-        # KPI metrics for each scenario
-        cols_stress = st.columns(len(scenarios))
-        for col_s, (scenario_name, market_drop) in zip(cols_stress, scenarios.items()):
-            total_impact = stress_df[scenario_name].sum()
-            pct = total_impact / total_value * 100 if total_value else 0
-            col_s.metric(
-                scenario_name.split("(")[0].strip(),
-                f"{total_impact:,.0f} kr",
-                f"{pct:.1f}%",
-                delta_color="inverse",
-            )
+    # KPI metrics for each scenario
+    cols_stress = st.columns(len(scenarios))
+    for col_s, (scenario_name, market_drop) in zip(cols_stress, scenarios.items()):
+        total_impact = stress_df[scenario_name].sum()
+        pct = total_impact / total_value * 100 if total_value else 0
+        col_s.metric(
+            scenario_name.split("(")[0].strip(),
+            f"{total_impact:,.0f} kr",
+            f"{pct:.1f}%",
+            delta_color="inverse",
+        )
 
-        st.markdown("---")
-        st.markdown("**Per aktie**")
+    st.markdown("---")
+    st.markdown("**Per aktie**")
 
-        display_stress = stress_df.copy()
-        for col_name in scenarios.keys():
-            display_stress[col_name] = display_stress[col_name].apply(
-                lambda x: f"{x:,.0f} kr" if pd.notna(x) else "—"
-            )
+    display_stress = stress_df.copy()
+    for col_name in scenarios.keys():
+        display_stress[col_name] = display_stress[col_name].apply(
+            lambda x: f"{x:,.0f} kr" if pd.notna(x) else "—"
+        )
 
-        st.dataframe(display_stress, use_container_width=True, hide_index=True)
-        if total_value:
-            weighted_beta = (stress_df["Beta"] * stress_df["Marknadsvärde (SEK)"]).sum() / total_value
-            st.caption(f"Portföljvärde: {total_value:,.0f} kr | Viktad beta: {weighted_beta:.2f}")
+    st.dataframe(display_stress, use_container_width=True, hide_index=True)
+    if total_value:
+        weighted_beta = (stress_df["Beta"] * stress_df["Marknadsvärde (SEK)"]).sum() / total_value
+        st.caption(f"Portföljvärde: {total_value:,.0f} kr | Viktad beta: {weighted_beta:.2f}")
 
 
 def _dividend_simulator(holdings: pd.DataFrame, score_data: dict) -> None:
@@ -940,316 +1034,289 @@ def _dividend_simulator(holdings: pd.DataFrame, score_data: dict) -> None:
     if holdings.empty:
         return
 
-    with st.expander("💰 Utdelningssimulator", expanded=False):
-        st.caption("Projicera utdelningsinkomst baserat på nuvarande innehav och historisk utdelningsdata.")
+    st.caption("Projicera utdelningsinkomst baserat på nuvarande innehav och historisk utdelningsdata.")
 
-        col_a, col_b, col_c = st.columns(3)
-        years = col_a.slider("Antal år", 1, 30, 10, key="div_sim_years")
-        growth_rate = col_b.slider("Utdelningstillväxt/år %", 0.0, 15.0, 5.0, step=0.5, key="div_sim_growth") / 100
-        reinvest = col_c.checkbox("Återinvestera utdelningar", value=True, key="div_sim_reinvest")
+    col_a, col_b, col_c = st.columns(3)
+    years = col_a.slider("Antal år", 1, 30, 10, key="div_sim_years")
+    growth_rate = col_b.slider("Utdelningstillväxt/år %", 0.0, 15.0, 5.0, step=0.5, key="div_sim_growth") / 100
+    reinvest = col_c.checkbox("Återinvestera utdelningar", value=True, key="div_sim_reinvest")
 
-        # Calculate current annual dividend per holding
-        annual_total = 0.0
-        per_stock = []
-        portfolio_total_value = 0.0
-        for _, h in holdings.iterrows():
-            ticker = h["ticker"]
-            shares = float(h.get("shares", 0))
-            cost = float(h.get("cost_basis", 0))
+    # Calculate current annual dividend per holding
+    annual_total = 0.0
+    per_stock = []
+    portfolio_total_value = 0.0
+    for _, h in holdings.iterrows():
+        ticker = h["ticker"]
+        shares = float(h.get("shares", 0))
+        cost = float(h.get("cost_basis", 0))
 
-            sd = score_data.get(ticker, {})
-            div_rate = sd.get("dividend_rate") or sd.get("trailingAnnualDividendRate") or 0
-            current_price = sd.get("current_price") or sd.get("close") or cost
+        sd = score_data.get(ticker, {})
+        div_rate = sd.get("dividend_rate") or sd.get("trailingAnnualDividendRate") or 0
+        current_price = sd.get("current_price") or sd.get("close") or cost
 
-            if current_price and pd.notna(current_price):
-                portfolio_total_value += shares * float(current_price)
+        if current_price and pd.notna(current_price):
+            portfolio_total_value += shares * float(current_price)
 
-            if div_rate and pd.notna(div_rate) and float(div_rate) > 0:
-                annual_div = shares * float(div_rate)
-                div_yield = float(div_rate) / float(current_price) * 100 if current_price else 0
-                annual_total += annual_div
-                per_stock.append({
-                    "Ticker": ticker,
-                    "Aktier": int(shares),
-                    "Utdelning/aktie (kr)": round(float(div_rate), 2),
-                    "Direktavkastning": f"{div_yield:.1f}%",
-                    "Årsutdelning (kr)": round(annual_div),
-                })
-
-        if annual_total == 0:
-            st.info("Inga utdelande aktier i portföljen, eller data saknas.")
-            return
-
-        # Projection table
-        projection = []
-        cumulative = annual_total
-        total_received = 0.0
-        portfolio_yield = (annual_total / portfolio_total_value) if portfolio_total_value > 0 else 0.03
-
-        for year in range(1, years + 1):
-            if reinvest:
-                # Reinvested dividends earn same yield
-                cumulative = cumulative * (1 + growth_rate + portfolio_yield)
-                year_div = cumulative
-            else:
-                year_div = annual_total * (1 + growth_rate) ** (year - 1)
-            total_received += year_div
-            projection.append({
-                "År": year,
-                "Kalenderår": 2026 + year - 1,
-                "Årsutdelning (kr)": round(year_div),
-                "Månadsutdelning (kr)": round(year_div / 12),
-                "Totalt utbetalt hittills (kr)": round(total_received),
+        if div_rate and pd.notna(div_rate) and float(div_rate) > 0:
+            annual_div = shares * float(div_rate)
+            div_yield = float(div_rate) / float(current_price) * 100 if current_price else 0
+            annual_total += annual_div
+            per_stock.append({
+                "Ticker": ticker,
+                "Aktier": int(shares),
+                "Utdelning/aktie (kr)": round(float(div_rate), 2),
+                "Direktavkastning": f"{div_yield:.1f}%",
+                "Årsutdelning (kr)": round(annual_div),
             })
 
-        # KPIs
-        proj_df = pd.DataFrame(projection)
-        final_annual = proj_df.iloc[-1]["Årsutdelning (kr)"]
-        total_recv = proj_df.iloc[-1]["Totalt utbetalt hittills (kr)"]
+    if annual_total == 0:
+        st.info("Inga utdelande aktier i portföljen, eller data saknas.")
+        return
 
-        col1_d, col2_d, col3_d = st.columns(3)
-        col1_d.metric("Nuvarande årsutdelning", f"{annual_total:,.0f} kr", f"{annual_total/12:,.0f} kr/mån")
-        growth_pct = (final_annual / annual_total - 1) * 100 if annual_total else 0
-        col2_d.metric(f"Årsutdelning år {years}", f"{final_annual:,.0f} kr", f"+{growth_pct:.0f}%")
-        col3_d.metric(f"Totalt utbetalt {years} år", f"{total_recv:,.0f} kr")
+    # Projection table
+    projection = []
+    cumulative = annual_total
+    total_received = 0.0
+    portfolio_yield = (annual_total / portfolio_total_value) if portfolio_total_value > 0 else 0.03
 
-        # Chart
-        import plotly.graph_objects as go
-        fig_div = go.Figure()
-        fig_div.add_trace(go.Bar(
-            x=proj_df["Kalenderår"],
-            y=proj_df["Årsutdelning (kr)"],
-            marker_color="#4caf50",
-            hovertemplate="År %{x}: %{y:,.0f} kr<extra></extra>",
-            name="Årsutdelning",
-        ))
-        fig_div.update_layout(
-            height=250, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#8892a4"), xaxis=dict(gridcolor="#252b3b"),
-            yaxis=dict(gridcolor="#252b3b", title="kr/år"),
-            margin=dict(l=0, r=0, t=20, b=0), showlegend=False,
-        )
-        st.plotly_chart(fig_div, use_container_width=True)
+    for year in range(1, years + 1):
+        if reinvest:
+            # Reinvested dividends earn same yield
+            cumulative = cumulative * (1 + growth_rate + portfolio_yield)
+            year_div = cumulative
+        else:
+            year_div = annual_total * (1 + growth_rate) ** (year - 1)
+        total_received += year_div
+        projection.append({
+            "År": year,
+            "Kalenderår": datetime.date.today().year + year - 1,
+            "Årsutdelning (kr)": round(year_div),
+            "Månadsutdelning (kr)": round(year_div / 12),
+            "Totalt utbetalt hittills (kr)": round(total_received),
+        })
 
-        with st.expander("Detaljerad projektion", expanded=False):
-            st.dataframe(proj_df, use_container_width=True, hide_index=True)
+    # KPIs
+    proj_df = pd.DataFrame(projection)
+    final_annual = proj_df.iloc[-1]["Årsutdelning (kr)"]
+    total_recv = proj_df.iloc[-1]["Totalt utbetalt hittills (kr)"]
 
-        if per_stock:
-            with st.expander("Per aktie", expanded=False):
-                st.dataframe(pd.DataFrame(per_stock), use_container_width=True, hide_index=True)
+    col1_d, col2_d, col3_d = st.columns(3)
+    col1_d.metric("Nuvarande årsutdelning", f"{annual_total:,.0f} kr", f"{annual_total/12:,.0f} kr/mån")
+    growth_pct = (final_annual / annual_total - 1) * 100 if annual_total else 0
+    col2_d.metric(f"Årsutdelning år {years}", f"{final_annual:,.0f} kr", f"+{growth_pct:.0f}%")
+    col3_d.metric(f"Totalt utbetalt {years} år", f"{total_recv:,.0f} kr")
+
+    # Chart
+    import plotly.graph_objects as go
+    fig_div = go.Figure()
+    fig_div.add_trace(go.Bar(
+        x=proj_df["Kalenderår"],
+        y=proj_df["Årsutdelning (kr)"],
+        marker_color="#4caf50",
+        hovertemplate="År %{x}: %{y:,.0f} kr<extra></extra>",
+        name="Årsutdelning",
+    ))
+    fig_div.update_layout(
+        height=250, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#8892a4"), xaxis=dict(gridcolor="#252b3b"),
+        yaxis=dict(gridcolor="#252b3b", title="kr/år"),
+        margin=dict(l=0, r=0, t=20, b=0), showlegend=False,
+    )
+    st.plotly_chart(fig_div, use_container_width=True)
+
+    with st.expander("Detaljerad projektion", expanded=False):
+        st.dataframe(proj_df, use_container_width=True, hide_index=True)
+
+    if per_stock:
+        with st.expander("Per aktie", expanded=False):
+            st.dataframe(pd.DataFrame(per_stock), use_container_width=True, hide_index=True)
 
 
-def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
-                   sc_df: pd.DataFrame = None):
-    st.title("💼 Portfölj & Bevakningslista")
+# ══════════════════════════════════════════════════════════════════════════════
+# SUB-TAB FUNKTIONER
+# ══════════════════════════════════════════════════════════════════════════════
 
-    # ── Notiser för nyligen tillagda tickers som inväntar nästa scan ──────────
-    _show_scan_pending_notifications()
+def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame):
+    """Sub-tab: Översikt — KPI-rad, portföljvärde-chart, period-avkastning, innehav-tabell, sektorpaj, utdelningar."""
+    import streamlit.components.v1 as _sc1
+    _sc1.html(
+        "<script>try{var el=window.parent.document.querySelector('[data-testid=\"stMain\"]');"
+        "if(!el)el=window.parent.document.body;"
+        "el.scrollTo({top:0,behavior:'instant'});}catch(e){}</script>",
+        height=0,
+    )
 
-    # ── Portföljhantering (synlig för alla användare) ─────────────────────────
-    _manage_portfolio_section(holdings)
-    # Ladda om portföljen om den just sparades
-    holdings = load_portfolio()
+    rows = _build_rows(holdings_view, score_data)
+    total_mv    = sum(r.get("_market_value") or 0 for r in rows)
+    total_inv   = sum(float(r.get("Inköpspris") or 0) * float(r.get("Antal") or 0) for r in rows)
+    pnl_vals    = [r["_pnl_pct"] for r in rows if isinstance(r.get("_pnl_pct"), (int, float))]
+    total_pnl_kr = total_mv - total_inv
+    total_pnl_pct = (total_pnl_kr / total_inv * 100) if total_inv > 0 else 0
+    n_pos       = len([r for r in rows if not r.get("_is_fund")])
 
-    if holdings.empty:
-        st.info("Portföljen är tom. Importera dina innehav från Avanza ovan ↑")
+    # Spara daglig snapshot
+    try:
+        save_portfolio_snapshot(total_mv, total_inv)
+    except Exception:
+        pass
+
+    kpi_row([
+        ("POSITIONER", str(n_pos), None),
+        ("TOTALT VÄRDE", f"{total_mv:,.0f} kr", None),
+        ("TOTAL P&L", f"{total_pnl_kr:+,.0f} kr", f"{total_pnl_pct:+.1f}%"),
+        ("BÄST / SÄMST",
+         f"+{max(pnl_vals):.1f}% / {min(pnl_vals):.1f}%" if pnl_vals else "—", None),
+    ])
+
+    # ── Portföljvärde-chart ──────────────────────────────────────────────────
+    st.markdown("#### Portföljvärde historik")
+    period_map = {"1M": "1mo", "3M": "3mo", "6M": "6mo", "1Å": "1y", "Allt": "2y"}
+    period_lbl = st.radio("Period", list(period_map.keys()), index=3,
+                          horizontal=True, key="port_period", label_visibility="collapsed")
+    period_yf = period_map[period_lbl]
+    with st.spinner("Hämtar prishistorik..."):
+        fig = portfolio_value_chart(holdings_view, period=period_yf)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    # ── Period-avkastning ────────────────────────────────────────────────────
+    with st.spinner(""):
+        period_rets = calc_period_returns(holdings_view)
+    if period_rets:
+        cols_ret = st.columns(len(period_rets))
+        for col, (label, (kr, pct)) in zip(cols_ret, period_rets.items()):
+            color = "#4caf50" if pct >= 0 else "#ef5350"
+            col.markdown(
+                f'<div style="text-align:center;background:#1e2230;border-radius:8px;padding:8px 4px;">'
+                f'<div style="font-size:10px;color:#8892a4;letter-spacing:.08em">{label}</div>'
+                f'<div style="font-size:16px;font-weight:700;color:{color}">{pct:+.1f}%</div>'
+                f'<div style="font-size:11px;color:#64748b">{kr:+,.0f} kr</div>'
+                f'</div>', unsafe_allow_html=True
+            )
+
+    # ── Innehav-tabell + sektordiagram ───────────────────────────────────────
+    col_table, col_pie = st.columns([3, 1])
+
+    display_rows_stocks = []
+    display_rows_funds  = []
+    for r in rows:
+        pnl_str = f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), (int, float)) else "—"
+        entry = {
+            "Ticker":  r.get("Ticker", ""),
+            "Bolag":   (r.get("Bolag") or "")[:25],
+            "P&L %":   pnl_str,
+            "Värde":   f"{r.get('_market_value', 0):,.0f} kr" if r.get("_market_value") else "—",
+            "Konto":   r.get("Konto", ""),
+            "_pnl":    r.get("_pnl_pct") or 0,
+            "_is_fund": r.get("_is_fund", False),
+        }
+        if r.get("_is_fund"):
+            display_rows_funds.append(entry)
+        else:
+            display_rows_stocks.append(entry)
+
+    with col_table:
+        if display_rows_stocks:
+            df_show = pd.DataFrame(display_rows_stocks).drop(columns=["_pnl", "_is_fund"], errors="ignore")
+            st.dataframe(df_show, use_container_width=True, hide_index=True)
+        if display_rows_funds:
+            with st.expander(f"🏦 Fonder ({len(display_rows_funds)})"):
+                df_funds = pd.DataFrame(display_rows_funds).drop(columns=["_pnl", "_is_fund"], errors="ignore")
+                st.dataframe(df_funds, use_container_width=True, hide_index=True)
+
+    with col_pie:
+        stock_rows_only = [r for r in rows if not r.get("_is_fund")]
+        if len(stock_rows_only) > 1 and df is not None and not df.empty:
+            tickers_for_pie = [r["Ticker"] for r in stock_rows_only]
+            mvs = {r["Ticker"]: r.get("_market_value", 0) for r in stock_rows_only}
+            try:
+                fig_pie = holdings_pie(
+                    holdings_view[holdings_view["ticker"].isin(tickers_for_pie)],
+                    df,
+                    mvs,
+                )
+                st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
+            except Exception:
+                pass
+
+    # ── Utdelningar ──────────────────────────────────────────────────────────
+    _holdings_hash = str(sorted(holdings_view["ticker"].tolist()))
+    if st.session_state.get("div_summary_hash") != _holdings_hash:
+        with st.spinner("Hämtar utdelningsdata…"):
+            _div_summary = _calc_dividend_summary(holdings_view, score_data)
+            st.session_state["div_summary"] = _div_summary
+            st.session_state["div_summary_hash"] = _holdings_hash
     else:
-        # ── Kontofilter ───────────────────────────────────────────────────────
-        konton_reg  = _load_konton()
-        all_konton  = sorted(holdings["konto"].dropna().unique().tolist()) if "konto" in holdings.columns else ["Huvud"]
-        konto_opts  = ["Alla konton"] + all_konton
-        # Färgade konto-badges
-        konto_badges = "".join(
-            f'<span style="background:{konton_reg.get(k,{}).get("color","#4c9be8")}22;'
-            f'border:1px solid {konton_reg.get(k,{}).get("color","#4c9be8")}55;'
-            f'border-radius:4px;padding:2px 8px;margin:0 4px;font-size:12px;color:#e8eaf0;">'
-            f'{"🏦 " if konton_reg.get(k,{}).get("typ")=="fond" else "📈 "}{k}</span>'
-            for k in all_konton
-        )
-        if len(all_konton) > 1:
-            st.markdown(f"<div style='margin-bottom:8px;'>Konton: {konto_badges}</div>",
-                        unsafe_allow_html=True)
-            sel_konto = st.selectbox("Visa konto:", konto_opts, key="port_konto_filter",
-                                     label_visibility="collapsed")
-        else:
-            sel_konto = "Alla konton"
+        _div_summary = st.session_state.get("div_summary", {})
 
-        # Filtrera holdings baserat på valt konto
-        if sel_konto != "Alla konton" and "konto" in holdings.columns:
-            holdings_view = holdings[holdings["konto"] == sel_konto].copy()
-        else:
-            holdings_view = holdings.copy()
-
-        frames = [f for f in [df, sc_df] if f is not None and not f.empty and "ticker" in f.columns]
-        if frames:
-            combined = pd.concat(frames, ignore_index=True).drop_duplicates(subset="ticker", keep="first")
-            score_data = combined.set_index("ticker").to_dict("index")
-        else:
-            score_data = {}
-
-        # ── Utdelningsdata — beräkna/cachas innan tabellen byggs ──────────────
-        _holdings_hash = str(sorted(holdings_view["ticker"].tolist()))
-        if st.session_state.get("div_summary_hash") != _holdings_hash:
-            with st.spinner("Hämtar utdelningsdata…"):
-                _div_summary = _calc_dividend_summary(holdings_view, score_data)
-                st.session_state["div_summary"] = _div_summary
-                st.session_state["div_summary_hash"] = _holdings_hash
-        else:
-            _div_summary = st.session_state.get("div_summary", {})
-
-        _div_ph_map: dict = {}
-        for _ph in _div_summary.get("per_holding", []):
-            _div_ph_map[_ph["ticker"]] = _ph
-
-        rows = []
-        for _, h in holdings_view.iterrows():
-            t      = str(h["ticker"]).upper()
-            konto  = str(h.get("konto", "Huvud"))
-            typ    = str(h.get("typ", ""))
-            sc     = score_data.get(t, {})
-            price  = sc.get("current_price")
-            cost   = h.get("cost_basis")
-            shares = h.get("shares", 0)
-            # Avgör per innehavs-nivå — fungerar för blandade konton
-            is_fund_acc = _is_fund_holding(typ, konto)
-            pnl_pct = ((price / float(cost)) - 1) * 100 \
-                if price and cost and float(cost) > 0 else None
-            mv = price * float(shares) if price and shares else None
-            _yoc = _div_ph_map.get(t, {}).get("yield_on_cost")
-            rows.append({
-                "Ticker":    t,
-                "Konto":     konto,
-                "Bolag":     sc.get("name", t)[:30],
-                "Sektor":    sc.get("sector", "—") if not is_fund_acc else "Fond",
-                "Antal":     shares,
-                "Inköpspris": cost,
-                "Pris nu":   f"{price:.2f}" if price else "—",
-                "P&L %":     f"{pnl_pct:+.1f}%" if pnl_pct is not None else "—",
-                "Marknadsvärde": f"{mv:,.0f}" if mv else "—",
-                "Yield/cost": f"{_yoc:.1f}%" if _yoc is not None else "—",
-                # Scannerdata döljs för fondkonton
-                "Score":     sc.get("score_total") if not is_fund_acc else None,
-                "Entry":     sc.get("entry_signal", "—") if not is_fund_acc else "Fond",
-                "Trend":     sc.get("trend_signal", "—") if not is_fund_acc else "—",
-                "Piotroski": sc.get("piotroski_f") if not is_fund_acc else None,
-                "RS":        sc.get("rs_label", "—") if not is_fund_acc else "—",
-                "_is_fund":  is_fund_acc,
-            })
-
-        port_df = pd.DataFrame(rows)
-
-        total_mv   = sum(float(r["Marknadsvärde"].replace(",", "").replace(" ", ""))
-                        for r in rows if isinstance(r["Marknadsvärde"], str)
-                        and r["Marknadsvärde"] != "—") if rows else 0
-        pnl_vals   = [float(r["P&L %"].replace("%", "").replace("+", ""))
-                      for r in rows if r["P&L %"] not in ("—", None)]
-        avg_pnl    = sum(pnl_vals) / len(pnl_vals) if pnl_vals else 0
-        best       = max(pnl_vals) if pnl_vals else 0
-        worst      = min(pnl_vals) if pnl_vals else 0
-
+    if _div_summary.get("total_annual_sek", 0) > 0:
+        st.markdown("---")
+        st.markdown("#### 💰 Utdelningar")
         kpi_row([
-            ("Positioner",       f"{len(rows)}",            None,
-             "Antal aktier du för närvarande äger i din portfölj."),
-            ("Totalt värde",     f"{total_mv:,.0f} kr",     None,
-             "Totalt marknadsvärde av alla dina innehav baserat på senaste kurs."),
-            ("Snitt P&L",        f"{avg_pnl:+.1f}%",        None,
-             "Genomsnittlig vinst/förlust (Profit & Loss) för alla positioner sedan inköp. Positivt = portföljen är på plus totalt."),
-            ("Bäst / Sämst",     f"+{best:.1f}% / {worst:.1f}%", None,
-             "Din bästa respektive sämsta position i procent. Bra för att identifiera vinnare och förlorare i portföljen."),
+            ("ÅRSUTDELNING", f"{_div_summary['total_annual_sek']:,.0f} kr", None),
+            ("YIELD/KOST", f"{_div_summary['avg_yield_on_cost']:.1f}%", None),
         ])
 
-        _total_div = _div_summary.get("total_annual_sek", 0)
-        _avg_yoc   = _div_summary.get("avg_yield_on_cost", 0)
-        if _total_div > 0 or _avg_yoc > 0:
-            kpi_row([
-                ("Årsutdelning (est.)", f"{_total_div:,.0f} kr", None,
-                 "Förväntad total årsutdelning baserat på aktuell utdelningsnivå för dina innehav."),
-                ("Snitt yield on cost", f"{_avg_yoc:.1f}%", None,
-                 "Genomsnittlig direktavkastning beräknad på ditt inköpspris — visar avkastningen på investerat kapital."),
-            ])
+    # ── Excel-export ─────────────────────────────────────────────────────────
+    try:
+        port_df = pd.DataFrame(rows)
+        stock_rows_exp = [r for r in rows if not r.get("_is_fund")]
+        _excel_bytes = _portfolio_excel_bytes(port_df, stock_rows_exp, score_data)
+        st.download_button(
+            label="📥 Exportera portfölj (Excel)",
+            data=_excel_bytes,
+            file_name=f"portfolio_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="dl_portfolio_excel",
+            help="Ladda ner portföljdata som Excel-fil med innehav + rekommendationer.",
+        )
+    except Exception:
+        pass
 
-        # ── Exportknapp ────────────────────────────────────────────────────────
-        try:
-            _excel_bytes = _portfolio_excel_bytes(port_df, stock_rows, score_data)
-            st.download_button(
-                label="📥 Exportera portfölj (Excel)",
-                data=_excel_bytes,
-                file_name=f"portfolio_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="dl_portfolio_excel",
-                help="Ladda ner portföljdata som Excel-fil med innehav + rekommendationer.",
-            )
-        except Exception:
-            pass  # openpyxl kanske saknas – tyst fel
 
-        # Dölj interna fält från tabellen
-        display_cols = [c for c in port_df.columns if not c.startswith("_")]
-        # Dölj Konto-kolumnen om det bara finns ett konto
-        if len(all_konton) <= 1 and "Konto" in display_cols:
-            display_cols = [c for c in display_cols if c != "Konto"]
-        port_df_display = port_df[display_cols]
-        col_cfg = {}
-        if "Score" in port_df_display.columns:
-            col_cfg["Score"] = st.column_config.ProgressColumn(
-                "Score", min_value=0, max_value=100, format="%.0f"
-            )
-        st.dataframe(port_df_display, use_container_width=True, hide_index=True,
-                     column_config=col_cfg)
+def _tab_analys(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame):
+    """Sub-tab: Analys — rekommendationer, stresstest, utdelningssimulator, AI-chat."""
+    import streamlit.components.v1 as _sc1
+    _sc1.html(
+        "<script>try{var el=window.parent.document.querySelector('[data-testid=\"stMain\"]');"
+        "if(!el)el=window.parent.document.body;"
+        "el.scrollTo({top:0,behavior:'instant'});}catch(e){}</script>",
+        height=0,
+    )
 
-        st.markdown("---")
-        st.subheader("💡 Rekommendationer")
+    rows = _build_rows(holdings_view, score_data)
+    stock_rows = [r for r in rows if not r.get("_is_fund")]
+    fund_rows  = [r for r in rows if r.get("_is_fund")]
 
-        # Dela upp aktier och fonder
-        stock_rows = [r for r in rows if not r.get("_is_fund")]
-        fund_rows  = [r for r in rows if r.get("_is_fund")]
+    # ── Rekommendationer ─────────────────────────────────────────────────────
+    if stock_rows:
+        st.markdown("### 💡 Rekommendationer")
+        st.caption("Baserat på senaste veckoanalys. Stop-loss beräknas på den typiska dagliga rörelsen (ATR14).")
+        _show_atr = st.toggle("Visa stop-loss & positionsstorlek", value=True, key="toggle_atr")
 
-        if fund_rows:
-            with st.expander(f"🏦 Fonder & fondkonton ({len(fund_rows)} st) — P&L-översikt", expanded=False):
-                st.caption("Fondinnehav analyseras inte med scanner-signaler. Enbart P&L och marknadsvärde visas.")
-                for r in fund_rows:
-                    pnl  = r.get("P&L %", "—")
-                    mv   = r.get("Marknadsvärde", "—")
-                    kont = r.get("Konto", "")
-                    pnl_color = "#4caf50" if str(pnl).startswith("+") else "#ef5350" if str(pnl).startswith("-") else "#8892a4"
-                    st.markdown(
-                        f"<div style='padding:8px 12px;border:1px solid #2d3250;border-radius:8px;margin-bottom:6px;'>"
-                        f"🏦 <b>{r['Ticker']}</b> <span style='color:#8892a4;font-size:12px;'>({kont})</span> &nbsp;·&nbsp; "
-                        f"Marknadsvärde: <b>{mv}</b> &nbsp;·&nbsp; "
-                        f"<span style='color:{pnl_color};'>P&L: {pnl}</span>"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
+        for r in sorted(stock_rows, key=lambda x: x.get("Score") or 0, reverse=True):
+            t  = r["Ticker"]
+            sc = score_data.get(t, {})
+            if not sc:
+                st.markdown(f"⚪ **{t}** — Analys uppdateras inom kort")
+                continue
+            entry  = sc.get("entry_signal", "—")
+            score  = sc.get("score_total", 0) or 0
+            price_val = sc.get("current_price") or sc.get("close")
 
-        if not stock_rows:
-            st.info("Inga aktier i valt konto.")
-        else:
-            st.caption("Baserat på senaste veckoanalys. Stop-loss beräknas på den typiska dagliga rörelsen (ATR14).")
-            _show_atr = st.toggle("Visa stop-loss & positionsstorlek", value=True, key="toggle_atr")
+            if score >= 70 and entry == "STARK":
+                icon = "🟢"; rec = "Behåll / Köp mer"
+            elif score >= 55:
+                icon = "🔵"; rec = "Behåll"
+            elif score >= 40:
+                icon = "🟡"; rec = "Avvakta"
+            else:
+                icon = "🔴"; rec = "Minska / Sälj"
 
-            for r in sorted(stock_rows, key=lambda x: x.get("Score") or 0, reverse=True):
-                t  = r["Ticker"]
-                sc = score_data.get(t, {})
-                if not sc:
-                    st.markdown(f"⚪ **{t}** — Analys uppdateras inom kort")
-                    continue
-                entry  = sc.get("entry_signal", "—")
-                score  = sc.get("score_total", 0) or 0
-                price_val = sc.get("current_price") or sc.get("close")
-
-                if score >= 70 and entry == "STARK":
-                    icon = "🟢"; rec = "Behåll / Köp mer"
-                elif score >= 55:
-                    icon = "🔵"; rec = "Behåll"
-                elif score >= 40:
-                    icon = "🟡"; rec = "Avvakta"
-                else:
-                    icon = "🔴"; rec = "Minska / Sälj"
-
-                with st.container(border=True):
-                    c1, c2 = st.columns([3, 2])
-                    with c1:
-                        st.markdown(f"**{icon} {t}** — {rec}")
-                        st.caption(f"Score: {score:.0f}  ·  Signal: {entry}  ·  Trend: {sc.get('trend_signal', '—')}")
+            with st.container(border=True):
+                c1, c2 = st.columns([3, 2])
+                with c1:
+                    st.markdown(f"**{icon} {t}** — {rec}")
+                    st.caption(f"Score: {score:.0f}  ·  Signal: {entry}  ·  Trend: {sc.get('trend_signal', '—')}")
                 with c2:
                     if _show_atr and price_val:
                         try:
@@ -1271,84 +1338,154 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
                         except Exception:
                             pass
 
-        if len(stock_rows) > 1:
-            st.markdown("---")
-            st.plotly_chart(holdings_pie(pd.DataFrame(stock_rows).rename(columns={"Sektor": "sector"})),
-                            use_container_width=True)
+    # ── Fonder P&L ───────────────────────────────────────────────────────────
+    if fund_rows:
+        with st.expander(f"🏦 Fonder & fondkonton ({len(fund_rows)} st) — P&L-översikt", expanded=False):
+            st.caption("Fondinnehav analyseras inte med scanner-signaler. Enbart P&L och marknadsvärde visas.")
+            for r in fund_rows:
+                pnl  = r.get("P&L %", "—")
+                mv   = r.get("Marknadsvärde", "—")
+                kont = r.get("Konto", "")
+                pnl_color = "#4caf50" if str(pnl).startswith("+") else "#ef5350" if str(pnl).startswith("-") else "#8892a4"
+                st.markdown(
+                    f"<div style='padding:8px 12px;border:1px solid #2d3250;border-radius:8px;margin-bottom:6px;'>"
+                    f"🏦 <b>{r['Ticker']}</b> <span style='color:#8892a4;font-size:12px;'>({kont})</span> &nbsp;·&nbsp; "
+                    f"Marknadsvärde: <b>{mv}</b> &nbsp;·&nbsp; "
+                    f"<span style='color:{pnl_color};'>P&L: {pnl}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
-        # ── Stress Test + Dividend Simulator (Features 5 & 8) ─────────────
-        st.markdown("---")
+    st.markdown("---")
+
+    # ── Stresstest ───────────────────────────────────────────────────────────
+    with st.expander("📉 Stresstest — kraschscenarier"):
         _portfolio_stress_test(holdings_view, score_data)
+
+    # ── Utdelningssimulator ──────────────────────────────────────────────────
+    with st.expander("💰 Utdelningssimulator"):
         _dividend_simulator(holdings_view, score_data)
 
-    # ── AI Portfolio Optimizer button (Feature 4) ──────────────────────────
-    if not holdings.empty:
-        st.markdown("---")
-        st.subheader("🤖 AI-portföljoptimering")
-        st.caption("Få AI-analys av din portfölj med förslag")
-        if st.button("🤖 Analysera portfölj med AI", key="btn_portfolio_ai",
-                     use_container_width=True, type="primary"):
-            provider = _get_provider()
-            depth = _get_depth()
-            with st.spinner("Analyserar portfölj..."):
-                try:
-                    result = ai_analysis.analyze_portfolio(
-                        holdings, df=df if not df.empty else None,
-                        provider=provider,
-                        depth=depth,
-                    )
-                    with st.container(border=True):
-                        st.markdown(result)
-                except Exception as e:
-                    st.error(f"❌ {e}")
+    # ── AI-portföljchat ──────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 🤖 AI-portföljanalys")
+    _portfolio_ai_chat(holdings_view, score_data, df)
 
-    # ── Dividend-kalender ───────────────────────────────────────────────────
-    if not holdings.empty and "ticker" in holdings.columns:
-        st.markdown("---")
-        st.subheader("💰 Kommande utdelningar")
-        st.caption("Estimerade nästa utdelningsdatum för dina innehav (baseras på historisk frekvens).")
-        _div_days = st.slider("Visa inom (dagar)", 30, 180, 90, 30, key="div_days")
-        if st.button("🔄 Hämta utdelningsdata", key="btn_div_cal", use_container_width=True):
-            with st.spinner("Hämtar utdelningshistorik..."):
-                try:
-                    from core.dividend_calendar import get_upcoming_dividends
-                    _tickers = holdings["ticker"].str.strip().str.upper().tolist()
-                    _div_df = get_upcoming_dividends(_tickers, days_ahead=_div_days)
-                    st.session_state["div_cal"] = _div_df
-                except Exception as e:
-                    st.error(f"Kunde inte hämta utdelningsdata: {e}")
 
-        _div_result = st.session_state.get("div_cal")
-        if _div_result is not None:
-            if _div_result.empty:
-                st.info(f"Inga förväntade utdelningar inom {_div_days} dagar.")
+def _portfolio_ai_chat(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame):
+    """Interaktiv AI-chat om portföljen."""
+    # Snabbfrågor
+    quick_q = [
+        "Vad bör jag sälja baserat på nuvarande signaler?",
+        "Hur diversifierad är min portfölj?",
+        "Vad är min portföljs totala risk?",
+        "Vilka aktier har starkast momentum just nu?",
+    ]
+    st.caption("Snabbfrågor:")
+    q_cols = st.columns(len(quick_q))
+    for col, q in zip(q_cols, quick_q):
+        if col.button(q[:30] + "…", key=f"paq_{q[:15]}", use_container_width=True):
+            st.session_state.setdefault("portfolio_chat_history", [])
+            st.session_state["portfolio_chat_history"].append({"role": "user", "content": q})
+            st.session_state["portfolio_chat_pending"] = True
+
+    # Chathistorik
+    chat_history = st.session_state.get("portfolio_chat_history", [])
+    for msg in chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Inmatning
+    user_input = st.chat_input("Fråga om din portfölj…", key="portfolio_chat_input")
+    if user_input:
+        st.session_state.setdefault("portfolio_chat_history", [])
+        st.session_state["portfolio_chat_history"].append({"role": "user", "content": user_input})
+        st.session_state["portfolio_chat_pending"] = True
+        st.rerun()
+
+    # Besvara väntande fråga
+    if st.session_state.pop("portfolio_chat_pending", False):
+        history = st.session_state.get("portfolio_chat_history", [])
+        last_q = history[-1]["content"] if history else ""
+
+        # Bygg portfölj-kontext
+        rows = _build_rows(holdings_view, score_data)
+        ctx_lines = ["## Din portfölj\n"]
+        for r in rows:
+            if r.get("_is_fund"):
+                ctx_lines.append(f"- **{r['Ticker']}** (fond) — {r.get('Antal',0):.0f} st à {r.get('Inköpspris',0):.2f} kr, P&L: {r.get('_pnl_pct','—')}")
             else:
-                def _urgency(d):
-                    if d <= 7:   return "🔴"
-                    if d <= 21:  return "🟡"
-                    return "🟢"
-                _div_result = _div_result.copy()
-                _div_result["Kvar"] = _div_result["days_until"].apply(
-                    lambda d: f"{_urgency(d)} {d}d")
-                _div_result["Yield"] = _div_result["yield_pct"].apply(
-                    lambda v: f"{v:.1f}%" if v and not pd.isna(v) else "—")
-                _div_show = _div_result[["ticker", "name", "next_div", "Kvar",
-                                         "amount", "Yield", "frequency"]].copy()
-                _div_show.columns = ["Ticker", "Bolag", "Datum", "Kvar",
-                                     "Belopp", "Årsyield", "Frekvens"]
-                st.dataframe(_div_show, use_container_width=True, hide_index=True)
-                st.caption("⚠️ Datum är estimat baserade på historisk frekvens — inte bekräftade.")
+                ctx_lines.append(
+                    f"- **{r['Ticker']}** ({r.get('Bolag','')}) — {r.get('Antal',0):.0f} st, "
+                    f"pris: {r.get('Pris nu','—')}, P&L: {r.get('_pnl_pct','—')}, "
+                    f"Score: {r.get('Score','—')}, Signal: {r.get('Entry','—')}"
+                )
+        portfolio_context = "\n".join(ctx_lines)
 
-    # Bevakningslista
+        provider = st.session_state.get("ai_provider", "auto")
+
+        with st.chat_message("assistant"):
+            with st.spinner("Analyserar…"):
+                try:
+                    resp = ai_analysis.ai_chat(
+                        messages=history,
+                        system=f"Du är en portföljrådgivare. Här är användarens innehav:\n\n{portfolio_context}",
+                        provider=provider,
+                    )
+                    st.markdown(resp)
+                    st.session_state["portfolio_chat_history"].append({"role": "assistant", "content": resp})
+                except Exception as e:
+                    st.error(f"AI-fel: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HUVUD-FUNKTION
+# ══════════════════════════════════════════════════════════════════════════════
+
+def page_portfolio(df: pd.DataFrame = None, watchlist: list = None,
+                   sc_df: pd.DataFrame = None, holdings: pd.DataFrame = None):
+    """Portfölj-sidan med 3 sub-tabs: Översikt | Analys | Hantera."""
+    # Ladda alltid färsk holdings (ignorera ev. inskickad för bakåtkompatibilitet)
+    holdings = load_portfolio()
+    score_data = _build_score_data(holdings, df, sc_df)
+
+    st.title("💼 Portfölj")
+    _show_scan_pending_notifications()
+
+    if holdings.empty:
+        _manage_portfolio_section(holdings)
+        return
+
+    # Konto-filter
+    holdings_view, _sel_konto = _konto_filter_section(holdings)
+
+    # 3 SUB-TABS
+    tab_overview, tab_analys, tab_hantera = st.tabs([
+        "📊 Översikt", "🧠 Analys", "⚙️ Hantera"
+    ])
+
+    with tab_overview:
+        _tab_overview(holdings_view, score_data, df)
+
+    with tab_analys:
+        _tab_analys(holdings_view, score_data, df)
+
+    with tab_hantera:
+        _manage_portfolio_section(holdings)
+        _show_scan_pending_notifications()
+
+    # ── Bevakningslista (utanför tabs, längst ner) ────────────────────────────
+    if watchlist is None:
+        watchlist = load_watchlist()
+
     st.markdown("---")
     st.subheader("⭐ Bevakningslista")
     if not watchlist:
         st.info("Bevakningslistan är tom. Sök efter aktier på 🔍 Aktie-sök och klicka 'Lägg till i bevakningslista'.")
     else:
-        if not df.empty and "ticker" in df.columns:
+        score_lu = {}
+        if df is not None and not df.empty and "ticker" in df.columns:
             score_lu = df.set_index("ticker").to_dict("index")
-        else:
-            score_lu = {}
 
         wl_rows = []
         for item in watchlist:

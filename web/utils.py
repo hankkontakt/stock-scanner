@@ -114,7 +114,7 @@ def _active_data_dir() -> Path:
 def load_portfolio(data_dir: Path | None = None) -> pd.DataFrame:
     """Laddar holdings.csv för den inloggade användaren.
     Ingen cache – filen ändras när användaren lägger till tickers.
-    Bakåtkompatibel: lägger till kolumnerna 'konto' och 'typ' om de saknas."""
+    Bakåtkompatibel: lägger till kolumnerna 'konto', 'typ' och 'buy_date' om de saknas."""
     base = data_dir if data_dir is not None else _active_data_dir()
     try:
         holdings = pd.read_csv(base / "holdings.csv")
@@ -130,9 +130,14 @@ def load_portfolio(data_dir: Path | None = None) -> pd.DataFrame:
             holdings["typ"] = ""   # tomt = bestäms av kontotyp
         else:
             holdings["typ"] = holdings["typ"].fillna("")
+        # buy_date: ISO-datumsträngformat (YYYY-MM-DD) eller tom sträng
+        if "buy_date" not in holdings.columns:
+            holdings["buy_date"] = ""
+        else:
+            holdings["buy_date"] = holdings["buy_date"].fillna("")
         return holdings
     except Exception:
-        return pd.DataFrame(columns=["ticker", "shares", "cost_basis", "konto", "typ"])
+        return pd.DataFrame(columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date"])
 
 
 def load_watchlist(data_dir: Path | None = None) -> list:
@@ -521,7 +526,42 @@ def conviction_meter_breakdown(row) -> str:
     return f"Styrkor: {top_str}   Svagheter: {bot_str}"
 
 
-def holdings_pie(df: pd.DataFrame) -> go.Figure:
+def holdings_pie(df: pd.DataFrame, score_df: pd.DataFrame = None, mvs: dict = None) -> go.Figure:
+    """Sektorpaj för innehav.
+
+    Stödjer tre signaturer:
+    - holdings_pie(df)                         – räknar antal per sektor (gammalt)
+    - holdings_pie(holdings_df, score_df, mvs) – viktad på marknadsvärde, sektorer från score_df
+    """
+    # Ny signatur: holdings_df + score_df + mvs
+    if score_df is not None and mvs is not None and "ticker" in df.columns:
+        score_lu = {}
+        if not score_df.empty and "ticker" in score_df.columns:
+            score_lu = score_df.set_index("ticker").to_dict("index")
+        sector_mv: dict[str, float] = {}
+        for _, row in df.iterrows():
+            t = str(row["ticker"]).upper()
+            sector = score_lu.get(t, {}).get("sector") or "Okänd"
+            mv = float(mvs.get(t, 0) or 0)
+            sector_mv[sector] = sector_mv.get(sector, 0) + mv
+        if not sector_mv:
+            return go.Figure()
+        labels = list(sector_mv.keys())
+        values = list(sector_mv.values())
+        fig = px.pie(
+            names=labels, values=values,
+            title="Sektorfördelning",
+            template="plotly_dark",
+            hole=0.4,
+        )
+        fig.update_layout(
+            margin=dict(t=36, b=16, l=16, r=16),
+            paper_bgcolor="#131722",
+            height=300,
+        )
+        return _apply_chart_style(fig)
+
+    # Gammal signatur: sektor-kolumn i df
     if "sector" not in df.columns:
         return go.Figure()
     agg = df["sector"].value_counts().reset_index()
@@ -538,3 +578,176 @@ def holdings_pie(df: pd.DataFrame) -> go.Figure:
         height=300,
     )
     return _apply_chart_style(fig)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PORTFÖLJVÄRDE-HISTORIK
+# ══════════════════════════════════════════════════════════════════════════════
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_price_history(tickers: tuple, period: str = "1y") -> pd.DataFrame:
+    """Hämtar daglig close-kurs för alla tickers. Returnerar DataFrame med datum som index, tickers som kolumner."""
+    if not tickers:
+        return pd.DataFrame()
+    try:
+        data = yf.download(list(tickers), period=period, auto_adjust=True, progress=False)
+        if isinstance(data.columns, pd.MultiIndex):
+            return data["Close"]
+        return data
+    except Exception:
+        return pd.DataFrame()
+
+
+def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y") -> go.Figure:
+    """
+    Portföljvärde historik-chart.
+    - Line chart (area fill) av portföljvärdet per dag
+    - Scatter-markeringar (▲) vid buy_date för varje holding
+    - period: "1mo" / "3mo" / "6mo" / "1y" / "2y"
+    """
+    if holdings.empty:
+        return go.Figure()
+
+    tickers = tuple(holdings["ticker"].str.upper().tolist())
+    price_hist = _fetch_price_history(tickers, period=period)
+
+    if price_hist.empty:
+        return go.Figure()
+
+    # Beräkna portföljvärde per dag
+    portfolio_values = pd.Series(0.0, index=price_hist.index)
+    for _, row in holdings.iterrows():
+        ticker = row["ticker"].upper()
+        shares = float(row.get("shares", 0) or 0)
+        if ticker in price_hist.columns and shares > 0:
+            portfolio_values = portfolio_values + price_hist[ticker].ffill() * shares
+
+    portfolio_values = portfolio_values[portfolio_values > 0]
+    if portfolio_values.empty:
+        return go.Figure()
+
+    fig = go.Figure()
+
+    # Area fill
+    fig.add_trace(go.Scatter(
+        x=portfolio_values.index,
+        y=portfolio_values.values,
+        mode="lines",
+        name="Portföljvärde",
+        line=dict(color="#4c9be8", width=2),
+        fill="tozeroy",
+        fillcolor="rgba(76,155,232,0.12)",
+        hovertemplate="%{x|%d %b %Y}<br><b>%{y:,.0f} kr</b><extra></extra>",
+    ))
+
+    # Köp-markeringar
+    buy_markers_x = []
+    buy_markers_y = []
+    buy_markers_text = []
+    for _, row in holdings.iterrows():
+        bd = str(row.get("buy_date", "")).strip()
+        if not bd:
+            continue
+        try:
+            buy_dt = pd.Timestamp(bd)
+            idx = portfolio_values.index.searchsorted(buy_dt)
+            if idx < len(portfolio_values):
+                actual_dt = portfolio_values.index[idx]
+                buy_markers_x.append(actual_dt)
+                buy_markers_y.append(portfolio_values.iloc[idx])
+                buy_markers_text.append(f"Köp: {row['ticker']}")
+        except Exception:
+            pass
+
+    if buy_markers_x:
+        fig.add_trace(go.Scatter(
+            x=buy_markers_x,
+            y=buy_markers_y,
+            mode="markers",
+            name="Köp",
+            marker=dict(symbol="triangle-up", size=10, color="#4caf50", line=dict(width=1, color="#fff")),
+            text=buy_markers_text,
+            hovertemplate="%{text}<br>%{x|%d %b %Y}<extra></extra>",
+        ))
+
+    fig.update_layout(
+        height=320,
+        margin=dict(l=0, r=0, t=8, b=0),
+        showlegend=False,
+        hovermode="x unified",
+    )
+    return _apply_chart_style(fig)
+
+
+def calc_period_returns(holdings: pd.DataFrame) -> dict:
+    """
+    Beräknar portföljens avkastning för standardperioder.
+    Returnerar: {"1D": (kr, pct), "1V": ..., "1M": ..., "3M": ..., "ÅTD": ..., "1Å": ...}
+    """
+    if holdings.empty:
+        return {}
+    tickers = tuple(holdings["ticker"].str.upper().tolist())
+    price_hist = _fetch_price_history(tickers, period="1y")
+    if price_hist.empty:
+        return {}
+
+    def _portfolio_value_at(dt: pd.Timestamp):
+        try:
+            idx = price_hist.index.searchsorted(dt)
+            if idx >= len(price_hist.index):
+                idx = len(price_hist.index) - 1
+            actual = price_hist.index[idx]
+            if abs((actual - dt).days) > 5:
+                return None
+            total = 0.0
+            for _, row in holdings.iterrows():
+                t = row["ticker"].upper()
+                s = float(row.get("shares", 0) or 0)
+                if t in price_hist.columns:
+                    p = price_hist[t].iloc[idx]
+                    if pd.notna(p):
+                        total += p * s
+            return total if total > 0 else None
+        except Exception:
+            return None
+
+    today = price_hist.index[-1]
+    today_val = _portfolio_value_at(today) or 0
+
+    periods = {
+        "1D":  today - pd.Timedelta(days=1),
+        "1V":  today - pd.Timedelta(weeks=1),
+        "1M":  today - pd.DateOffset(months=1),
+        "3M":  today - pd.DateOffset(months=3),
+        "ÅTD": pd.Timestamp(today.year, 1, 1),
+        "1Å":  today - pd.DateOffset(years=1),
+    }
+
+    result = {}
+    for label, past_dt in periods.items():
+        past_val = _portfolio_value_at(past_dt)
+        if past_val and past_val > 0 and today_val > 0:
+            kr_diff = today_val - past_val
+            pct_diff = (kr_diff / past_val) * 100
+            result[label] = (round(kr_diff), round(pct_diff, 1))
+
+    return result
+
+
+def save_portfolio_snapshot(total_value: float, invested: float) -> None:
+    """Sparar en daglig portfölj-snapshot om dagens datum saknas."""
+    import datetime as _dt
+    snap_path = DATA_DIR / "portfolio_snapshots.json"
+    today = _dt.date.today().isoformat()
+    try:
+        snaps = json.loads(snap_path.read_text(encoding="utf-8")) if snap_path.exists() else []
+    except Exception:
+        snaps = []
+    if any(s.get("date") == today for s in snaps):
+        return
+    pnl_pct = round((total_value / invested - 1) * 100, 2) if invested > 0 else 0.0
+    snaps.append({"date": today, "value": round(total_value, 2),
+                  "invested": round(invested, 2), "pnl_pct": pnl_pct})
+    snaps = snaps[-365:]
+    snap_path.parent.mkdir(parents=True, exist_ok=True)
+    snap_path.write_text(json.dumps(snaps, ensure_ascii=False, indent=2), encoding="utf-8")
