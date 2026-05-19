@@ -208,6 +208,16 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
             added = add_custom_to_universe(ticker)
             if added:
                 st.session_state[f"scan_pending_{ticker}"] = True
+                # Trigga targeted refresh direkt – hämtar data inom ~2 min
+                try:
+                    from web.pages.admin import _trigger_targeted_refresh
+                    if _trigger_targeted_refresh([ticker]):
+                        st.toast(
+                            f"⏳ Hämtar data för **{ticker}** — klart om ~2 min",
+                            icon="🔄",
+                        )
+                except Exception:
+                    pass
         except Exception:
             pass
     return h

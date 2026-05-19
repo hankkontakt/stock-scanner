@@ -172,6 +172,14 @@ def _save_watchlist_data(items: list, previous_tickers: list | None = None):
                     )
                 except Exception:
                     pass
+            # ── Trigga targeted refresh direkt för nya tickers ────────────────
+            if added_to_cu:
+                if _trigger_targeted_refresh(added_to_cu):
+                    st.toast(
+                        f"⏳ Hämtar data för {', '.join(added_to_cu)} — "
+                        "klart om ~2 min",
+                        icon="🔄",
+                    )
         except Exception:
             pass
 
@@ -285,6 +293,41 @@ def _trigger_gh_workflow(token: str, owner: str, repo: str,
                      f"\n{resp.text[:200]}")
     except Exception as e:
         st.error(f"❌ Nätverksfel: {e}")
+
+
+def _trigger_targeted_refresh(tickers: list[str]) -> bool:
+    """
+    Starta en targeted-refresh av specifika tickers via GitHub Actions.
+    Tyst – inga st.success/st.error-meddelanden (används vid automatiska triggers).
+    Returnerar True om requesten skickades, annars False.
+    """
+    if not tickers:
+        return False
+    token = _get_github_token()
+    if not token:
+        return False
+    import requests as _req
+    owner = os.getenv("GITHUB_OWNER") or "hankkontakt"
+    repo  = os.getenv("GITHUB_REPO")  or "stock-scanner"
+    url = (f"https://api.github.com/repos/{owner}/{repo}"
+           f"/actions/workflows/daily_scan.yml/dispatches")
+    payload = {
+        "ref": "main",
+        "inputs": {
+            "mode": "targeted",
+            "tickers": ",".join(t.strip().upper() for t in tickers if t.strip()),
+        },
+    }
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "MarketScan-Streamlit",
+    }
+    try:
+        resp = _req.post(url, json=payload, headers=headers, timeout=15)
+        return resp.status_code in (200, 201, 204)
+    except Exception:
+        return False
 
 
 # ══════════════════════════════════════════════════════════════════════════════
