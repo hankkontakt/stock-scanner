@@ -473,6 +473,189 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                             st.rerun()
 
 
+def _portfolio_stress_test(holdings: pd.DataFrame, score_data: dict) -> None:
+    """Show how portfolio would perform in market crash scenarios."""
+    if holdings.empty:
+        return
+
+    with st.expander("🔥 Stresstesta portföljen", expanded=False):
+        st.caption("Simulerar hur din portfölj påverkas vid marknadsfall, baserat på varje aktiens beta.")
+
+        scenarios = {
+            "Liten korrigering (-10%)": -0.10,
+            "Normal björnmarknad (-20%)": -0.20,
+            "Svår krasch (-30%)": -0.30,
+            "Extrem krasch (-40%)": -0.40,
+        }
+
+        rows = []
+        for _, h in holdings.iterrows():
+            ticker = h["ticker"]
+            shares = float(h.get("shares", 0))
+            cost = float(h.get("cost_basis", 0))
+
+            # Get beta and current price from score_data
+            sd = score_data.get(ticker, {})
+            beta_val = sd.get("beta")
+            if beta_val is None or (isinstance(beta_val, float) and pd.isna(beta_val)):
+                beta_val = 1.0  # default
+            beta_val = float(beta_val)
+
+            current_price = sd.get("current_price") or sd.get("close")
+            if current_price and pd.notna(current_price):
+                market_value = shares * float(current_price)
+            elif cost > 0:
+                market_value = shares * cost
+            else:
+                continue
+
+            row = {"Ticker": ticker, "Beta": round(beta_val, 2), "Marknadsvärde (SEK)": round(market_value)}
+            for scenario_name, market_drop in scenarios.items():
+                stock_drop = market_drop * beta_val
+                impact = market_value * stock_drop
+                row[scenario_name] = round(impact)
+            rows.append(row)
+
+        if not rows:
+            st.info("Lägg till innehav med kostnadsbas för att stresstesta portföljen.")
+            return
+
+        stress_df = pd.DataFrame(rows)
+
+        # Portfolio totals
+        total_value = stress_df["Marknadsvärde (SEK)"].sum()
+
+        # KPI metrics for each scenario
+        cols_stress = st.columns(len(scenarios))
+        for col_s, (scenario_name, market_drop) in zip(cols_stress, scenarios.items()):
+            total_impact = stress_df[scenario_name].sum()
+            pct = total_impact / total_value * 100 if total_value else 0
+            col_s.metric(
+                scenario_name.split("(")[0].strip(),
+                f"{total_impact:,.0f} kr",
+                f"{pct:.1f}%",
+                delta_color="inverse",
+            )
+
+        st.markdown("---")
+        st.markdown("**Per aktie**")
+
+        display_stress = stress_df.copy()
+        for col_name in scenarios.keys():
+            display_stress[col_name] = display_stress[col_name].apply(
+                lambda x: f"{x:,.0f} kr" if pd.notna(x) else "—"
+            )
+
+        st.dataframe(display_stress, use_container_width=True, hide_index=True)
+        if total_value:
+            weighted_beta = (stress_df["Beta"] * stress_df["Marknadsvärde (SEK)"]).sum() / total_value
+            st.caption(f"Portföljvärde: {total_value:,.0f} kr | Viktad beta: {weighted_beta:.2f}")
+
+
+def _dividend_simulator(holdings: pd.DataFrame, score_data: dict) -> None:
+    """Dividend income simulator with optional reinvestment."""
+    if holdings.empty:
+        return
+
+    with st.expander("💰 Utdelningssimulator", expanded=False):
+        st.caption("Projicera utdelningsinkomst baserat på nuvarande innehav och historisk utdelningsdata.")
+
+        col_a, col_b, col_c = st.columns(3)
+        years = col_a.slider("Antal år", 1, 30, 10, key="div_sim_years")
+        growth_rate = col_b.slider("Utdelningstillväxt/år %", 0.0, 15.0, 5.0, step=0.5, key="div_sim_growth") / 100
+        reinvest = col_c.checkbox("Återinvestera utdelningar", value=True, key="div_sim_reinvest")
+
+        # Calculate current annual dividend per holding
+        annual_total = 0.0
+        per_stock = []
+        portfolio_total_value = 0.0
+        for _, h in holdings.iterrows():
+            ticker = h["ticker"]
+            shares = float(h.get("shares", 0))
+            cost = float(h.get("cost_basis", 0))
+
+            sd = score_data.get(ticker, {})
+            div_rate = sd.get("dividend_rate") or sd.get("trailingAnnualDividendRate") or 0
+            current_price = sd.get("current_price") or sd.get("close") or cost
+
+            if current_price and pd.notna(current_price):
+                portfolio_total_value += shares * float(current_price)
+
+            if div_rate and pd.notna(div_rate) and float(div_rate) > 0:
+                annual_div = shares * float(div_rate)
+                div_yield = float(div_rate) / float(current_price) * 100 if current_price else 0
+                annual_total += annual_div
+                per_stock.append({
+                    "Ticker": ticker,
+                    "Aktier": int(shares),
+                    "Utdelning/aktie (kr)": round(float(div_rate), 2),
+                    "Direktavkastning": f"{div_yield:.1f}%",
+                    "Årsutdelning (kr)": round(annual_div),
+                })
+
+        if annual_total == 0:
+            st.info("Inga utdelande aktier i portföljen, eller data saknas.")
+            return
+
+        # Projection table
+        projection = []
+        cumulative = annual_total
+        total_received = 0.0
+        portfolio_yield = (annual_total / portfolio_total_value) if portfolio_total_value > 0 else 0.03
+
+        for year in range(1, years + 1):
+            if reinvest:
+                # Reinvested dividends earn same yield
+                cumulative = cumulative * (1 + growth_rate + portfolio_yield)
+                year_div = cumulative
+            else:
+                year_div = annual_total * (1 + growth_rate) ** (year - 1)
+            total_received += year_div
+            projection.append({
+                "År": year,
+                "Kalenderår": 2026 + year - 1,
+                "Årsutdelning (kr)": round(year_div),
+                "Månadsutdelning (kr)": round(year_div / 12),
+                "Totalt utbetalt hittills (kr)": round(total_received),
+            })
+
+        # KPIs
+        proj_df = pd.DataFrame(projection)
+        final_annual = proj_df.iloc[-1]["Årsutdelning (kr)"]
+        total_recv = proj_df.iloc[-1]["Totalt utbetalt hittills (kr)"]
+
+        col1_d, col2_d, col3_d = st.columns(3)
+        col1_d.metric("Nuvarande årsutdelning", f"{annual_total:,.0f} kr", f"{annual_total/12:,.0f} kr/mån")
+        growth_pct = (final_annual / annual_total - 1) * 100 if annual_total else 0
+        col2_d.metric(f"Årsutdelning år {years}", f"{final_annual:,.0f} kr", f"+{growth_pct:.0f}%")
+        col3_d.metric(f"Totalt utbetalt {years} år", f"{total_recv:,.0f} kr")
+
+        # Chart
+        import plotly.graph_objects as go
+        fig_div = go.Figure()
+        fig_div.add_trace(go.Bar(
+            x=proj_df["Kalenderår"],
+            y=proj_df["Årsutdelning (kr)"],
+            marker_color="#4caf50",
+            hovertemplate="År %{x}: %{y:,.0f} kr<extra></extra>",
+            name="Årsutdelning",
+        ))
+        fig_div.update_layout(
+            height=250, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#8892a4"), xaxis=dict(gridcolor="#252b3b"),
+            yaxis=dict(gridcolor="#252b3b", title="kr/år"),
+            margin=dict(l=0, r=0, t=20, b=0), showlegend=False,
+        )
+        st.plotly_chart(fig_div, use_container_width=True)
+
+        with st.expander("Detaljerad projektion", expanded=False):
+            st.dataframe(proj_df, use_container_width=True, hide_index=True)
+
+        if per_stock:
+            with st.expander("Per aktie", expanded=False):
+                st.dataframe(pd.DataFrame(per_stock), use_container_width=True, hide_index=True)
+
+
 def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
                    sc_df: pd.DataFrame = None):
     st.title("💼 Portfölj & Bevakningslista")
@@ -647,6 +830,11 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
             st.markdown("---")
             st.plotly_chart(holdings_pie(pd.DataFrame(rows).rename(columns={"Sektor": "sector"})),
                             use_container_width=True)
+
+        # ── Stress Test + Dividend Simulator (Features 5 & 8) ─────────────
+        st.markdown("---")
+        _portfolio_stress_test(holdings, score_data)
+        _dividend_simulator(holdings, score_data)
 
     # ── AI Portfolio Optimizer button (Feature 4) ──────────────────────────
     if not holdings.empty:
