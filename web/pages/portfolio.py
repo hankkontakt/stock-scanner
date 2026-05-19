@@ -59,23 +59,23 @@ def _is_fund_konto(konto_name: str) -> bool:
     return _load_konton().get(konto_name, {}).get("typ") == "fond"
 
 
-def _is_fund_holding(holding_typ: str, konto_name: str) -> bool:
+def _is_fund_holding(holding_typ: str, konto_name: str, ticker: str = "") -> bool:
     """Avgör om ett enskilt innehav ska behandlas som fond (ingen scanneranalys).
 
     Prioritetsordning:
-    1. holding_typ är explicit satt (fond/etf/certificate) → styr alltid
-    2. holding_typ är tomt → faller tillbaka på kontotypen
-    3. Kontotyp "aktier" och tomt holding_typ → full scanner-analys
-
-    Det gör att ett blandat konto (aktier + fonder i samma ISK) hanteras
-    korrekt: varje innehavs egen typ styr, inte kontots typ.
+    1. holding_typ är explicit satt (fond/fund/etf/certificate) → styr alltid
+    2. ticker innehåller mellanslag → troligen ett fondnamn sparat som ticker-nyckel
+    3. holding_typ är tomt → faller tillbaka på kontotypen
     """
-    if holding_typ in ("fond", "certificate"):
+    if holding_typ in ("fond", "fund", "certificate"):
         return True
     if holding_typ == "etf":
         return False   # ETF:er är börshandlade – full analys
     if holding_typ == "aktier":
         return False
+    # Ticker med mellanslag = fondnamn sparat som nyckel (legacy-import utan typ)
+    if ticker and " " in ticker:
+        return True
     # holding_typ är "" eller okänt → fall tillbaka på kontotypen
     return _is_fund_konto(konto_name)
 
@@ -356,7 +356,7 @@ def _build_rows(holdings_view: pd.DataFrame, score_data: dict) -> list:
         price  = sc.get("current_price")
         cost   = h.get("cost_basis")
         shares = h.get("shares", 0)
-        is_fund_acc = _is_fund_holding(typ, konto)
+        is_fund_acc = _is_fund_holding(typ, konto, ticker=t)
         pnl_pct = ((price / float(cost)) - 1) * 100 \
             if price and cost and float(cost) > 0 else None
         mv = price * float(shares) if price and shares else None
@@ -1239,7 +1239,9 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
 
     # Chart: bara aktieposter (fonder har inga yfinance-kurser)
     stocks_hv = holdings_view[holdings_view.apply(
-        lambda row: not _is_fund_holding(str(row.get("typ", "")), str(row.get("konto", ""))), axis=1
+        lambda row: not _is_fund_holding(
+            str(row.get("typ", "")), str(row.get("konto", "")), ticker=str(row.get("ticker", ""))
+        ), axis=1
     )] if not holdings_view.empty else holdings_view
 
     with st.spinner("Hämtar prishistorik..."):

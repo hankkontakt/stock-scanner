@@ -591,9 +591,11 @@ def _fetch_price_history(tickers: tuple, period: str = "1y") -> pd.DataFrame:
         return pd.DataFrame()
     try:
         data = yf.download(list(tickers), period=period, auto_adjust=True, progress=False)
-        if isinstance(data.columns, pd.MultiIndex):
-            return data["Close"]
-        return data
+        close = data["Close"] if isinstance(data.columns, pd.MultiIndex) else data
+        # Normalisera till tz-naivt index (yfinance returnerar UTC) för enkla jämförelser
+        if close.index.tz is not None:
+            close.index = close.index.tz_localize(None)
+        return close
     except Exception:
         return pd.DataFrame()
 
