@@ -1,0 +1,105 @@
+================================================================================
+GEMINI DEEP RESEARCH — PROMPT: NYA AKTIER TILL STORA SCANNERN
+Uppdaterad: 2026-05-19
+Bifoga filen: data/universe_stora_scannen.txt
+================================================================================
+
+Du är en kvantitativ investeringsanalytiker med djup erfarenhet av global
+aktieanalys. Din uppgift är att identifiera 20–25 NYA, HÖGKVALITATIVA bolag
+som passar in i min kvantitativa globala aktie-scanner.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+!! ABSOLUT VIKTIGAST — LÄS DETTA INNAN DU GÖR NÅGOT ANNAT !!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Den bifogade filen "universe_stora_scannen.txt" innehåller ALLA 1 220 aktier
+som redan finns i min scanner. Du MÅSTE göra följande:
+
+  STEG 1: Läs igenom HELA den bifogade exkluderingslistan (alla 1 220 tickers).
+  STEG 2: Kontrollera VARJE förslag du tänker ge mot listan.
+  STEG 3: Om tickern redan finns i listan → UTESLUT den helt från ditt svar.
+  STEG 4: Presentera ENBART aktier som INTE finns i listan.
+
+Att föreslå en aktie som redan finns i listan är ett MISSLYCKANDE.
+Dubbelkolla varje ticker mot den platta ticker-listan längst ner i filen.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCANNERNS NUVARANDE TÄCKNING (för din referens)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  • 534 amerikanska aktier (NYSE/Nasdaq, ingen .suffix)
+  • 93 svenska aktier (.ST)
+  • 23 norska aktier (.OL)
+  • 19 finska aktier (.HE)
+  • 120+ brittiska, tyska, franska, schweiziska, holländska aktier
+  • 300+ asiatiska aktier (Japan .T, Taiwan .TW, Sydkorea .KS, Kina .HK, Indien .NS)
+  • 50+ kanadensiska aktier (.TO)
+  • 30+ brasilianska/latinamerikanska aktier (.SA/.MX)
+
+Totalt: 1 220 unika aktier — alla listade i bifogad fil.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KVANTITATIVA KRITERIER FÖR NYA KANDIDATER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Hårda filter (alla måste uppfyllas):
+  ✓ Börsvärde: $500M–$500B USD (mid cap till mega cap)
+  ✓ Daglig handelsvolym: >$5M USD (likvid marknad)
+  ✓ Nettoskuld/EBITDA: <3x
+  ✓ Omsättningstillväxt YoY: >8% (senaste helår)
+  ✓ Positivt operativt kassaflöde (FCF > 0)
+  ✓ Listad på erkänd börs med Yahoo Finance-ticker
+
+Mjuka krav (minst 3 av 5):
+  ○ ROE eller ROIC > 12%
+  ○ Bruttomarginal > 40% (mjukvara/medtech) eller > 20% (industri)
+  ○ Insiderägande > 5% ELLER aktieåterköpsprogram aktivt
+  ○ Stark marknadsposition (topp 3 i sin nisch)
+  ○ "Rule of 40" > 40 (för SaaS-bolag)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FOKUSOMRÅDEN — LETA SPECIFIKT INOM DESSA SEGMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Segment jag saknar eller har undervikt:
+
+  1. EUROPISK INDUSTRI & AUTOMATION (ej Tyskland/UK som är täckta)
+     Fokus: Frankrike (CAC 40 mid cap), Spanien, Italien, Benelux, Schweiz
+     Exempel på typer: automationskomponenter, precisionsindustri, testmätning
+
+  2. SYDOSTASIEN & INDIEN mid cap
+     Fokus: Singapore, Sydkorea (utöver de stora), Vietnam, Thailand
+     Exempel på typer: halvledare, logistik, fintech
+
+  3. GLOBAL HÄLSOVÅRD (utanför USA & Europa)
+     Fokus: Japansk medtech, indisk pharma, australiensisk biotech med intäkter
+     Krav: Kommersialiserade produkter, ej tidiga kliniska bolag
+
+  4. AI-INFRASTRUKTUR & DATA (USA small/mid cap som jag missat)
+     Fokus: $500M–$5B market cap, AI-träning, datainfrastruktur, edge computing
+     Krav: Positiv FCF eller tydlig väg dit inom 12 månader
+
+  5. FÖRNYBAR ENERGI & GRID-TEKNIK (globalt)
+     Fokus: Nätinfrastruktur, energilagring, vätgas (med intäkter)
+     Exkludera: Rena projektbolag utan kassaflöde
+
+  6. NORDISKA BOLAG UTANFÖR SVERIGE
+     Fokus: Danska, norska, finska mid cap bolag jag saknar
+     Krav: Börsvärde 1–30 GSEK, lönsamhet bevisad
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LEVERANSFORMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+För varje förslag, ange:
+
+  | Ticker (Yahoo Finance-format) | Bolagsnamn | Börs | Börsvärde |
+  | Omsättningstillväxt | FCF | ROE/ROIC | Skuld/EBITDA |
+  | Varför det passar scannern (2–3 meningar) |
+  | Primär risk (1 mening) |
+
+Avsluta med en sammanfattande rankingtabell sorterad på: FCF-styrka +
+tillväxt + insider-signal.
+
+PÅMINNELSE: Kontrollera VARJE ticker mot den bifogade exkluderingslistan
+INNAN du skriver ditt svar. Inga dubbletter accepteras.
