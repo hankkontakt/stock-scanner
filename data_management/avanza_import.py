@@ -95,6 +95,41 @@ BUILTIN_MAP = {
     "bufab":                "BUFAB.ST",
     "troax":                "TROAX.ST",
 
+    # ── ETF:er och indexfonder (handlas på börs, har Yahoo Finance-ticker) ──────
+    # Svenska ETF:er (Nasdaq Stockholm)
+    "xact omxsb":           "XACTO.ST",
+    "xact omxs30":          "XACTS.ST",
+    "xact bull":            "XACTBULL.ST",
+    "xact bear":            "XACTBEAR.ST",
+    "xact norden":          "XACTN.ST",
+    "xact högutdelande":    "XACTHDIV.ST",
+    "xact usa":             "XACTUSA.ST",
+    "xact obligationer":    "XACTOBLIG.ST",
+    # Europeiska ETF:er (handlas på Nasdaq Stockholm som EUR-noterade)
+    "xtrackers msci world":         "XDWD.DE",
+    "ishares core msci world":      "IWDA.AS",
+    "ishares msci world":           "URTH",
+    "vanguard ftse all-world":      "VWRL.AS",
+    "vanguard s&p 500":             "VUSD.AS",
+    "ishares core s&p 500":         "CSPX.AS",
+    "lyxor msci world":             "LCWL.PA",
+    "spdr s&p 500":                 "SPY",
+    "invesco qqq":                  "QQQ",
+    "ishares nasdaq 100":           "CNDX.AS",
+    # Råvaru-ETP:er
+    "xetra-gold":                   "4GLD.DE",
+    "wisdomtree physical gold":     "PHGP.AS",
+    "ishares physical gold":        "IGLN.AS",
+    # Nordiska utdelningsfokuerade ETF:er
+    "carnegie corporate bond":      "0P00017NJI.F",   # eventuellt ej på YF
+    "skagen global":                None,              # aktivt förvaltad, ej på YF
+    "länsförsäkringar global":      None,              # aktivt förvaltad, ej på YF
+    "swedbank robur access global": None,              # aktivt förvaltad, ej på YF
+    "avanza global":                None,              # aktivt förvaltad, ej på YF
+    "avanza zero":                  None,              # indexfond, ej på YF
+    "spiltan aktiefond investmentbolag": None,         # aktivt förvaltad, ej på YF
+    "handelsbanken global index":   None,              # indexfond, ej på YF
+
     # USA (Avanza visar ofta bara företagsnamn utan ticker)
     "apple":                "AAPL",
     "microsoft":            "MSFT",
@@ -213,10 +248,13 @@ def normalize_name(name: str) -> str:
     )
 
 
-def find_ticker(name: str, custom_map: dict) -> str | None:
+def find_ticker(name: str, custom_map: dict, isin: str | None = None) -> str | None:
     """
-    Försöker hitta Yahoo Finance-ticker för ett Avanza-bolagsnamn.
-    Söker i: 1) custom_map, 2) BUILTIN_MAP, 3) yfinance Search
+    Försöker hitta Yahoo Finance-ticker för ett Avanza-bolagsnamn eller ISIN.
+    Söker i: 1) custom_map, 2) BUILTIN_MAP, 3) ISIN-sökning via yfinance,
+             4) Namnbaserad sökning via yfinance
+
+    Returnerar None om det är en känd aktivt förvaltad fond utan börshandel.
     """
     norm = normalize_name(name)
 
@@ -224,13 +262,25 @@ def find_ticker(name: str, custom_map: dict) -> str | None:
     if norm in custom_map:
         return custom_map[norm]
 
-    # 2. Kolla inbyggd mappning
+    # 2. Kolla inbyggd mappning (None = känd fond utan YF-ticker)
     if norm in BUILTIN_MAP:
-        return BUILTIN_MAP[norm]
+        return BUILTIN_MAP[norm]  # kan vara None för aktivt förvaltade fonder
 
-    # 3. Prova yfinance-sökning
+    # 3. ISIN-baserad sökning (hittar ofta ETF:er och utländska fonder)
+    if isin and len(isin) == 12:
+        try:
+            results = yf.Search(isin, max_results=3).quotes
+            for r in results:
+                if r.get("quoteType") in ("EQUITY", "ETF", "MUTUALFUND"):
+                    ticker = r.get("symbol", "")
+                    if ticker:
+                        return ticker
+        except Exception:
+            pass
+
+    # 4. Namnbaserad sökning
     try:
-        results = yf.Search(name, max_results=3).quotes
+        results = yf.Search(name, max_results=5).quotes
         for r in results:
             if r.get("quoteType") in ("EQUITY", "ETF"):
                 ticker = r.get("symbol", "")
@@ -240,6 +290,32 @@ def find_ticker(name: str, custom_map: dict) -> str | None:
         pass
 
     return None
+
+
+def classify_security(name: str, ticker: str | None) -> str:
+    """
+    Klassificerar ett värdepapper baserat på namn och ticker.
+    Returnerar: 'stock', 'etf', 'fund', 'certificate', 'unknown'
+    """
+    n = name.lower()
+    # Kända fond-nyckelord (aktivt förvaltade, ej börshandlade)
+    fund_keywords = ("fond", "fund", "robur", "länsförsäkringar global",
+                     "avanza global", "avanza zero", "spiltan", "handelsbanken global",
+                     "carnegie", "lannebo", "öhman", "coeli", "didner")
+    if any(kw in n for kw in fund_keywords) and ticker is None:
+        return "fund"
+    # ETF-nyckelord
+    etf_keywords = ("etf", "xact", "xtrackers", "ishares", "vanguard", "lyxor",
+                    "spdr", "invesco qqq", "wisdomtree", "amundi")
+    if any(kw in n for kw in etf_keywords):
+        return "etf"
+    # Certifikat
+    if any(kw in n for kw in ("bull", "bear", "certifikat", "turbo", "mini future",
+                               "warrant", "teckningsoption")):
+        return "certificate"
+    if ticker:
+        return "stock"
+    return "unknown"
 
 
 # ── Avanza CSV-parser ──────────────────────────────────────────────────────────
@@ -311,6 +387,9 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
         # Värdepappersnamn
         if any(kw in c for kw in ("värdepapper", "security")) or c in ("namn", "name"):
             target = "name"
+        # ISIN
+        elif c == "isin" or c.startswith("isin"):
+            target = "isin"
         # Antal
         elif any(kw in c for kw in ("antal", "quantity", "shares")):
             target = "shares"
