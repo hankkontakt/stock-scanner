@@ -430,7 +430,40 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                         from data_management.avanza_import import find_ticker, classify_security, load_custom_map
                         custom_map = load_custom_map()
                         n_funds = n_certs = 0
-                        st.success(f"Hittade **{len(df_az)} innehav** i filen. Granska och bekräfta:")
+
+                        # Bygg lookup för befintliga innehav i detta konto
+                        _existing: dict[str, tuple[float, float]] = {}
+                        if not holdings.empty and "konto" in holdings.columns:
+                            _acc = holdings[holdings["konto"] == az_konto]
+                            for _, _row in _acc.iterrows():
+                                _existing[str(_row["ticker"]).upper()] = (
+                                    float(_row.get("shares", 0)),
+                                    float(_row.get("cost_basis", 0)),
+                                )
+
+                        # Räkna statuses för sammanfattnings-banner
+                        _n_new = _n_changed = _n_same = 0
+                        for _, r in df_az.iterrows():
+                            _s = float(r.get("shares", 0))
+                            _c = float(r.get("cost_basis", 0))
+                            _nm = r.get("name", "")
+                            _sg = find_ticker(_nm, custom_map,
+                                              isin=r.get("isin") if "isin" in df_az.columns else None) or ""
+                            if _sg.upper() not in _existing:
+                                _n_new += 1
+                            elif abs(_existing[_sg.upper()][0] - _s) > 0.001 or abs(_existing[_sg.upper()][1] - _c) > 0.001:
+                                _n_changed += 1
+                            else:
+                                _n_same += 1
+
+                        # Sammanfattnings-banner
+                        _parts = []
+                        if _n_new:      _parts.append(f"**{_n_new} nya**")
+                        if _n_changed:  _parts.append(f"**{_n_changed} ändrade**")
+                        if _n_same:     _parts.append(f"{_n_same} oförändrade")
+                        _summary = " · ".join(_parts) if _parts else f"**{len(df_az)} innehav**"
+                        st.success(f"Hittade {len(df_az)} innehav i filen: {_summary}. Granska och bekräfta:")
+
                         import_data = []
                         for i, r in df_az.iterrows():
                             name = r.get("name", "")
@@ -438,31 +471,68 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                             suggested = find_ticker(name, custom_map, isin=isin) or ""
                             security_type = classify_security(name, suggested or None)
 
-                            badge = ""
+                            # Jämför med befintligt innehav för att bestämma status
+                            new_shares    = float(r.get("shares", 0))
+                            new_cost      = float(r.get("cost_basis", 0))
+                            existing_vals = _existing.get(suggested.upper()) if suggested else None
+                            if existing_vals is None:
+                                row_status      = "new"
+                                status_badge    = "🟢 Ny"
+                                status_color    = "#4caf50"
+                                default_check   = bool(suggested) and security_type != "certificate"
+                            elif (abs(existing_vals[0] - new_shares) > 0.001
+                                  or abs(existing_vals[1] - new_cost) > 0.001):
+                                row_status      = "changed"
+                                # Visa vad som ändras
+                                _delta_parts = []
+                                if abs(existing_vals[0] - new_shares) > 0.001:
+                                    _delta_parts.append(f"antal {existing_vals[0]:.0f}→{new_shares:.0f}")
+                                if abs(existing_vals[1] - new_cost) > 0.001:
+                                    _delta_parts.append(f"pris {existing_vals[1]:.2f}→{new_cost:.2f}")
+                                status_badge    = "🔄 " + ", ".join(_delta_parts)
+                                status_color    = "#f59e0b"
+                                default_check   = True
+                            else:
+                                row_status      = "same"
+                                status_badge    = "✓ Oförändrad"
+                                status_color    = "#64748b"
+                                default_check   = False  # avbocka – ingen anledning att skriva över
+
+                            type_badge = ""
                             if security_type == "fund":
-                                badge = " 🏦 *Fond*"
+                                type_badge = " 🏦 *Fond*"
                                 n_funds += 1
                             elif security_type == "etf":
-                                badge = " 📊 *ETF*"
+                                type_badge = " 📊 *ETF*"
                             elif security_type == "certificate":
-                                badge = " ⚠️ *Certifikat*"
+                                type_badge = " ⚠️ *Certifikat*"
                                 n_certs += 1
+                                default_check = False
 
                             with st.container(border=True):
                                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 2, 1])
-                                c1.markdown(f"**{name}**{badge}")
-                                c2.caption(f"Antal: {r.get('shares', 0)}")
-                                c3.caption(f"Pris: {r.get('cost_basis', 0)}")
+                                c1.markdown(f"**{name}**{type_badge}")
+                                c2.caption(f"Antal: {new_shares:.0f}")
+                                c3.caption(f"Pris: {new_cost:.2f}")
                                 ticker_val = c4.text_input(
                                     "Ticker", value=suggested, key=f"az_t_{i}",
                                     label_visibility="collapsed",
                                     placeholder="t.ex. VOLV-B.ST",
                                 ).upper().strip()
-                                default_check = bool(suggested) and security_type != "certificate"
-                                do_it = c5.checkbox("Ta med", value=default_check, key=f"az_ok_{i}")
+                                do_it = c5.checkbox(
+                                    "Ta med", value=default_check, key=f"az_ok_{i}",
+                                    help=status_badge,
+                                )
+                                # Statusindikator under rad
+                                c1.markdown(
+                                    f'<span style="font-size:11px;color:{status_color};">'
+                                    f'{status_badge}</span>',
+                                    unsafe_allow_html=True,
+                                )
                             import_data.append({
                                 "row": r, "ticker": ticker_val,
                                 "import": do_it, "security_type": security_type,
+                                "row_status": row_status,
                             })
 
                         if n_funds > 0 and az_typ != "fond":
@@ -493,13 +563,15 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                                 # Normalisera till de typer vi använder
                                 if row_typ not in ("aktier", "fond", "etf", "certificate"):
                                     row_typ = ""
-                                mask_ex = (h["ticker"] == t) & (h.get("konto", pd.Series(dtype=str)) == az_konto) if "konto" in h.columns else h["ticker"] == t
-                                was_new = not mask_ex.any() if hasattr(mask_ex, "any") else True
+                                is_new = item.get("row_status") == "new"
                                 h = _upsert_holding(h, t, s, c, konto=az_konto, typ=row_typ)
-                                if was_new: n_add += 1
-                                else:       n_upd += 1
+                                if is_new: n_add += 1
+                                else:      n_upd += 1
                             _save_holdings_user(h)
-                            st.success(f"✅ Klart! {n_add} nya, {n_upd} uppdaterade.")
+                            _msg_parts = []
+                            if n_add: _msg_parts.append(f"{n_add} nya")
+                            if n_upd: _msg_parts.append(f"{n_upd} uppdaterade")
+                            st.success("✅ Klart! " + ", ".join(_msg_parts) + " innehav sparade.")
                             st.rerun()
                 except Exception as e:
                     st.error(f"Fel: {e}")
