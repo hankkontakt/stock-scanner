@@ -688,8 +688,9 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                         row_typ = "fond"
                     elif row_typ not in ("aktier", "fond", "etf", "certificate"):
                         row_typ = ""
+                    buy_date_val = str(item["row"].get("buy_date", "") or "").strip() or today_iso
                     h = _upsert_holding(h, t, s, c, konto=konto_name, typ=row_typ,
-                                        buy_date=today_iso, market_value=mv_import)
+                                        buy_date=buy_date_val, market_value=mv_import)
                     if item.get("row_status") == "new": n_add += 1
                     else: n_upd += 1
                 return h, n_add, n_upd
