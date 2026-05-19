@@ -123,7 +123,10 @@ BUILTIN_MAP = {
     # Nordiska utdelningsfokuerade ETF:er
     "carnegie corporate bond":      "0P00017NJI.F",   # eventuellt ej på YF
     "skagen global":                None,              # aktivt förvaltad, ej på YF
-    "länsförsäkringar global":      None,              # aktivt förvaltad, ej på YF
+    "länsförsäkringar global":       None,              # aktivt förvaltad, ej på YF
+    "länsförsäkringar global index": None,             # aktivt förvaltad, ej på YF
+    "länsförsäkringar sverige index": None,
+    "länsförsäkringar tillväxtmarknad index": None,
     "swedbank robur access global": None,              # aktivt förvaltad, ej på YF
     "avanza global":                None,              # aktivt förvaltad, ej på YF
     "avanza zero":                  None,              # indexfond, ej på YF
@@ -299,10 +302,15 @@ def classify_security(name: str, ticker: str | None) -> str:
     """
     n = name.lower()
     # Kända fond-nyckelord (aktivt förvaltade, ej börshandlade)
-    fund_keywords = ("fond", "fund", "robur", "länsförsäkringar global",
+    fund_keywords = ("fond", "fund", "robur", "länsförsäkringar",
                      "avanza global", "avanza zero", "spiltan", "handelsbanken global",
-                     "carnegie", "lannebo", "öhman", "coeli", "didner")
-    if any(kw in n for kw in fund_keywords) and ticker is None:
+                     "carnegie", "lannebo", "öhman", "coeli", "didner",
+                     "global index", "sverige index", "world index")
+    # Klassificera som fond baserat på namn OAVSETT om en ticker hittades
+    if any(kw in n for kw in fund_keywords):
+        return "fund"
+    # Morningstar-fondkoder (0P-prefix) som yfinance returnerar för aktivt förvaltade fonder
+    if ticker and str(ticker).upper().startswith("0P"):
         return "fund"
     # ETF-nyckelord
     etf_keywords = ("etf", "xact", "xtrackers", "ishares", "vanguard", "lyxor",
