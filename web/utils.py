@@ -113,14 +113,20 @@ def _active_data_dir() -> Path:
 
 def load_portfolio(data_dir: Path | None = None) -> pd.DataFrame:
     """Laddar holdings.csv för den inloggade användaren.
-    Ingen cache – filen ändras när användaren lägger till tickers."""
+    Ingen cache – filen ändras när användaren lägger till tickers.
+    Bakåtkompatibel: lägger till kolumnerna 'konto' och 'typ' om de saknas."""
     base = data_dir if data_dir is not None else _active_data_dir()
     try:
         holdings = pd.read_csv(base / "holdings.csv")
         holdings["ticker"] = holdings["ticker"].str.upper()
+        # Bakåtkompatibilitet – fyll i saknade kolumner
+        if "konto" not in holdings.columns:
+            holdings["konto"] = "Huvud"
+        else:
+            holdings["konto"] = holdings["konto"].fillna("Huvud")
         return holdings
     except Exception:
-        return pd.DataFrame(columns=["ticker", "shares", "cost_basis"])
+        return pd.DataFrame(columns=["ticker", "shares", "cost_basis", "konto"])
 
 
 def load_watchlist(data_dir: Path | None = None) -> list:

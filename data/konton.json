@@ -1,0 +1,7 @@
+{
+  "Huvud": {"typ": "aktier", "color": "#4c9be8"},
+  "ISK Aktier": {"typ": "aktier", "color": "#4c9be8"},
+  "ISK Fonder": {"typ": "fond", "color": "#f59e0b"},
+  "KF": {"typ": "aktier", "color": "#00d4aa"},
+  "Depå": {"typ": "aktier", "color": "#a78bfa"}
+}

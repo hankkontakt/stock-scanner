@@ -1,7 +1,9 @@
 """web/pages/portfolio.py – Sida 4: Portfölj"""
 
+import json
 import os
 import tempfile
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -9,9 +11,50 @@ import streamlit as st
 from web.utils import (
     kpi_row, holdings_pie, num_fmt, pct_fmt,
     load_portfolio, load_watchlist, _get_provider, _get_depth,
-    _active_data_dir,
+    _active_data_dir, DATA_DIR,
 )
 from core import ai_analysis
+
+# ── Kontoregister (konton.json) ───────────────────────────────────────────────
+
+_KONTON_PATH = DATA_DIR / "konton.json"
+_DEFAULT_KONTON = {
+    "Huvud":       {"typ": "aktier", "color": "#4c9be8"},
+    "ISK Aktier":  {"typ": "aktier", "color": "#4c9be8"},
+    "ISK Fonder":  {"typ": "fond",   "color": "#f59e0b"},
+    "KF":          {"typ": "aktier", "color": "#00d4aa"},
+    "Depå":        {"typ": "aktier", "color": "#a78bfa"},
+}
+
+
+def _load_konton() -> dict:
+    """Läs kontoregistret. Returnerar dict {namn: {typ, color}}."""
+    try:
+        return json.loads(_KONTON_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return dict(_DEFAULT_KONTON)
+
+
+def _save_konton(konton: dict):
+    _KONTON_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _KONTON_PATH.write_text(json.dumps(konton, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _ensure_konto(name: str, typ: str = "aktier") -> dict:
+    """Lägg till kontot i registret om det inte finns. Returnerar uppdaterat register."""
+    konton = _load_konton()
+    if name not in konton:
+        colors = ["#4c9be8", "#00d4aa", "#f59e0b", "#a78bfa", "#f87171", "#34d399"]
+        used = {v.get("color") for v in konton.values()}
+        color = next((c for c in colors if c not in used), "#8892a4")
+        konton[name] = {"typ": typ, "color": color}
+        _save_konton(konton)
+    return konton
+
+
+def _is_fund_konto(konto_name: str) -> bool:
+    """Returnerar True om kontot är av typen 'fond' (ingen scanneranalys)."""
+    return _load_konton().get(konto_name, {}).get("typ") == "fond"
 
 
 def _save_watchlist_data(items):
@@ -187,19 +230,28 @@ def _save_holdings_user(df: pd.DataFrame):
 
 
 def _upsert_holding(holdings: pd.DataFrame, ticker: str,
-                    shares: float, cost_basis: float) -> pd.DataFrame:
+                    shares: float, cost_basis: float,
+                    konto: str = "Huvud") -> pd.DataFrame:
     """Lägg till eller uppdatera en aktie i portföljen.
-    Om tickern är ny läggs den automatiskt till i nästa scan (custom_universe)."""
+    Om tickern är ny läggs den automatiskt till i nästa scan (custom_universe).
+    konto: vilket konto innehavet tillhör (default 'Huvud')."""
     h = holdings.copy() if not holdings.empty else pd.DataFrame(
-        columns=["ticker", "shares", "cost_basis"]
+        columns=["ticker", "shares", "cost_basis", "konto"]
     )
-    is_new = ticker not in (h["ticker"].values if not h.empty else [])
-    if ticker in h["ticker"].values:
-        h.loc[h["ticker"] == ticker, "shares"]     = shares
-        h.loc[h["ticker"] == ticker, "cost_basis"] = cost_basis
+    # Säkerställ att konto-kolumnen finns
+    if "konto" not in h.columns:
+        h["konto"] = "Huvud"
+
+    # Matcha på ticker + konto (samma aktie kan finnas i flera konton)
+    mask = (h["ticker"] == ticker) & (h["konto"] == konto)
+    is_new = not mask.any()
+    if mask.any():
+        h.loc[mask, "shares"]     = shares
+        h.loc[mask, "cost_basis"] = cost_basis
     else:
         h = pd.concat([h, pd.DataFrame([{
-            "ticker": ticker, "shares": shares, "cost_basis": cost_basis
+            "ticker": ticker, "shares": shares,
+            "cost_basis": cost_basis, "konto": konto
         }])], ignore_index=True)
     # Auto-lägg till i scan-universum om det är en ny ticker
     if is_new:
@@ -264,20 +316,49 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
 <div style="background:#1a2235;border:1px solid #2d3250;border-radius:10px;
      padding:14px 18px;margin-bottom:14px;">
 <div style="font-size:13px;font-weight:600;color:#e8eaf0;margin-bottom:8px;">
-  Så här laddar du ner din portfölj från Avanza
+  Så här laddar du ner din portfölj från Avanza (dator)
 </div>
 <ol style="font-size:13px;color:#a0aec0;margin:0;padding-left:18px;line-height:2.1;">
-  <li>Logga in på <strong style="color:#e8eaf0;">avanza.se</strong></li>
-  <li>Gå till <strong style="color:#e8eaf0;">Konto → din depå/ISK</strong></li>
+  <li>Logga in på <strong style="color:#e8eaf0;">avanza.se i webbläsaren</strong> (fungerar ej i appen)</li>
+  <li>Klicka på ett specifikt konto i menyn, t.ex. <strong style="color:#e8eaf0;">ISK Aktier</strong></li>
   <li>Klicka på fliken <strong style="color:#e8eaf0;">Innehav</strong></li>
-  <li>Scrolla längst ner → klicka <strong style="color:#4c9be8;">Exportera</strong></li>
-  <li>Spara filen och ladda upp den nedan</li>
+  <li>Scrolla längst ner på sidan → klicka <strong style="color:#4c9be8;">Exportera</strong></li>
+  <li>Upprepa för varje konto (ett konto = en fil)</li>
+  <li>Ladda upp filen nedan och ange vilket konto det tillhör</li>
 </ol>
+<div style="font-size:12px;color:#64748b;margin-top:8px;">
+  💡 Har du många konton? Kör importen en gång per ISK/depå och välj rätt kontonamn varje gång.
+</div>
 </div>
 """, unsafe_allow_html=True)
 
+            # ── Kontoväljare ──────────────────────────────────────────────────
+            konton_reg = _load_konton()
+            konto_names = list(konton_reg.keys())
+            c_knam, c_ktyp = st.columns([2, 1])
+            with c_knam:
+                az_konto = st.selectbox(
+                    "Vilket konto importerar du?",
+                    options=konto_names + ["➕ Nytt konto…"],
+                    key="az_konto_sel",
+                    help="Välj vilket av dina Avanza-konton den här filen tillhör.",
+                )
+            if az_konto == "➕ Nytt konto…":
+                c_new, c_typ = st.columns([2, 1])
+                az_konto = c_new.text_input(
+                    "Kontonamn", placeholder="t.ex. ISK Aktier 2", key="az_konto_ny"
+                ).strip() or "Nytt konto"
+                az_typ = c_typ.radio(
+                    "Typ", ["aktier", "fond"], key="az_konto_typ",
+                    help="'fond' döljer scanner-signaler för dessa innehav",
+                )
+            else:
+                az_typ = konton_reg.get(az_konto, {}).get("typ", "aktier")
+                typ_label = "🏦 Fondkonto – ingen scanneranalys" if az_typ == "fond" else "📈 Aktiekonto – full analys"
+                st.caption(f"Kontotyp: {typ_label}")
+
             uploaded = st.file_uploader(
-                "Välj Avanza-filen (CSV)",
+                f"Välj Avanza-filen för **{az_konto}** (CSV)",
                 type=["csv"],
                 key="avanza_csv_user",
                 help="Filen laddas inte upp till någon server – den läses direkt i din webbläsare.",
@@ -298,24 +379,22 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                         from data_management.avanza_import import find_ticker, classify_security, load_custom_map
                         custom_map = load_custom_map()
                         n_funds = n_certs = 0
-                        st.success(f"Hittade **{len(df_az)} innehav**. Granska och bekräfta:")
+                        st.success(f"Hittade **{len(df_az)} innehav** i filen. Granska och bekräfta:")
                         import_data = []
                         for i, r in df_az.iterrows():
                             name = r.get("name", "")
                             isin = r.get("isin") if "isin" in df_az.columns else None
-                            # Försök hitta ticker via BUILTIN_MAP/ISIN/yfinance
                             suggested = find_ticker(name, custom_map, isin=isin) or ""
                             security_type = classify_security(name, suggested or None)
 
-                            # Badges för fond/certifikat
                             badge = ""
                             if security_type == "fund":
-                                badge = " 🏦 *Fond – ej börshandlad*"
+                                badge = " 🏦 *Fond*"
                                 n_funds += 1
                             elif security_type == "etf":
                                 badge = " 📊 *ETF*"
                             elif security_type == "certificate":
-                                badge = " ⚠️ *Certifikat – stöds ej*"
+                                badge = " ⚠️ *Certifikat*"
                                 n_certs += 1
 
                             with st.container(border=True):
@@ -328,27 +407,26 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                                     label_visibility="collapsed",
                                     placeholder="t.ex. VOLV-B.ST",
                                 ).upper().strip()
-                                # Fonder och certifikat utan ticker är avbockade som default
                                 default_check = bool(suggested) and security_type != "certificate"
                                 do_it = c5.checkbox("Ta med", value=default_check, key=f"az_ok_{i}")
                             import_data.append({"row": r, "ticker": ticker_val, "import": do_it})
 
-                        if n_funds > 0:
+                        if n_funds > 0 and az_typ != "fond":
                             st.info(
                                 f"🏦 **{n_funds} aktivt förvaltade fonder** hittades. "
-                                "Dessa saknar Yahoo Finance-ticker och kan inte analyseras i scannern — "
-                                "de är avbockade som standard. ETF:er med börsticker fungerar däremot utmärkt."
+                                "Väljer du ett **Fondkonto** som kontotyp analyseras de utan scanner-signaler."
                             )
                         if n_certs > 0:
                             st.warning(
-                                f"⚠️ **{n_certs} certifikat/turbo/warrant** identifierades och är avbockade — "
-                                "dessa stöds inte av scannern."
+                                f"⚠️ **{n_certs} certifikat/turbo/warrant** identifierades och är avbockade."
                             )
 
                         if st.button("💾 Importera markerade", key="btn_az_save",
                                      type="primary", use_container_width=True):
+                            # Registrera kontot om det är nytt
+                            _ensure_konto(az_konto, az_typ)
                             h = holdings.copy() if not holdings.empty else pd.DataFrame(
-                                columns=["ticker", "shares", "cost_basis"])
+                                columns=["ticker", "shares", "cost_basis", "konto"])
                             n_add = n_upd = 0
                             for item in import_data:
                                 if not item["import"] or not item["ticker"]:
@@ -356,8 +434,9 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                                 t = item["ticker"]
                                 s = float(item["row"].get("shares", 0))
                                 c = float(item["row"].get("cost_basis", 0))
-                                was_new = t not in h["ticker"].values
-                                h = _upsert_holding(h, t, s, c)  # hanterar scan_pending internt
+                                mask = (h["ticker"] == t) & (h.get("konto", "Huvud") == az_konto) if "konto" in h.columns else h["ticker"] == t
+                                was_new = not mask.any() if hasattr(mask, "any") else True
+                                h = _upsert_holding(h, t, s, c, konto=az_konto)
                                 if was_new: n_add += 1
                                 else:       n_upd += 1
                             _save_holdings_user(h)
@@ -703,6 +782,32 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
     if holdings.empty:
         st.info("Portföljen är tom. Importera dina innehav från Avanza ovan ↑")
     else:
+        # ── Kontofilter ───────────────────────────────────────────────────────
+        konton_reg  = _load_konton()
+        all_konton  = sorted(holdings["konto"].dropna().unique().tolist()) if "konto" in holdings.columns else ["Huvud"]
+        konto_opts  = ["Alla konton"] + all_konton
+        # Färgade konto-badges
+        konto_badges = "".join(
+            f'<span style="background:{konton_reg.get(k,{}).get("color","#4c9be8")}22;'
+            f'border:1px solid {konton_reg.get(k,{}).get("color","#4c9be8")}55;'
+            f'border-radius:4px;padding:2px 8px;margin:0 4px;font-size:12px;color:#e8eaf0;">'
+            f'{"🏦 " if konton_reg.get(k,{}).get("typ")=="fond" else "📈 "}{k}</span>'
+            for k in all_konton
+        )
+        if len(all_konton) > 1:
+            st.markdown(f"<div style='margin-bottom:8px;'>Konton: {konto_badges}</div>",
+                        unsafe_allow_html=True)
+            sel_konto = st.selectbox("Visa konto:", konto_opts, key="port_konto_filter",
+                                     label_visibility="collapsed")
+        else:
+            sel_konto = "Alla konton"
+
+        # Filtrera holdings baserat på valt konto
+        if sel_konto != "Alla konton" and "konto" in holdings.columns:
+            holdings_view = holdings[holdings["konto"] == sel_konto].copy()
+        else:
+            holdings_view = holdings.copy()
+
         frames = [f for f in [df, sc_df] if f is not None and not f.empty and "ticker" in f.columns]
         if frames:
             combined = pd.concat(frames, ignore_index=True).drop_duplicates(subset="ticker", keep="first")
@@ -711,11 +816,10 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
             score_data = {}
 
         # ── Utdelningsdata — beräkna/cachas innan tabellen byggs ──────────────
-        # Cachas per unik holdings-sammansättning så yfinance-anrop sker max en gång.
-        _holdings_hash = str(sorted(holdings["ticker"].tolist()))
+        _holdings_hash = str(sorted(holdings_view["ticker"].tolist()))
         if st.session_state.get("div_summary_hash") != _holdings_hash:
             with st.spinner("Hämtar utdelningsdata…"):
-                _div_summary = _calc_dividend_summary(holdings, score_data)
+                _div_summary = _calc_dividend_summary(holdings_view, score_data)
                 st.session_state["div_summary"] = _div_summary
                 st.session_state["div_summary_hash"] = _holdings_hash
         else:
@@ -726,31 +830,36 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
             _div_ph_map[_ph["ticker"]] = _ph
 
         rows = []
-        for _, h in holdings.iterrows():
-            t     = str(h["ticker"]).upper()
-            sc    = score_data.get(t, {})
-            price = sc.get("current_price")
-            cost  = h.get("cost_basis")
+        for _, h in holdings_view.iterrows():
+            t      = str(h["ticker"]).upper()
+            konto  = str(h.get("konto", "Huvud"))
+            sc     = score_data.get(t, {})
+            price  = sc.get("current_price")
+            cost   = h.get("cost_basis")
             shares = h.get("shares", 0)
+            is_fund_acc = _is_fund_konto(konto)
             pnl_pct = ((price / float(cost)) - 1) * 100 \
                 if price and cost and float(cost) > 0 else None
             mv = price * float(shares) if price and shares else None
             _yoc = _div_ph_map.get(t, {}).get("yield_on_cost")
             rows.append({
                 "Ticker":    t,
+                "Konto":     konto,
                 "Bolag":     sc.get("name", t)[:30],
-                "Sektor":    sc.get("sector", "—"),
+                "Sektor":    sc.get("sector", "—") if not is_fund_acc else "Fond",
                 "Antal":     shares,
                 "Inköpspris": cost,
                 "Pris nu":   f"{price:.2f}" if price else "—",
                 "P&L %":     f"{pnl_pct:+.1f}%" if pnl_pct is not None else "—",
                 "Marknadsvärde": f"{mv:,.0f}" if mv else "—",
                 "Yield/cost": f"{_yoc:.1f}%" if _yoc is not None else "—",
-                "Score":     sc.get("score_total"),
-                "Entry":     sc.get("entry_signal", "—"),
-                "Trend":     sc.get("trend_signal", "—"),
-                "Piotroski": sc.get("piotroski_f"),
-                "RS":        sc.get("rs_label", "—"),
+                # Scannerdata döljs för fondkonton
+                "Score":     sc.get("score_total") if not is_fund_acc else None,
+                "Entry":     sc.get("entry_signal", "—") if not is_fund_acc else "Fond",
+                "Trend":     sc.get("trend_signal", "—") if not is_fund_acc else "—",
+                "Piotroski": sc.get("piotroski_f") if not is_fund_acc else None,
+                "RS":        sc.get("rs_label", "—") if not is_fund_acc else "—",
+                "_is_fund":  is_fund_acc,
             })
 
         port_df = pd.DataFrame(rows)
@@ -787,7 +896,7 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
 
         # ── Exportknapp ────────────────────────────────────────────────────────
         try:
-            _excel_bytes = _portfolio_excel_bytes(port_df, rows, score_data)
+            _excel_bytes = _portfolio_excel_bytes(port_df, stock_rows, score_data)
             st.download_button(
                 label="📥 Exportera portfölj (Excel)",
                 data=_excel_bytes,
@@ -799,44 +908,74 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
         except Exception:
             pass  # openpyxl kanske saknas – tyst fel
 
+        # Dölj interna fält från tabellen
+        display_cols = [c for c in port_df.columns if not c.startswith("_")]
+        # Dölj Konto-kolumnen om det bara finns ett konto
+        if len(all_konton) <= 1 and "Konto" in display_cols:
+            display_cols = [c for c in display_cols if c != "Konto"]
+        port_df_display = port_df[display_cols]
         col_cfg = {}
-        if "Score" in port_df.columns:
+        if "Score" in port_df_display.columns:
             col_cfg["Score"] = st.column_config.ProgressColumn(
                 "Score", min_value=0, max_value=100, format="%.0f"
             )
-        st.dataframe(port_df, use_container_width=True, hide_index=True,
+        st.dataframe(port_df_display, use_container_width=True, hide_index=True,
                      column_config=col_cfg)
 
         st.markdown("---")
         st.subheader("💡 Rekommendationer")
-        st.caption("Baserat på senaste veckoanalys. Stop-loss beräknas på den typiska dagliga rörelsen (ATR14).")
 
-        _show_atr = st.toggle("Visa stop-loss & positionsstorlek", value=True, key="toggle_atr")
+        # Dela upp aktier och fonder
+        stock_rows = [r for r in rows if not r.get("_is_fund")]
+        fund_rows  = [r for r in rows if r.get("_is_fund")]
 
-        for r in sorted(rows, key=lambda x: x.get("Score") or 0, reverse=True):
-            t  = r["Ticker"]
-            sc = score_data.get(t, {})
-            if not sc:
-                st.markdown(f"⚪ **{t}** — Analys uppdateras inom kort")
-                continue
-            entry  = sc.get("entry_signal", "—")
-            score  = sc.get("score_total", 0) or 0
-            price_val = sc.get("current_price") or sc.get("close")
+        if fund_rows:
+            with st.expander(f"🏦 Fonder & fondkonton ({len(fund_rows)} st) — P&L-översikt", expanded=False):
+                st.caption("Fondinnehav analyseras inte med scanner-signaler. Enbart P&L och marknadsvärde visas.")
+                for r in fund_rows:
+                    pnl  = r.get("P&L %", "—")
+                    mv   = r.get("Marknadsvärde", "—")
+                    kont = r.get("Konto", "")
+                    pnl_color = "#4caf50" if str(pnl).startswith("+") else "#ef5350" if str(pnl).startswith("-") else "#8892a4"
+                    st.markdown(
+                        f"<div style='padding:8px 12px;border:1px solid #2d3250;border-radius:8px;margin-bottom:6px;'>"
+                        f"🏦 <b>{r['Ticker']}</b> <span style='color:#8892a4;font-size:12px;'>({kont})</span> &nbsp;·&nbsp; "
+                        f"Marknadsvärde: <b>{mv}</b> &nbsp;·&nbsp; "
+                        f"<span style='color:{pnl_color};'>P&L: {pnl}</span>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
 
-            if score >= 70 and entry == "STARK":
-                icon = "🟢"; rec = "Behåll / Köp mer"
-            elif score >= 55:
-                icon = "🔵"; rec = "Behåll"
-            elif score >= 40:
-                icon = "🟡"; rec = "Avvakta"
-            else:
-                icon = "🔴"; rec = "Minska / Sälj"
+        if not stock_rows:
+            st.info("Inga aktier i valt konto.")
+        else:
+            st.caption("Baserat på senaste veckoanalys. Stop-loss beräknas på den typiska dagliga rörelsen (ATR14).")
+            _show_atr = st.toggle("Visa stop-loss & positionsstorlek", value=True, key="toggle_atr")
 
-            with st.container(border=True):
-                c1, c2 = st.columns([3, 2])
-                with c1:
-                    st.markdown(f"**{icon} {t}** — {rec}")
-                    st.caption(f"Score: {score:.0f}  ·  Signal: {entry}  ·  Trend: {sc.get('trend_signal', '—')}")
+            for r in sorted(stock_rows, key=lambda x: x.get("Score") or 0, reverse=True):
+                t  = r["Ticker"]
+                sc = score_data.get(t, {})
+                if not sc:
+                    st.markdown(f"⚪ **{t}** — Analys uppdateras inom kort")
+                    continue
+                entry  = sc.get("entry_signal", "—")
+                score  = sc.get("score_total", 0) or 0
+                price_val = sc.get("current_price") or sc.get("close")
+
+                if score >= 70 and entry == "STARK":
+                    icon = "🟢"; rec = "Behåll / Köp mer"
+                elif score >= 55:
+                    icon = "🔵"; rec = "Behåll"
+                elif score >= 40:
+                    icon = "🟡"; rec = "Avvakta"
+                else:
+                    icon = "🔴"; rec = "Minska / Sälj"
+
+                with st.container(border=True):
+                    c1, c2 = st.columns([3, 2])
+                    with c1:
+                        st.markdown(f"**{icon} {t}** — {rec}")
+                        st.caption(f"Score: {score:.0f}  ·  Signal: {entry}  ·  Trend: {sc.get('trend_signal', '—')}")
                 with c2:
                     if _show_atr and price_val:
                         try:
@@ -858,15 +997,15 @@ def page_portfolio(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: list,
                         except Exception:
                             pass
 
-        if len(rows) > 1:
+        if len(stock_rows) > 1:
             st.markdown("---")
-            st.plotly_chart(holdings_pie(pd.DataFrame(rows).rename(columns={"Sektor": "sector"})),
+            st.plotly_chart(holdings_pie(pd.DataFrame(stock_rows).rename(columns={"Sektor": "sector"})),
                             use_container_width=True)
 
         # ── Stress Test + Dividend Simulator (Features 5 & 8) ─────────────
         st.markdown("---")
-        _portfolio_stress_test(holdings, score_data)
-        _dividend_simulator(holdings, score_data)
+        _portfolio_stress_test(holdings_view, score_data)
+        _dividend_simulator(holdings_view, score_data)
 
     # ── AI Portfolio Optimizer button (Feature 4) ──────────────────────────
     if not holdings.empty:
