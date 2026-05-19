@@ -331,14 +331,21 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
     label = "➕ Hantera portfölj" if not holdings.empty else "➕ Kom igång – lägg till dina aktier"
     with st.expander(label, expanded=holdings.empty):
 
-        # Scroll-till-topp när användaren byter flik
         import streamlit.components.v1 as _sc1
-        _sc1.html(
-            "<script>window.parent.document.querySelector"
-            "('[data-testid=\"stAppViewContainer\"]')"
-            ".scrollTo({top:0,behavior:'smooth'});</script>",
-            height=0,
-        )
+
+        def _scroll_top():
+            """Scrolla till toppen av sidan – anropas överst i varje flik."""
+            _sc1.html(
+                "<script>"
+                "try{"
+                "  var el=window.parent.document.querySelector('[data-testid=\"stMain\"]');"
+                "  if(!el) el=window.parent.document.querySelector('.main');"
+                "  if(!el) el=window.parent.document.body;"
+                "  el.scrollTo({top:0,behavior:'instant'});"
+                "}catch(e){window.parent.scrollTo(0,0);}"
+                "</script>",
+                height=0,
+            )
 
         tab_avanza, tab_search, tab_manual, tab_remove = st.tabs([
             "📥 Importera från Avanza",
@@ -351,29 +358,37 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
         # FLIK 1 – AVANZA IMPORT
         # ══════════════════════════════════════════════════════════════════════
         with tab_avanza:
+            _scroll_top()
             st.markdown("""
 <div style="background:#1a2235;border:1px solid #2d3250;border-radius:10px;
      padding:16px 20px;margin-bottom:14px;">
-<div style="font-size:13px;font-weight:700;color:#e8eaf0;margin-bottom:10px;">
+<div style="font-size:13px;font-weight:700;color:#e8eaf0;margin-bottom:12px;">
   📥 Ladda ner din portfölj från Avanza
 </div>
 
 <div style="font-size:12px;font-weight:600;color:#4c9be8;text-transform:uppercase;
-     letter-spacing:0.08em;margin-bottom:6px;">Alla konton i en fil (rekommenderas)</div>
-<ol style="font-size:13px;color:#a0aec0;margin:0 0 10px 0;padding-left:18px;line-height:2.0;">
-  <li>Öppna <strong style="color:#e8eaf0;">avanza.se</strong> i en webbläsare på datorn
-      <span style="color:#64748b;"> — fungerar ej i mobilappen</span></li>
+     letter-spacing:0.08em;margin-bottom:8px;">Steg för steg</div>
+<ol style="font-size:13px;color:#a0aec0;margin:0 0 12px 0;padding-left:18px;line-height:2.2;">
+  <li>Öppna <strong style="color:#e8eaf0;">avanza.se</strong> i webbläsaren på datorn
+      <span style="color:#64748b;">(fungerar ej i mobilappen)</span></li>
   <li>Klicka på <strong style="color:#e8eaf0;">Min ekonomi</strong> i vänstermenyn</li>
-  <li>Välj fliken <strong style="color:#e8eaf0;">Analys</strong> längst upp</li>
-  <li>Scrolla ner till sektionen <strong style="color:#e8eaf0;">Exportera data</strong></li>
+  <li>Klicka på fliken <strong style="color:#e8eaf0;">Analys</strong> i menyn som visas överst</li>
+  <li>Scrolla ner till rubriken <strong style="color:#e8eaf0;">Exportera data</strong>
+      <span style="color:#64748b;">(längst ner på sidan)</span></li>
   <li>Klicka på <strong style="color:#4c9be8;">Mitt innehav fördelat per konto</strong>
-      → ladda ner <code>.csv</code>-filen</li>
-  <li>Ladda upp filen nedan — alla dina konton importeras automatiskt</li>
+      — filen <code>positioner.csv</code> laddas ner direkt</li>
+  <li>Ladda upp filen nedan — alla konton importeras på en gång</li>
 </ol>
 
-<div style="font-size:12px;color:#64748b;border-top:1px solid #2d3250;padding-top:8px;margin-top:4px;">
-  ⚠️ <strong>Mobilapp:</strong> Export finns <em>inte</em> i Avanza-appen — använd avanza.se på dator.<br>
-  💡 Filen innehåller alla ISK, KF och depåer — du slipper ladda ner en fil per konto.
+<div style="background:#0f1a2e;border:1px solid #2d3250;border-radius:6px;
+     padding:10px 14px;margin-bottom:10px;font-size:12px;color:#8892a4;line-height:1.8;">
+  <strong style="color:#e8eaf0;">Vad filen innehåller:</strong> alla dina konton (ISK, KF, depåer) med
+  antal aktier, inköpspris och ISIN — ingen manuell inmatning behövs.<br>
+  <strong style="color:#e8eaf0;">Fonder:</strong> importeras automatiskt utan scanner-analys.
+</div>
+
+<div style="font-size:12px;color:#64748b;">
+  ⚠️ <strong>Mobilapp:</strong> Exportera-funktionen saknas i Avanza-appen — använd avanza.se på dator eller surfplatta.
 </div>
 </div>
 """, unsafe_allow_html=True)
@@ -688,6 +703,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
         # FLIK 2 – SÖK & LÄGG TILL
         # ══════════════════════════════════════════════════════════════════════
         with tab_search:
+            _scroll_top()
             st.caption("Sök på aktiens namn eller ticker och fyll i hur många du köpt och till vilket pris.")
             search_q = st.text_input(
                 "Sök aktie",
@@ -749,6 +765,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
         # FLIK 3 – MANUELL INMATNING
         # ══════════════════════════════════════════════════════════════════════
         with tab_manual:
+            _scroll_top()
             st.caption("Vet du tickern? Fyll i direkt utan att söka.")
             with st.form("form_manual_add", clear_on_submit=True):
                 c1, c2, c3 = st.columns([2, 2, 2])
@@ -798,6 +815,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
         # FLIK 4 – TA BORT / REDIGERA
         # ══════════════════════════════════════════════════════════════════════
         with tab_remove:
+            _scroll_top()
             if holdings.empty:
                 st.info("Portföljen är tom – ingenting att ta bort.")
             else:
