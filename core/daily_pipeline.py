@@ -1088,8 +1088,13 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         # ── Sektorer ─────────────────────────────────────────────────────
         if "sector" in scored.columns and "score_total" in scored.columns:
             report_lines.append(_section_header("🏭 Sektorer"))
+            # Filtrera bort okända/tomma sektorer och NaN-snitt innan loopen
             sec = scored.groupby("sector")["score_total"].mean().sort_values(ascending=False)
+            _skip_sectors = {"Unknown", "unknown", ""}
             for sector, avg in sec.items():
+                # Hoppa över tomma sektornamn, "Unknown" och sektorer där avg är NaN
+                if not sector or str(sector).strip() in _skip_sectors or pd.isna(avg):
+                    continue
                 arrow = "🟢" if avg >= 60 else "🟡" if avg >= 45 else "🔴"
                 report_lines.append(f"- {arrow} **{sector}** – snittscore {avg:.1f}")
             report_lines.append("")

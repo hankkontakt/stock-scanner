@@ -682,13 +682,32 @@ def predict_returns(scored_df: pd.DataFrame, universe: str,
         return scored_df
 
     result = scored_df.copy()
-    result["predicted_return"] = preds
-    # Rank: 0-100, högre = bättre prediktion
+
+    # Identifiera rader där ALLA tekniska features var NaN innan fillna(0).
+    # Dessa aktier har ingen prishistorik i cachen — modellen predikterar
+    # ett artefaktvärde (~1.34) för all-zero-vektorer vilket är missvisande.
+    # Sätt predicted_return = NaN för dessa rader.
+    tech_cols_used = [c for c in model_wrapper.feature_cols if c in TECH_FEATURES]
+    if tech_cols_used:
+        no_data_mask = tech_df.reindex(columns=tech_cols_used).isna().all(axis=1)
+    else:
+        no_data_mask = pd.Series(False, index=scored_df.index)
+
+    preds_series = pd.Series(preds, index=scored_df.index, dtype=float)
+    preds_series[no_data_mask] = float("nan")
+
+    result["predicted_return"] = preds_series
+    # ml_rank: rangordna bara rader med giltig prediktion (NaN → 0 i ranken)
     result["ml_rank"] = (
         result["predicted_return"]
-        .rank(pct=True, ascending=True)
+        .rank(pct=True, ascending=True, na_option="keep")
         .fillna(0) * 100
     ).round(1)
+
+    n_filtered = int(no_data_mask.sum())
+    if n_filtered:
+        logger.info(f"  ℹ ML: {n_filtered} aktier saknade prisdata och fick ingen prediktion")
+
     return result
 
 
