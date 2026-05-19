@@ -1758,10 +1758,39 @@ def page_admin():
                             try:
                                 h = pd.read_csv(holdings_path)
                                 st.dataframe(h, use_container_width=True, hide_index=True)
-                                if st.button(f"🔄 Refresh data ({uname})", key=f"refresh_user_{uname}"):
-                                    tickers = h["ticker"].dropna().tolist()
-                                    if _trigger_targeted_refresh(tickers):
-                                        st.toast(f"Startar refresh för {uname}s {len(tickers)} innehav", icon="🔄")
+                                _btn_r, _btn_c = st.columns(2)
+                                with _btn_r:
+                                    if st.button(f"🔄 Refresh data", key=f"refresh_user_{uname}",
+                                                 use_container_width=True):
+                                        tickers = h["ticker"].dropna().tolist()
+                                        if _trigger_targeted_refresh(tickers):
+                                            st.toast(f"Startar refresh för {uname}s {len(tickers)} innehav", icon="🔄")
+                                with _btn_c:
+                                    _ck = f"confirm_clear_h_{uname}"
+                                    if not st.session_state.get(_ck):
+                                        if st.button("🗑️ Rensa innehav", key=f"clear_h_{uname}",
+                                                     use_container_width=True):
+                                            st.session_state[_ck] = True
+                                            st.rerun()
+                                    else:
+                                        st.warning(f"Rensa **alla** {len(h)} innehav för `{uname}`?")
+                                        _cy, _cn = st.columns(2)
+                                        if _cy.button("✅ Ja, rensa", key=f"clear_h_yes_{uname}",
+                                                      use_container_width=True, type="primary"):
+                                            empty_csv = "ticker,shares,cost_basis,konto,typ,buy_date,market_value\n"
+                                            holdings_path.write_text(empty_csv, encoding="utf-8")
+                                            if uname == "admin":
+                                                token = _get_github_token()
+                                                if token:
+                                                    _github_commit_file("data/holdings.csv", empty_csv, token,
+                                                                        message=f"Rensa innehav för {uname} (admin)")
+                                            st.session_state.pop(_ck, None)
+                                            st.success(f"✅ Innehav för `{uname}` rensade.")
+                                            st.rerun()
+                                        if _cn.button("❌ Avbryt", key=f"clear_h_no_{uname}",
+                                                      use_container_width=True):
+                                            st.session_state.pop(_ck, None)
+                                            st.rerun()
                             except Exception as e:
                                 st.warning(f"Kunde inte läsa holdings.csv: {e}")
                         else:
@@ -1777,6 +1806,31 @@ def page_admin():
                                     show_wl_cols = [c for c in ["ticker", "name"] if c in wl_df.columns]
                                     st.dataframe(wl_df[show_wl_cols] if show_wl_cols else wl_df,
                                                  use_container_width=True, hide_index=True)
+                                    _wck = f"confirm_clear_wl_{uname}"
+                                    if not st.session_state.get(_wck):
+                                        if st.button("🗑️ Rensa bevakningslista", key=f"clear_wl_{uname}",
+                                                     use_container_width=True):
+                                            st.session_state[_wck] = True
+                                            st.rerun()
+                                    else:
+                                        st.warning(f"Rensa **hela** bevakningslistan för `{uname}`?")
+                                        _wy, _wn = st.columns(2)
+                                        if _wy.button("✅ Ja, rensa", key=f"clear_wl_yes_{uname}",
+                                                      use_container_width=True, type="primary"):
+                                            empty_wl = "[]"
+                                            watchlist_path.write_text(empty_wl, encoding="utf-8")
+                                            if uname == "admin":
+                                                token = _get_github_token()
+                                                if token:
+                                                    _github_commit_file("data/watchlist.json", empty_wl, token,
+                                                                        message=f"Rensa bevakningslista för {uname} (admin)")
+                                            st.session_state.pop(_wck, None)
+                                            st.success(f"✅ Bevakningslista för `{uname}` rensad.")
+                                            st.rerun()
+                                        if _wn.button("❌ Avbryt", key=f"clear_wl_no_{uname}",
+                                                      use_container_width=True):
+                                            st.session_state.pop(_wck, None)
+                                            st.rerun()
                                 else:
                                     st.info("Tom bevakningslista")
                             except Exception as e:
