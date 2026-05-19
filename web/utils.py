@@ -585,6 +585,44 @@ def holdings_pie(df: pd.DataFrame, score_df: pd.DataFrame = None, mvs: dict = No
 # ══════════════════════════════════════════════════════════════════════════════
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def fetch_fund_nav(fund_name: str) -> float | None:
+    """
+    Hämtar aktuellt NAV för en fond via Yahoo Finance-sökning.
+    Söker på fondnamnet, returnerar priset i fondens valuta (SEK för svenska fonder).
+    Cachas 1 timme. Returnerar None om fonden inte hittas.
+    """
+    import requests
+    query = fund_name.strip()
+    if not query:
+        return None
+    try:
+        url = "https://query2.finance.yahoo.com/v1/finance/search"
+        r = requests.get(
+            url,
+            params={"q": query, "quotesCount": 6, "newsCount": 0},
+            timeout=8,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        if r.status_code != 200:
+            return None
+        for quote in r.json().get("quotes", []):
+            if quote.get("quoteType") not in ("MUTUALFUND", "ETF"):
+                continue
+            sym = quote.get("symbol", "")
+            if not sym:
+                continue
+            info = yf.Ticker(sym).info
+            price = (info.get("regularMarketPrice")
+                     or info.get("navPrice")
+                     or info.get("previousClose"))
+            if price and float(price) > 0:
+                return float(price)
+    except Exception:
+        pass
+    return None
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_price_history(tickers: tuple, period: str = "1y") -> pd.DataFrame:
     """Hämtar daglig close-kurs för alla tickers. Returnerar DataFrame med datum som index, tickers som kolumner."""
     if not tickers:
