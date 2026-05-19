@@ -383,8 +383,10 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
 <div style="background:#0f1a2e;border:1px solid #2d3250;border-radius:6px;
      padding:10px 14px;margin-bottom:10px;font-size:12px;color:#8892a4;line-height:1.8;">
   <strong style="color:#e8eaf0;">Vad filen innehåller:</strong> alla dina konton (ISK, KF, depåer) med
-  antal aktier, inköpspris och ISIN — ingen manuell inmatning behövs.<br>
-  <strong style="color:#e8eaf0;">Fonder:</strong> importeras automatiskt utan scanner-analys.
+  antal, inköpspris och ISIN — ingen manuell inmatning behövs.<br>
+  <strong style="color:#e8eaf0;">Fonder:</strong> importeras automatiskt utan scanner-analys.<br>
+  <span style="color:#f59e0b;">⚠ Välj <em>Mitt innehav fördelat per konto</em> — inte "Mitt sammanställda innehav".
+  Den sammanställda varianten saknar kontouppdelning och fondklassificering.</span>
 </div>
 
 <div style="font-size:12px;color:#64748b;">
