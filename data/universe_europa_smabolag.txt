@@ -1,0 +1,98 @@
+EUROPEISKA AKTIER I SCANNERN - BEFINTLIGA AKTIER (EXKLUDERINGSLISTA)
+Totalt europeiskt (exkl. Norden): 220 aktier | Uppdaterad: 2026-05-19
+======================================================================
+
+KRITISK INSTRUKTION: FORESLA ABSOLUT INTE nagra aktier fran denna lista.
+Alla aktier nedan ar REDAN inkluderade i scannern och ska INTE foreslas.
+
+OBS: Denna lista galler europeiska aktier UTANFOR Norden.
+Nordiska aktier (Sverige, Danmark, Norge, Finland) listas nedan som
+sekundaer referens — de ar OCKSA exkluderade fran dina forslag.
+
+--- Frankrike (Euronext Paris) (25 aktier) ---
+  ACA.PA          AI.PA           AIR.PA          BNP.PA          CAP.PA          DIM.PA          DSY.PA          ENGI.PA       
+  GLE.PA          HO.PA           KER.PA          MC.PA           OR.PA           PUB.PA          RMS.PA          RNO.PA        
+  SAF.PA          SAN.PA          STLAP.PA        STMPA.PA        SU.PA           TEP.PA          TTE.PA          VIE.PA        
+  VIV.PA        
+
+--- Holland (Euronext Amsterdam) (17 aktier) ---
+  AD.AS           ADYEN.AS        AKZA.AS         ASM.AS          ASML.AS         ASRNL.AS        BESI.AS         EXOR.AS       
+  HEIA.AS         IMCD.AS         INGA.AS         KPN.AS          MT.AS           PHIA.AS         PRX.AS          UMG.AS        
+  WKL.AS        
+
+--- Italien (Borsa Italiana) (9 aktier) ---
+  ENEL.MI         ENI.MI          ISP.MI          LDO.MI          MONC.MI         NEXI.MI         PRY.MI          RACE.MI       
+  UCG.MI        
+
+--- Osterrike (Wienbörsen) (2 aktier) ---
+  OMV.VI          VIG.VI        
+
+--- Polen (GPW Warszawa) (3 aktier) ---
+  PKN.WA          PKO.WA          PZU.WA        
+
+--- Portugal (Euronext Lissabon) (2 aktier) ---
+  EDP.LS          GALP.LS       
+
+--- Schweiz (SIX) (14 aktier) ---
+  ABBN.SW         ALC.SW          CFR.SW          GIVN.SW         HOLN.SW         KNIN.SW         LONN.SW         NESN.SW       
+  NOVN.SW         ROG.SW          SGSN.SW         SLHN.SW         UBSG.SW         ZURN.SW       
+
+--- Spanien (BME) (8 aktier) ---
+  BBVA.MC         BKT.MC          CABK.MC         FER.MC          IBE.MC          REP.MC          SAN.MC          TEF.MC        
+
+--- Storbritannien (London) (74 aktier) ---
+  AAL.L           ABF.L           ANTO.L          AUTO.L          AV.L            AZN.L           BA.L            BARC.L        
+  BATS.L          BDEV.L          BLND.L          BME.L           BP.L            CCH.L           CNA.L           COB.L         
+  CPG.L           CRH.L           DARK.L          DGE.L           EME.L           EXPN.L          FRES.L          GAW.L         
+  GKN.L           GLEN.L          GSK.L           HBR.L           HICL.L          HSBA.L          III.L           IMB.L         
+  IMI.L           JD.L            JMAT.L          LAND.L          LGEN.L          LLOY.L          LSEG.L          MGGT.L        
+  MKS.L           MNG.L           MONY.L          MRO.L           MSY.L           NG.L            NWG.L           NXT.L         
+  PHNX.L          PRU.L           PSN.L           REL.L           RIO.L           RR.L            RTO.L           RWI.L         
+  SBRY.L          SGE.L           SHEL.L          SHG.L           SMIN.L          SMT.L           SN.L            SPD.L         
+  SPX.L           SSE.L           STAN.L          SV.L            TLW.L           TSCO.L          ULVR.L          UU.L          
+  VOD.L           WEIR.L        
+
+--- Tyskland (XETRA) (66 aktier) ---
+  1COV.DE         ADS.DE          AIXA.DE         ALV.DE          BAS.DE          BAYN.DE         BC8.DE          BEI.DE        
+  BMW.DE          BOSS.DE         CBK.DE          DB1.DE          DBK.DE          DHL.DE          DIC.DE          DTE.DE        
+  DUE.DE          ENR.DE          EOAN.DE         EVT.DE          FMG.DE          FNTN.DE         FRE.DE          G1A.DE        
+  GFT.DE          HEI.DE          HEN3.DE         HHFA.DE         HNR1.DE         IFX.DE          KCO.DE          LEO.DE        
+  LXS.DE          MAN.DE          MBG.DE          MOR.DE          MRN.DE          MTX.DE          MUV2.DE         NDX1.DE       
+  NEM.DE          P911.DE         PNE.DE          PUM.DE          QBY.DE          RAA.DE          RHM.DE          RWE.DE        
+  S92.DE          SAP.DE          SHL.DE          SIE.DE          SKB.DE          SMHN.DE         SRT.DE          STM.DE        
+  SY1.DE          TKA.DE          TTE.DE          UN01.DE         UTDI.DE         VOW3.DE         WAF.DE          WCH.DE        
+  WKN.DE          ZAL.DE        
+
+
+--- NORDISKA AKTIER (sekundar referens — ocksa exkluderade) ---
+  Danmark (.CO) (25): ALK-B.CO, AMBU-B.CO, CARL-A.CO, CARL-B.CO, COLO-B.CO, DANSKE.CO, DEMANT.CO, DSV.CO, FLS.CO, GMAB.CO, GN.CO, HHS.CO, ISS.CO, JYSK.CO, MAERSK-A.CO, MAERSK-B.CO, NOVO-B.CO, NSIS-B.CO, NZYM-B.CO, ORSTED.CO, PANDORA.CO, ROCK-A.CO, SYDB.CO, TOP.CO, ZEAL.CO
+  Finland (.HE) (19): ELISA.HE, FORTUM.HE, HARVIA.HE, KAMUX.HE, KEMIRA.HE, MARIMEKKO.HE, METSB.HE, METSO.HE, NESTE.HE, NOKIA.HE, ORION-B.HE, PUUILO.HE, QTCOM.HE, RELAIS.HE, SAMPO.HE, STORA.HE, TOKMAN.HE, UPM.HE, VALMT.HE
+  Norge (.OL) (23): AKSO.OL, AUSS.OL, BOUV.OL, BWLPG.OL, BWO.OL, DNB.OL, EQNR.OL, FLNG.OL, FRO.OL, GJF.OL, GOGL.OL, KIT.OL, KOG.OL, MOWI.OL, NHY.OL, NOD.OL, ORK.OL, SALM.OL, SCATC.OL, SUBC.OL, TEL.OL, TOM.OL, YAR.OL
+  Sverige (.ST) (93): ADDT-B.ST, ADDV-B.ST, AFRY.ST, ALFA.ST, ALZ.ST, AQ.ST, ATCO-A.ST, ATCO-B.ST, AXFO.ST, BEIJ-B.ST, BETZ.ST, BILIA-A.ST, BIOG-B.ST, BIOTAGE.ST, BOKU.ST, BOLM.ST, BOOZT.ST, BURE.ST, CALD.ST, CAPP.ST, CAST.ST, CBRE.ST, CEVI.ST, CINT.ST, CLAS-B.ST, CMORE.ST, CTT.ST, DIAM-B.ST, DIOS.ST, EPIR-B.ST, ERIC-A.ST, ERIC-B.ST, ESSITY-B.ST, EVO.ST, FABG.ST, HEXA-B.ST, HM-A.ST, HM-B.ST, HMED.ST, HMS.ST, HOLM-B.ST, HUSQ-B.ST, INDT.ST, INVE-A.ST, INVE-B.ST, KINV-B.ST, KLOVERN-B.ST, KNOW-IT.ST, LAGR-B.ST, LATO-A.ST, LATO-B.ST, LUND-B.ST, MATAS.ST, MSAB-B.ST, MYCR.ST, NANOFORM.ST, NCAB.ST, NCC-B.ST, NDA-SE.ST, NETG-B.ST, NIBE-B.ST, NMAN.ST, NOLA-B.ST, NOTE.ST, NYFOSA.ST, OEM-B.ST, ONCO.ST, SAND.ST, SBB-B.ST, SCA-B.ST, SEB-A.ST, SECT-B.ST, SHB-A.ST, SINCH.ST, SKF-B.ST, SOBI.ST, SSAB-A.ST, SSAB-B.ST, SSCP.ST, SVNK-A.ST, SWEC-B.ST, SWED-A.ST, TAGM-B.ST, TELIA.ST, THULE.ST, TROAX.ST, VATTENFALL.ST, VBG-B.ST, VIT-B.ST, VOLV-A.ST, VOLV-B.ST, WIHL.ST, XVIVO.ST
+
+======================================================================
+TOTAL europeisk (exkl. Norden): 220 aktier att EXKLUDERA.
+
+Flat ticker-lista (alla europeiska, exkl. Norden, alfabetisk ordning):
+  1COV.DE         AAL.L           ABBN.SW         ABF.L           ACA.PA          AD.AS           ADS.DE          ADYEN.AS        AI.PA           AIR.PA        
+  AIXA.DE         AKZA.AS         ALC.SW          ALV.DE          ANTO.L          ASM.AS          ASML.AS         ASRNL.AS        AUTO.L          AV.L          
+  AZN.L           BA.L            BARC.L          BAS.DE          BATS.L          BAYN.DE         BBVA.MC         BC8.DE          BDEV.L          BEI.DE        
+  BESI.AS         BKT.MC          BLND.L          BME.L           BMW.DE          BNP.PA          BOSS.DE         BP.L            CABK.MC         CAP.PA        
+  CBK.DE          CCH.L           CFR.SW          CNA.L           COB.L           CPG.L           CRH.L           DARK.L          DB1.DE          DBK.DE        
+  DGE.L           DHL.DE          DIC.DE          DIM.PA          DSY.PA          DTE.DE          DUE.DE          EDP.LS          EME.L           ENEL.MI       
+  ENGI.PA         ENI.MI          ENR.DE          EOAN.DE         EVT.DE          EXOR.AS         EXPN.L          FER.MC          FMG.DE          FNTN.DE       
+  FRE.DE          FRES.L          G1A.DE          GALP.LS         GAW.L           GFT.DE          GIVN.SW         GKN.L           GLE.PA          GLEN.L        
+  GSK.L           HBR.L           HEI.DE          HEIA.AS         HEN3.DE         HHFA.DE         HICL.L          HNR1.DE         HO.PA           HOLN.SW       
+  HSBA.L          IBE.MC          IFX.DE          III.L           IMB.L           IMCD.AS         IMI.L           INGA.AS         ISP.MI          JD.L          
+  JMAT.L          KCO.DE          KER.PA          KNIN.SW         KPN.AS          LAND.L          LDO.MI          LEO.DE          LGEN.L          LLOY.L        
+  LONN.SW         LSEG.L          LXS.DE          MAN.DE          MBG.DE          MC.PA           MGGT.L          MKS.L           MNG.L           MONC.MI       
+  MONY.L          MOR.DE          MRN.DE          MRO.L           MSY.L           MT.AS           MTX.DE          MUV2.DE         NDX1.DE         NEM.DE        
+  NESN.SW         NEXI.MI         NG.L            NOVN.SW         NWG.L           NXT.L           OMV.VI          OR.PA           P911.DE         PHIA.AS       
+  PHNX.L          PKN.WA          PKO.WA          PNE.DE          PRU.L           PRX.AS          PRY.MI          PSN.L           PUB.PA          PUM.DE        
+  PZU.WA          QBY.DE          RAA.DE          RACE.MI         REL.L           REP.MC          RHM.DE          RIO.L           RMS.PA          RNO.PA        
+  ROG.SW          RR.L            RTO.L           RWE.DE          RWI.L           S92.DE          SAF.PA          SAN.MC          SAN.PA          SAP.DE        
+  SBRY.L          SGE.L           SGSN.SW         SHEL.L          SHG.L           SHL.DE          SIE.DE          SKB.DE          SLHN.SW         SMHN.DE       
+  SMIN.L          SMT.L           SN.L            SPD.L           SPX.L           SRT.DE          SSE.L           STAN.L          STLAP.PA        STM.DE        
+  STMPA.PA        SU.PA           SV.L            SY1.DE          TEF.MC          TEP.PA          TKA.DE          TLW.L           TSCO.L          TTE.DE        
+  TTE.PA          UBSG.SW         UCG.MI          ULVR.L          UMG.AS          UN01.DE         UTDI.DE         UU.L            VIE.PA          VIG.VI        
+  VIV.PA          VOD.L           VOW3.DE         WAF.DE          WCH.DE          WEIR.L          WKL.AS          WKN.DE          ZAL.DE          ZURN.SW       

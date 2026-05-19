@@ -1,0 +1,177 @@
+================================================================================
+GEMINI DEEP RESEARCH — PROMPT: NYA EUROPEISKA SMÅBOLAG (UTANFÖR NORDEN)
+Uppdaterad: 2026-05-19
+Bifoga filen: data/universe_europa_smabolag.txt
+================================================================================
+
+Du är en kvantitativ investeringsanalytiker med djup erfarenhet av europeiska
+börsmarknader. Din uppgift är att identifiera 15–20 NYA, HÖGKVALITATIVA bolag
+från europeiska börser (exklusive Norden) som passar in i min kvantitativa
+aktie-scanner.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+!! ABSOLUT VIKTIGAST — LÄS DETTA INNAN DU GÖR NÅGOT ANNAT !!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Den bifogade filen "universe_europa_smabolag.txt" innehåller alla 220
+europeiska aktier (exkl. Norden) som redan finns i min scanner. Du MÅSTE:
+
+  STEG 1: Läs igenom HELA exkluderingslistan (alla 220 tickers).
+  STEG 2: Kontrollera VARJE kandidat mot listan — ticker för ticker.
+  STEG 3: Om tickern redan finns → UTESLUT den helt från ditt svar.
+  STEG 4: Presentera ENBART aktier som INTE finns i listan.
+  STEG 5: Bekräfta explicit i ditt svar: "Jag har kontrollerat alla
+          [X] kandidater mot exkluderingslistan med 220 befintliga aktier."
+
+Att föreslå en aktie som redan finns = MISSLYCKANDE.
+Använd den platta ticker-listan längst ner i filen för snabbkontroll.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MIN NUVARANDE EUROPEISKA TÄCKNING (för kontext)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Börsländer som redan är BRETT täckta — undvik mer från dessa:
+  • Storbritannien (74 aktier): FTSE 100 + FTSE 250 dominanter täckta
+  • Tyskland (66 aktier): DAX, MDAX och SDAX tungt representerade
+  • Frankrike (25 aktier): CAC 40 + Euronext Paris large caps täckta
+  • Holland (17 aktier): AEX + Euronext Amsterdam large caps täckta
+  • Schweiz (14 aktier): SMI-komponenter och pharma/finans täckta
+
+Börsländer som är UNDERTÄCKTA — prioritera sökningar här:
+  • Belgien (0 aktier) — Euronext Brussels saknas helt
+  • Irland (0 aktier) — Euronext Dublin saknas helt
+  • Österrike (2 aktier) — ATX är nästan orepresenterat
+  • Polen (3 aktier) — WIG20 och mWIG40 saknas i stort sett
+  • Portugal (2 aktier) — PSI nästan tomt
+  • Spanien (8 aktier) — IBEX mid/small cap saknas
+  • Frankrike small cap — Euronext Growth Paris (CAC Small/Mid)
+  • Tyskland small cap — Scale-segmentet och SDAX
+  • Luxemburg, Tjeckien, Ungern, Rumänien — saknas helt
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KVANTITATIVA KRAV
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Hårda filter (alla måste uppfyllas):
+  ✓ Börsvärde: €150M – €10B (small till lower mid cap)
+  ✓ Daglig handelsvolym: >€500 000 (likvid nog för in/utgång)
+  ✓ Nettoskuld/EBITDA: <3x
+  ✓ Omsättningstillväxt YoY: >7% (senaste helår)
+  ✓ Positivt operativt kassaflöde
+  ✓ Noterad på erkänd europeisk börs med Yahoo Finance-ticker
+    (t.ex. .DE, .PA, .L, .AS, .SW, .MI, .MC, .WA, .BR, .VI, .LS)
+
+Mjuka krav (minst 3 av 5):
+  ○ ROE > 12% eller ROIC > 10%
+  ○ Bruttomarginal > 35% (mjukvara/medtech/nisch) eller > 18% (industri)
+  ○ Stark nischposition — topp 3 i sin europeiska eller globala marknad
+  ○ Insider/grundarägande > 5% ELLER aktivt återköpsprogram
+  ○ Piotroski F-Score ≥ 5 (om beräkningsbar)
+
+Automatiskt exkluderade:
+  ✗ Banker och försäkringsbolag med komplex regulatorisk balansräkning
+  ✗ Rena fastighetsbolag (REITs) utan industritillväxt
+  ✗ Förlustbringande biotech/pharma (fas 1–2, utan godkänd produkt)
+  ✗ Statsägda bolag med >50% offentligt ägande
+  ✗ Bolag utan revisor på erkänt revisionsfirma
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FOKUSERADE SÖKSEGMENT — LETA SPECIFIKT HÄR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Segment 1 — TYSKT OCH FRANSKT QUALITY SMALL CAP
+  Börs: Frankfurt Scale, m:access, Euronext Growth Paris (CAC Mid/Small)
+  Typer: Familjeägda Mittelstand-bolag med global nisch, vertikal SaaS för
+         europeisk industri, specialistmaskiner
+  Krav: Grundarfamilj fortfarande i ledningen, >15% EBIT-marginal
+  Exempel på profiler (ej att föreslå — dessa finns redan):
+    Rational AG (RAA.DE) = storkök, 41% ROIC — leta liknande bolag
+    Nemetschek (NEM.DE) = AEC-mjukvara — leta liknande vertikal SaaS
+
+Segment 2 — BRITTISK AIM-SMALL CAP (utöver FTSE 250 som är täckt)
+  Börs: London AIM Market (.L suffix)
+  Typer: Nischad teknik, specialiserade tjänster, healthcare services
+  Krav: Positiv FCF, EBITDA-marginal >10%, börsvärde £150M–£2B
+  Undvik: Spekuativa gruv-, olje- och spelutvecklingsbolag på AIM
+
+Segment 3 — BELGISK OCH HOLLÄNDSK TECH/INDUSTRI
+  Börs: Euronext Brussels (.BR), Euronext Amsterdam (.AS mid/small)
+  Typer: Halvledarutrustning (Belgien är starkt inom detta), precision
+         manufacturing, biofarmaci med intäkter
+  Krav: Europeisk eller global marknadsledare i sin nisch
+  Notera: ASML och BESI finns redan — leta nästa nivå i ekosystemet
+
+Segment 4 — POLSK OCH ÖSTEUROPEISK TECHNOLOGY
+  Börs: GPW Warszawa (.WA), Prag (.PR), Budapest (.BD)
+  Typer: IT-tjänster, spelbolag med kassaflöde, fintech, e-handel
+  Krav: Exponering mot västeuropeiska kunder (ej enbart lokalt beroende)
+  Varför: Kombination av låga lönekostnader och västeuropeisk kundtillväxt
+           ger ofta extremt höga kassaflödesmarginaler för IT-bolag
+
+Segment 5 — SCHWEIZISK OCH ÖSTERRIKISK PRECISIONSINDUSTRI
+  Börs: SIX Swiss Exchange (.SW mid/small), Wiener Börse (.VI)
+  Typer: Medicinsk utrustning, precisionsmätning, automation, lyxvaror nisch
+  Krav: Export-orienterade, minst 50% av intäkterna från utanför hemmarknaden
+  Notera: Nestlé, Novartis, Roche, ABB finns redan — leta SMID cap
+
+Segment 6 — EUROPEISK FÖRSVARSTEKNIK (ny upphandlingsvåg)
+  Börs: Alla europeiska börser
+  Typer: Ammunition, militär elektronik, CBRN-skydd, cyberförsvar
+  Krav: Aktiva Nato/EU-kontrakt, ej start-up, bevisad leveranskapacitet
+  Undvik: Rheinmetall, Thales, Saab, Leonardo — dessa är large caps
+
+Segment 7 — SPANSK OCH ITALIENSK NISCHINDUSTRI
+  Börs: BME Growth (.MC), Euronext Growth Milan (.MI)
+  Typer: Turism- och hospitalitetsteknik, jordbruks-agritech, mode-tech
+  Krav: Internationella intäkter >30%, positiv FCF, >10% tillväxt
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VARFÖR EUROPEISKA SMÅBOLAG ÄR INTRESSANTA JUST NU
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Ge din sökning kontext utifrån dessa strukturella megatrender:
+
+  • Europeisk ombeväpning: Nato-ländernas krav på 2–3,5% av BNP i
+    försvarsutgifter skapar decennielånga orderböcker hos underleverantörer
+  • Re- och nearshoring: Europeisk industri tar hem produktion från Asien —
+    gynnar kontraktstillverkare, automationsbolag och logistikspecialister
+  • Energitransition: EU Green Deal kräver massiva investeringar i
+    elnätsmodernisering, laddinfrastruktur och energilagring
+  • Digital transformation av "tråkig" industri: ERP, IoT, MES-system
+    till europeisk SME är en billion-euro-marknad som SaaS-bolag adresserar
+  • Demografisk press: Åldrande befolkning driver medtech, homecare-tech
+    och automatisering av personalintensiva sektorer
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LEVERANSFORMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Strukturera ditt svar i tre delar:
+
+DEL 1 — VERIFIERING
+  "Jag har läst exkluderingslistan med 220 europeiska aktier och kontrollerat
+  alla mina kandidater. Inga av mina förslag finns i listan."
+
+DEL 2 — KANDIDATER (15–20 bolag)
+  För varje bolag:
+
+  Ticker (Yahoo Finance-format):
+  Bolagsnamn:
+  Land & Börs:
+  Börsvärde (€M):
+  Omsättning TTM (€M):
+  Tillväxt YoY (%):
+  EBIT-marginal (%):
+  FCF (operativt kassaflöde):
+  Nettoskuld/EBITDA:
+  ROE/ROIC:
+  Insider-signal / Ägarstruktur:
+  Varför det passar scannern (2–3 meningar):
+  Primär risk (1 mening):
+
+DEL 3 — RANKINGTABELL
+  Sortera på: FCF-styrka + tillväxt + nischstyrka
+  Ange segment (se fokusområden ovan) för varje bolag
+
+PÅMINNELSE: Kontrollera VARJE ticker mot bifogad lista INNAN du svarar.
+Inga dubbletter accepteras.
