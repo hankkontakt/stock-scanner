@@ -593,6 +593,98 @@ def parse_avanza_positioner_csv(raw_bytes_or_path) -> dict[str, pd.DataFrame]:
     return result
 
 
+def parse_inkopskurser_csv(raw_bytes_or_path) -> dict[str, list[tuple[str, float]]]:
+    """
+    Parsar Avanza 'Historiska inköpskurser'-filen.
+
+    Format: Datum;Konto;ISIN;Namn;Inköpskurs (SEK);Antal
+
+    Returnerar: {isin: [(date_str, antal), ...]} sorterat äldst-first.
+    Används för att härleda köpdatum per innehav.
+    """
+    import io as _io
+
+    if isinstance(raw_bytes_or_path, (bytes, bytearray)):
+        raw = bytes(raw_bytes_or_path)
+        enc = "utf-8-sig" if raw[:3] == b"\xef\xbb\xbf" else "utf-8"
+        try:
+            text = raw.decode(enc)
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1")
+    else:
+        p = Path(raw_bytes_or_path)
+        raw = p.read_bytes()
+        enc = "utf-8-sig" if raw[:3] == b"\xef\xbb\xbf" else "utf-8"
+        try:
+            text = raw.decode(enc)
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1")
+
+    df = pd.read_csv(_io.StringIO(text), sep=";", on_bad_lines="skip")
+    df.columns = [c.strip() for c in df.columns]
+
+    # Normalise column names (case-insensitive)
+    col_map = {}
+    for col in df.columns:
+        c = col.lower().strip()
+        if c == "datum":
+            col_map[col] = "datum"
+        elif c == "isin":
+            col_map[col] = "isin"
+        elif "antal" in c:
+            col_map[col] = "antal"
+    df = df.rename(columns=col_map)
+
+    if not {"isin", "datum", "antal"}.issubset(df.columns):
+        return {}
+
+    def _num(s):
+        if pd.isna(s):
+            return None
+        s = str(s).strip().replace("\xa0", "").replace(" ", "").replace(",", ".")
+        try:
+            return float(s)
+        except ValueError:
+            return None
+
+    df["antal"] = df["antal"].apply(_num)
+    df = df.dropna(subset=["isin", "datum", "antal"])
+    df = df[df["isin"].astype(str).str.strip() != ""]
+    df["datum"] = df["datum"].astype(str).str.strip()
+
+    result: dict[str, list[tuple[str, float]]] = {}
+    for isin, group in df.groupby("isin"):
+        rows = sorted(
+            [(str(d), float(a)) for d, a in zip(group["datum"], group["antal"])],
+            key=lambda x: x[0],
+        )
+        result[str(isin).strip()] = rows
+
+    return result
+
+
+def get_buy_date_from_inkopskurser(
+    isin: str,
+    current_antal: float,
+    inkopskurser: dict[str, list[tuple[str, float]]],
+) -> str | None:
+    """
+    Returnerar uppskattat köpdatum för ett innehav.
+
+    Strategi: hitta det första datumet i historiken där antal stämmer med
+    nuvarande antal (±0.1%). Om inget match, returnera första förekomst av ISIN.
+    """
+    snapshots = inkopskurser.get(isin, [])
+    if not snapshots:
+        return None
+    tol = max(0.001, abs(current_antal) * 0.001)
+    for date_str, antal in snapshots:  # already sorted ascending
+        if abs(antal - current_antal) <= tol:
+            return date_str
+    # Fallback: first appearance of ISIN in file
+    return snapshots[0][0]
+
+
 # ── Huvud-importfunktion ────────────────────────────────────────────────────────
 
 def import_from_avanza(
