@@ -535,10 +535,12 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                     new_shares    = float(r.get("shares") or 0)
                     new_cost      = float(r.get("cost_basis") or 0)
 
-                    existing_vals = _existing_konto.get(suggested.upper()) if suggested else None
+                    # Fonder: använd fondnamnet som lookup-nyckel (ingen ticker)
+                    fund_key = name.upper()[:30] if security_type == "fund" else suggested.upper()
+                    existing_vals = _existing_konto.get(fund_key) if fund_key else None
                     if existing_vals is None:
                         row_status  = "new"; status_badge = "🟢 Ny"; status_color = "#4caf50"
-                        default_check = bool(suggested) and security_type != "certificate"
+                        default_check = (security_type == "fund") or (bool(suggested) and security_type != "certificate")
                     elif abs(existing_vals[0] - new_shares) > 0.001 or abs(existing_vals[1] - new_cost) > 0.001:
                         row_status  = "changed"; status_color = "#f59e0b"
                         _dp = []
@@ -604,9 +606,15 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                 n_add = n_upd = 0
                 today_iso = datetime.date.today().isoformat()
                 for item in import_data:
-                    if not item["import"] or not item["ticker"]:
+                    if not item["import"]:
                         continue
+                    is_fund_item = item.get("security_type") == "fund"
                     t = item["ticker"]
+                    # Fonder har inget yfinance-ticker — använd fondnamnet som nyckel
+                    if is_fund_item and not t:
+                        t = str(item["row"].get("name") or item["row"].get("kortnamn") or "FOND").upper()[:30]
+                    if not t:
+                        continue
                     s = float(item["row"].get("shares") or 0)
                     c = float(item["row"].get("cost_basis") or 0)
                     row_typ = item.get("security_type", "")
