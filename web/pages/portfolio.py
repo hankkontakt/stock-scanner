@@ -1017,6 +1017,20 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
         if holdings.empty:
             st.info("Portföljen är tom – ingenting att ta bort.")
         else:
+            # ── Rensa hela portföljen ────────────────────────────────────
+            with st.expander("⚠️ Rensa hela portföljen"):
+                st.warning("Detta tar bort **alla** aktier och fonder permanent.")
+                if st.button("🗑️ Ta bort alla innehav", key="btn_clear_all",
+                             type="primary", use_container_width=True):
+                    empty_h = pd.DataFrame(
+                        columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date"]
+                    )
+                    _save_holdings_user(empty_h)
+                    st.success("✅ Alla innehav borttagna.")
+                    st.rerun()
+
+            st.divider()
+
             tickers = holdings["ticker"].tolist()
             sel = st.selectbox("Välj aktie att hantera", tickers, key="port_remove_sel")
             _sel_match = holdings[holdings["ticker"] == sel]
