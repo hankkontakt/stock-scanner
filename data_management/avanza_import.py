@@ -457,6 +457,128 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
     return df
 
 
+# ── Avanza "positioner"-format (Min ekonomi → Analys → Exportera data) ─────────
+
+# Marknad-suffix: Avanzas marknadsnamn → Yahoo Finance-suffix
+_MARKET_SUFFIX: dict[str, str | None] = {
+    "XSTO": ".ST",   # Nasdaq Stockholm
+    "FNSE": ".ST",   # First North Sweden
+    "NGMX": ".ST",   # Nordic Growth Market
+    "XHEL": ".HE",   # Helsinki
+    "XCSE": ".CO",   # Copenhagen
+    "XOSL": ".OL",   # Oslo
+    "XLON": ".L",    # London
+    "XETR": ".DE",   # Frankfurt
+    "XPAR": ".PA",   # Paris
+    "XAMS": ".AS",   # Amsterdam
+    "XMIL": ".MI",   # Milano
+    "XNYS": "",      # NYSE (ingen suffix i Yahoo)
+    "XNAS": "",      # Nasdaq (ingen suffix)
+    "FUND": None,    # Aktivt förvaltad fond
+}
+
+
+def kortnamn_to_ticker(kortnamn: str, marknad: str) -> str | None:
+    """
+    Konverterar Avanzas kortnamn + marknad till Yahoo Finance-ticker.
+    Exempel: "INVE B" + "XSTO" → "INVE-B.ST"
+             "NCAB"  + "XSTO" → "NCAB.ST"
+             "AAPL"  + "XNAS" → "AAPL"
+    Returnerar None för fonder (FUND) eller okänd marknad.
+    """
+    suffix = _MARKET_SUFFIX.get((marknad or "").upper().strip())
+    if suffix is None and (marknad or "").upper() not in _MARKET_SUFFIX:
+        # Okänd marknad – försök utan suffix
+        suffix = ""
+    if suffix is None:
+        return None  # fond
+    base = kortnamn.strip().replace(" ", "-")
+    return f"{base}{suffix}" if base else None
+
+
+def is_positioner_format(raw_bytes_or_text) -> bool:
+    """Detekterar om filen är i det nya 'positioner'-formatet (har Kontonummer-kolumn)."""
+    try:
+        if isinstance(raw_bytes_or_text, bytes):
+            text = raw_bytes_or_text[:500].decode("utf-8-sig", errors="replace")
+        else:
+            text = str(raw_bytes_or_text)[:500]
+        first_line = text.splitlines()[0].lower() if text.splitlines() else ""
+        return "kontonummer" in first_line
+    except Exception:
+        return False
+
+
+def parse_avanza_positioner_csv(raw_bytes_or_path) -> dict[str, pd.DataFrame]:
+    """
+    Parsar det nya Avanza 'positioner'-formatet.
+
+    Källa: Min ekonomi → Analys → Exportera data →
+           "Mitt innehav fördelat per konto – Ladda ner innehav per konto som .csv"
+
+    CSV-kolumner:
+        Kontonummer;Namn;Kortnamn;Volym;Marknadsvärde;GAV (SEK);GAV;Valuta;Land;ISIN;Marknad;Typ
+
+    Returnerar:
+        {kontonummer_str: DataFrame} med kolumnerna:
+            name, kortnamn, shares, cost_basis, isin, marknad, av_typ
+    """
+    import io as _io
+
+    if isinstance(raw_bytes_or_path, (bytes, bytearray)):
+        raw = bytes(raw_bytes_or_path)
+        enc = "utf-8-sig" if raw[:3] == b"\xef\xbb\xbf" else "utf-8"
+        try:
+            text = raw.decode(enc)
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1")
+    else:
+        p = Path(raw_bytes_or_path)
+        raw = p.read_bytes()
+        enc = "utf-8-sig" if raw[:3] == b"\xef\xbb\xbf" else "utf-8"
+        try:
+            text = raw.decode(enc)
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1")
+
+    df = pd.read_csv(_io.StringIO(text), sep=";", on_bad_lines="skip")
+    df.columns = [c.strip() for c in df.columns]
+
+    def _num(s):
+        if pd.isna(s):
+            return None
+        s = str(s).strip().replace("\xa0", "").replace(" ", "").replace(" ", "").replace(",", ".")
+        try:
+            return float(s)
+        except ValueError:
+            return None
+
+    for col in ["Volym", "GAV (SEK)", "GAV", "Marknadsvärde"]:
+        if col in df.columns:
+            df[col] = df[col].apply(_num)
+
+    df = df.dropna(subset=["Namn"])
+    df = df[df["Namn"].astype(str).str.strip() != ""]
+
+    result: dict[str, pd.DataFrame] = {}
+    for konto_nr, group in df.groupby("Kontonummer"):
+        rows = []
+        for _, r in group.iterrows():
+            cost = r.get("GAV (SEK)") if pd.notna(r.get("GAV (SEK)")) else r.get("GAV")
+            rows.append({
+                "name":      str(r.get("Namn", "")).strip(),
+                "kortnamn":  str(r.get("Kortnamn", "")).strip(),
+                "shares":    r.get("Volym"),
+                "cost_basis": cost,
+                "isin":      str(r.get("ISIN", "")).strip(),
+                "marknad":   str(r.get("Marknad", "")).strip(),
+                "av_typ":    str(r.get("Typ", "")).strip().upper(),  # STOCK / FUND
+            })
+        result[str(konto_nr)] = pd.DataFrame(rows)
+
+    return result
+
+
 # ── Huvud-importfunktion ────────────────────────────────────────────────────────
 
 def import_from_avanza(
