@@ -54,6 +54,9 @@ def _apply_weekly_filters(df: pd.DataFrame, filters: dict,
     if filters.get("only_swedish"):
         out = out[out["ticker"].str.endswith(".ST", na=False)]
 
+    if filters.get("hide_illiquid") and "low_liquidity" in out.columns:
+        out = out[~out["low_liquidity"].fillna(False)]
+
     _SUFFIX_MAP = {
         "🇸🇪 Sverige": ".ST",
         "🇬🇧 UK":      ".L",
@@ -102,7 +105,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         "rank", "ticker", "name", "_status", "sector",
         "score_total", "predicted_return", "ml_rank",
         "entry_signal", "confidence_label", "trend_signal",
-        "delta_flag", "piotroski_f",
+        "delta_flag", "piotroski_f", "low_liquidity",
     ] if c in show.columns]
 
     display = show[base_cols].copy()
@@ -111,7 +114,14 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         "ticker":            "Ticker",
     })
     if "Ticker" in display.columns:
+        # Lägg till varningsikon för illikvida aktier direkt i ticker-kolumnen
+        _illiq = display.pop("low_liquidity") if "low_liquidity" in display.columns else None
         display["Ticker"] = display["Ticker"].apply(lambda t: f"{flag_for_ticker(t)} {t}")
+        if _illiq is not None:
+            display["Ticker"] = display.apply(
+                lambda r: r["Ticker"] + " 💧" if _illiq.get(r.name, False) else r["Ticker"],
+                axis=1,
+            )
     display = display.rename(columns={
         "name":              "Bolag",
         "_status":           "Status",
@@ -131,7 +141,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
 
     col_cfg = {
         "Rank": st.column_config.NumberColumn("Rank", help="Position i rankinglistan. Rank 1 = bäst poäng i det filtrerade urvalet.", format="%d"),
-        "Ticker": st.column_config.TextColumn("Ticker", help="Börsticker — den förkortade koden som identifierar aktien på börsen."),
+        "Ticker": st.column_config.TextColumn("Ticker", help="Börsticker. 💧 = illikvid (uppskattad dagsomsättning < $50k/dag — kan vara svår att handla utan hög spread)."),
         "Bolag": st.column_config.TextColumn("Bolag", help="Bolagets fullständiga namn."),
         "Status": st.column_config.TextColumn("Status", help="💼 = du äger aktien · ⭐ = du bevakar den"),
         "Sektor": st.column_config.TextColumn("Sektor", help="Vilken bransch bolaget tillhör. Sektorrotation är viktigt — starka sektorer presterar ofta bättre."),
