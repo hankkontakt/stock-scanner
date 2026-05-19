@@ -295,23 +295,55 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                     if df_az.empty:
                         st.error("Kunde inte läsa filen. Är det en Avanza-export?")
                     else:
+                        from data_management.avanza_import import find_ticker, classify_security, load_custom_map
+                        custom_map = load_custom_map()
+                        n_funds = n_certs = 0
                         st.success(f"Hittade **{len(df_az)} innehav**. Granska och bekräfta:")
                         import_data = []
                         for i, r in df_az.iterrows():
-                            hits      = _search_ticker_yfinance(r.get("name", ""))
-                            suggested = hits[0]["ticker"] if hits else ""
+                            name = r.get("name", "")
+                            isin = r.get("isin") if "isin" in df_az.columns else None
+                            # Försök hitta ticker via BUILTIN_MAP/ISIN/yfinance
+                            suggested = find_ticker(name, custom_map, isin=isin) or ""
+                            security_type = classify_security(name, suggested or None)
+
+                            # Badges för fond/certifikat
+                            badge = ""
+                            if security_type == "fund":
+                                badge = " 🏦 *Fond – ej börshandlad*"
+                                n_funds += 1
+                            elif security_type == "etf":
+                                badge = " 📊 *ETF*"
+                            elif security_type == "certificate":
+                                badge = " ⚠️ *Certifikat – stöds ej*"
+                                n_certs += 1
+
                             with st.container(border=True):
                                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 2, 1])
-                                c1.markdown(f"**{r.get('name','?')}**")
-                                c2.caption(f"Antal: {r.get('shares',0)}")
-                                c3.caption(f"Pris: {r.get('cost_basis',0)}")
+                                c1.markdown(f"**{name}**{badge}")
+                                c2.caption(f"Antal: {r.get('shares', 0)}")
+                                c3.caption(f"Pris: {r.get('cost_basis', 0)}")
                                 ticker_val = c4.text_input(
                                     "Ticker", value=suggested, key=f"az_t_{i}",
                                     label_visibility="collapsed",
                                     placeholder="t.ex. VOLV-B.ST",
                                 ).upper().strip()
-                                do_it = c5.checkbox("Ta med", value=bool(suggested), key=f"az_ok_{i}")
+                                # Fonder och certifikat utan ticker är avbockade som default
+                                default_check = bool(suggested) and security_type != "certificate"
+                                do_it = c5.checkbox("Ta med", value=default_check, key=f"az_ok_{i}")
                             import_data.append({"row": r, "ticker": ticker_val, "import": do_it})
+
+                        if n_funds > 0:
+                            st.info(
+                                f"🏦 **{n_funds} aktivt förvaltade fonder** hittades. "
+                                "Dessa saknar Yahoo Finance-ticker och kan inte analyseras i scannern — "
+                                "de är avbockade som standard. ETF:er med börsticker fungerar däremot utmärkt."
+                            )
+                        if n_certs > 0:
+                            st.warning(
+                                f"⚠️ **{n_certs} certifikat/turbo/warrant** identifierades och är avbockade — "
+                                "dessa stöds inte av scannern."
+                            )
 
                         if st.button("💾 Importera markerade", key="btn_az_save",
                                      type="primary", use_container_width=True):
