@@ -257,47 +257,35 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
                     konto: str = "Huvud",
                     typ: str = "",
                     buy_date: str = "",
-                    market_value: float = None) -> pd.DataFrame:
-    """Lägg till eller uppdatera ett innehav i portföljen.
-    Om tickern är ny läggs den automatiskt till i nästa scan (custom_universe).
-
-    konto:    vilket konto innehavet tillhör (default 'Huvud')
-    typ:      innehavets typ — 'aktier', 'fond', 'etf', 'certificate' eller ''
-              (tomt = bestäms av kontotypen vid visning, se _is_fund_holding)
-    buy_date: köpdatum i ISO-format (YYYY-MM-DD). Uppdateras bara om befintlig rad har tomt datum.
-    """
+                    market_value: float = None,
+                    isin: str = "") -> pd.DataFrame:
+    """Lägg till eller uppdatera ett innehav i portföljen."""
     h = holdings.copy() if not holdings.empty else pd.DataFrame(
-        columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date", "market_value"]
+        columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date", "market_value", "isin"]
     )
-    # Säkerställ att alla kolumner finns
-    if "konto" not in h.columns:
-        h["konto"] = "Huvud"
-    if "typ" not in h.columns:
-        h["typ"] = ""
-    if "buy_date" not in h.columns:
-        h["buy_date"] = ""
-    if "market_value" not in h.columns:
-        h["market_value"] = None
+    for col, default in [("konto", "Huvud"), ("typ", ""), ("buy_date", ""),
+                         ("market_value", None), ("isin", "")]:
+        if col not in h.columns:
+            h[col] = default
 
-    # Matcha på ticker + konto (samma aktie kan finnas i flera konton)
     mask = (h["ticker"] == ticker) & (h["konto"] == konto)
     is_new = not mask.any()
     if mask.any():
         h.loc[mask, "shares"]     = shares
         h.loc[mask, "cost_basis"] = cost_basis
-        if typ:                          # uppdatera typ bara om den skickas med
+        if typ:
             h.loc[mask, "typ"] = typ
         if market_value is not None:
             h.loc[mask, "market_value"] = market_value
-        # Uppdatera buy_date om ett datum skickas in (tillåt att skriva över fel datum)
         if buy_date:
             h.loc[mask, "buy_date"] = buy_date
+        if isin:
+            h.loc[mask, "isin"] = isin
     else:
         h = pd.concat([h, pd.DataFrame([{
             "ticker": ticker, "shares": shares,
             "cost_basis": cost_basis, "konto": konto, "typ": typ,
-            "buy_date": buy_date,
-            "market_value": market_value,
+            "buy_date": buy_date, "market_value": market_value, "isin": isin,
         }])], ignore_index=True)
     # Auto-lägg till i scan-universum om det är en ny ticker
     if is_new:
@@ -543,6 +531,45 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                 inkopskurser_data = avanza_import.parse_inkopskurser_csv(uploaded_ink.getvalue())
                 if inkopskurser_data:
                     st.success(f"✅ Historiska inköpskurser laddade — {len(inkopskurser_data)} ISIN-poster hittades.")
+                    # Knapp för att uppdatera köpdatum på befintliga innehav direkt
+                    if not holdings.empty and st.button(
+                        "📅 Uppdatera köpdatum på befintliga innehav",
+                        key="btn_update_dates", use_container_width=True,
+                        help="Matchar dina innehav mot inköpskurser-filen via ISIN och skriver in rätt köpdatum."
+                    ):
+                        # Bygg ISIN→ticker-map från positioner-filen om tillgänglig
+                        isin_map: dict[str, str] = {}
+                        if "isin" in holdings.columns:
+                            for _, _hr in holdings.iterrows():
+                                _isin = str(_hr.get("isin", "")).strip()
+                                if _isin:
+                                    isin_map[_isin] = str(_hr["ticker"]).upper()
+
+                        # Försök matcha via positioner-rådata om isin saknas i holdings
+                        # Annars: läs ISIN direkt från inkopskurser via råfil-lookup
+                        h_upd = holdings.copy()
+                        for col in ("buy_date", "isin"):
+                            if col not in h_upd.columns:
+                                h_upd[col] = ""
+                        n_updated = 0
+                        if "isin" in h_upd.columns:
+                            for idx, hrow in h_upd.iterrows():
+                                isin_h = str(hrow.get("isin", "") or "").strip()
+                                if not isin_h or isin_h not in inkopskurser_data:
+                                    continue
+                                shares = float(hrow.get("shares") or 0)
+                                bd = avanza_import.get_buy_date_from_inkopskurser(
+                                    isin_h, shares, inkopskurser_data
+                                )
+                                if bd:
+                                    h_upd.at[idx, "buy_date"] = bd
+                                    n_updated += 1
+                        if n_updated:
+                            _save_holdings_user(h_upd)
+                            st.success(f"✅ Köpdatum uppdaterat för {n_updated} innehav.")
+                            st.rerun()
+                        else:
+                            st.info("Inga ISIN-matchningar hittades — importera positioner-filen en gång så att ISIN sparas, tryck sedan här.")
                 else:
                     st.warning("Kunde inte läsa inköpskurser-filen. Kontrollera att det är rätt export.")
             except Exception:
@@ -687,8 +714,10 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                     elif row_typ not in ("aktier", "fond", "etf", "certificate"):
                         row_typ = ""
                     buy_date_val = str(item["row"].get("buy_date", "") or "").strip() or today_iso
+                    isin_val = str(item["row"].get("isin", "") or "").strip()
                     h = _upsert_holding(h, t, s, c, konto=konto_name, typ=row_typ,
-                                        buy_date=buy_date_val, market_value=mv_import)
+                                        buy_date=buy_date_val, market_value=mv_import,
+                                        isin=isin_val)
                     if item.get("row_status") == "new": n_add += 1
                     else: n_upd += 1
                 return h, n_add, n_upd
