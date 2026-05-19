@@ -623,14 +623,14 @@ def fetch_fund_nav(fund_name: str) -> float | None:
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def _fetch_price_history(tickers: tuple, period: str = "1y") -> pd.DataFrame:
-    """Hämtar daglig close-kurs för alla tickers. Returnerar DataFrame med datum som index, tickers som kolumner."""
+def _fetch_price_history(tickers: tuple, period: str = "1y", interval: str = "1d") -> pd.DataFrame:
+    """Hämtar kurshistorik för alla tickers. Returnerar DataFrame med datum/tid som index."""
     if not tickers:
         return pd.DataFrame()
     try:
-        data = yf.download(list(tickers), period=period, auto_adjust=True, progress=False)
+        data = yf.download(list(tickers), period=period, interval=interval,
+                           auto_adjust=True, progress=False)
         close = data["Close"] if isinstance(data.columns, pd.MultiIndex) else data
-        # Normalisera till tz-naivt index (yfinance returnerar UTC) för enkla jämförelser
         if close.index.tz is not None:
             close.index = close.index.tz_localize(None)
         return close
@@ -658,34 +658,47 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
     if price_hist.empty:
         return go.Figure()
 
-    # Sista tillgängliga datapunkt i historiken
-    last_available = price_hist.index[-1] if not price_hist.empty else pd.Timestamp.now()
+    def _calc_portfolio_series(ph: pd.DataFrame) -> pd.Series:
+        """Summera portföljvärde per tidpunkt, filtrera på buy_date."""
+        last_ts = ph.index[-1] if not ph.empty else pd.Timestamp.now()
+        pv = pd.Series(0.0, index=ph.index)
+        for _, row in holdings.iterrows():
+            t = row["ticker"].upper()
+            s = float(row.get("shares", 0) or 0)
+            if t not in ph.columns or s <= 0:
+                continue
+            ser = ph[t].ffill() * s
+            bd = str(row.get("buy_date", "")).strip()
+            if bd:
+                try:
+                    buy_ts = pd.Timestamp(bd).normalize()
+                    if buy_ts <= last_ts:
+                        ser = ser.where(ser.index >= buy_ts, 0.0)
+                except Exception:
+                    pass
+            pv = pv + ser
+        first_nz = pv[pv > 0].index.min() if (pv > 0).any() else None
+        if first_nz is not None:
+            pv = pv[pv.index >= first_nz]
+        return pv[pv > 0]
 
-    portfolio_values = pd.Series(0.0, index=price_hist.index)
-    for _, row in holdings.iterrows():
-        ticker = row["ticker"].upper()
-        shares = float(row.get("shares", 0) or 0)
-        if ticker not in price_hist.columns or shares <= 0:
-            continue
-        series = price_hist[ticker].ffill() * shares
-        buy_date_str = str(row.get("buy_date", "")).strip()
-        if buy_date_str:
-            try:
-                buy_ts = pd.Timestamp(buy_date_str).normalize()
-                # Filtrera bara om buy_date ligger inom tillgänglig historik;
-                # om köpt efter sista datapunkt (t.ex. köpt idag, close ej inrapporterad)
-                # visas senast tillgängliga kurs istället för tom chart
-                if buy_ts <= last_available:
-                    series = series.where(series.index >= buy_ts, 0.0)
-            except Exception:
-                pass
-        portfolio_values = portfolio_values + series
+    portfolio_values = _calc_portfolio_series(price_hist)
 
-    # Ta bort ledande nollor
-    first_nonzero = portfolio_values[portfolio_values > 0].index.min() if (portfolio_values > 0).any() else None
-    if first_nonzero is not None:
-        portfolio_values = portfolio_values[portfolio_values.index >= first_nonzero]
-    portfolio_values = portfolio_values[portfolio_values > 0]
+    # För korta innehavsperioder (< 5 datapunkter): byt till timdata för snygg chart
+    if len(portfolio_values) < 5 and tickers:
+        ph_intraday = _fetch_price_history(tickers, period="5d", interval="1h")
+        if not ph_intraday.empty:
+            pv_intra = _calc_portfolio_series(ph_intraday)
+            if not pv_intra.empty:
+                price_hist = ph_intraday
+                portfolio_values = pv_intra
+                _intraday = True
+            else:
+                _intraday = False
+        else:
+            _intraday = False
+    else:
+        _intraday = False
 
     if fund_constant > 0:
         if portfolio_values.empty:
@@ -714,7 +727,9 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
 
     # Benchmark-linje (normaliserad till portföljens startvärde)
     if benchmark:
-        bench_hist = _fetch_price_history((benchmark,), period=period)
+        _bperiod = "5d" if _intraday else period
+        _binterval = "1h" if _intraday else "1d"
+        bench_hist = _fetch_price_history((benchmark,), period=_bperiod, interval=_binterval)
         if not bench_hist.empty:
             bench_col = benchmark if benchmark in bench_hist.columns else bench_hist.columns[0]
             bench_s = bench_hist[bench_col].ffill()
@@ -737,6 +752,7 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
                     show_legend = True
 
     # Köp-markeringar (▲)
+    _dt_fmt = "%d %b %H:%M" if _intraday else "%d %b %Y"
     buy_markers_x, buy_markers_y, buy_markers_text = [], [], []
     for _, row in holdings.iterrows():
         bd = str(row.get("buy_date", "")).strip()
@@ -758,7 +774,7 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
             mode="markers", name="Köp",
             marker=dict(symbol="triangle-up", size=10, color="#4caf50", line=dict(width=1, color="#fff")),
             text=buy_markers_text,
-            hovertemplate="%{text}<br>%{x|%d %b %Y}<extra></extra>",
+            hovertemplate="%{text}<br>%{x|" + _dt_fmt + "}<extra></extra>",
         ))
 
     layout_extra = {}
