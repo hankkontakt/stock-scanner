@@ -256,7 +256,8 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
                     shares: float, cost_basis: float,
                     konto: str = "Huvud",
                     typ: str = "",
-                    buy_date: str = "") -> pd.DataFrame:
+                    buy_date: str = "",
+                    market_value: float = None) -> pd.DataFrame:
     """Lägg till eller uppdatera ett innehav i portföljen.
     Om tickern är ny läggs den automatiskt till i nästa scan (custom_universe).
 
@@ -266,7 +267,7 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
     buy_date: köpdatum i ISO-format (YYYY-MM-DD). Uppdateras bara om befintlig rad har tomt datum.
     """
     h = holdings.copy() if not holdings.empty else pd.DataFrame(
-        columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date"]
+        columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date", "market_value"]
     )
     # Säkerställ att alla kolumner finns
     if "konto" not in h.columns:
@@ -275,6 +276,8 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
         h["typ"] = ""
     if "buy_date" not in h.columns:
         h["buy_date"] = ""
+    if "market_value" not in h.columns:
+        h["market_value"] = None
 
     # Matcha på ticker + konto (samma aktie kan finnas i flera konton)
     mask = (h["ticker"] == ticker) & (h["konto"] == konto)
@@ -284,6 +287,8 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
         h.loc[mask, "cost_basis"] = cost_basis
         if typ:                          # uppdatera typ bara om den skickas med
             h.loc[mask, "typ"] = typ
+        if market_value is not None:
+            h.loc[mask, "market_value"] = market_value
         # Uppdatera buy_date bara om den skickas in OCH befintlig rad har tomt datum
         if buy_date:
             existing_bd = str(h.loc[mask, "buy_date"].iloc[0]).strip()
@@ -294,6 +299,7 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
             "ticker": ticker, "shares": shares,
             "cost_basis": cost_basis, "konto": konto, "typ": typ,
             "buy_date": buy_date,
+            "market_value": market_value,
         }])], ignore_index=True)
     # Auto-lägg till i scan-universum om det är en ny ticker
     if is_new:
@@ -357,9 +363,18 @@ def _build_rows(holdings_view: pd.DataFrame, score_data: dict) -> list:
         cost   = h.get("cost_basis")
         shares = h.get("shares", 0)
         is_fund_acc = _is_fund_holding(typ, konto, ticker=t)
+        # Fonder: om ingen live-kurs finns, använd lagrad marknadsvärde från import (eller cost×shares)
+        if is_fund_acc and not price:
+            stored_mv = float(h.get("market_value") or 0)
+            if stored_mv > 0:
+                mv = stored_mv
+            else:
+                mv = float(cost or 0) * float(shares or 0) or None
+            price = (mv / float(shares)) if mv and shares and float(shares) > 0 else None
+        else:
+            mv = price * float(shares) if price and shares else None
         pnl_pct = ((price / float(cost)) - 1) * 100 \
             if price and cost and float(cost) > 0 else None
-        mv = price * float(shares) if price and shares else None
         rows.append({
             "Ticker":    t,
             "Konto":     konto,
@@ -617,13 +632,15 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                         continue
                     s = float(item["row"].get("shares") or 0)
                     c = float(item["row"].get("cost_basis") or 0)
+                    raw_mv = item["row"].get("market_value")
+                    mv_import = float(raw_mv) if raw_mv is not None and str(raw_mv) not in ("", "nan") else None
                     row_typ = item.get("security_type", "")
                     if row_typ == "fund":
                         row_typ = "fond"
                     elif row_typ not in ("aktier", "fond", "etf", "certificate"):
                         row_typ = ""
                     h = _upsert_holding(h, t, s, c, konto=konto_name, typ=row_typ,
-                                        buy_date=today_iso)
+                                        buy_date=today_iso, market_value=mv_import)
                     if item.get("row_status") == "new": n_add += 1
                     else: n_upd += 1
                 return h, n_add, n_upd
@@ -666,13 +683,14 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                                     ) or ""
                                     sec_type = classify_security(str(r.get("name", "")), suggested or None)
                                 rows_enriched.append({
-                                    "name":      r.get("name"),
-                                    "shares":    r.get("shares"),
-                                    "cost_basis": r.get("cost_basis"),
-                                    "isin":      r.get("isin"),
+                                    "name":         r.get("name"),
+                                    "shares":       r.get("shares"),
+                                    "cost_basis":   r.get("cost_basis"),
+                                    "market_value": r.get("market_value"),
+                                    "isin":         r.get("isin"),
                                     "_suggested_ticker": suggested,
                                     "_security_type":    sec_type,
-                                    "buy_date":  datetime.date.today().isoformat(),
+                                    "buy_date":     datetime.date.today().isoformat(),
                                 })
                             df_enriched = pd.DataFrame(rows_enriched)
 

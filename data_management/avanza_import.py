@@ -576,13 +576,14 @@ def parse_avanza_positioner_csv(raw_bytes_or_path) -> dict[str, pd.DataFrame]:
         for _, r in group.iterrows():
             cost = r.get("GAV (SEK)") if pd.notna(r.get("GAV (SEK)")) else r.get("GAV")
             rows.append({
-                "name":      str(r.get("Namn", "")).strip(),
-                "kortnamn":  str(r.get("Kortnamn", "")).strip(),
-                "shares":    r.get("Volym"),
-                "cost_basis": cost,
-                "isin":      str(r.get("ISIN", "")).strip(),
-                "marknad":   str(r.get("Marknad", "")).strip(),
-                "av_typ":    str(r.get("Typ", "")).strip().upper(),  # STOCK / FUND
+                "name":         str(r.get("Namn", "")).strip(),
+                "kortnamn":     str(r.get("Kortnamn", "")).strip(),
+                "shares":       r.get("Volym"),
+                "cost_basis":   cost,
+                "market_value": r.get("Marknadsvärde"),
+                "isin":         str(r.get("ISIN", "")).strip(),
+                "marknad":      str(r.get("Marknad", "")).strip(),
+                "av_typ":       str(r.get("Typ", "")).strip().upper(),  # STOCK / FUND
             })
         result[str(konto_nr)] = pd.DataFrame(rows)
 
