@@ -1249,17 +1249,32 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
     rows = _build_rows(holdings_view, score_data)
     stock_rows_ov = [r for r in rows if not r.get("_is_fund")]
     fund_rows_ov  = [r for r in rows if r.get("_is_fund")]
-    total_mv    = sum(r.get("_market_value") or 0 for r in rows)
-    total_inv   = sum(float(r.get("Inköpspris") or 0) * float(r.get("Antal") or 0) for r in rows)
-    pnl_vals    = [r["_pnl_pct"] for r in rows if isinstance(r.get("_pnl_pct"), (int, float))]
-    total_pnl_kr = total_mv - total_inv
-    total_pnl_pct = (total_pnl_kr / total_inv * 100) if total_inv > 0 else 0
-    n_pos       = len(stock_rows_ov)
-    n_funds_ov  = len(fund_rows_ov)
+    n_pos      = len(stock_rows_ov)
+    n_funds_ov = len(fund_rows_ov)
 
-    # Spara daglig snapshot
+    # ── Toggle: styr HELA Översikt-fliken (KPI, chart, period-avkastning) ────
+    _th_l, _th_r = st.columns([4, 1])
+    with _th_r:
+        include_funds = st.toggle(
+            "🏦 Inkl. fonder",
+            key="chart_incl_funds",
+            value=False,
+            help="Inkludera/exkludera fonder i totalt värde, portföljchart och period-avkastning",
+        )
+
+    # Beräkna KPI-värden baserat på toggle
+    active_rows = rows if include_funds else stock_rows_ov
+    total_mv    = sum(r.get("_market_value") or 0 for r in active_rows)
+    total_inv   = sum(float(r.get("Inköpspris") or 0) * float(r.get("Antal") or 0) for r in active_rows)
+    pnl_vals    = [r["_pnl_pct"] for r in active_rows if isinstance(r.get("_pnl_pct"), (int, float))]
+    total_pnl_kr  = total_mv - total_inv
+    total_pnl_pct = (total_pnl_kr / total_inv * 100) if total_inv > 0 else 0
+
+    # Spara daglig snapshot (alltid med fonder, oavsett toggle)
+    _all_mv  = sum(r.get("_market_value") or 0 for r in rows)
+    _all_inv = sum(float(r.get("Inköpspris") or 0) * float(r.get("Antal") or 0) for r in rows)
     try:
-        save_portfolio_snapshot(total_mv, total_inv)
+        save_portfolio_snapshot(_all_mv, _all_inv)
     except Exception:
         pass
 
@@ -1302,18 +1317,24 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
     # ── Portföljvärde-chart ──────────────────────────────────────────────────
     st.markdown("#### Portföljvärde historik")
     period_map = {"1M": "1mo", "3M": "3mo", "6M": "6mo", "1Å": "1y", "Allt": "2y"}
-    col_period, col_toggle = st.columns([5, 1])
-    with col_period:
+    _col_per, _col_bench = st.columns([3, 2])
+    with _col_per:
         period_lbl = st.radio("Period", list(period_map.keys()), index=3,
                               horizontal=True, key="port_period", label_visibility="collapsed")
-    with col_toggle:
-        include_funds_chart = st.toggle("Inkl. fonder", key="chart_incl_funds", value=False,
-                                        help="Lägg till fondernas aktuella marknadsvärde i chart (konstant, ej historisk data)")
+    with _col_bench:
+        benchmark_lbl = st.selectbox(
+            "Jämför mot",
+            ["Ingen", "S&P 500 (SPY)", "Nasdaq (QQQ)", "OMXS30 (^OMX)", "Världsindex (ACWI)"],
+            index=0, key="port_benchmark", label_visibility="collapsed",
+        )
     period_yf = period_map[period_lbl]
+    _bm_map = {"S&P 500 (SPY)": "SPY", "Nasdaq (QQQ)": "QQQ",
+               "OMXS30 (^OMX)": "^OMX", "Världsindex (ACWI)": "ACWI"}
+    benchmark_ticker = _bm_map.get(benchmark_lbl, "")
 
-    # Beräkna fondvärde-konstant
+    # Fondvärde-konstant — bara om toggle är på
     fund_constant = 0.0
-    if include_funds_chart and fund_rows_ov:
+    if include_funds and fund_rows_ov:
         for r in fund_rows_ov:
             mv = r.get("_market_value") or 0
             if not mv:
@@ -1328,12 +1349,19 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
     )] if not holdings_view.empty else holdings_view
 
     with st.spinner("Hämtar prishistorik..."):
-        fig = portfolio_value_chart(stocks_hv, period=period_yf, fund_constant=fund_constant)
+        fig = portfolio_value_chart(stocks_hv, period=period_yf, fund_constant=fund_constant,
+                                    benchmark=benchmark_ticker)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-    # ── Period-avkastning ────────────────────────────────────────────────────
+    # ── Period-avkastning (respekterar toggle) ───────────────────────────────
+    _hv_for_rets = holdings_view if include_funds else (
+        holdings_view[~holdings_view.apply(
+            lambda _r: _is_fund_holding(str(_r.get("typ","")), str(_r.get("konto","")), ticker=str(_r.get("ticker",""))),
+            axis=1
+        )] if not holdings_view.empty else holdings_view
+    )
     with st.spinner(""):
-        period_rets = calc_period_returns(holdings_view)
+        period_rets = calc_period_returns(_hv_for_rets)
     if period_rets:
         cols_ret = st.columns(len(period_rets))
         for col, (label, (kr, pct)) in zip(cols_ret, period_rets.items()):
