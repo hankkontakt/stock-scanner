@@ -327,5 +327,3 @@ def _trigger_targeted_refresh(tickers: list[str]) -> bool:
 
 
 
-# ── Re-export: bakåtkompatibel import för streamlit_app.py ───────────────────
-from web.pages.admin_page import page_admin  # noqa: F401
