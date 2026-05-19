@@ -598,18 +598,20 @@ def _fetch_price_history(tickers: tuple, period: str = "1y") -> pd.DataFrame:
         return pd.DataFrame()
 
 
-def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y") -> go.Figure:
+def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
+                          fund_constant: float = 0.0) -> go.Figure:
     """
     Portföljvärde historik-chart.
     - Line chart (area fill) av portföljvärdet per dag
     - Scatter-markeringar (▲) vid buy_date för varje holding
+    - fund_constant: lägg till fondernas aktuella marknadsvärde som konstant offset
     - period: "1mo" / "3mo" / "6mo" / "1y" / "2y"
     """
-    if holdings.empty:
+    if holdings.empty and fund_constant == 0:
         return go.Figure()
 
-    tickers = tuple(holdings["ticker"].str.upper().tolist())
-    price_hist = _fetch_price_history(tickers, period=period)
+    tickers = tuple(holdings["ticker"].str.upper().tolist()) if not holdings.empty else ()
+    price_hist = _fetch_price_history(tickers, period=period) if tickers else pd.DataFrame()
 
     if price_hist.empty:
         return go.Figure()
@@ -623,6 +625,14 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y") -> go.Figu
             portfolio_values = portfolio_values + price_hist[ticker].ffill() * shares
 
     portfolio_values = portfolio_values[portfolio_values > 0]
+
+    if fund_constant > 0:
+        if portfolio_values.empty:
+            idx = pd.date_range(end=pd.Timestamp.now(), periods=30, freq="D")
+            portfolio_values = pd.Series(fund_constant, index=idx)
+        else:
+            portfolio_values = portfolio_values + fund_constant
+
     if portfolio_values.empty:
         return go.Figure()
 
@@ -670,11 +680,20 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y") -> go.Figu
             hovertemplate="%{text}<br>%{x|%d %b %Y}<extra></extra>",
         ))
 
+    layout_extra = {}
+    if fund_constant > 0:
+        layout_extra["annotations"] = [dict(
+            text=f"🏦 +{fund_constant:,.0f} kr fonder (aktuellt värde, ej historik)",
+            xref="paper", yref="paper", x=0.01, y=0.97,
+            showarrow=False, font=dict(size=11, color="#f59e0b"), align="left",
+        )]
+
     fig.update_layout(
         height=320,
-        margin=dict(l=0, r=0, t=8, b=0),
+        margin=dict(l=0, r=0, t=8 if not fund_constant else 28, b=0),
         showlegend=False,
         hovermode="x unified",
+        **layout_extra,
     )
     return _apply_chart_style(fig)
 

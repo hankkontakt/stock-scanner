@@ -1145,12 +1145,15 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
     )
 
     rows = _build_rows(holdings_view, score_data)
+    stock_rows_ov = [r for r in rows if not r.get("_is_fund")]
+    fund_rows_ov  = [r for r in rows if r.get("_is_fund")]
     total_mv    = sum(r.get("_market_value") or 0 for r in rows)
     total_inv   = sum(float(r.get("Inköpspris") or 0) * float(r.get("Antal") or 0) for r in rows)
     pnl_vals    = [r["_pnl_pct"] for r in rows if isinstance(r.get("_pnl_pct"), (int, float))]
     total_pnl_kr = total_mv - total_inv
     total_pnl_pct = (total_pnl_kr / total_inv * 100) if total_inv > 0 else 0
-    n_pos       = len([r for r in rows if not r.get("_is_fund")])
+    n_pos       = len(stock_rows_ov)
+    n_funds_ov  = len(fund_rows_ov)
 
     # Spara daglig snapshot
     try:
@@ -1158,22 +1161,70 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
     except Exception:
         pass
 
+    pos_label = f"{n_pos}" if not n_funds_ov else f"{n_pos} + {n_funds_ov} 🏦"
     kpi_row([
-        ("POSITIONER", str(n_pos), None),
+        ("POSITIONER", pos_label, None),
         ("TOTALT VÄRDE", f"{total_mv:,.0f} kr", None),
         ("TOTAL P&L", f"{total_pnl_kr:+,.0f} kr", f"{total_pnl_pct:+.1f}%"),
         ("BÄST / SÄMST",
          f"+{max(pnl_vals):.1f}% / {min(pnl_vals):.1f}%" if pnl_vals else "—", None),
     ])
 
+    # ── Innehav-detaljer (klickbar) ──────────────────────────────────────────
+    with st.expander(f"📋 Visa alla innehav ({n_pos} aktier{f' + {n_funds_ov} fonder' if n_funds_ov else ''})"):
+        if stock_rows_ov:
+            st.markdown("**Aktier**")
+            stocks_detail = [{
+                "Ticker":     r["Ticker"],
+                "Bolag":      (r.get("Bolag") or r["Ticker"])[:30],
+                "Antal":      r.get("Antal"),
+                "Inköpspris": f"{float(r['Inköpspris']):.2f}" if r.get("Inköpspris") else "—",
+                "Värde":      f"{r['_market_value']:,.0f} kr" if r.get("_market_value") else "—",
+                "P&L %":      f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), float) else "—",
+                "Konto":      r.get("Konto", ""),
+            } for r in stock_rows_ov]
+            st.dataframe(pd.DataFrame(stocks_detail), use_container_width=True, hide_index=True)
+        if fund_rows_ov:
+            st.markdown("**Fonder**")
+            funds_detail = [{
+                "Namn":            (r.get("Bolag") or r["Ticker"])[:35],
+                "Antal andelar":   f"{float(r['Antal']):.4f}" if r.get("Antal") else "—",
+                "GAV/andel (kr)":  f"{float(r['Inköpspris']):.2f}" if r.get("Inköpspris") else "—",
+                "Inköpsvärde":     f"{float(r['Inköpspris'] or 0)*float(r['Antal'] or 0):,.0f} kr",
+                "Marknadsvärde":   f"{r['_market_value']:,.0f} kr" if r.get("_market_value") else "—",
+                "P&L %":           f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), float) else "—",
+                "Konto":           r.get("Konto", ""),
+            } for r in fund_rows_ov]
+            st.dataframe(pd.DataFrame(funds_detail), use_container_width=True, hide_index=True)
+
     # ── Portföljvärde-chart ──────────────────────────────────────────────────
     st.markdown("#### Portföljvärde historik")
     period_map = {"1M": "1mo", "3M": "3mo", "6M": "6mo", "1Å": "1y", "Allt": "2y"}
-    period_lbl = st.radio("Period", list(period_map.keys()), index=3,
-                          horizontal=True, key="port_period", label_visibility="collapsed")
+    col_period, col_toggle = st.columns([5, 1])
+    with col_period:
+        period_lbl = st.radio("Period", list(period_map.keys()), index=3,
+                              horizontal=True, key="port_period", label_visibility="collapsed")
+    with col_toggle:
+        include_funds_chart = st.toggle("Inkl. fonder", key="chart_incl_funds", value=False,
+                                        help="Lägg till fondernas aktuella marknadsvärde i chart (konstant, ej historisk data)")
     period_yf = period_map[period_lbl]
+
+    # Beräkna fondvärde-konstant
+    fund_constant = 0.0
+    if include_funds_chart and fund_rows_ov:
+        for r in fund_rows_ov:
+            mv = r.get("_market_value") or 0
+            if not mv:
+                mv = float(r.get("Inköpspris") or 0) * float(r.get("Antal") or 0)
+            fund_constant += mv
+
+    # Chart: bara aktieposter (fonder har inga yfinance-kurser)
+    stocks_hv = holdings_view[holdings_view.apply(
+        lambda row: not _is_fund_holding(str(row.get("typ", "")), str(row.get("konto", ""))), axis=1
+    )] if not holdings_view.empty else holdings_view
+
     with st.spinner("Hämtar prishistorik..."):
-        fig = portfolio_value_chart(holdings_view, period=period_yf)
+        fig = portfolio_value_chart(stocks_hv, period=period_yf, fund_constant=fund_constant)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     # ── Period-avkastning ────────────────────────────────────────────────────
@@ -1217,9 +1268,7 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
             df_show = pd.DataFrame(display_rows_stocks).drop(columns=["_pnl", "_is_fund"], errors="ignore")
             st.dataframe(df_show, use_container_width=True, hide_index=True)
         if display_rows_funds:
-            with st.expander(f"🏦 Fonder ({len(display_rows_funds)})"):
-                df_funds = pd.DataFrame(display_rows_funds).drop(columns=["_pnl", "_is_fund"], errors="ignore")
-                st.dataframe(df_funds, use_container_width=True, hide_index=True)
+            st.caption(f"🏦 {len(display_rows_funds)} fond{'er' if len(display_rows_funds)>1 else ''} ingår — se detaljer i 📋 Visa alla innehav ovan eller i Analys-fliken")
 
     with col_pie:
         stock_rows_only = [r for r in rows if not r.get("_is_fund")]
@@ -1338,21 +1387,43 @@ def _tab_analys(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame)
 
     # ── Fonder P&L ───────────────────────────────────────────────────────────
     if fund_rows:
-        with st.expander(f"🏦 Fonder & fondkonton ({len(fund_rows)} st) — P&L-översikt", expanded=False):
-            st.caption("Fondinnehav analyseras inte med scanner-signaler. Enbart P&L och marknadsvärde visas.")
-            for r in fund_rows:
-                pnl  = r.get("P&L %", "—")
-                mv   = r.get("Marknadsvärde", "—")
-                kont = r.get("Konto", "")
-                pnl_color = "#4caf50" if str(pnl).startswith("+") else "#ef5350" if str(pnl).startswith("-") else "#8892a4"
-                st.markdown(
-                    f"<div style='padding:8px 12px;border:1px solid #2d3250;border-radius:8px;margin-bottom:6px;'>"
-                    f"🏦 <b>{r['Ticker']}</b> <span style='color:#8892a4;font-size:12px;'>({kont})</span> &nbsp;·&nbsp; "
-                    f"Marknadsvärde: <b>{mv}</b> &nbsp;·&nbsp; "
-                    f"<span style='color:{pnl_color};'>P&L: {pnl}</span>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
+        st.markdown("### 🏦 Fonder")
+        st.caption("Fondinnehav analyseras inte med scanner-signaler — enbart värde och P&L visas.")
+        for r in fund_rows:
+            cost   = float(r.get("Inköpspris") or 0)
+            antal  = float(r.get("Antal") or 0)
+            mv     = r.get("_market_value") or (cost * antal if cost and antal else None)
+            inv    = cost * antal if cost and antal else None
+            pnl_kr = (mv - inv) if mv and inv else None
+            pnl_pct = r.get("_pnl_pct")
+            pnl_color = "#4caf50" if (pnl_pct or 0) > 0 else "#ef5350" if (pnl_pct or 0) < 0 else "#8892a4"
+            name   = (r.get("Bolag") or r["Ticker"])[:40]
+            with st.container(border=True):
+                c1, c2, c3, c4 = st.columns([3, 2, 2, 2])
+                with c1:
+                    st.markdown(f"🏦 **{name}**")
+                    st.caption(f"Konto: {r['Konto']}  ·  {antal:.4f} andelar  ·  GAV {cost:.2f} kr/andel")
+                with c2:
+                    st.markdown(
+                        f'<div style="padding-top:4px"><div style="font-size:10px;color:#8892a4;letter-spacing:.08em;text-transform:uppercase">Inköpsvärde</div>'
+                        f'<div style="font-size:18px;font-weight:600;color:#e8eaf0">{inv:,.0f} kr</div></div>' if inv else "—",
+                        unsafe_allow_html=True,
+                    )
+                with c3:
+                    st.markdown(
+                        f'<div style="padding-top:4px"><div style="font-size:10px;color:#8892a4;letter-spacing:.08em;text-transform:uppercase">Marknadsvärde</div>'
+                        f'<div style="font-size:18px;font-weight:600;color:#e8eaf0">{mv:,.0f} kr</div></div>' if mv else "—",
+                        unsafe_allow_html=True,
+                    )
+                with c4:
+                    pnl_pct_str = f"{pnl_pct:+.1f}%" if pnl_pct is not None else "—"
+                    pnl_kr_str  = f"{pnl_kr:+,.0f} kr" if pnl_kr is not None else ""
+                    st.markdown(
+                        f'<div style="padding-top:4px"><div style="font-size:10px;color:#8892a4;letter-spacing:.08em;text-transform:uppercase">P&L</div>'
+                        f'<div style="font-size:18px;font-weight:700;color:{pnl_color}">{pnl_pct_str}</div>'
+                        f'<div style="font-size:11px;color:#64748b">{pnl_kr_str}</div></div>',
+                        unsafe_allow_html=True,
+                    )
 
     st.markdown("---")
 
