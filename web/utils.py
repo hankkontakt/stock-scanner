@@ -658,9 +658,8 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
     if price_hist.empty:
         return go.Figure()
 
-    # Köp-datum äldre än 14 dagar → filtrera historik
-    # Nyare köp (≤14 dagar) visas utan datum-avklippning för att ge meningsfull chart
-    cutoff_recent = pd.Timestamp.now().normalize() - pd.Timedelta(days=14)
+    # Sista tillgängliga datapunkt i historiken
+    last_available = price_hist.index[-1] if not price_hist.empty else pd.Timestamp.now()
 
     portfolio_values = pd.Series(0.0, index=price_hist.index)
     for _, row in holdings.iterrows():
@@ -673,7 +672,10 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
         if buy_date_str:
             try:
                 buy_ts = pd.Timestamp(buy_date_str).normalize()
-                if buy_ts <= cutoff_recent:
+                # Filtrera bara om buy_date ligger inom tillgänglig historik;
+                # om köpt efter sista datapunkt (t.ex. köpt idag, close ej inrapporterad)
+                # visas senast tillgängliga kurs istället för tom chart
+                if buy_ts <= last_available:
                     series = series.where(series.index >= buy_ts, 0.0)
             except Exception:
                 pass
