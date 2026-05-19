@@ -1071,7 +1071,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                 col_edit, col_del = st.columns(2)
 
                 with col_edit:
-                    with st.expander("✏️ Ändra antal / pris"):
+                    with st.expander("✏️ Ändra antal / pris / köpdatum"):
                         with st.form(f"form_edit_{sel}"):
                             e_shares = st.number_input(
                                 "Antal", value=float(row["shares"]),
@@ -1081,8 +1081,17 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                                 "Inköpspris (kr/st)", value=float(row["cost_basis"]),
                                 min_value=0.0, step=0.01, key=f"e_p_{sel}",
                             )
+                            _existing_bd = str(row.get("buy_date", "") or "").strip()
+                            try:
+                                _bd_default = datetime.date.fromisoformat(_existing_bd) if _existing_bd else datetime.date.today()
+                            except Exception:
+                                _bd_default = datetime.date.today()
+                            e_buy_date = st.date_input(
+                                "Köpdatum", value=_bd_default, key=f"e_bd_{sel}",
+                            )
                             if st.form_submit_button("💾 Spara", use_container_width=True):
-                                h = _upsert_holding(holdings, sel, e_shares, e_price)
+                                h = _upsert_holding(holdings, sel, e_shares, e_price,
+                                                    buy_date=e_buy_date.isoformat())
                                 _save_holdings_user(h)
                                 st.success(f"✅ {sel} uppdaterad.")
                                 st.rerun()
