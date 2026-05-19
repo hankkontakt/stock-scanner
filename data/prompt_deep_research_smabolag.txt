@@ -1,0 +1,128 @@
+================================================================================
+GEMINI DEEP RESEARCH — PROMPT: NYA AKTIER TILL SMABOLAGSSCANNERN
+Uppdaterad: 2026-05-19
+Bifoga filen: data/universe_smabolag.txt
+================================================================================
+
+Du är en kvantitativ investeringsanalytiker specialiserad på nordiska
+småbolag. Din uppgift är att identifiera 15–20 NYA, HÖGKVALITATIVA bolag
+som passar in i min kvantitativa nordiska småbolagsscanner.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+!! ABSOLUT VIKTIGAST — LÄS DETTA INNAN DU GÖR NÅGOT ANNAT !!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Den bifogade filen "universe_smabolag.txt" innehåller ALLA 318 aktier som
+redan finns i min scanner. Du MÅSTE göra följande:
+
+  STEG 1: Läs igenom HELA den bifogade exkluderingslistan (alla 318 tickers).
+  STEG 2: Kontrollera VARJE förslag mot listan — ticker för ticker.
+  STEG 3: Om tickern redan finns i listan → UTESLUT den helt från ditt svar.
+  STEG 4: Presentera ENBART aktier som INTE finns i listan.
+
+Den platta ticker-listan längst ner i filen listar ALLA 318 i alfabetisk
+ordning — använd den för snabbkontroll av varje kandidat.
+
+Att föreslå en aktie som redan finns i listan är ett MISSLYCKANDE.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCANNERNS NUVARANDE TÄCKNING (318 aktier)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Börser som redan är täckta:
+  • Nasdaq First North Growth Market Sverige (~120 bolag)
+  • Nasdaq Stockholm Small/Mid Cap (~130 bolag)
+  • Spotlight Stock Market & NGM (~20 bolag)
+  • Nasdaq Helsinki / First North Finland (LEMON.HE, DETEC.HE, IFA1V.HE, DIGIA.HE)
+  • Euronext Growth Oslo (VOLUE.OL, STRO.OL, KIT.OL)
+
+Sektorer som är BRETT täckta (undvik att föreslå fler i dessa):
+  • Mjukvara & SaaS — 45 bolag (t.ex. Lime, Fortnox, Vitec, Enea)
+  • Industri & Verkstad — 50 bolag (t.ex. Bufab, NCAB, HMS Networks)
+  • MedTech & Life Science — 50 bolag (t.ex. CellaVision, XVIVO, Bonex)
+  • Fastighet — 30 bolag (t.ex. Sagax, Castellum, Balder)
+  • Investmentbolag — 20 bolag (t.ex. Lifco, Lagercrantz, Addnode)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HÅRDA KVANTITATIVA KRAV
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ✓ Börsvärde: 100 MSEK – 15 GSEK
+  ✓ Daglig handelsvolym: >100 000 SEK (eller ekvivalent i NOK/EUR)
+  ✓ Nettoskuld/EBITDA: <3x (absolut gräns)
+  ✓ Piotroski F-Score: ≥5 (om beräkningsbar)
+  ✓ Positivt operativt kassaflöde (FCF ≥ 0)
+  ✓ Omsättningstillväxt YoY: >8%
+  ✓ Aktieantal-utspädning <20% senaste 12 månader
+  ✓ Kassan räcker minst 6 månader (ej akut burn-case)
+
+Exkludera automatiskt:
+  ✗ Förlustbringande biotech utan godkänd produkt (fas 1/2-bolag)
+  ✗ Fastighetsbolag med D/E >300%
+  ✗ Bolag med daglig volym <50 000 SEK
+  ✗ Shell-bolag och SPACs
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FOKUSOMRÅDEN — UNDERREPRESENTERADE SEGMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Dessa segment är UNDERREPRESENTERADE — prioritera sökningar här:
+
+  1. FINSKA & NORSKA TILLVÄXTBOLAG (utöver de 7 som redan finns)
+     Fokus: First North Finland, Oslo Börs mid cap
+     Typer: Industriell mjukvara, fintech, cleantech med intäkter
+     Krav: Noterade på erkänd nordisk börs med .HE eller .OL suffix
+
+  2. DEFENSIV KONSUMENT & NICHE RETAIL (underrepresenterat)
+     Fokus: Varumärkesbolag med prissättningsmakt, abonnemangstjänster B2C
+     Undvik: Modebolag med hög cyklikalitet, lågpriskedjor utan marginal
+
+  3. SPECIALISERAD B2B-TJÄNSTER (ej IT-konsult — det är överrepresenterat)
+     Fokus: Bemanning inom nischsektorer, certifieringstjänster, testning
+     Krav: >10% organisk tillväxt, >5% EBIT-marginal
+
+  4. INDUSTRI 4.0 / AUTOMATION (specifik nisch)
+     Fokus: Robotik-komponenter, sensorer, SCADA/MES-mjukvara
+     Undvik: Generella EMS-bolag (NOTE, HANZA m.fl. finns redan)
+
+  5. NORDISK FÖRSVARSTEKNOLOGI (utöver MILDEF, W5, ASTOR som finns)
+     Fokus: Nischade underleverantörer, elektronisk krigföring, CBRN
+     Krav: Befintliga försvarskontrakt, ej enbart civilt
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INSIDER- OCH ÄGARSIGNALER (viktig rankingfaktor)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Prioritera bolag med MINST ETT av följande:
+  • VD/CFO/styrelseordförande har köpt aktier öppet de senaste 6 månaderna
+  • Grundaren kvar i bolaget med >10% ägande
+  • Välkänt aktivt investmentbolag som storägare (t.ex. Traction, Latour, Öresund)
+  • Klusterköp: ≥3 insiders har köpt inom 30 dagar
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LEVERANSFORMAT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+För varje förslag, ange:
+
+  Ticker (Yahoo Finance-format, t.ex. PLEJD.ST eller LEMON.HE):
+  Bolagsnamn:
+  Börs/lista:
+  Börsvärde (MSEK):
+  Omsättning TTM (MSEK):
+  Tillväxt YoY (%):
+  FCF (operativt, senaste rapportering):
+  Piotroski F-Score (om känd):
+  Insider-signal:
+  Varför det passar scannern (2–3 meningar):
+  Primär risk (1 mening):
+
+Avsluta med en rankingtabell sorterad på:
+  FCF-styrka + Piotroski + Insidersignal + Tillväxt
+
+PÅMINNELSE INNAN DU SVARAR:
+  → Öppna den bifogade filen.
+  → Kontrollera VARJE kandidat mot den platta listan längst ner.
+  → Tar du med en aktie som redan finns = du har misslyckats.
+  → Ange explicit i ditt svar: "Jag har verifierat att ingen av mina
+    förslag finns i exkluderingslistan med [X] bolag."
