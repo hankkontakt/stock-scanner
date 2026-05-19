@@ -354,7 +354,8 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
     #   "Datum: 2026-05-19"
     #   (tom rad)
     #   Värdepapper;Antal;Kurs;...
-    _HEADER_KEYWORDS = {"värdepapper", "antal", "security", "quantity", "name", "isin"}
+    _HEADER_KEYWORDS = {"värdepapper", "antal", "security", "quantity", "name", "isin",
+                        "kontonummer", "volym", "kortnamn"}
     skip_rows = 0
     for i, line in enumerate(lines):
         cols_in_line = {c.strip().lower().strip('"') for c in line.split(sep)}
@@ -390,11 +391,12 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
         # ISIN
         elif c == "isin" or c.startswith("isin"):
             target = "isin"
-        # Antal
-        elif any(kw in c for kw in ("antal", "quantity", "shares")):
+        # Antal / Volym (positioner-format)
+        elif any(kw in c for kw in ("antal", "quantity", "shares", "volym")):
             target = "shares"
-        # Köpkurs / anskaffningskurs (cost basis per share)
-        elif any(kw in c for kw in ("köpkurs", "genomsnittlig", "purchase", "anskaffningskurs")):
+        # Köpkurs / GAV / anskaffningskurs (cost basis per share)
+        elif any(kw in c for kw in ("köpkurs", "genomsnittlig", "purchase", "anskaffningskurs")) \
+                or c == "gav" or c.startswith("gav "):
             target = "cost_basis"
         # Aktuell kurs — matchar "kurs" men INTE köp/anskaff-varianter
         elif ("kurs" in c

@@ -331,6 +331,15 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
     label = "➕ Hantera portfölj" if not holdings.empty else "➕ Kom igång – lägg till dina aktier"
     with st.expander(label, expanded=holdings.empty):
 
+        # Scroll-till-topp när användaren byter flik
+        import streamlit.components.v1 as _sc1
+        _sc1.html(
+            "<script>window.parent.document.querySelector"
+            "('[data-testid=\"stAppViewContainer\"]')"
+            ".scrollTo({top:0,behavior:'smooth'});</script>",
+            height=0,
+        )
+
         tab_avanza, tab_search, tab_manual, tab_remove = st.tabs([
             "📥 Importera från Avanza",
             "🔍 Sök & lägg till",
@@ -519,14 +528,20 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                                 # Förbered ticker-förslag direkt i DataFrame
                                 rows_enriched = []
                                 for _, r in df_acc.iterrows():
-                                    # Försök kortnamn-metoden först (snabbare, ingen nätverksanrop)
-                                    suggested = kortnamn_to_ticker(
-                                        str(r.get("kortnamn", "")), str(r.get("marknad", ""))
-                                    ) or find_ticker(
-                                        str(r.get("name", "")), custom_map, isin=str(r.get("isin", "")) or None
-                                    ) or ""
-                                    sec_type = "fund" if str(r.get("av_typ", "")).upper() == "FUND" else \
-                                               classify_security(str(r.get("name", "")), suggested or None)
+                                    # Fonder (av_typ == FUND): inget ticker-uppslag
+                                    _is_fund_row = str(r.get("av_typ", "")).upper() == "FUND"
+                                    if _is_fund_row:
+                                        suggested = ""
+                                        sec_type  = "fund"
+                                    else:
+                                        # Kortnamn-metoden först (snabbare, ingen nätverksanrop)
+                                        suggested = kortnamn_to_ticker(
+                                            str(r.get("kortnamn", "")), str(r.get("marknad", ""))
+                                        ) or find_ticker(
+                                            str(r.get("name", "")), custom_map,
+                                            isin=str(r.get("isin", "")) or None,
+                                        ) or ""
+                                        sec_type = classify_security(str(r.get("name", "")), suggested or None)
                                     rows_enriched.append({
                                         "name":      r.get("name"),
                                         "shares":    r.get("shares"),
