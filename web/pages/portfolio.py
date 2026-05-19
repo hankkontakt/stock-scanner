@@ -1442,8 +1442,8 @@ def _portfolio_ai_chat(holdings_view: pd.DataFrame, score_data: dict, df: pd.Dat
 # HUVUD-FUNKTION
 # ══════════════════════════════════════════════════════════════════════════════
 
-def page_portfolio(df: pd.DataFrame = None, watchlist: list = None,
-                   sc_df: pd.DataFrame = None, holdings: pd.DataFrame = None):
+def page_portfolio(df: pd.DataFrame = None, holdings: pd.DataFrame = None,
+                   watchlist: list = None, sc_df: pd.DataFrame = None):
     """Portfölj-sidan med 3 sub-tabs: Översikt | Analys | Hantera."""
     # Ladda alltid färsk holdings (ignorera ev. inskickad för bakåtkompatibilitet)
     holdings = load_portfolio()
