@@ -813,11 +813,3 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     return df.sort_values("score_total", ascending=False).reset_index(drop=True)
 
 
-def get_recommendation(score: float) -> str:
-    """Map a score to a buy/hold/sell recommendation."""
-    if score >= config.BUY_MORE_PERCENTILE:
-        return "KÖP MER"
-    elif score >= config.HOLD_PERCENTILE:
-        return "BEHÅLL"
-    else:
-        return "SÄLJ/MINSKA"

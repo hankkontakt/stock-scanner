@@ -1018,7 +1018,11 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
         else:
             tickers = holdings["ticker"].tolist()
             sel = st.selectbox("Välj aktie att hantera", tickers, key="port_remove_sel")
-            row = holdings[holdings["ticker"] == sel].iloc[0]
+            _sel_match = holdings[holdings["ticker"] == sel]
+            if _sel_match.empty:
+                st.rerun()
+                return
+            row = _sel_match.iloc[0]
 
             with st.container(border=True):
                 st.markdown(f"**{sel}** · {float(row['shares']):.0f} st · inköp {float(row['cost_basis']):.2f} kr/st")
