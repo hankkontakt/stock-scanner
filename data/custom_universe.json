@@ -3,5 +3,200 @@
     "ticker": "ACCON.ST",
     "name": "",
     "added": "2026-05-19"
+  },
+  {
+    "ticker": "AOF.DE",
+    "name": "Apontis Pharma",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "REY.MI",
+    "name": "Reyax Technology",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "DNP.WA",
+    "name": "DataWalk",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "FDR.MC",
+    "name": "Fluidra",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "CHRT.L",
+    "name": "Cohort",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "CER.L",
+    "name": "Cerillion",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "LOTB.BR",
+    "name": "Lotus Bakeries",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "SL.MI",
+    "name": "SeSa",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "INPST.AS",
+    "name": "InPost",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "ELG.DE",
+    "name": "Elmos Semiconductor",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "EVS.BR",
+    "name": "EVS Broadcast Equipment",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "TXT.WA",
+    "name": "Text SA",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "DIE.BR",
+    "name": "D'Ieteren Group",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "KSB.DE",
+    "name": "KSB SE",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "OGN.L",
+    "name": "Organon Global",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "VACN.SW",
+    "name": "VAT Group",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "BEAN.SW",
+    "name": "Bossard Holding",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "GTT.PA",
+    "name": "Gaztransport & Technigaz",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "CENY.BR",
+    "name": "Cenergy Holdings",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "042700.KS",
+    "name": "Hyunday WIA",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "058470.KQ",
+    "name": "Inti Inc",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "KPITTECH.NS",
+    "name": "KPIT Technologies",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "DIXON.NS",
+    "name": "Dixon Technologies",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "KAYNES.NS",
+    "name": "Kaynes Technology",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "PME.AX",
+    "name": "Pro Medicus",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "7733.T",
+    "name": "Olympus",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "FPH.NZ",
+    "name": "Fisher & Paykel Healthcare",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "TORNTPHARM.NS",
+    "name": "Torrent Pharmaceuticals",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "CRDO",
+    "name": "Credo Technology",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "NVMI",
+    "name": "Nova",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "CAMT",
+    "name": "Camtek",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "FN",
+    "name": "Fabrinet",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "MOD",
+    "name": "Modine Manufacturing",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "POWL",
+    "name": "Powell Industries",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "HUBB",
+    "name": "Hubbell",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "ENS",
+    "name": "EnerSys",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "VAIAS.HE",
+    "name": "Vaisala",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "CRAYN.OL",
+    "name": "Crayon Group",
+    "added": "2026-05-19"
+  },
+  {
+    "ticker": "RILBA.CO",
+    "name": "Ringkjoebing Landbobank",
+    "added": "2026-05-19"
   }
 ]
