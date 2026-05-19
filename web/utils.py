@@ -639,12 +639,14 @@ def _fetch_price_history(tickers: tuple, period: str = "1y") -> pd.DataFrame:
 
 
 def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
-                          fund_constant: float = 0.0) -> go.Figure:
+                          fund_constant: float = 0.0,
+                          benchmark: str = "") -> go.Figure:
     """
     Portföljvärde historik-chart.
     - Line chart (area fill) av portföljvärdet per dag
     - Scatter-markeringar (▲) vid buy_date för varje holding
-    - fund_constant: lägg till fondernas aktuella marknadsvärde som konstant offset
+    - fund_constant: fondernas aktuella marknadsvärde som konstant offset
+    - benchmark: yfinance-ticker att jämföra mot (t.ex. "SPY", "^OMX")
     - period: "1mo" / "3mo" / "6mo" / "1y" / "2y"
     """
     if holdings.empty and fund_constant == 0:
@@ -656,7 +658,10 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
     if price_hist.empty:
         return go.Figure()
 
-    # Beräkna portföljvärde per dag — varje holding bidrar först från sitt buy_date
+    # Köp-datum äldre än 14 dagar → filtrera historik
+    # Nyare köp (≤14 dagar) visas utan datum-avklippning för att ge meningsfull chart
+    cutoff_recent = pd.Timestamp.now().normalize() - pd.Timedelta(days=14)
+
     portfolio_values = pd.Series(0.0, index=price_hist.index)
     for _, row in holdings.iterrows():
         ticker = row["ticker"].upper()
@@ -664,17 +669,17 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
         if ticker not in price_hist.columns or shares <= 0:
             continue
         series = price_hist[ticker].ffill() * shares
-        # Nollställ dagar före köpdatum
         buy_date_str = str(row.get("buy_date", "")).strip()
         if buy_date_str:
             try:
-                buy_ts = pd.Timestamp(buy_date_str)
-                series = series.where(series.index >= buy_ts, 0.0)
+                buy_ts = pd.Timestamp(buy_date_str).normalize()
+                if buy_ts <= cutoff_recent:
+                    series = series.where(series.index >= buy_ts, 0.0)
             except Exception:
                 pass
         portfolio_values = portfolio_values + series
 
-    # Ta bort ledande nollor (perioder innan första köpet)
+    # Ta bort ledande nollor
     first_nonzero = portfolio_values[portfolio_values > 0].index.min() if (portfolio_values > 0).any() else None
     if first_nonzero is not None:
         portfolio_values = portfolio_values[portfolio_values.index >= first_nonzero]
@@ -691,8 +696,9 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
         return go.Figure()
 
     fig = go.Figure()
+    show_legend = False
 
-    # Area fill
+    # Area fill — portföljvärde
     fig.add_trace(go.Scatter(
         x=portfolio_values.index,
         y=portfolio_values.values,
@@ -704,10 +710,32 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
         hovertemplate="%{x|%d %b %Y}<br><b>%{y:,.0f} kr</b><extra></extra>",
     ))
 
-    # Köp-markeringar
-    buy_markers_x = []
-    buy_markers_y = []
-    buy_markers_text = []
+    # Benchmark-linje (normaliserad till portföljens startvärde)
+    if benchmark:
+        bench_hist = _fetch_price_history((benchmark,), period=period)
+        if not bench_hist.empty:
+            bench_col = benchmark if benchmark in bench_hist.columns else bench_hist.columns[0]
+            bench_s = bench_hist[bench_col].ffill()
+            start_idx = portfolio_values.index[0]
+            pos = bench_s.index.searchsorted(start_idx)
+            if pos < len(bench_s):
+                bench_start = bench_s.iloc[pos]
+                port_start  = portfolio_values.iloc[0]
+                if bench_start > 0:
+                    bench_norm = bench_s * (port_start / bench_start)
+                    bench_norm = bench_norm[bench_norm.index >= start_idx]
+                    fig.add_trace(go.Scatter(
+                        x=bench_norm.index,
+                        y=bench_norm.values,
+                        mode="lines",
+                        name=benchmark,
+                        line=dict(color="#f59e0b", width=1.5, dash="dot"),
+                        hovertemplate="%{x|%d %b %Y}<br><b>%{y:,.0f} kr</b> (" + benchmark + ")<extra></extra>",
+                    ))
+                    show_legend = True
+
+    # Köp-markeringar (▲)
+    buy_markers_x, buy_markers_y, buy_markers_text = [], [], []
     for _, row in holdings.iterrows():
         bd = str(row.get("buy_date", "")).strip()
         if not bd:
@@ -716,8 +744,7 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
             buy_dt = pd.Timestamp(bd)
             idx = portfolio_values.index.searchsorted(buy_dt)
             if idx < len(portfolio_values):
-                actual_dt = portfolio_values.index[idx]
-                buy_markers_x.append(actual_dt)
+                buy_markers_x.append(portfolio_values.index[idx])
                 buy_markers_y.append(portfolio_values.iloc[idx])
                 buy_markers_text.append(f"Köp: {row['ticker']}")
         except Exception:
@@ -725,10 +752,8 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
 
     if buy_markers_x:
         fig.add_trace(go.Scatter(
-            x=buy_markers_x,
-            y=buy_markers_y,
-            mode="markers",
-            name="Köp",
+            x=buy_markers_x, y=buy_markers_y,
+            mode="markers", name="Köp",
             marker=dict(symbol="triangle-up", size=10, color="#4caf50", line=dict(width=1, color="#fff")),
             text=buy_markers_text,
             hovertemplate="%{text}<br>%{x|%d %b %Y}<extra></extra>",
@@ -745,7 +770,7 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
     fig.update_layout(
         height=320,
         margin=dict(l=0, r=0, t=8 if not fund_constant else 28, b=0),
-        showlegend=False,
+        showlegend=show_legend,
         hovermode="x unified",
         title={"text": ""},
         yaxis_title="",
