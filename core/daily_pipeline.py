@@ -721,12 +721,234 @@ def _pre_scan_sync_universe():
         logger.info("  ✓ Pre-scan sync: inga nya tickers att lägga till")
 
 
+def run_targeted(tickers: list[str]) -> int:
+    """
+    Hämtar färsk data för en specifik lista aktier, uppdaterar den senaste
+    scored_universe-filen och sparar tillbaka.
+
+    Används för att direkt sätta poäng på aktier som:
+    - Precis lagts till i bevakningslista / portfölj
+    - Visar None/NaN i alla datapunkter i latest scored CSV
+
+    Flöde:
+        1. Ladda senaste scored_universe som base
+        2. Hämta fresh data för target-tickers (force_refresh=True → bypassa cache)
+        3. Ersätt/lägg till target-rader i base-df
+        4. Re-scora hela df:n (region-neutral) för korrekta percentilranker
+        5. Spara uppdaterad scored_universe med dagens datum
+
+    Returns:
+        Antal tickers som lyckades.
+    """
+    if not tickers:
+        logger.warning("run_targeted: tom ticker-lista")
+        return 0
+
+    tickers = [t.strip().upper() for t in tickers if t.strip()]
+    logger.info(f"\n{'='*50}")
+    logger.info(f"🎯 Targeted refresh – {len(tickers)} tickers: {', '.join(tickers)}")
+    logger.info(f"{'='*50}\n")
+
+    date_str = date.today().strftime("%Y-%m-%d")
+
+    # ── Steg 1: Ladda befintlig scored universe som base ──────────────────────
+    base_df = _load_latest_scored("scored_universe_*.parquet")
+    if base_df.empty:
+        base_df = _load_latest_scored("scored_universe_*.csv")
+    logger.info(f"  📂 Base scored universe: {len(base_df)} rader")
+
+    # ── Steg 2: Hämta fresh data för target-tickers ──────────────────────────
+    # fetch_universe_data hämtar fundamentals + prishistorik.
+    # Vi rensar cachen för dessa tickers manuellt så yfinance-data är färsk.
+    try:
+        from core.data_fetcher import fetch_universe_data, _CACHE_DIR as _DC
+        import glob
+
+        # Rensa alla cachade filer för dessa tickers
+        cleared = 0
+        for ticker in tickers:
+            safe = ticker.replace("/", "_").replace(".", "_")
+            for pattern in [f"{safe}_*", f"*{safe}*"]:
+                for f in glob.glob(str(Path(_DC) / pattern)):
+                    try:
+                        Path(f).unlink()
+                        cleared += 1
+                    except Exception:
+                        pass
+        if cleared:
+            logger.info(f"  🧹 Rensade {cleared} cachefiler för {len(tickers)} tickers")
+
+        raw_new = fetch_universe_data(tickers, verbose=True)
+    except Exception as e:
+        logger.error(f"  ❌ fetch_universe_data misslyckades: {e}")
+        return 0
+
+    if raw_new.empty:
+        logger.warning(f"  ⚠ Ingen data hämtades för {tickers} – avbryter")
+        return 0
+
+    succeeded = len(raw_new)
+    logger.info(f"  ✅ Hämtade data för {succeeded}/{len(tickers)} tickers")
+
+    # ── Steg 3: Slå ihop med base ─────────────────────────────────────────────
+    if base_df.empty or "ticker" not in base_df.columns:
+        merged_raw = raw_new
+    else:
+        # Ta bort gamla rader för dessa tickers, ersätt med nya
+        kept = base_df[~base_df["ticker"].isin(raw_new["ticker"].str.upper())]
+        # Justera raw_new kolumner till base_df:s kolumnuppsättning (undvik missmatch)
+        common_cols = [c for c in base_df.columns if c in raw_new.columns or c.startswith("score_")]
+        # raw_new saknar score-kolumner ännu — det ger NaN, vilket vi fyller i steg 4
+        merged_raw = pd.concat([kept, raw_new], ignore_index=True)
+
+    # ── Steg 4: Re-scora hela df:n ────────────────────────────────────────────
+    # Percentilrankning kräver hela universum — vi kan inte scora bara target-rader.
+    try:
+        from core.scoring import score_universe
+        from core.macro_regime import detect_regime
+
+        try:
+            regime = detect_regime().get("regime", "OSÄKER")
+        except Exception:
+            regime = "OSÄKER"
+
+        scored = score_universe(merged_raw, regime=regime)
+        logger.info(f"  ✅ Re-scorat {len(scored)} tickers (regime={regime})")
+    except Exception as e:
+        logger.error(f"  ❌ score_universe misslyckades: {e}")
+        return 0
+
+    # Piotroski (snabb, använder cachad data)
+    try:
+        from core import piotroski as _pio
+        scored = _pio.add_piotroski_to_universe(scored, verbose=False)
+    except Exception as e:
+        logger.warning(f"  ⚠ Piotroski hoppades över: {e}")
+
+    # Entry/trend-signaler
+    try:
+        from core import filters as _filters
+        scored = _filters.apply_all_filters(scored, verbose=False)
+    except Exception as e:
+        logger.warning(f"  ⚠ apply_all_filters hoppades över: {e}")
+
+    # ML-prediktion (om modell finns)
+    try:
+        from core.ml_predictor import predict_returns
+        scored = predict_returns(scored, "universe")
+    except Exception as e:
+        logger.warning(f"  ⚠ ML-prediktion hoppades över: {e}")
+
+    # ── Steg 5: Spara ────────────────────────────────────────────────────────
+    csv_path = REPORT_DIR / f"scored_universe_{date_str}"
+    _save_scored(scored, csv_path)
+    logger.info(f"  💾 Sparad: scored_universe_{date_str}.parquet/.csv")
+
+    # Logga hur det gick för de specifika target-tickers
+    if "ticker" in scored.columns and "score_total" in scored.columns:
+        target_rows = scored[scored["ticker"].isin(tickers)]
+        for _, row in target_rows.iterrows():
+            score = row.get("score_total", "?")
+            entry = row.get("entry_signal", "—")
+            logger.info(f"  ✓ {row['ticker']}: score={score:.1f}, entry={entry}")
+
+    logger.info(f"\n✅ Targeted refresh klar — {succeeded} ticker(s) uppdaterade\n")
+    return succeeded
+
+
+def _find_missing_data_tickers(max_tickers: int = 50) -> list[str]:
+    """
+    Hittar tickers i senaste scored_universe som saknar meningsfull data.
+
+    Kriterier för "saknar data":
+    - score_total är NaN ELLER
+    - current_price / close saknas ELLER är 0 ELLER
+    - Alla dessa saknas: pe_trailing, roe, revenue_growth, return_12m
+
+    Returnerar max max_tickers tickers, prioriterade på att de finns i
+    portfolio/watchlist (dessa är viktigast för användaren).
+    """
+    df = _load_latest_scored("scored_universe_*.parquet")
+    if df.empty or "ticker" not in df.columns:
+        return []
+
+    # Fastställ "data saknas"-mask
+    has_score = df.get("score_total", pd.Series()).notna()
+
+    price_col = next((c for c in ("current_price", "close") if c in df.columns), None)
+    if price_col:
+        has_price = df[price_col].notna() & (df[price_col] > 0)
+    else:
+        has_price = pd.Series(False, index=df.index)
+
+    key_fundamental_cols = [c for c in ("pe_trailing", "roe", "revenue_growth", "return_12m")
+                             if c in df.columns]
+    if key_fundamental_cols:
+        has_fundamentals = df[key_fundamental_cols].notna().any(axis=1)
+    else:
+        has_fundamentals = pd.Series(False, index=df.index)
+
+    missing_mask = (~has_score) | (~has_price) | (~has_fundamentals)
+    missing_tickers = df.loc[missing_mask, "ticker"].dropna().unique().tolist()
+
+    if not missing_tickers:
+        logger.info("  ✓ Inga tickers med saknad data hittades")
+        return []
+
+    # Prioritera tickers i portfölj/watchlist
+    holdings = _load_portfolio()
+    wl_raw = _load_watchlist()
+    priority = set()
+    if not holdings.empty and "ticker" in holdings.columns:
+        priority.update(holdings["ticker"].str.upper().tolist())
+    priority.update(i.get("ticker", "").upper() for i in wl_raw if i.get("ticker"))
+
+    prioritized = [t for t in missing_tickers if t in priority]
+    rest = [t for t in missing_tickers if t not in priority]
+    ordered = prioritized + rest
+
+    result = ordered[:max_tickers]
+    logger.info(f"  🔍 Hittade {len(missing_tickers)} tickers med saknad data"
+                f" (prioriterade: {len(prioritized)}, totalt att köra: {len(result)})")
+    return result
+
+
+def run_refresh_missing(max_tickers: int = 50) -> int:
+    """
+    Hitta aktier med saknad data i senaste scored_universe och kör
+    en targeted refresh på dem.
+
+    Körs 1–2 gånger per dag via GitHub Actions (schema: 08:00 + 16:00 CET).
+    Typiska kandidater:
+    - Nyligen tillagda bevakningar/portföljinnehav vars data ännu ej hämtats
+    - Tickers som misslyckades i senaste veckoscan p.g.a. API-timeout/rate-limit
+    - Avnoterade tickers (dessa ger tom data och bör kännas igen)
+
+    Returns:
+        Antal tickers som uppdaterades.
+    """
+    logger.info(f"\n{'='*50}")
+    logger.info("🔄 Refresh missing data – letar efter tickers med saknad data...")
+    logger.info(f"{'='*50}\n")
+
+    tickers = _find_missing_data_tickers(max_tickers=max_tickers)
+    if not tickers:
+        logger.info("✅ Inget att uppdatera.")
+        return 0
+
+    logger.info(f"  📋 Kör targeted refresh för {len(tickers)} tickers: "
+                f"{', '.join(tickers[:10])}{'...' if len(tickers) > 10 else ''}")
+    return run_targeted(tickers)
+
+
 def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     """
     Kör dagliga pipeline: hämta data, skapa rapport, skicka mail.
 
     Args:
         mode: "morning" | "evening" | "weekly" | "smallcap"
+              | "targeted"      (TARGET_TICKERS-env sätts av workflow)
+              | "refresh_missing" (letar upp + refreshar saknad data)
         force_refresh: Hoppa över cache, tvinga ny data
     """
     start_time = time.time()
@@ -739,6 +961,21 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     logger.info(f"\n{'='*50}")
     logger.info(f"🚀 MarketScan Pipeline – mode={mode} – {date_str}")
     logger.info(f"{'='*50}\n")
+
+    # ── Snabblägen som inte behöver hela pipeline-flödet ──────────────────
+    if mode == "targeted":
+        tickers_env = os.environ.get("TARGET_TICKERS", "")
+        tickers_list = [t.strip().upper() for t in tickers_env.split(",") if t.strip()]
+        if not tickers_list:
+            logger.warning("  ⚠ TARGET_TICKERS env var är tom – avbryter targeted-körning")
+            return
+        logger.info(f"  🎯 Targeted refresh: {', '.join(tickers_list)}")
+        run_targeted(tickers_list)
+        return
+
+    if mode == "refresh_missing":
+        run_refresh_missing()
+        return
 
     # ═══════════════════════════════════════════════════════════════════════
     # 1. LADDA DATA

@@ -10,6 +10,8 @@ on:
     - cron: "0 9 * * 6"
     # Småbolag måndag 09:15 CET
     - cron: "15 8 * * 1"
+    # Refresh missing data 08:00 + 15:00 UTC (10:00 + 17:00 CET) vardagar
+    - cron: "0 8,15 * * 1-5"
 
   workflow_dispatch:
     inputs:
@@ -23,6 +25,12 @@ on:
           - evening
           - weekly
           - smallcap
+          - targeted
+          - refresh_missing
+      tickers:
+        description: 'Kommaseparerade tickers (endast för targeted-läge, t.ex. VOLV-B.ST,ERIC-B.ST)'
+        required: false
+        default: ''
 
 jobs:
   pipeline:
@@ -79,16 +87,25 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
+            echo "tickers=${{ github.event.inputs.tickers }}" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "0 7 * * 1-5" ]; then
             echo "mode=morning" >> $GITHUB_OUTPUT
+            echo "tickers=" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "30 15 * * 1-5" ]; then
             echo "mode=evening" >> $GITHUB_OUTPUT
+            echo "tickers=" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "0 9 * * 6" ]; then
             echo "mode=weekly" >> $GITHUB_OUTPUT
+            echo "tickers=" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "15 8 * * 1" ]; then
             echo "mode=smallcap" >> $GITHUB_OUTPUT
+            echo "tickers=" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 8,15 * * 1-5" ]; then
+            echo "mode=refresh_missing" >> $GITHUB_OUTPUT
+            echo "tickers=" >> $GITHUB_OUTPUT
           else
             echo "mode=morning" >> $GITHUB_OUTPUT
+            echo "tickers=" >> $GITHUB_OUTPUT
           fi
 
       - name: 🚀 Kör pipeline
@@ -99,6 +116,7 @@ jobs:
           FINNHUB_API_KEY:  ${{ secrets.FINNHUB_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
+          TARGET_TICKERS:   ${{ steps.mode.outputs.tickers }}
         run: |
           echo "▶️ Kör pipeline i läge: ${{ steps.mode.outputs.mode }}"
           python -c "from core.daily_pipeline import run_pipeline; run_pipeline('${{ steps.mode.outputs.mode }}')"
