@@ -363,14 +363,21 @@ def _build_rows(holdings_view: pd.DataFrame, score_data: dict) -> list:
         cost   = h.get("cost_basis")
         shares = h.get("shares", 0)
         is_fund_acc = _is_fund_holding(typ, konto, ticker=t)
-        # Fonder: om ingen live-kurs finns, använd lagrad marknadsvärde från import (eller cost×shares)
         if is_fund_acc and not price:
-            stored_mv = float(h.get("market_value") or 0)
-            if stored_mv > 0:
-                mv = stored_mv
-            else:
-                mv = float(cost or 0) * float(shares or 0) or None
-            price = (mv / float(shares)) if mv and shares and float(shares) > 0 else None
+            # Försök hämta live NAV via Yahoo Finance-sökning (cachat 1h)
+            try:
+                from web.utils import fetch_fund_nav
+                fund_display_name = str(h.get("ticker", t)).strip()
+                nav = fetch_fund_nav(fund_display_name)
+                if nav and float(shares or 0) > 0:
+                    price = nav
+                    mv = nav * float(shares)
+                else:
+                    raise ValueError("no nav")
+            except Exception:
+                stored_mv = float(h.get("market_value") or 0)
+                mv = stored_mv if stored_mv > 0 else (float(cost or 0) * float(shares or 0) or None)
+                price = (mv / float(shares)) if mv and shares and float(shares) > 0 else None
         else:
             mv = price * float(shares) if price and shares else None
         pnl_pct = ((price / float(cost)) - 1) * 100 \
@@ -580,8 +587,9 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                         c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 2, 1])
                         c1.markdown(f"**{name}**{type_badge}")
                         if security_type == "fund":
-                            total_val = new_shares * new_cost
-                            c2.caption(f"Värde: {total_val:,.0f} kr")
+                            mv_csv = float(r.get("market_value") or 0)
+                            total_val = mv_csv if mv_csv > 0 else new_shares * new_cost
+                            c2.caption(f"Marknadsvärde: {total_val:,.0f} kr")
                             c3.caption(f"{new_shares:.4f} andelar")
                         else:
                             c2.caption(f"Antal: {new_shares:.2f}")
