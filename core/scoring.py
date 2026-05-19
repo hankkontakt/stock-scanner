@@ -9,6 +9,17 @@ Scoring philosophy:
 - This makes the scores comparable across stocks regardless of sector
 - Lower-is-better metrics (P/E, debt) are inverted before ranking
 - Final composite is a weighted average of all factor scores
+
+Region neutralization (added 2026-05):
+- Fundamental metrics (P/E, P/B, ROE, margins) are region-adjusted before
+  percentile ranking. A Swedish industrial stock's P/E 15 is no longer ranked
+  against Nasdaq tech P/E 35 — instead it's ranked relative to its regional
+  peers. This corrects the most significant cross-market bias in the original
+  global-percentile approach.
+- Momentum is intentionally kept global (cross-market relative strength is
+  a valid factor and is not distorted by valuation-regime differences).
+- Liquidity flag: stocks with estimated daily turnover < USD 50k (or equivalent)
+  are tagged low_liquidity=True so users can filter them out.
 """
 
 import pandas as pd
@@ -25,6 +36,36 @@ UNSUSTAINABLE_PAYOUT   = 1.0   # Payout ratio över detta = ohållbart
 HOLDING_DISCOUNT       = 0.85  # Multiplikator för holdingbolag
 COMMODITY_DISCOUNT     = 0.90  # Multiplikator för råvarubolag
 
+# ── Likviditetsgräns ─────────────────────────────────────────────────────────
+# Uppskattad daglig omsättning i USD under denna gräns → low_liquidity = True.
+# avg_volume (aktier/dag) × current_price (lokal valuta) omräknas till USD via
+# en förenklad tabell. Allt under $50k/dag är i praktiken handelsmässigt svårt
+# att kliva in/ur utan onödig spread och slippage.
+MIN_DAILY_TURNOVER_USD = 50_000
+
+# Ungefärliga konverteringsfaktorer lokal valuta → USD (uppdateras sällan).
+# Används ENBART för likviditetsestimering, inte för kursjämförelser.
+_CCY_TO_USD = {
+    "SEK": 0.095,   # 1 SEK ≈ 0.095 USD (1 USD ≈ 10.5 SEK)
+    "NOK": 0.093,
+    "DKK": 0.143,
+    "EUR": 1.08,
+    "GBP": 1.27,
+    "JPY": 0.0065,
+    "HKD": 0.128,
+    "KRW": 0.00073,
+    "TWD": 0.031,
+    "AUD": 0.65,
+    "CAD": 0.73,
+    "INR": 0.012,
+    "BRL": 0.18,
+    "MXN": 0.052,
+    "CHF": 1.12,
+    "SGD": 0.74,
+    "CNY": 0.138,
+    "USD": 1.0,
+}
+
 HOLDING_INDUSTRIES = {
     "asset management", "diversified investments", "investment trusts",
     "closed-end fund", "exchange traded fund", "capital markets",
@@ -34,11 +75,175 @@ COMMODITY_INDUSTRIES = {
     "steel", "aluminum", "uranium", "oil & gas e&p",
 }
 
+# ── Börsgrupper för region-neutralisering ────────────────────────────────────
+# Fundamentala värderingsmultiplar (P/E, P/B, ROE, marginaler) skiljer sig
+# systematiskt mellan marknader p.g.a. redovisningsregler, ränteklimat och
+# historiska prissättningsregimer. Vi subtraherar gruppens median innan
+# percentilrankning så att en svenska aktie rankas mot svenska aktier,
+# inte mot Nasdaq-tech.
+#
+# Ticker-suffix → exchange_group
+_SUFFIX_TO_GROUP = {
+    # Norden
+    ".ST": "Nordic", ".HE": "Nordic", ".CO": "Nordic", ".OL": "Nordic",
+    # UK
+    ".L": "UK",
+    # Kontinentaleuropa
+    ".DE": "Europe", ".PA": "Europe", ".AS": "Europe", ".MI": "Europe",
+    ".MC": "Europe", ".VI": "Europe", ".WA": "Europe", ".LS": "Europe",
+    ".SW": "Europe",
+    # Nordamerika
+    ".TO": "Canada", ".AX": "Australia",
+    # Asien
+    ".T": "Japan",
+    ".HK": "Asia", ".TW": "Asia", ".KS": "Asia",
+    ".NS": "India", ".BO": "India",
+    # Latinamerika
+    ".SA": "LatAm", ".MX": "LatAm",
+    # Singapore
+    ".SI": "Singapore",
+}
+
+# Fundamentala kolumner som ska region-neutraliseras.
+# Momentum-kolumner (return_*) är medvetet EXKLUDERADE — global relativ styrka
+# är ett legitimt cross-market-signal.
+_REGION_NEUTRALIZE_COLS = [
+    ("pe_trailing",       False),   # Lägre är bättre
+    ("pe_forward",        False),
+    ("price_to_book",     False),
+    ("ev_to_ebitda",      False),
+    ("roe",               True),    # Högre är bättre
+    ("roa",               True),
+    ("profit_margin",     True),
+    ("operating_margin",  True),
+    ("gross_margin",      True),
+    ("debt_to_equity",    False),
+    ("current_ratio",     True),
+    ("free_cash_flow",    True),    # Relativt EV — region-median påverkar FCF-yield-rankning
+]
+
 # ── Hjälpfunktioner ────────────────────────────────────────────────────────
 
 def _neutral_series(index) -> pd.Series:
     """Returnerar en serie med neutrala poäng (50) för alla index-entries."""
     return pd.Series(NEUTRAL_SCORE, index=index)
+
+
+def _assign_exchange_group(ticker: str) -> str:
+    """Returnerar börsgrupp baserat på ticker-suffix.
+
+    Exempel:
+        'VOLV-B.ST' → 'Nordic'
+        'AAPL'      → 'US'
+        'SAP.DE'    → 'Europe'
+        '7203.T'    → 'Japan'
+    """
+    t = str(ticker).upper()
+    for suffix, group in _SUFFIX_TO_GROUP.items():
+        if t.endswith(suffix.upper()):
+            return group
+    return "US"  # Ingen suffix = amerikanskt papper
+
+
+def _add_exchange_groups(df: pd.DataFrame) -> pd.DataFrame:
+    """Lägger till kolumnen 'exchange_group' om den saknas."""
+    if "exchange_group" not in df.columns:
+        if "ticker" in df.columns:
+            df = df.copy()
+            df["exchange_group"] = df["ticker"].apply(_assign_exchange_group)
+        else:
+            df = df.copy()
+            df["exchange_group"] = df.index.map(
+                lambda t: _assign_exchange_group(str(t))
+            )
+    return df
+
+
+def _region_neutralize_fundamentals(df: pd.DataFrame) -> pd.DataFrame:
+    """Subtraherar regionmedianen från fundamentala värderingsmultiplar
+    INNAN percentilrankning. Detta gör att en svensk aktie rankas mot
+    svenska/nordiska peers, inte mot global median.
+
+    Kolumner som neutraliseras definieras i _REGION_NEUTRALIZE_COLS.
+    Momentum (return_*) neutraliseras INTE — global relativ styrka är valid.
+
+    Returnerar en kopia av df med justerade kolumnvärden.
+    Originaldatan skrivs inte tillbaka; df-schemat bibehålls.
+    """
+    df = _add_exchange_groups(df)
+    groups = df["exchange_group"]
+
+    for col, _ in _REGION_NEUTRALIZE_COLS:
+        if col not in df.columns:
+            continue
+        series = df[col]
+        if series.isna().all():
+            continue
+        # Beräkna regionmedian för varje rad
+        region_median = series.groupby(groups).transform("median")
+        # Subtrahera medianen: värdet blir nu "relativt regionen"
+        # NaN-rader i originalet förblir NaN (transform hanterar det korrekt)
+        df[col] = series - region_median
+
+    return df
+
+
+def _estimate_daily_turnover_usd(df: pd.DataFrame) -> pd.Series:
+    """Uppskattar daglig omsättning i USD per aktie.
+
+    Formel: avg_volume_10d (aktier/dag) × current_price (lokal valuta) × FX → USD
+
+    Fallback-kedja:
+        1. avg_volume_10d × current_price × FX
+        2. avg_volume × current_price × FX
+        3. NaN (otillräcklig data)
+
+    Notera: FX-faktorerna i _CCY_TO_USD är statiska approximationer som
+    enbart används för likviditetsflaggning — inte för kursjämförelser.
+    """
+    # Välj bästa volymkolumn
+    if "avg_volume_10d" in df.columns and df["avg_volume_10d"].notna().any():
+        vol = df["avg_volume_10d"]
+    elif "avg_volume" in df.columns and df["avg_volume"].notna().any():
+        vol = df["avg_volume"]
+    else:
+        return pd.Series(np.nan, index=df.index)
+
+    # Pris i lokal valuta
+    price_col = next(
+        (c for c in ("current_price", "close", "last_price") if c in df.columns),
+        None,
+    )
+    if price_col is None:
+        return pd.Series(np.nan, index=df.index)
+    price = df[price_col]
+
+    # FX-konvertering
+    if "currency" in df.columns:
+        fx = df["currency"].map(_CCY_TO_USD).fillna(1.0)
+    else:
+        # Ingen valutakolumn: anta USD för US, SEK för .ST, annars 1.0
+        if "ticker" in df.columns:
+            def _guess_fx(t: str) -> float:
+                t = str(t).upper()
+                for sfx, grp in _SUFFIX_TO_GROUP.items():
+                    if t.endswith(sfx.upper()):
+                        # Approximera: Nordic→SEK, UK→GBP, Europe→EUR, Japan→JPY
+                        _grp_ccy = {
+                            "Nordic": "SEK", "UK": "GBP", "Europe": "EUR",
+                            "Japan": "JPY", "Asia": "HKD", "Canada": "CAD",
+                            "Australia": "AUD", "India": "INR",
+                            "LatAm": "BRL", "Singapore": "SGD",
+                        }
+                        ccy = _grp_ccy.get(grp, "USD")
+                        return _CCY_TO_USD.get(ccy, 1.0)
+                return 1.0  # US
+            fx = df["ticker"].apply(_guess_fx)
+        else:
+            fx = pd.Series(1.0, index=df.index)
+
+    turnover_usd = vol * price * fx
+    return turnover_usd.where(turnover_usd > 0)
 
 
 def get_dynamic_weights(regime: str, base_weights: dict) -> dict:
@@ -411,53 +616,44 @@ def calc_sentiment_score(df: pd.DataFrame) -> pd.Series:
 
 def score_universe_sector_neutralized(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calculate factor scores WITHIN-sector neutralization.
-    
-    Per the architecture review: for long-short strategies, stripping out
-    the cross-sector component isolates pure firm-specific alpha.
-    The within-sector portfolio (W) dominates the across-sector portfolio (A)
-    with a 78% win-rate in long-short applications.
-    
-    This function subtracts the sector median from each raw metric
-    BEFORE percentile ranking, removing structural sector biases.
-    
-    Returns df with same schema as score_universe() but sector-neutralized.
+    Calculate factor scores with BOTH region- and sector-neutralization.
+
+    Tillämpningsordning:
+        1. Region-neutralisering (subtrahera regionmedian) — tar bort systematiska
+           skillnader i värderingsregim mellan marknader (US tech vs Nordic industrial).
+        2. Sektor-neutralisering (subtrahera sektormedianen) — isolerar
+           bolagsspecifik alpha från sektorexponering.
+
+    Per the architecture review: the within-sector portfolio (W) dominates the
+    across-sector portfolio (A) with a 78% win-rate in long-short applications.
+    Combining with region-neutralization removes the cross-market valuation bias
+    that distorts single-region percentile rankings.
+
+    Returns df with same schema as score_universe() + low_liquidity flag.
     """
     df = df.copy()
-    
-    # Ensure we have sector data
+
+    # ── Steg 1: Region-neutralisering ────────────────────────────────────────
+    df = _region_neutralize_fundamentals(df)
+
+    # ── Steg 2: Sektor-neutralisering (ovanpå region-justerade värden) ───────
     if "sector" not in df.columns:
         df["sector"] = df.get("industry", "Unknown").fillna("Unknown")
-    
+
     sectors = df["sector"].fillna("Unknown")
-    
-    # Define which metrics to neutralize (lower-is-better already handled later)
-    _NEUTRALIZE_METRICS = [
-        # Valuation — subtract sector median P/E, P/B, EV/EBITDA
-        ("pe_forward", False), ("pe_trailing", False),
-        ("price_to_book", False), ("ev_to_ebitda", False),
-        # Quality — subract sector median ROE, margins  
-        ("roe", True), ("roa", True),
-        ("profit_margin", True), ("operating_margin", True),
-        # Growth — subtract sector median growth rates
-        ("revenue_growth", True), ("earnings_growth", True),
-        # Risk — subtract sector median D/E, current ratio
-        ("debt_to_equity", False), ("current_ratio", True),
+
+    _SECTOR_NEUTRALIZE = [
+        "pe_forward", "pe_trailing", "price_to_book", "ev_to_ebitda",
+        "roe", "roa", "profit_margin", "operating_margin",
+        "revenue_growth", "earnings_growth",
+        "debt_to_equity", "current_ratio",
     ]
-    
-    # Create sector-neutralized versions of each metric
-    for col, _ in _NEUTRALIZE_METRICS:
-        if col in df.columns:
+    for col in _SECTOR_NEUTRALIZE:
+        if col in df.columns and df[col].notna().any():
             sector_median = df.groupby(sectors)[col].transform("median")
-            df[f"{col}_neutral"] = df[col] - sector_median
-    
-    # Patching step: overwrite original columns with neutralized versions
-    for col, _ in _NEUTRALIZE_METRICS:
-        neutral_col = f"{col}_neutral"
-        if neutral_col in df.columns and df[neutral_col].notna().any():
-            df[col] = df[neutral_col]
-    
-    # Calculate all factor scores (now sector-neutralized)
+            df[col] = df[col] - sector_median
+
+    # ── Steg 3: Faktorscore ───────────────────────────────────────────────────
     df["score_value"]     = calc_value_score(df)
     df["score_quality"]   = calc_quality_score(df)
     df["score_momentum"]  = calc_momentum_score(df)
@@ -466,9 +662,6 @@ def score_universe_sector_neutralized(df: pd.DataFrame) -> pd.DataFrame:
     df["score_size"]      = calc_size_score(df)
     df["score_dividend"]  = calc_dividend_score(df)
     df["score_fcf_yield"] = calc_fcf_yield_score(df)
-    
-    # Beräkna sentimentpoäng alltid – insider-boostar appliceras oavsett
-    # om sentiment_raw finns (calc_sentiment_score startar från neutral vid saknad data).
     df["score_sentiment"] = calc_sentiment_score(df)
 
     # Dynamic weights (neutral mode → use base weights)
@@ -484,17 +677,28 @@ def score_universe_sector_neutralized(df: pd.DataFrame) -> pd.DataFrame:
         w.get("dividend", 0)  * df["score_dividend"]  +
         w.get("sentiment", 0) * df["score_sentiment"]
     )
-    
+
     # Same holding/commodity discounts as score_universe
     if "industry" in df.columns:
         ind_lower = df["industry"].fillna("").str.lower()
         is_holding = ind_lower.apply(lambda i: any(h in i for h in HOLDING_INDUSTRIES))
-        df.loc[is_holding, "score_total"] = (df.loc[is_holding, "score_total"] * HOLDING_DISCOUNT).clip(0, 100)
+        df.loc[is_holding, "score_total"] = (
+            df.loc[is_holding, "score_total"] * HOLDING_DISCOUNT
+        ).clip(0, 100)
         is_commodity = ind_lower.apply(lambda i: any(c in i for c in COMMODITY_INDUSTRIES))
-        df.loc[is_commodity & ~is_holding, "score_total"] = (df.loc[is_commodity & ~is_holding, "score_total"] * COMMODITY_DISCOUNT).clip(0, 100)
-    
+        df.loc[is_commodity & ~is_holding, "score_total"] = (
+            df.loc[is_commodity & ~is_holding, "score_total"] * COMMODITY_DISCOUNT
+        ).clip(0, 100)
+
     df["rank"] = df["score_total"].rank(ascending=False, method="min").astype("Int64")
-    
+
+    # ── Steg 4: Likviditetsflagg (identisk med score_universe) ───────────────
+    turnover = _estimate_daily_turnover_usd(df)
+    df["est_daily_turnover_usd"] = turnover.round(0).astype("Int64", errors="ignore")
+    df["low_liquidity"] = (
+        turnover.fillna(0) < MIN_DAILY_TURNOVER_USD
+    ) | turnover.isna()
+
     return df.sort_values("score_total", ascending=False).reset_index(drop=True)
 
 
@@ -502,9 +706,23 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     """
     Calculate all factor scores and composite score.
     Returns df with new columns added.
+
+    Pipeline:
+        1. Region-neutralisera fundamentala metrics (subtrahera regionmedian)
+           så att P/E 15 för ett nordiskt bolag inte jämförs mot Nasdaq-tech P/E 35.
+        2. Beräkna faktorscore på de region-justerade värdena.
+        3. Momentum hålls globalt (intentionellt — cross-market relativ styrka är valid).
+        4. Likviditetsflagg: low_liquidity=True om dagsomsättning < MIN_DAILY_TURNOVER_USD.
     """
     df = df.copy()
 
+    # ── Steg 1: Region-neutralisera fundamentala metrics ─────────────────────
+    # Subtraherar regionmedianen för P/E, P/B, ROE, marginaler m.fl. INNAN
+    # percentilrankning. Nordiska aktier rankas mot nordiska peers.
+    # Momentum-kolumner (return_*) är undantagna — de rankas globalt.
+    df = _region_neutralize_fundamentals(df)
+
+    # ── Steg 2: Beräkna faktorscore ──────────────────────────────────────────
     # Calculate each factor score
     df["score_value"]     = calc_value_score(df)
     df["score_quality"]   = calc_quality_score(df)
@@ -578,6 +796,19 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     ]
     available_cols = [c for c in metric_cols if c in df.columns]
     df["data_quality"] = df[available_cols].notna().sum(axis=1) / len(available_cols)
+
+    # ── Steg 4: Likviditetsflagg ──────────────────────────────────────────────
+    # Beräkna uppskattad daglig omsättning i USD. Aktier under tröskeln
+    # (MIN_DAILY_TURNOVER_USD) flaggas low_liquidity=True. Dessa visas
+    # fortfarande i UI:t men kan filtreras bort av användaren.
+    # Flaggan påverkar INTE score_total (vi bestraffar inte för låg likviditet
+    # eftersom småbolagspremien är en del av poängsättningen — storlekspoängen
+    # hanterar det redan via calc_size_score).
+    turnover = _estimate_daily_turnover_usd(df)
+    df["est_daily_turnover_usd"] = turnover.round(0).astype("Int64", errors="ignore")
+    df["low_liquidity"] = (
+        turnover.fillna(0) < MIN_DAILY_TURNOVER_USD
+    ) | turnover.isna()
 
     return df.sort_values("score_total", ascending=False).reset_index(drop=True)
 

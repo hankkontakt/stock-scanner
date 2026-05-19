@@ -351,6 +351,12 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                     filters["piotroski_min"] = st.slider("Min Piotroski", 0, 9, 0, key="ws_pio")
                     filters["show_holdings"] = st.checkbox("Bara mina innehav", key="ws_hold")
                     filters["show_watchlist"] = st.checkbox("Inkludera bevakning", key="ws_wl")
+                    filters["hide_illiquid"] = st.checkbox(
+                        "Dölj illikvida",
+                        value=False,
+                        key="ws_hide_illiquid",
+                        help="Döljer aktier med uppskattad dagsomsättning under $50k/dag (avg_volume × kurs × FX).",
+                    )
                     st.markdown("---")
                     filters["only_swedish"] = st.checkbox(
                         "🇸🇪 Visa endast svenska aktier",
