@@ -14,6 +14,7 @@ US_LARGE_CAP = [
     "CRM", "ADBE", "AMD", "INTC", "CSCO", "QCOM", "TXN", "IBM", "NOW", "INTU",
     "PANW", "PLTR", "SNOW", "MU", "AMAT", "LRCX", "KLAC", "ADI", "MRVL", "FTNT",
     "DDOG", "CRWD", "WDAY", "TEAM", "MDB", "NET", "ZS", "OKTA", "SHOP", "UBER",
+    "IOT", "MNDY", "APPF", "HUBS", "S",   # SaaS/AI – Rule of 40, FCF-positiva – Deep Research maj 2026
     "ABNB", "DASH", "SPOT", "ADSK", "CDNS", "SNPS", "VRSN", "CTSH", "GLW",
     "HPQ", "HPE", "DELL", "WDC", "STX", "PSTG", "NTAP", "AKAM", "CDW", "ZBRA",
     "ARM", "SMCI", "ACN", "EPAM", "GLOB", "APP", "FLUT", "ANET", "VRT", "NTNX", 
@@ -150,6 +151,7 @@ NORDIC = [
     "SALM.OL", "YAR.OL", "KOG.OL", "NHY.OL", "TEL.OL", "BOUV.OL",
     "FLNG.OL", "FRO.OL", "BWLPG.OL", "GJF.OL", "GOGL.OL",
     "SUBC.OL", "AUSS.OL", "SCATC.OL", "NOD.OL", "BWO.OL",
+    "KIT.OL",      # Kitron – EMS kontraktstillverkning, försvars- & medtech-fokus
     # Finland
     "NOKIA.HE", "SAMPO.HE", "UPM.HE", "NESTE.HE", "FORTUM.HE",
     "KEMIRA.HE", "METSB.HE", "VALMT.HE", "METSO.HE", "TOKMAN.HE",
@@ -165,6 +167,16 @@ OMX_SE = [
     "NCC-B.ST", "SSAB-A.ST", "SSAB-B.ST", "BOLM.ST", "THULE.ST",
     "HUSQ-B.ST", "TROAX.ST", "DIOS.ST", "AFRY.ST", "MSAB-B.ST",
     "NCAB.ST", "TAGM-B.ST",
+    # Nordiska kvalitetsbolag – Gemini Deep Research maj 2026
+    "LAGR-B.ST",   # Lagercrantz – serieförvärvare, ROE 29 %, EBITA >18 %
+    "ADDT-B.ST",   # Addtech – teknikhandel, ROE 29 %, organisk tillväxt
+    "MYCR.ST",     # Mycronic – mönsterritare & SMT, EBIT 24-25 %, nettokassa
+    "AQ.ST",       # AQ Group – global EMS, ROE 14,9 %, nettoskuldfri
+    "NMAN.ST",     # Nederman – industriell luftfiltrering, ESG-medvind
+    "CTT.ST",      # CTT Systems – fuktkontroll flygplan, monopol, EBIT >25 %
+    "BEIJ-B.ST",   # Beijer Ref – klimatgrossist, grön övergång F-gas
+    "VBG-B.ST",    # VBG Group – dragutrustning lastbilar, D/E ~0,5x
+    "NOTE.ST",     # Note AB – nordeuropeisk EMS, nearshoring, ROE >17 %
 
     # Finans & Bank
     "SEB-A.ST", "SHB-A.ST", "SWED-A.ST", "NDA-SE.ST", "INVE-A.ST",
@@ -175,10 +187,13 @@ OMX_SE = [
     "ERIC-B.ST", "ERIC-A.ST", "EVO.ST", "CINT.ST", "BOKU.ST",
     "NOLA-B.ST", "INDT.ST", "HMS.ST", "DIAM-B.ST", "ADDV-B.ST",
     "SINCH.ST", "NETG-B.ST", "CMORE.ST",
+    "VIT-B.ST",    # Vitec Software – vertikal SaaS, 88 % recurring, FCF-marginal ~30 %
+    "SECT-B.ST",   # Sectra – medtech & cybersäkerhet, molnintäkter +75 %, ROE >25 %
 
     # Healthcare & Life Science
     "SOBI.ST", "ONCO.ST", "BIOG-B.ST", "ALZ.ST", "HMED.ST",
     "BIOTAGE.ST", "XVIVO.ST", "NANOFORM.ST",
+    "CEVI.ST",     # CellaVision – AI-blodanalys, EBITDA >30 %, nettokassa
 
     # Konsument & Handel
     "HM-B.ST", "HM-A.ST", "AXFO.ST", "CLAS-B.ST", "BOOZT.ST",
@@ -198,10 +213,12 @@ OMX_SE = [
 # ════════════════ EUROPA (Uppdelad i Sektorer) ════════════════
 EUROPE = [
     # Industri & Verkstad
-    "SIE.DE", "AIR.PA", "SAF.PA", "BA.L", "RR.L", "ABBN.SW", "DSV.CO", "MAERSK-B.CO", 
+    "SIE.DE", "AIR.PA", "SAF.PA", "BA.L", "RR.L", "ABBN.SW", "DSV.CO", "MAERSK-B.CO",
     "DHL.DE", "MTX.DE", "RHM.DE", "HO.PA", "DSY.PA", "CPG.L", "SMT.L", "SGSN.SW",
     "KNIN.SW", "FER.MC", "PRY.MI", "LDO.MI", "TOM.OL", "AKSO.OL", "METSO.HE", "VALMT.HE",
     "FLS.CO", "ROCK-A.CO", "KOG.OL", "NDX1.DE",
+    "SU.PA",       # Schneider Electric – energihantering & datacenter, EBITA 18,7 %, ROIC >12 %
+    "RAA.DE",      # Rational AG – storköksutrustning, ROIC 41 %, skuldfri, EBIT >26 %
 
     # Finans & Försäkring
     "ALV.DE", "MUV2.DE", "DBK.DE", "DB1.DE", "BNP.PA", "GLE.PA", "ACA.PA", "HSBA.L", 
@@ -213,6 +230,7 @@ EUROPE = [
     "SAP.DE", "IFX.DE", "AIXA.DE", "GFT.DE", "WAF.DE", "SMHN.DE", "STMPA.PA", "CAP.PA", 
     "TEP.PA", "ASML.AS", "PRX.AS", "BESI.AS", "BOUV.OL", "OPRA", 
     "NOKIA.HE", "ADYEN.AS", "NEM.DE",
+    "ASM.AS",      # ASM International – ALD halvledarutrustning, ~53 % bruttomarginal, nettokassa
 
     # Healthcare / Läkemedel
     "BAYN.DE", "FRE.DE", "SAN.PA", "AZN.L", "GSK.L", "NOVN.SW", "ROG.SW", "LONN.SW", 

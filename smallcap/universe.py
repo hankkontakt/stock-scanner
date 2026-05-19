@@ -172,6 +172,9 @@ FIRST_NORTH = [
     "CX.ST",        # CombinedX – digitalisering & IT-konsult
     "IDUN-B.ST",    # Idun Industrier – förvärvsbyggare, 59% bruttomarginal
     "HUMBLE.ST",    # Humble Group – FMCG-hälsa, kassaflöde 515 MSEK
+    # ── Gemini Deep Research maj 2026: nordiska kvalitetsbolag ──────────────────
+    "ADTR.ST",      # Adtraction Group – affiliate-plattform, capex-fritt, EBITDA +28%
+    "CRADB.ST",     # C-Rad AB – surface guided radiation therapy, FCF positivt
 ]
 
 
@@ -325,6 +328,20 @@ SMALL_CAP = [
 ]
 
 
+# ── NORDISKA BÖRSER – Finland (Nasdaq Helsinki / First North) & Norge (Euronext) ──
+# Gemini Deep Research maj 2026: identifierade nordiska kvalitetsbolag utanför Sverige
+NORDIC_MARKETS = [
+    # ── Finland – Nasdaq Helsinki / First North ───────────────────────────────
+    "LEMON.HE",     # Lemonsoft Oyj – B2B ERP SaaS, >23% EBIT-marginal, >84% bruttomarginal
+    "DETEC.HE",     # Detection Technology Plc – röntgensensorer för medtech & säkerhet
+    "IFA1V.HE",     # Innofactor Plc – ledande Microsoft-partner & systemintegratör
+    "DIGIA.HE",     # Digia Oyj – digital infrastruktur & IT-tjänster, nettokassa
+    # ── Norge – Euronext Oslo ─────────────────────────────────────────────────
+    "VOLUE.OL",     # Volue ASA – SaaS för energi- & kraftoptimering, Norden-dominant
+    "STRO.OL",      # StrongPoint ASA – retailautomation (ESL, click-and-collect), 13-15% EBITDA-mål
+]
+
+
 # ── SPOTLIGHT STOCK MARKET & NGM (urval) ─────────────────────────────────────
 # Mikrokap. Hög risk. Filtret tar bort illikvida bolag.
 SPOTLIGHT = [
@@ -372,7 +389,7 @@ SPOTLIGHT = [
 
 # ── KOMBINERAT UNIVERSUM ──────────────────────────────────────────────────────
 
-_ALL = FIRST_NORTH + SMALL_CAP + SPOTLIGHT
+_ALL = FIRST_NORTH + SMALL_CAP + NORDIC_MARKETS + SPOTLIGHT
 
 # Deduplicera (behåll första förekomsten)
 SMALLCAP_UNIVERSE = list(dict.fromkeys(t.upper() for t in _ALL))
@@ -441,10 +458,11 @@ def get_universe(market: str = "all") -> list:
     market: "all" | "first_north" | "small_cap" | "spotlight"
     """
     mapping = {
-        "all":         SMALLCAP_UNIVERSE,
-        "first_north": list(dict.fromkeys(t.upper() for t in FIRST_NORTH)),
-        "small_cap":   list(dict.fromkeys(t.upper() for t in SMALL_CAP)),
-        "spotlight":   list(dict.fromkeys(t.upper() for t in SPOTLIGHT)),
+        "all":            SMALLCAP_UNIVERSE,
+        "first_north":    list(dict.fromkeys(t.upper() for t in FIRST_NORTH)),
+        "small_cap":      list(dict.fromkeys(t.upper() for t in SMALL_CAP)),
+        "nordic_markets": list(dict.fromkeys(t.upper() for t in NORDIC_MARKETS)),
+        "spotlight":      list(dict.fromkeys(t.upper() for t in SPOTLIGHT)),
     }
     base = mapping.get(market, SMALLCAP_UNIVERSE)
 
@@ -472,6 +490,8 @@ SECTOR_GROUPS = {
         "ADVE.ST", "SINCH.ST", "VERI.ST", "AWRD.ST",
         "SAFE.ST", "EASY-B.ST", "QBNK.ST", "EWRK.ST", "BRIGHT.ST", "AYIMA-B.ST",
         "KAMBI.ST", "NBZ.ST", "VER.ST", "VERT-B.ST", "CX.ST",
+        "ADTR.ST",                          # Adtraction – affiliate SaaS, capex-fritt
+        "LEMON.HE", "IFA1V.HE", "DIGIA.HE", # Finland: ERP/IT-tjänster med höga marginaler
     ],
     "MedTech & Life Science": [
         "XVIVO.ST", "ELOS-B.ST", "BOMILL.ST", "BIOG-B.ST", "CEVI.ST", "MNTC.ST",
@@ -485,6 +505,7 @@ SECTOR_GROUPS = {
         "REAL.ST", "SECARE.ST",
         "DVYSR.ST", "VICO.ST", "REDS.ST", "XINT.ST", "IMPC.ST",
         "BONEX.ST", "ADDV-B.ST", "SUS.ST",
+        "CRADB.ST",  # C-Rad – SGRT onkologi, FCF positivt, mjukvaruandel växer
     ],
     "Industri & Verkstad": [
         "MIPS.ST", "GARO.ST", "OEM-B.ST", "SDIP-B.ST", "XANO-B.ST", "REJL-B.ST",
@@ -497,6 +518,8 @@ SECTOR_GROUPS = {
         "HUSQ-B.ST", "SWEC-B.ST", "AFRY.ST", "MMGR-B.ST", "GREEN.ST", "SILEX.ST",
         "SINT.ST", "FNM.ST", "NTEK-B.ST", "INISS-B.ST", "CBTT-B.ST",
         "DUROC-B.ST", "HAKI-B.ST", "BULTEN.ST",
+        "DETEC.HE",  # Detection Technology – röntgensensorer, industriell & medtech
+        "STRO.OL",   # StrongPoint – retailautomation, EBITDA-expansion
     ],
     "Konsument & Livsstil": [
         "THULE.ST", "RVRC.ST", "SKIS-B.ST", "BHG.ST", "BORG.ST",
@@ -518,6 +541,7 @@ SECTOR_GROUPS = {
         "EOLU-B.ST", "GRNG.ST", "PCELL.ST", "MINEST.ST",
         "MAHA-A.ST", "EPRO-B.ST", "ORRON.ST", "SUSG.ST", "SOLT.ST",
         "ARISE.ST", "OPTI.ST",
+        "VOLUE.OL",  # Volue ASA – SaaS för kraftnät & energioptimering, Norden-dominant
     ],
     "Investmentbolag & Förvärvsbyggare": [
         "BURE.ST", "CRED-A.ST", "NAXS.ST", "TRAC-B.ST", "SVOL-B.ST", "VNV.ST",
