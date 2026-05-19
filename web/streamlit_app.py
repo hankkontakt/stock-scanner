@@ -495,14 +495,27 @@ def _save_reset_tokens(tokens: dict):
 
 def _find_user_by_email(email: str) -> tuple[str, dict] | tuple[None, None]:
     """Hitta användarnamn + userdata för en given e-postadress.
-    Söker i users_config.json (ej admin — den har lösenord i Secrets)."""
+    Söker i users_config.json OCH Streamlit Secrets (för admin-kontot)."""
     email_lower = email.strip().lower()
+    # 1. Sök i users_config.json (vanliga användare)
     try:
         import json as _j
         data = _j.loads((DATA_DIR / "users_config.json").read_text(encoding="utf-8"))
         for user in data.get("users", []):
             if user.get("email", "").strip().lower() == email_lower:
                 return user.get("username"), user
+    except Exception:
+        pass
+    # 2. Sök i Streamlit Secrets (admin och andra credential-baserade konton)
+    try:
+        raw_creds = st.secrets.get("credentials", {})
+        for uname, udata in raw_creds.get("usernames", {}).items():
+            if str(udata.get("email", "")).strip().lower() == email_lower:
+                return uname, {
+                    "username": uname,
+                    "email": email_lower,
+                    "name": udata.get("name", uname),
+                }
     except Exception:
         pass
     return None, None
@@ -512,7 +525,11 @@ def _send_reset_email(to_email: str, username: str, token: str) -> bool:
     """Skickar återställningslänk via e-post. Returnerar True vid lyckat utskick."""
     try:
         from core.email_template import send_email
-        app_url = "https://marketscan.streamlit.app"  # uppdatera vid annan domän
+        # Hämta app-URL från secrets om den är konfigurerad, annars fallback
+        try:
+            app_url = str(st.secrets.get("APP_URL", "https://marketscan.streamlit.app")).rstrip("/")
+        except Exception:
+            app_url = "https://marketscan.streamlit.app"
         reset_url = f"{app_url}?reset_token={token}"
         body = f"""# 🔐 Återställ ditt lösenord
 
@@ -538,16 +555,42 @@ ditt konto är oförändrat.
 
 
 def _update_user_password(username: str, new_hashed: str) -> bool:
-    """Uppdaterar lösenord i users_config.json. Returnerar True vid lyckat sparande."""
+    """Uppdaterar lösenord i users_config.json. Returnerar True vid lyckat sparande.
+
+    Fungerar även för admin-kontot: skriver in en override-post i filen som
+    sedan läses av _load_managed_users() och slås samman över secrets-lösenordet.
+    """
     try:
         import json as _j
+        from datetime import datetime as _dt
         path = DATA_DIR / "users_config.json"
-        data = _j.loads(path.read_text(encoding="utf-8"))
+        # Ladda befintlig fil eller skapa tom struktur
+        try:
+            data = _j.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            data = {"users": []}
+        uname_lower = username.strip().lower()
+        updated = False
         for user in data.get("users", []):
-            if user.get("username", "").strip().lower() == username.strip().lower():
+            if user.get("username", "").strip().lower() == uname_lower:
                 user["password"] = new_hashed
-                path.write_text(_j.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-                return True
+                user["active"] = True
+                updated = True
+                break
+        if not updated:
+            # Användaren finns inte i filen (t.ex. admin som normalt är i secrets)
+            # – lägg till som override-post
+            data.setdefault("users", []).append({
+                "username": uname_lower,
+                "name": username,
+                "email": "",
+                "password": new_hashed,
+                "active": True,
+                "added": _dt.now().strftime("%Y-%m-%d"),
+                "password_reset": True,
+            })
+        path.write_text(_j.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        return True
     except Exception:
         pass
     return False
@@ -561,7 +604,7 @@ def _handle_password_reset_flow() -> bool:
     Returnerar True om sidan tas över (token hittades i URL) → anroparen ska stopa appen.
     Returnerar False om ingen token finns i URL → normal inloggning fortsätter.
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     try:
         token_from_url = st.query_params.get("reset_token", "")
@@ -601,8 +644,15 @@ def _handle_password_reset_flow() -> bool:
             st.rerun()
         return True
 
-    expires = datetime.fromisoformat(token_data["expires"])
-    if datetime.utcnow() > expires:
+    expires_str = token_data["expires"]
+    try:
+        expires = datetime.fromisoformat(expires_str)
+        # Hantera både naive (gamla tokens) och timezone-aware format
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+    except Exception:
+        expires = datetime.now(timezone.utc)  # Behandla ogiltigt datum som utgånget
+    if datetime.now(timezone.utc) > expires:
         st.error("⌛ Länken har gått ut (giltig 1 timme). Begär en ny nedan.")
         if st.button("↩ Gå till inloggning"):
             st.query_params.clear()
@@ -622,13 +672,30 @@ def _handle_password_reset_flow() -> bool:
             elif pw1 != pw2:
                 st.error("Lösenorden matchar inte.")
             else:
+                # Hasha lösenordet — prova olika API-varianter beroende på version
+                new_hash = None
                 try:
                     import streamlit_authenticator as stauth
+                    # Ny API (>=0.3.3): Hasher.hash(password)
                     new_hash = stauth.Hasher.hash(pw1)
                 except Exception:
-                    import bcrypt
-                    new_hash = bcrypt.hashpw(pw1.encode(), bcrypt.gensalt()).decode()
-                if _update_user_password(username, new_hash):
+                    pass
+                if not new_hash:
+                    try:
+                        import streamlit_authenticator as stauth
+                        # Gammal API (<0.3): Hasher([password]).generate()[0]
+                        new_hash = stauth.Hasher([pw1]).generate()[0]
+                    except Exception:
+                        pass
+                if not new_hash:
+                    try:
+                        import bcrypt
+                        new_hash = bcrypt.hashpw(pw1.encode(), bcrypt.gensalt()).decode()
+                    except Exception:
+                        new_hash = None
+                if not new_hash:
+                    st.error("❌ Kunde inte hasha lösenordet. Kontakta administratören.")
+                elif _update_user_password(username, new_hash):
                     tokens.pop(token_from_url, None)
                     _save_reset_tokens(tokens)
                     st.success("✅ Lösenordet har uppdaterats! Du kan nu logga in.")
@@ -642,7 +709,7 @@ def _handle_password_reset_flow() -> bool:
 def _show_forgot_password_form():
     """Visar 'Glömt lösenord?'-expander under inloggningsformuläret."""
     import uuid
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
     with st.expander("🔑 Glömt lösenord?", expanded=False):
         st.caption("Ange din e-postadress så skickar vi en länk för att välja nytt lösenord.")
@@ -659,12 +726,19 @@ def _show_forgot_password_form():
                     st.success("Om e-postadressen finns registrerad skickar vi en länk inom kort.")
                     if uname is not None:
                         token = str(uuid.uuid4())
-                        expires = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+                        now_utc = datetime.now(timezone.utc)
+                        expires = (now_utc + timedelta(hours=1)).isoformat()
                         tokens = _load_reset_tokens()
                         # Rensa gamla tokens för denna användare
-                        tokens = {k: v for k, v in tokens.items()
-                                  if v.get("username") != uname
-                                  or datetime.fromisoformat(v["expires"]) > datetime.utcnow()}
+                        def _is_valid_token(v: dict) -> bool:
+                            try:
+                                exp = datetime.fromisoformat(v["expires"])
+                                if exp.tzinfo is None:
+                                    exp = exp.replace(tzinfo=timezone.utc)
+                                return v.get("username") != uname or exp > now_utc
+                            except Exception:
+                                return False
+                        tokens = {k: v for k, v in tokens.items() if _is_valid_token(v)}
                         tokens[token] = {"username": uname, "expires": expires}
                         _save_reset_tokens(tokens)
                         _send_reset_email(reset_email.strip(), uname, token)
@@ -675,7 +749,10 @@ def _load_managed_users() -> dict:
 
     Returnerar dict på formatet:
         {"username": {"name": ..., "email": ..., "password": "<bcrypt>"}}
-    Ignorerar inaktiva användare och 'admin' (den hanteras alltid via secrets).
+    Ignorerar inaktiva användare.
+
+    OBS: Admin-posten i filen (om den finns) används som lösenords-override
+    efter en lysenordsåterställning — den slås samman ÖVER secrets-värdet.
     """
     try:
         import json as _json
@@ -684,9 +761,12 @@ def _load_managed_users() -> dict:
         result = {}
         for user in data.get("users", []):
             uname = user.get("username", "").strip().lower()
-            if not uname or uname == "admin":
+            if not uname:
                 continue
             if not user.get("active", True):
+                continue
+            # Admin-posten inkluderas bara om den har ett lösenord (reset-override)
+            if uname == "admin" and not user.get("password"):
                 continue
             result[uname] = {
                 "name":     user.get("name", uname),
