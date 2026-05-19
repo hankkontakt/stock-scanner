@@ -746,7 +746,14 @@ def _render_cache_tab():
         if st.button(f"🗑️ Rensa priscache > {days_old} dagar", key="btn_clear_price_cache"):
             if cache_dir.exists():
                 cutoff = time.time() - days_old * 86400
-                removed = sum(1 for f in cache_dir.glob("*") if f.stat().st_mtime < cutoff and not f.unlink())
+                removed = 0
+                for f in cache_dir.glob("*"):
+                    try:
+                        if f.stat().st_mtime < cutoff:
+                            f.unlink()
+                            removed += 1
+                    except Exception:
+                        pass
                 st.success(f"✅ Raderade {removed} cache-filer")
                 st.rerun()
 
@@ -769,7 +776,14 @@ def _render_cache_tab():
         if st.button(f"🗑️ Rensa AI-cache > {ai_days} dagar", key="btn_clear_ai_cache"):
             if ai_cache_dir.exists():
                 cutoff = time.time() - ai_days * 86400
-                removed = sum(1 for f in ai_cache_dir.glob("*") if f.stat().st_mtime < cutoff and not f.unlink())
+                removed = 0
+                for f in ai_cache_dir.glob("*"):
+                    try:
+                        if f.stat().st_mtime < cutoff:
+                            f.unlink()
+                            removed += 1
+                    except Exception:
+                        pass
                 st.success(f"✅ Raderade {removed} AI-cache-filer")
                 st.rerun()
 
@@ -782,6 +796,16 @@ def _render_cache_tab():
                     removed += 1
                 st.success(f"✅ All priscache rensad ({removed} filer)")
                 st.rerun()
+
+        st.markdown("**🤖 Rensa ALL AI-cache**")
+        if st.button("🔴 Rensa ALL AI-cache (alla analyser)", key="btn_clear_all_ai_cache"):
+            try:
+                from core.ai_analysis import clear_cache as _clear_ai_cache
+                msg = _clear_ai_cache()
+                st.success(msg)
+                st.rerun()
+            except Exception as e:
+                st.error(f"Fel: {e}")
 
 
 def _render_alarms_tab():

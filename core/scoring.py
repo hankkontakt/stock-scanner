@@ -569,7 +569,7 @@ def _insider_decay_weight(df: pd.DataFrame) -> pd.Series:
     now = pd.Timestamp.now()
     dates = pd.to_datetime(df["insider_recent_date"], errors="coerce")
     
-    days_since = (now - dates).dt.days
+    days_since = (now - dates).dt.days.clip(lower=0)
     decay = 1.0 - (days_since / 180.0)  # Linjär decay: 1.0 dag 0 → 0.0 dag 180
     decay = decay.clip(lower=0.0, upper=1.0)
     # NaT = datum saknas (t.ex. gammal cachad data utan datumsupport).

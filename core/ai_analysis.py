@@ -16,6 +16,7 @@ Användning:
 
 import json
 import os
+import re
 import hashlib
 import tempfile
 import logging
@@ -35,7 +36,7 @@ except ImportError:
     _fetch_news_ai = None
 
 _logger = logging.getLogger(__name__)
-_token_sanitize = __import__("re").compile(r"(sk-[a-zA-Z0-9]{10,}|AIza[a-zA-Z0-9_-]{20,})")
+_token_sanitize = re.compile(r"(sk-[a-zA-Z0-9]{10,}|AIza[a-zA-Z0-9_-]{20,})")
 
 
 # ── Runtime-säker secret-läsare ────────────────────────────────────────────
@@ -688,13 +689,22 @@ def _set_cache(cache_key: str, response: str):
         return
     try:
         cache_file = AI_CACHE_DIR / f"{cache_key}.json"
-        tmp_file = cache_file.with_suffix(".json.tmp")
-        tmp_file.write_text(json.dumps({
-            "cached_at": datetime.now().isoformat(),
-            "response": response,
-        }, ensure_ascii=False), encoding="utf-8")
-        # os.replace är atomic på alla plattformar
-        os.replace(tmp_file, cache_file)
+        # Use a unique temp file per write to avoid concurrent-write collisions
+        fd, tmp_path = tempfile.mkstemp(dir=AI_CACHE_DIR, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump({
+                    "cached_at": datetime.now().isoformat(),
+                    "response": response,
+                }, fh, ensure_ascii=False)
+            # os.replace är atomic på alla plattformar
+            os.replace(tmp_path, cache_file)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+            raise
     except Exception:
         pass
 
