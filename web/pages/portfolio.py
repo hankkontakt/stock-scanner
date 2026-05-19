@@ -344,20 +344,41 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
         with tab_avanza:
             st.markdown("""
 <div style="background:#1a2235;border:1px solid #2d3250;border-radius:10px;
-     padding:14px 18px;margin-bottom:14px;">
-<div style="font-size:13px;font-weight:600;color:#e8eaf0;margin-bottom:8px;">
-  Så här laddar du ner din portfölj från Avanza (dator)
+     padding:16px 20px;margin-bottom:14px;">
+<div style="font-size:13px;font-weight:700;color:#e8eaf0;margin-bottom:10px;">
+  📥 Ladda ner din portfölj från Avanza
 </div>
-<ol style="font-size:13px;color:#a0aec0;margin:0;padding-left:18px;line-height:2.1;">
-  <li>Logga in på <strong style="color:#e8eaf0;">avanza.se i webbläsaren</strong> (fungerar ej i appen)</li>
-  <li>Klicka på ett specifikt konto i menyn, t.ex. <strong style="color:#e8eaf0;">ISK Aktier</strong></li>
-  <li>Klicka på fliken <strong style="color:#e8eaf0;">Innehav</strong></li>
-  <li>Scrolla längst ner på sidan → klicka <strong style="color:#4c9be8;">Exportera</strong></li>
-  <li>Upprepa för varje konto (ett konto = en fil)</li>
-  <li>Ladda upp filen nedan och ange vilket konto det tillhör</li>
+
+<div style="font-size:12px;font-weight:600;color:#4c9be8;text-transform:uppercase;
+     letter-spacing:0.08em;margin-bottom:6px;">Per konto (rekommenderas)</div>
+<ol style="font-size:13px;color:#a0aec0;margin:0 0 10px 0;padding-left:18px;line-height:2.0;">
+  <li>Öppna <strong style="color:#e8eaf0;">avanza.se</strong> i en webbläsare på datorn
+      <span style="color:#64748b;"> — fungerar ej i mobilappen</span></li>
+  <li>Klicka på <strong style="color:#e8eaf0;">Mina sidor</strong> i menyn längst upp</li>
+  <li>Välj <strong style="color:#e8eaf0;">Konton &amp; depåer</strong> och klicka på ett specifikt konto,
+      t.ex. <em>ISK Aktier</em></li>
+  <li>Klicka på fliken <strong style="color:#e8eaf0;">Innehav</strong> (precis under kontonamnet)</li>
+  <li>Scrolla ner till absoluta botten av sidan →
+      klicka på knappen <strong style="color:#4c9be8;">Exportera</strong></li>
+  <li>En <code>.csv</code>-fil laddas ner automatiskt</li>
+  <li>Upprepa steg 3–6 för varje konto (ISK, KF, depå …)</li>
+  <li>Ladda upp filen nedan och välj rätt kontonamn för varje fil</li>
 </ol>
-<div style="font-size:12px;color:#64748b;margin-top:8px;">
-  💡 Har du många konton? Kör importen en gång per ISK/depå och välj rätt kontonamn varje gång.
+
+<details style="margin-bottom:8px;">
+<summary style="font-size:12px;color:#64748b;cursor:pointer;user-select:none;">
+  🔽 Alternativ: sammanlagd export för alla konton på en gång
+</summary>
+<div style="font-size:12px;color:#8892a4;margin-top:8px;padding-left:4px;line-height:1.8;">
+  Gå till <strong style="color:#e8eaf0;">Profil → Mina uppgifter → Hämta uppgifter om mitt innehav</strong>.<br>
+  Du får en Excel-fil med alla konton på separata flikar. Importera varje flik som en separat fil här ovan,
+  eller kontakta oss om du vill ha stöd för Excel-import.
+</div>
+</details>
+
+<div style="font-size:12px;color:#64748b;border-top:1px solid #2d3250;padding-top:8px;margin-top:4px;">
+  ⚠️ <strong>Mobilapp:</strong> Exportera-knappen finns <em>inte</em> i Avanza-appen — använd avanza.se på dator eller surfplatta.<br>
+  💡 Har du många konton? Kör importen en gång per konto och välj rätt kontonamn varje gång.
 </div>
 </div>
 """, unsafe_allow_html=True)
