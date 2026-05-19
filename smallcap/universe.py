@@ -311,6 +311,11 @@ SMALL_CAP = [
     "NEOBO.ST",     # Neobo Fastigheter – bostäder, aktieåterköp
     "VICO.ST",      # Vicore Pharma – IPF-pipeline (f.d. VICOR.ST)
     "KDEV.ST",      # Karolinska Development – life science investmentbolag
+    # ── Analytisk rapport maj 2026: nordiska kvalitetsbolag ─────────────────
+    "SMCRT.ST",     # SyntheticMR – medicinsk bildanalys, SaaS
+    "CTT.ST",       # CTT Systems – fukthantering för flyg, nischmonopol
+    "EPEN.ST",      # Episurf Medical – patientspecifika ortopediska implantat
+    "DEDI.ST",      # Dedicated Networks – IT-infrastruktur, managed services
     # ── Kvantitativ allokeringsstudie maj 2026: 30 högpotentiella småbolag ──
     "BONEX.ST",     # Bonesupport – ortobiologi, 95,3% bruttomarginal
     "ADDV-B.ST",    # ADDvise Group – life science förvärvsbyggare
@@ -336,9 +341,25 @@ NORDIC_MARKETS = [
     "DETEC.HE",     # Detection Technology Plc – röntgensensorer för medtech & säkerhet
     "IFA1V.HE",     # Innofactor Plc – ledande Microsoft-partner & systemintegratör
     "DIGIA.HE",     # Digia Oyj – digital infrastruktur & IT-tjänster, nettokassa
+    # ── Finland – analytisk rapport maj 2026 ────────────────────────────────
+    "GOFORE.HE",    # Gofore Oyj – digital transformation-konsult, stark FCF
+    "PUUILO.HE",    # Puuilo Oyj – finsk DIY/hemtextil-detaljhandel, expansiv
+    "ADMCM.HE",     # Administer Oyj – ekonomi- & lönetjänster SaaS
+    "HARVIA.HE",    # Harvia Oyj – badsturor & wellness, global premiummärke
+    "MEKKO.HE",     # Marimekko Oyj – finsk designbrand, stark prissättningsförmåga
+    "TALENOM.HE",   # Talenom Oyj – redovisnings-SaaS, >40% bruttomarginal
     # ── Norge – Euronext Oslo ─────────────────────────────────────────────────
     "VOLUE.OL",     # Volue ASA – SaaS för energi- & kraftoptimering, Norden-dominant
     "STRO.OL",      # StrongPoint ASA – retailautomation (ESL, click-and-collect), 13-15% EBITDA-mål
+    # ── Norge – analytisk rapport maj 2026 ──────────────────────────────────
+    "KID.OL",       # Kid ASA – hemtextil/inredning Norge, stark FCF-generering
+    "EPR.OL",       # Europris ASA – lågprisdetaljhandel Norge, konsistent tillväxt
+    "NORCO.OL",     # Norco AS – offshore service & marin teknik
+    "ENDUR.OL",     # Endur ASA – marin teknik & industriservice; insiderkluster maj 2026
+    "SMOP.OL",      # SmartOptics – optisk nätverksutrustning, telecom-nisch
+    "PEXIP.OL",     # Pexip Holding – videokonferens-SaaS, >49% FCF-marginal
+    "MULTI.OL",     # Multiconsult ASA – ingenjörs-/miljökonsult, stabil offentlig efterfrågan
+    "LINK.OL",      # LINK Mobility – mobil kommunikationsplattform, pan-europeisk
 ]
 
 
