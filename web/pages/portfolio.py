@@ -562,12 +562,21 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                     with st.container(border=True):
                         c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 2, 1])
                         c1.markdown(f"**{name}**{type_badge}")
-                        c2.caption(f"Antal: {new_shares:.2f}")
-                        c3.caption(f"Pris: {new_cost:.2f}")
-                        ticker_val = c4.text_input(
-                            "Ticker", value=suggested, key=f"{key_prefix}_t_{i}",
-                            label_visibility="collapsed", placeholder="t.ex. VOLV-B.ST",
-                        ).upper().strip()
+                        if security_type == "fund":
+                            total_val = new_shares * new_cost
+                            c2.caption(f"Värde: {total_val:,.0f} kr")
+                            c3.caption(f"{new_shares:.4f} andelar")
+                        else:
+                            c2.caption(f"Antal: {new_shares:.2f}")
+                            c3.caption(f"Pris: {new_cost:.2f}")
+                        if security_type == "fund":
+                            c4.caption("Fonder hanteras utan ticker")
+                            ticker_val = ""
+                        else:
+                            ticker_val = c4.text_input(
+                                "Ticker", value=suggested, key=f"{key_prefix}_t_{i}",
+                                label_visibility="collapsed", placeholder="t.ex. VOLV-B.ST",
+                            ).upper().strip()
                         do_it = c5.checkbox("Ta med", value=default_check,
                                             key=f"{key_prefix}_ok_{i}", help=status_badge)
                         c1.markdown(
