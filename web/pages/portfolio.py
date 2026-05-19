@@ -415,38 +415,36 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
     from data_management import avanza_import
     from web.pages.admin import _search_ticker_yfinance
 
-    label = "➕ Hantera portfölj" if not holdings.empty else "➕ Kom igång – lägg till dina aktier"
-    with st.expander(label, expanded=holdings.empty):
 
-        import streamlit.components.v1 as _sc1
+    import streamlit.components.v1 as _sc1
 
-        def _scroll_top():
-            """Scrolla till toppen av sidan – anropas överst i varje flik."""
-            _sc1.html(
-                "<script>"
-                "try{"
-                "  var el=window.parent.document.querySelector('[data-testid=\"stMain\"]');"
-                "  if(!el) el=window.parent.document.querySelector('.main');"
-                "  if(!el) el=window.parent.document.body;"
-                "  el.scrollTo({top:0,behavior:'instant'});"
-                "}catch(e){window.parent.scrollTo(0,0);}"
-                "</script>",
-                height=0,
-            )
+    def _scroll_top():
+        """Scrolla till toppen av sidan – anropas överst i varje flik."""
+        _sc1.html(
+            "<script>"
+            "try{"
+            "  var el=window.parent.document.querySelector('[data-testid=\"stMain\"]');"
+            "  if(!el) el=window.parent.document.querySelector('.main');"
+            "  if(!el) el=window.parent.document.body;"
+            "  el.scrollTo({top:0,behavior:'instant'});"
+            "}catch(e){window.parent.scrollTo(0,0);}"
+            "</script>",
+            height=0,
+        )
 
-        tab_avanza, tab_search, tab_manual, tab_remove = st.tabs([
-            "📥 Importera från Avanza",
-            "🔍 Sök & lägg till",
-            "✏️ Lägg till manuellt",
-            "🗑️ Ta bort aktie",
-        ])
+    tab_avanza, tab_search, tab_manual, tab_remove = st.tabs([
+        "📥 Importera från Avanza",
+        "🔍 Sök & lägg till",
+        "✏️ Lägg till manuellt",
+        "🗑️ Ta bort aktie",
+    ])
 
-        # ══════════════════════════════════════════════════════════════════════
-        # FLIK 1 – AVANZA IMPORT
-        # ══════════════════════════════════════════════════════════════════════
-        with tab_avanza:
-            _scroll_top()
-            st.markdown("""
+    # ══════════════════════════════════════════════════════════════════════
+    # FLIK 1 – AVANZA IMPORT
+    # ══════════════════════════════════════════════════════════════════════
+    with tab_avanza:
+        _scroll_top()
+        st.markdown("""
 <div style="background:#1a2235;border:1px solid #2d3250;border-radius:10px;
      padding:16px 20px;margin-bottom:14px;">
 <div style="font-size:13px;font-weight:700;color:#e8eaf0;margin-bottom:12px;">
@@ -482,473 +480,473 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
 </div>
 """, unsafe_allow_html=True)
 
-            # ── Filuppladdning ──────────────────────────────────────────────────
-            uploaded = st.file_uploader(
-                "Välj Avanza-filen (CSV)",
-                type=["csv"],
-                key="avanza_csv_user",
-                help="Filen laddas inte upp till någon server – den läses direkt i din webbläsare.",
+        # ── Filuppladdning ──────────────────────────────────────────────────
+        uploaded = st.file_uploader(
+            "Välj Avanza-filen (CSV)",
+            type=["csv"],
+            key="avanza_csv_user",
+            help="Filen laddas inte upp till någon server – den läses direkt i din webbläsare.",
+        )
+        if uploaded is not None:
+            raw_bytes = uploaded.getvalue()
+            _is_positioner = avanza_import.is_positioner_format(raw_bytes)
+
+            # Gemensamma hjälpfunktioner
+            from data_management.avanza_import import (
+                find_ticker, classify_security, load_custom_map,
+                kortnamn_to_ticker,
             )
-            if uploaded is not None:
-                raw_bytes = uploaded.getvalue()
-                _is_positioner = avanza_import.is_positioner_format(raw_bytes)
+            custom_map = load_custom_map()
 
-                # Gemensamma hjälpfunktioner
-                from data_management.avanza_import import (
-                    find_ticker, classify_security, load_custom_map,
-                    kortnamn_to_ticker,
-                )
-                custom_map = load_custom_map()
+            def _build_holding_rows(df_src, konto_name, key_prefix):
+                """Renderar gransknings-UI för en lista innehav. Returnerar import_data-lista."""
+                _existing_konto: dict[str, tuple[float, float]] = {}
+                if not holdings.empty and "konto" in holdings.columns:
+                    for _, _row in holdings[holdings["konto"] == konto_name].iterrows():
+                        _existing_konto[str(_row["ticker"]).upper()] = (
+                            float(_row.get("shares", 0)),
+                            float(_row.get("cost_basis", 0)),
+                        )
 
-                def _build_holding_rows(df_src, konto_name, key_prefix):
-                    """Renderar gransknings-UI för en lista innehav. Returnerar import_data-lista."""
-                    _existing_konto: dict[str, tuple[float, float]] = {}
-                    if not holdings.empty and "konto" in holdings.columns:
-                        for _, _row in holdings[holdings["konto"] == konto_name].iterrows():
-                            _existing_konto[str(_row["ticker"]).upper()] = (
-                                float(_row.get("shares", 0)),
-                                float(_row.get("cost_basis", 0)),
-                            )
-
-                    _n_new = _n_changed = _n_same = 0
-                    for _, r in df_src.iterrows():
-                        _sg = str(r.get("_suggested_ticker", "")).upper()
-                        _s = float(r.get("shares") or 0)
-                        _c = float(r.get("cost_basis") or 0)
-                        if not _sg or _sg not in _existing_konto:
-                            _n_new += 1
-                        elif abs(_existing_konto[_sg][0] - _s) > 0.001 or abs(_existing_konto[_sg][1] - _c) > 0.001:
-                            _n_changed += 1
-                        else:
-                            _n_same += 1
-
-                    _parts = []
-                    if _n_new:     _parts.append(f"**{_n_new} nya**")
-                    if _n_changed: _parts.append(f"**{_n_changed} ändrade**")
-                    if _n_same:    _parts.append(f"{_n_same} oförändrade")
-                    st.success("Hittade " + str(len(df_src)) + " innehav: " + (" · ".join(_parts) if _parts else str(len(df_src))) + ". Granska och bekräfta:")
-
-                    import_data = []
-                    n_funds = n_certs = 0
-                    for i, r in df_src.iterrows():
-                        name          = str(r.get("name", ""))
-                        suggested     = str(r.get("_suggested_ticker", ""))
-                        security_type = str(r.get("_security_type", "stock"))
-                        new_shares    = float(r.get("shares") or 0)
-                        new_cost      = float(r.get("cost_basis") or 0)
-
-                        existing_vals = _existing_konto.get(suggested.upper()) if suggested else None
-                        if existing_vals is None:
-                            row_status  = "new"; status_badge = "🟢 Ny"; status_color = "#4caf50"
-                            default_check = bool(suggested) and security_type != "certificate"
-                        elif abs(existing_vals[0] - new_shares) > 0.001 or abs(existing_vals[1] - new_cost) > 0.001:
-                            row_status  = "changed"; status_color = "#f59e0b"
-                            _dp = []
-                            if abs(existing_vals[0] - new_shares) > 0.001:
-                                _dp.append(f"antal {existing_vals[0]:.0f}→{new_shares:.0f}")
-                            if abs(existing_vals[1] - new_cost) > 0.001:
-                                _dp.append(f"pris {existing_vals[1]:.2f}→{new_cost:.2f}")
-                            status_badge = "🔄 " + ", ".join(_dp); default_check = True
-                        else:
-                            row_status  = "same"; status_badge = "✓ Oförändrad"
-                            status_color = "#64748b"; default_check = False
-
-                        type_badge = ""
-                        if security_type == "fund":
-                            type_badge = " 🏦 *Fond*"; n_funds += 1
-                        elif security_type == "etf":
-                            type_badge = " 📊 *ETF*"
-                        elif security_type == "certificate":
-                            type_badge = " ⚠️ *Certifikat*"; n_certs += 1; default_check = False
-
-                        with st.container(border=True):
-                            c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 2, 1])
-                            c1.markdown(f"**{name}**{type_badge}")
-                            c2.caption(f"Antal: {new_shares:.2f}")
-                            c3.caption(f"Pris: {new_cost:.2f}")
-                            ticker_val = c4.text_input(
-                                "Ticker", value=suggested, key=f"{key_prefix}_t_{i}",
-                                label_visibility="collapsed", placeholder="t.ex. VOLV-B.ST",
-                            ).upper().strip()
-                            do_it = c5.checkbox("Ta med", value=default_check,
-                                                key=f"{key_prefix}_ok_{i}", help=status_badge)
-                            c1.markdown(
-                                f'<span style="font-size:11px;color:{status_color};">'
-                                f'{status_badge}</span>', unsafe_allow_html=True)
-                        import_data.append({
-                            "row": r, "ticker": ticker_val, "import": do_it,
-                            "security_type": security_type, "row_status": row_status,
-                        })
-
-                    if n_funds > 0:
-                        st.info(f"🏦 **{n_funds} fonder** hittades — behandlas utan scanner-signaler.")
-                    if n_certs > 0:
-                        st.warning(f"⚠️ **{n_certs} certifikat/turbo/warrant** identifierades och är avbockade.")
-                    return import_data
-
-                def _do_import(import_data, konto_name, konto_typ, base_h=None):
-                    _ensure_konto(konto_name, konto_typ)
-                    if base_h is not None:
-                        h = base_h.copy()
-                    elif not holdings.empty:
-                        h = holdings.copy()
+                _n_new = _n_changed = _n_same = 0
+                for _, r in df_src.iterrows():
+                    _sg = str(r.get("_suggested_ticker", "")).upper()
+                    _s = float(r.get("shares") or 0)
+                    _c = float(r.get("cost_basis") or 0)
+                    if not _sg or _sg not in _existing_konto:
+                        _n_new += 1
+                    elif abs(_existing_konto[_sg][0] - _s) > 0.001 or abs(_existing_konto[_sg][1] - _c) > 0.001:
+                        _n_changed += 1
                     else:
-                        h = pd.DataFrame(columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date"])
-                    n_add = n_upd = 0
-                    today_iso = datetime.date.today().isoformat()
-                    for item in import_data:
-                        if not item["import"] or not item["ticker"]:
-                            continue
-                        t = item["ticker"]
-                        s = float(item["row"].get("shares") or 0)
-                        c = float(item["row"].get("cost_basis") or 0)
-                        row_typ = item.get("security_type", "")
-                        if row_typ not in ("aktier", "fond", "etf", "certificate"):
-                            row_typ = ""
-                        h = _upsert_holding(h, t, s, c, konto=konto_name, typ=row_typ,
-                                            buy_date=today_iso)
-                        if item.get("row_status") == "new": n_add += 1
-                        else: n_upd += 1
-                    return h, n_add, n_upd
+                        _n_same += 1
 
-                try:
-                    # ══════════════════════════════════════════════════════════
-                    # FORMAT A: Nytt "positioner"-format (Kontonummer-kolumn)
-                    # Min ekonomi → Analys → Exportera data → Mitt innehav per konto
-                    # ══════════════════════════════════════════════════════════
-                    if _is_positioner:
-                        positioner_data = avanza_import.parse_avanza_positioner_csv(raw_bytes)
-                        if not positioner_data:
-                            st.error("Kunde inte läsa filen. Är det en Avanza positioner-export?")
-                        else:
-                            konton_reg = _load_konton()
-                            total_holdings = sum(len(df) for df in positioner_data.values())
-                            st.info(
-                                f"✅ Hittade **{total_holdings} innehav** i **{len(positioner_data)} konton**. "
-                                "Namnge kontona nedan (kontonummer visas som standard):"
-                            )
+                _parts = []
+                if _n_new:     _parts.append(f"**{_n_new} nya**")
+                if _n_changed: _parts.append(f"**{_n_changed} ändrade**")
+                if _n_same:    _parts.append(f"{_n_same} oförändrade")
+                st.success("Hittade " + str(len(df_src)) + " innehav: " + (" · ".join(_parts) if _parts else str(len(df_src))) + ". Granska och bekräfta:")
 
-                            # Bygg en lista av (kontonr, df, föreslagen_namn, föreslagen_typ)
-                            account_configs = []
-                            for konto_nr, df_acc in positioner_data.items():
-                                # Förbered ticker-förslag direkt i DataFrame
-                                rows_enriched = []
-                                for _, r in df_acc.iterrows():
-                                    # Fonder (av_typ == FUND): inget ticker-uppslag
-                                    _is_fund_row = str(r.get("av_typ", "")).upper() == "FUND"
-                                    if _is_fund_row:
-                                        suggested = ""
-                                        sec_type  = "fund"
-                                    else:
-                                        # Kortnamn-metoden först (snabbare, ingen nätverksanrop)
-                                        suggested = kortnamn_to_ticker(
-                                            str(r.get("kortnamn", "")), str(r.get("marknad", ""))
-                                        ) or find_ticker(
-                                            str(r.get("name", "")), custom_map,
-                                            isin=str(r.get("isin", "")) or None,
-                                        ) or ""
-                                        sec_type = classify_security(str(r.get("name", "")), suggested or None)
-                                    rows_enriched.append({
-                                        "name":      r.get("name"),
-                                        "shares":    r.get("shares"),
-                                        "cost_basis": r.get("cost_basis"),
-                                        "isin":      r.get("isin"),
-                                        "_suggested_ticker": suggested,
-                                        "_security_type":    sec_type,
-                                        "buy_date":  datetime.date.today().isoformat(),
-                                    })
-                                df_enriched = pd.DataFrame(rows_enriched)
+                import_data = []
+                n_funds = n_certs = 0
+                for i, r in df_src.iterrows():
+                    name          = str(r.get("name", ""))
+                    suggested     = str(r.get("_suggested_ticker", ""))
+                    security_type = str(r.get("_security_type", "stock"))
+                    new_shares    = float(r.get("shares") or 0)
+                    new_cost      = float(r.get("cost_basis") or 0)
 
-                                # Autodetektera kontotyp
-                                n_funds_acc = sum(1 for r in rows_enriched if r["_security_type"] == "fund")
-                                auto_typ = "fond" if n_funds_acc > len(rows_enriched) / 2 else "aktier"
-
-                                account_configs.append({
-                                    "konto_nr": konto_nr,
-                                    "df": df_enriched,
-                                    "auto_typ": auto_typ,
-                                    "n_funds": n_funds_acc,
-                                })
-
-                            # Kontonamn-UI: en rad per konto
-                            all_import_data = {}
-                            for idx, acc in enumerate(account_configs):
-                                konto_nr = acc["konto_nr"]
-                                df_enriched = acc["df"]
-                                auto_typ = acc["auto_typ"]
-
-                                with st.expander(
-                                    f"{'🏦' if auto_typ=='fond' else '📈'} Konto {konto_nr} "
-                                    f"({len(df_enriched)} innehav)",
-                                    expanded=True,
-                                ):
-                                    cn1, cn2 = st.columns([2, 1])
-                                    default_name = konto_nr  # standard = kontonummer
-                                    # Kolla om kontonumret liknar ett befintligt konto
-                                    for existing_name in konton_reg:
-                                        if existing_name.lower() in konto_nr.lower():
-                                            default_name = existing_name
-                                            break
-                                    acc_name = cn1.text_input(
-                                        "Kontonamn",
-                                        value=default_name,
-                                        key=f"pos_name_{idx}",
-                                        help="Vad vill du kalla det här kontot i MarketScan?",
-                                    ).strip() or konto_nr
-                                    acc_typ = cn2.radio(
-                                        "Typ", ["aktier", "fond"],
-                                        index=0 if auto_typ == "aktier" else 1,
-                                        key=f"pos_typ_{idx}",
-                                        help="'fond' döljer scanner-signaler",
-                                    )
-                                    import_rows = _build_holding_rows(
-                                        df_enriched, acc_name, key_prefix=f"pos_{idx}"
-                                    )
-                                    all_import_data[idx] = {
-                                        "name": acc_name, "typ": acc_typ, "rows": import_rows
-                                    }
-
-                            if st.button("💾 Importera alla markerade", key="btn_pos_save",
-                                         type="primary", use_container_width=True):
-                                h_all = holdings.copy() if not holdings.empty else pd.DataFrame(
-                                    columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date"])
-                                total_add = total_upd = 0
-                                for acc_data in all_import_data.values():
-                                    h_all, n_a, n_u = _do_import(
-                                        acc_data["rows"], acc_data["name"], acc_data["typ"],
-                                        base_h=h_all,  # kedja konton så inget skrivs över
-                                    )
-                                    total_add += n_a; total_upd += n_u
-                                _save_holdings_user(h_all)
-                                _msg = []
-                                if total_add: _msg.append(f"{total_add} nya")
-                                if total_upd: _msg.append(f"{total_upd} uppdaterade")
-                                st.success("✅ Klart! " + ", ".join(_msg) + " innehav sparade.")
-                                st.rerun()
-
-                    # ══════════════════════════════════════════════════════════
-                    # FORMAT B: Gammalt per-konto-format (Värdepapper/Antal/Kurs…)
-                    # ══════════════════════════════════════════════════════════
+                    existing_vals = _existing_konto.get(suggested.upper()) if suggested else None
+                    if existing_vals is None:
+                        row_status  = "new"; status_badge = "🟢 Ny"; status_color = "#4caf50"
+                        default_check = bool(suggested) and security_type != "certificate"
+                    elif abs(existing_vals[0] - new_shares) > 0.001 or abs(existing_vals[1] - new_cost) > 0.001:
+                        row_status  = "changed"; status_color = "#f59e0b"
+                        _dp = []
+                        if abs(existing_vals[0] - new_shares) > 0.001:
+                            _dp.append(f"antal {existing_vals[0]:.0f}→{new_shares:.0f}")
+                        if abs(existing_vals[1] - new_cost) > 0.001:
+                            _dp.append(f"pris {existing_vals[1]:.2f}→{new_cost:.2f}")
+                        status_badge = "🔄 " + ", ".join(_dp); default_check = True
                     else:
-                        # Konto-väljare visas bara för det gamla formatet
-                        konton_reg2 = _load_konton()
-                        konto_names2 = list(konton_reg2.keys())
-                        c_knam, c_ktyp = st.columns([2, 1])
-                        with c_knam:
-                            az_konto = st.selectbox(
-                                "Vilket konto tillhör filen?",
-                                options=konto_names2 + ["➕ Nytt konto…"],
-                                key="az_konto_sel",
-                            )
-                        if az_konto == "➕ Nytt konto…":
-                            c_new, c_new_typ = st.columns([2, 1])
-                            az_konto = c_new.text_input(
-                                "Kontonamn", placeholder="t.ex. ISK Aktier", key="az_konto_ny"
-                            ).strip() or "Nytt konto"
-                            az_typ = c_new_typ.radio("Typ", ["aktier", "fond"], key="az_konto_typ")
-                        else:
-                            az_typ = konton_reg2.get(az_konto, {}).get("typ", "aktier")
-                            st.caption("Kontotyp: " + ("🏦 Fondkonto" if az_typ == "fond" else "📈 Aktiekonto"))
+                        row_status  = "same"; status_badge = "✓ Oförändrad"
+                        status_color = "#64748b"; default_check = False
 
-                        with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
-                            tmp.write(raw_bytes)
-                            tmp_path = tmp.name
-                        try:
-                            df_az = avanza_import.parse_avanza_csv(tmp_path)
-                        finally:
-                            os.unlink(tmp_path)
-
-                        if df_az.empty:
-                            st.error("Kunde inte läsa filen. Är det en Avanza-export?")
-                        else:
-                            # Förbered ticker-förslag
-                            rows_enriched2 = []
-                            for _, r in df_az.iterrows():
-                                name = str(r.get("name", ""))
-                                isin = str(r.get("isin", "")) if "isin" in df_az.columns else None
-                                suggested = find_ticker(name, custom_map, isin=isin or None) or ""
-                                sec_type  = classify_security(name, suggested or None)
-                                rows_enriched2.append({
-                                    **r.to_dict(),
-                                    "_suggested_ticker": suggested,
-                                    "_security_type": sec_type,
-                                    "buy_date": datetime.date.today().isoformat(),
-                                })
-                            df_enriched2 = pd.DataFrame(rows_enriched2)
-                            import_data2 = _build_holding_rows(df_enriched2, az_konto, "az")
-
-                            if st.button("💾 Importera markerade", key="btn_az_save",
-                                         type="primary", use_container_width=True):
-                                h_new, n_add, n_upd = _do_import(import_data2, az_konto, az_typ)
-                                _save_holdings_user(h_new)
-                                _msg = []
-                                if n_add: _msg.append(f"{n_add} nya")
-                                if n_upd: _msg.append(f"{n_upd} uppdaterade")
-                                st.success("✅ Klart! " + ", ".join(_msg) + " innehav sparade.")
-                                st.rerun()
-
-                except Exception as e:
-                    st.error(f"Fel vid import: {e}")
-                    import traceback
-                    st.caption(traceback.format_exc())
-
-        # ══════════════════════════════════════════════════════════════════════
-        # FLIK 2 – SÖK & LÄGG TILL
-        # ══════════════════════════════════════════════════════════════════════
-        with tab_search:
-            _scroll_top()
-            st.caption("Sök på aktiens namn eller ticker och fyll i hur många du köpt och till vilket pris.")
-            search_q = st.text_input(
-                "Sök aktie",
-                key="port_search_q",
-                placeholder="t.ex. Volvo, AAPL, Investor...",
-            )
-            if search_q:
-                with st.spinner("Söker..."):
-                    hits = _search_ticker_yfinance(search_q)
-                if hits:
-                    options = {
-                        f"{h['ticker']}  —  {h.get('name','')[:35]}  ({h.get('exchange','')})": h
-                        for h in hits
-                    }
-                    chosen_label = st.selectbox("Välj aktie", list(options.keys()),
-                                                key="port_search_sel")
-                    chosen = options[chosen_label]
+                    type_badge = ""
+                    if security_type == "fund":
+                        type_badge = " 🏦 *Fond*"; n_funds += 1
+                    elif security_type == "etf":
+                        type_badge = " 📊 *ETF*"
+                    elif security_type == "certificate":
+                        type_badge = " ⚠️ *Certifikat*"; n_certs += 1; default_check = False
 
                     with st.container(border=True):
-                        st.markdown(
-                            f"**{chosen.get('name', chosen['ticker'])}**  "
-                            f"`{chosen['ticker']}`  ·  {chosen.get('exchange','')}"
-                        )
-                        col_s, col_p, col_d = st.columns(3)
-                        with col_s:
-                            antal = st.number_input(
-                                "Antal aktier",
-                                min_value=0.0, value=0.0, step=1.0,
-                                key="port_add_shares",
-                                help="Hur många aktier du äger totalt av detta bolag.",
-                            )
-                        with col_p:
-                            pris = st.number_input(
-                                "Genomsnittligt inköpspris (kr/st)",
-                                min_value=0.0, value=0.0, step=0.01,
-                                key="port_add_price",
-                                help="Ditt genomsnittliga inköpspris per aktie, inklusive courtage.",
-                            )
-                        with col_d:
-                            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-                            if st.button("➕ Lägg till i portfölj", key="btn_port_add_search",
-                                         type="primary", use_container_width=True):
-                                if antal <= 0:
-                                    st.error("Ange antal aktier.")
-                                elif pris <= 0:
-                                    st.error("Ange inköpspris.")
-                                else:
-                                    h = _upsert_holding(holdings, chosen["ticker"], antal, pris)
-                                    _save_holdings_user(h)
-                                    st.success(
-                                        f"✅ **{chosen['ticker']}** tillagd "
-                                        f"({antal:.0f} st à {pris:.2f} kr)!"
-                                    )
-                                    st.rerun()
+                        c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 2, 1])
+                        c1.markdown(f"**{name}**{type_badge}")
+                        c2.caption(f"Antal: {new_shares:.2f}")
+                        c3.caption(f"Pris: {new_cost:.2f}")
+                        ticker_val = c4.text_input(
+                            "Ticker", value=suggested, key=f"{key_prefix}_t_{i}",
+                            label_visibility="collapsed", placeholder="t.ex. VOLV-B.ST",
+                        ).upper().strip()
+                        do_it = c5.checkbox("Ta med", value=default_check,
+                                            key=f"{key_prefix}_ok_{i}", help=status_badge)
+                        c1.markdown(
+                            f'<span style="font-size:11px;color:{status_color};">'
+                            f'{status_badge}</span>', unsafe_allow_html=True)
+                    import_data.append({
+                        "row": r, "ticker": ticker_val, "import": do_it,
+                        "security_type": security_type, "row_status": row_status,
+                    })
+
+                if n_funds > 0:
+                    st.info(f"🏦 **{n_funds} fonder** hittades — behandlas utan scanner-signaler.")
+                if n_certs > 0:
+                    st.warning(f"⚠️ **{n_certs} certifikat/turbo/warrant** identifierades och är avbockade.")
+                return import_data
+
+            def _do_import(import_data, konto_name, konto_typ, base_h=None):
+                _ensure_konto(konto_name, konto_typ)
+                if base_h is not None:
+                    h = base_h.copy()
+                elif not holdings.empty:
+                    h = holdings.copy()
                 else:
-                    st.info("Inga resultat. Försök med tickern direkt, t.ex. `VOLV-B.ST`.")
+                    h = pd.DataFrame(columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date"])
+                n_add = n_upd = 0
+                today_iso = datetime.date.today().isoformat()
+                for item in import_data:
+                    if not item["import"] or not item["ticker"]:
+                        continue
+                    t = item["ticker"]
+                    s = float(item["row"].get("shares") or 0)
+                    c = float(item["row"].get("cost_basis") or 0)
+                    row_typ = item.get("security_type", "")
+                    if row_typ not in ("aktier", "fond", "etf", "certificate"):
+                        row_typ = ""
+                    h = _upsert_holding(h, t, s, c, konto=konto_name, typ=row_typ,
+                                        buy_date=today_iso)
+                    if item.get("row_status") == "new": n_add += 1
+                    else: n_upd += 1
+                return h, n_add, n_upd
 
-        # ══════════════════════════════════════════════════════════════════════
-        # FLIK 3 – MANUELL INMATNING
-        # ══════════════════════════════════════════════════════════════════════
-        with tab_manual:
-            _scroll_top()
-            st.caption("Vet du tickern? Fyll i direkt utan att söka.")
-            with st.form("form_manual_add", clear_on_submit=True):
-                c1, c2, c3 = st.columns([2, 2, 2])
-                with c1:
-                    m_ticker = st.text_input(
-                        "Ticker *",
-                        placeholder="t.ex. VOLV-B.ST",
-                        help="Yahoo Finance-ticker. Svenska aktier slutar på .ST",
-                    ).upper().strip()
-                with c2:
-                    m_shares = st.number_input(
-                        "Antal aktier *",
-                        min_value=0.0, value=0.0, step=1.0,
-                    )
-                with c3:
-                    m_price = st.number_input(
-                        "Inköpspris per aktie (kr) *",
-                        min_value=0.0, value=0.0, step=0.01,
-                    )
-                # Köpdatum
-                buy_date_input = st.date_input("Köpdatum", value=datetime.date.today(),
-                                               key="manual_buy_date")
-                # Kontoväljare + typ för manuell inmatning
-                konton_reg_m = _load_konton()
-                mc1, mc2 = st.columns([2, 1])
-                m_konto = mc1.selectbox(
-                    "Konto", list(konton_reg_m.keys()), key="manual_konto",
-                    help="Vilket konto innehavet tillhör",
-                )
-                m_typ = mc2.selectbox(
-                    "Typ", ["", "aktier", "fond", "etf"],
-                    key="manual_typ",
-                    help="Lämna tomt = bestäms av kontotypen. Välj 'fond' för aktivt förvaltade fonder i ett blandat konto.",
-                )
-                if st.form_submit_button("➕ Lägg till", type="primary", use_container_width=True):
-                    if not m_ticker:
-                        st.error("Ange ticker.")
-                    elif m_shares <= 0:
-                        st.error("Ange antal.")
-                    elif m_price <= 0:
-                        st.error("Ange inköpspris.")
+            try:
+                # ══════════════════════════════════════════════════════════
+                # FORMAT A: Nytt "positioner"-format (Kontonummer-kolumn)
+                # Min ekonomi → Analys → Exportera data → Mitt innehav per konto
+                # ══════════════════════════════════════════════════════════
+                if _is_positioner:
+                    positioner_data = avanza_import.parse_avanza_positioner_csv(raw_bytes)
+                    if not positioner_data:
+                        st.error("Kunde inte läsa filen. Är det en Avanza positioner-export?")
                     else:
-                        h = _upsert_holding(holdings, m_ticker, m_shares, m_price,
-                                            konto=m_konto, typ=m_typ,
-                                            buy_date=buy_date_input.isoformat())
-                        _save_holdings_user(h)
-                        st.success(f"✅ **{m_ticker}** tillagd ({m_shares:.0f} st à {m_price:.2f} kr)!")
-                        st.rerun()
+                        konton_reg = _load_konton()
+                        total_holdings = sum(len(df) for df in positioner_data.values())
+                        st.info(
+                            f"✅ Hittade **{total_holdings} innehav** i **{len(positioner_data)} konton**. "
+                            "Namnge kontona nedan (kontonummer visas som standard):"
+                        )
 
-        # ══════════════════════════════════════════════════════════════════════
-        # FLIK 4 – TA BORT / REDIGERA
-        # ══════════════════════════════════════════════════════════════════════
-        with tab_remove:
-            _scroll_top()
-            if holdings.empty:
-                st.info("Portföljen är tom – ingenting att ta bort.")
-            else:
-                tickers = holdings["ticker"].tolist()
-                sel = st.selectbox("Välj aktie att hantera", tickers, key="port_remove_sel")
-                row = holdings[holdings["ticker"] == sel].iloc[0]
+                        # Bygg en lista av (kontonr, df, föreslagen_namn, föreslagen_typ)
+                        account_configs = []
+                        for konto_nr, df_acc in positioner_data.items():
+                            # Förbered ticker-förslag direkt i DataFrame
+                            rows_enriched = []
+                            for _, r in df_acc.iterrows():
+                                # Fonder (av_typ == FUND): inget ticker-uppslag
+                                _is_fund_row = str(r.get("av_typ", "")).upper() == "FUND"
+                                if _is_fund_row:
+                                    suggested = ""
+                                    sec_type  = "fund"
+                                else:
+                                    # Kortnamn-metoden först (snabbare, ingen nätverksanrop)
+                                    suggested = kortnamn_to_ticker(
+                                        str(r.get("kortnamn", "")), str(r.get("marknad", ""))
+                                    ) or find_ticker(
+                                        str(r.get("name", "")), custom_map,
+                                        isin=str(r.get("isin", "")) or None,
+                                    ) or ""
+                                    sec_type = classify_security(str(r.get("name", "")), suggested or None)
+                                rows_enriched.append({
+                                    "name":      r.get("name"),
+                                    "shares":    r.get("shares"),
+                                    "cost_basis": r.get("cost_basis"),
+                                    "isin":      r.get("isin"),
+                                    "_suggested_ticker": suggested,
+                                    "_security_type":    sec_type,
+                                    "buy_date":  datetime.date.today().isoformat(),
+                                })
+                            df_enriched = pd.DataFrame(rows_enriched)
+
+                            # Autodetektera kontotyp
+                            n_funds_acc = sum(1 for r in rows_enriched if r["_security_type"] == "fund")
+                            auto_typ = "fond" if n_funds_acc > len(rows_enriched) / 2 else "aktier"
+
+                            account_configs.append({
+                                "konto_nr": konto_nr,
+                                "df": df_enriched,
+                                "auto_typ": auto_typ,
+                                "n_funds": n_funds_acc,
+                            })
+
+                        # Kontonamn-UI: en rad per konto
+                        all_import_data = {}
+                        for idx, acc in enumerate(account_configs):
+                            konto_nr = acc["konto_nr"]
+                            df_enriched = acc["df"]
+                            auto_typ = acc["auto_typ"]
+
+                            with st.expander(
+                                f"{'🏦' if auto_typ=='fond' else '📈'} Konto {konto_nr} "
+                                f"({len(df_enriched)} innehav)",
+                                expanded=True,
+                            ):
+                                cn1, cn2 = st.columns([2, 1])
+                                default_name = konto_nr  # standard = kontonummer
+                                # Kolla om kontonumret liknar ett befintligt konto
+                                for existing_name in konton_reg:
+                                    if existing_name.lower() in konto_nr.lower():
+                                        default_name = existing_name
+                                        break
+                                acc_name = cn1.text_input(
+                                    "Kontonamn",
+                                    value=default_name,
+                                    key=f"pos_name_{idx}",
+                                    help="Vad vill du kalla det här kontot i MarketScan?",
+                                ).strip() or konto_nr
+                                acc_typ = cn2.radio(
+                                    "Typ", ["aktier", "fond"],
+                                    index=0 if auto_typ == "aktier" else 1,
+                                    key=f"pos_typ_{idx}",
+                                    help="'fond' döljer scanner-signaler",
+                                )
+                                import_rows = _build_holding_rows(
+                                    df_enriched, acc_name, key_prefix=f"pos_{idx}"
+                                )
+                                all_import_data[idx] = {
+                                    "name": acc_name, "typ": acc_typ, "rows": import_rows
+                                }
+
+                        if st.button("💾 Importera alla markerade", key="btn_pos_save",
+                                     type="primary", use_container_width=True):
+                            h_all = holdings.copy() if not holdings.empty else pd.DataFrame(
+                                columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date"])
+                            total_add = total_upd = 0
+                            for acc_data in all_import_data.values():
+                                h_all, n_a, n_u = _do_import(
+                                    acc_data["rows"], acc_data["name"], acc_data["typ"],
+                                    base_h=h_all,  # kedja konton så inget skrivs över
+                                )
+                                total_add += n_a; total_upd += n_u
+                            _save_holdings_user(h_all)
+                            _msg = []
+                            if total_add: _msg.append(f"{total_add} nya")
+                            if total_upd: _msg.append(f"{total_upd} uppdaterade")
+                            st.success("✅ Klart! " + ", ".join(_msg) + " innehav sparade.")
+                            st.rerun()
+
+                # ══════════════════════════════════════════════════════════
+                # FORMAT B: Gammalt per-konto-format (Värdepapper/Antal/Kurs…)
+                # ══════════════════════════════════════════════════════════
+                else:
+                    # Konto-väljare visas bara för det gamla formatet
+                    konton_reg2 = _load_konton()
+                    konto_names2 = list(konton_reg2.keys())
+                    c_knam, c_ktyp = st.columns([2, 1])
+                    with c_knam:
+                        az_konto = st.selectbox(
+                            "Vilket konto tillhör filen?",
+                            options=konto_names2 + ["➕ Nytt konto…"],
+                            key="az_konto_sel",
+                        )
+                    if az_konto == "➕ Nytt konto…":
+                        c_new, c_new_typ = st.columns([2, 1])
+                        az_konto = c_new.text_input(
+                            "Kontonamn", placeholder="t.ex. ISK Aktier", key="az_konto_ny"
+                        ).strip() or "Nytt konto"
+                        az_typ = c_new_typ.radio("Typ", ["aktier", "fond"], key="az_konto_typ")
+                    else:
+                        az_typ = konton_reg2.get(az_konto, {}).get("typ", "aktier")
+                        st.caption("Kontotyp: " + ("🏦 Fondkonto" if az_typ == "fond" else "📈 Aktiekonto"))
+
+                    with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
+                        tmp.write(raw_bytes)
+                        tmp_path = tmp.name
+                    try:
+                        df_az = avanza_import.parse_avanza_csv(tmp_path)
+                    finally:
+                        os.unlink(tmp_path)
+
+                    if df_az.empty:
+                        st.error("Kunde inte läsa filen. Är det en Avanza-export?")
+                    else:
+                        # Förbered ticker-förslag
+                        rows_enriched2 = []
+                        for _, r in df_az.iterrows():
+                            name = str(r.get("name", ""))
+                            isin = str(r.get("isin", "")) if "isin" in df_az.columns else None
+                            suggested = find_ticker(name, custom_map, isin=isin or None) or ""
+                            sec_type  = classify_security(name, suggested or None)
+                            rows_enriched2.append({
+                                **r.to_dict(),
+                                "_suggested_ticker": suggested,
+                                "_security_type": sec_type,
+                                "buy_date": datetime.date.today().isoformat(),
+                            })
+                        df_enriched2 = pd.DataFrame(rows_enriched2)
+                        import_data2 = _build_holding_rows(df_enriched2, az_konto, "az")
+
+                        if st.button("💾 Importera markerade", key="btn_az_save",
+                                     type="primary", use_container_width=True):
+                            h_new, n_add, n_upd = _do_import(import_data2, az_konto, az_typ)
+                            _save_holdings_user(h_new)
+                            _msg = []
+                            if n_add: _msg.append(f"{n_add} nya")
+                            if n_upd: _msg.append(f"{n_upd} uppdaterade")
+                            st.success("✅ Klart! " + ", ".join(_msg) + " innehav sparade.")
+                            st.rerun()
+
+            except Exception as e:
+                st.error(f"Fel vid import: {e}")
+                import traceback
+                st.caption(traceback.format_exc())
+
+    # ══════════════════════════════════════════════════════════════════════
+    # FLIK 2 – SÖK & LÄGG TILL
+    # ══════════════════════════════════════════════════════════════════════
+    with tab_search:
+        _scroll_top()
+        st.caption("Sök på aktiens namn eller ticker och fyll i hur många du köpt och till vilket pris.")
+        search_q = st.text_input(
+            "Sök aktie",
+            key="port_search_q",
+            placeholder="t.ex. Volvo, AAPL, Investor...",
+        )
+        if search_q:
+            with st.spinner("Söker..."):
+                hits = _search_ticker_yfinance(search_q)
+            if hits:
+                options = {
+                    f"{h['ticker']}  —  {h.get('name','')[:35]}  ({h.get('exchange','')})": h
+                    for h in hits
+                }
+                chosen_label = st.selectbox("Välj aktie", list(options.keys()),
+                                            key="port_search_sel")
+                chosen = options[chosen_label]
 
                 with st.container(border=True):
-                    st.markdown(f"**{sel}** · {float(row['shares']):.0f} st · inköp {float(row['cost_basis']):.2f} kr/st")
-                    col_edit, col_del = st.columns(2)
-
-                    with col_edit:
-                        with st.expander("✏️ Ändra antal / pris"):
-                            with st.form(f"form_edit_{sel}"):
-                                e_shares = st.number_input(
-                                    "Antal", value=float(row["shares"]),
-                                    min_value=0.0, step=1.0, key=f"e_s_{sel}",
+                    st.markdown(
+                        f"**{chosen.get('name', chosen['ticker'])}**  "
+                        f"`{chosen['ticker']}`  ·  {chosen.get('exchange','')}"
+                    )
+                    col_s, col_p, col_d = st.columns(3)
+                    with col_s:
+                        antal = st.number_input(
+                            "Antal aktier",
+                            min_value=0.0, value=0.0, step=1.0,
+                            key="port_add_shares",
+                            help="Hur många aktier du äger totalt av detta bolag.",
+                        )
+                    with col_p:
+                        pris = st.number_input(
+                            "Genomsnittligt inköpspris (kr/st)",
+                            min_value=0.0, value=0.0, step=0.01,
+                            key="port_add_price",
+                            help="Ditt genomsnittliga inköpspris per aktie, inklusive courtage.",
+                        )
+                    with col_d:
+                        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+                        if st.button("➕ Lägg till i portfölj", key="btn_port_add_search",
+                                     type="primary", use_container_width=True):
+                            if antal <= 0:
+                                st.error("Ange antal aktier.")
+                            elif pris <= 0:
+                                st.error("Ange inköpspris.")
+                            else:
+                                h = _upsert_holding(holdings, chosen["ticker"], antal, pris)
+                                _save_holdings_user(h)
+                                st.success(
+                                    f"✅ **{chosen['ticker']}** tillagd "
+                                    f"({antal:.0f} st à {pris:.2f} kr)!"
                                 )
-                                e_price = st.number_input(
-                                    "Inköpspris (kr/st)", value=float(row["cost_basis"]),
-                                    min_value=0.0, step=0.01, key=f"e_p_{sel}",
-                                )
-                                if st.form_submit_button("💾 Spara", use_container_width=True):
-                                    h = _upsert_holding(holdings, sel, e_shares, e_price)
-                                    _save_holdings_user(h)
-                                    st.success(f"✅ {sel} uppdaterad.")
-                                    st.rerun()
+                                st.rerun()
+            else:
+                st.info("Inga resultat. Försök med tickern direkt, t.ex. `VOLV-B.ST`.")
 
-                    with col_del:
-                        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-                        if st.button(f"🗑️ Ta bort {sel}", key=f"btn_del_{sel}",
-                                     use_container_width=True):
-                            h = holdings[holdings["ticker"] != sel].reset_index(drop=True)
-                            _save_holdings_user(h)
-                            st.success(f"✅ {sel} borttagen.")
-                            st.rerun()
+    # ══════════════════════════════════════════════════════════════════════
+    # FLIK 3 – MANUELL INMATNING
+    # ══════════════════════════════════════════════════════════════════════
+    with tab_manual:
+        _scroll_top()
+        st.caption("Vet du tickern? Fyll i direkt utan att söka.")
+        with st.form("form_manual_add", clear_on_submit=True):
+            c1, c2, c3 = st.columns([2, 2, 2])
+            with c1:
+                m_ticker = st.text_input(
+                    "Ticker *",
+                    placeholder="t.ex. VOLV-B.ST",
+                    help="Yahoo Finance-ticker. Svenska aktier slutar på .ST",
+                ).upper().strip()
+            with c2:
+                m_shares = st.number_input(
+                    "Antal aktier *",
+                    min_value=0.0, value=0.0, step=1.0,
+                )
+            with c3:
+                m_price = st.number_input(
+                    "Inköpspris per aktie (kr) *",
+                    min_value=0.0, value=0.0, step=0.01,
+                )
+            # Köpdatum
+            buy_date_input = st.date_input("Köpdatum", value=datetime.date.today(),
+                                           key="manual_buy_date")
+            # Kontoväljare + typ för manuell inmatning
+            konton_reg_m = _load_konton()
+            mc1, mc2 = st.columns([2, 1])
+            m_konto = mc1.selectbox(
+                "Konto", list(konton_reg_m.keys()), key="manual_konto",
+                help="Vilket konto innehavet tillhör",
+            )
+            m_typ = mc2.selectbox(
+                "Typ", ["", "aktier", "fond", "etf"],
+                key="manual_typ",
+                help="Lämna tomt = bestäms av kontotypen. Välj 'fond' för aktivt förvaltade fonder i ett blandat konto.",
+            )
+            if st.form_submit_button("➕ Lägg till", type="primary", use_container_width=True):
+                if not m_ticker:
+                    st.error("Ange ticker.")
+                elif m_shares <= 0:
+                    st.error("Ange antal.")
+                elif m_price <= 0:
+                    st.error("Ange inköpspris.")
+                else:
+                    h = _upsert_holding(holdings, m_ticker, m_shares, m_price,
+                                        konto=m_konto, typ=m_typ,
+                                        buy_date=buy_date_input.isoformat())
+                    _save_holdings_user(h)
+                    st.success(f"✅ **{m_ticker}** tillagd ({m_shares:.0f} st à {m_price:.2f} kr)!")
+                    st.rerun()
+
+    # ══════════════════════════════════════════════════════════════════════
+    # FLIK 4 – TA BORT / REDIGERA
+    # ══════════════════════════════════════════════════════════════════════
+    with tab_remove:
+        _scroll_top()
+        if holdings.empty:
+            st.info("Portföljen är tom – ingenting att ta bort.")
+        else:
+            tickers = holdings["ticker"].tolist()
+            sel = st.selectbox("Välj aktie att hantera", tickers, key="port_remove_sel")
+            row = holdings[holdings["ticker"] == sel].iloc[0]
+
+            with st.container(border=True):
+                st.markdown(f"**{sel}** · {float(row['shares']):.0f} st · inköp {float(row['cost_basis']):.2f} kr/st")
+                col_edit, col_del = st.columns(2)
+
+                with col_edit:
+                    with st.expander("✏️ Ändra antal / pris"):
+                        with st.form(f"form_edit_{sel}"):
+                            e_shares = st.number_input(
+                                "Antal", value=float(row["shares"]),
+                                min_value=0.0, step=1.0, key=f"e_s_{sel}",
+                            )
+                            e_price = st.number_input(
+                                "Inköpspris (kr/st)", value=float(row["cost_basis"]),
+                                min_value=0.0, step=0.01, key=f"e_p_{sel}",
+                            )
+                            if st.form_submit_button("💾 Spara", use_container_width=True):
+                                h = _upsert_holding(holdings, sel, e_shares, e_price)
+                                _save_holdings_user(h)
+                                st.success(f"✅ {sel} uppdaterad.")
+                                st.rerun()
+
+                with col_del:
+                    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+                    if st.button(f"🗑️ Ta bort {sel}", key=f"btn_del_{sel}",
+                                 use_container_width=True):
+                        h = holdings[holdings["ticker"] != sel].reset_index(drop=True)
+                        _save_holdings_user(h)
+                        st.success(f"✅ {sel} borttagen.")
+                        st.rerun()
 
 
 def _portfolio_stress_test(holdings: pd.DataFrame, score_data: dict) -> None:
