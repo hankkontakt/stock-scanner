@@ -151,17 +151,6 @@ def load_watchlist(data_dir: Path | None = None) -> list:
 
 
 @st.cache_data(ttl=300)
-def load_history_snapshots() -> dict:
-    result = {}
-    for f in sorted((DATA_DIR / "history").glob("snapshot_*.csv"), reverse=True)[:10]:
-        try:
-            d  = f.stem.replace("snapshot_", "")
-            df = pd.read_csv(f, low_memory=False)
-            result[d] = df
-        except Exception:
-            pass
-    return result
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HJÄLPFUNKTIONER
@@ -170,32 +159,6 @@ def load_history_snapshots() -> dict:
 def _get(df: pd.DataFrame, col: str, default=None) -> pd.Series:
     return df[col] if col in df.columns else pd.Series([default] * len(df))
 
-
-def score_color(val) -> str:
-    try:
-        v = float(val)
-        if v >= 75: return "#00c853"
-        if v >= 60: return "#69f0ae"
-        if v >= 45: return "#ffd600"
-        if v >= 30: return "#ff6d00"
-        return "#d50000"
-    except Exception:
-        return "#78909c"
-
-
-def signal_tag(sig: str) -> str:
-    sig = str(sig).upper().strip()
-    m = {
-        "STARK": ("green", "🟢 STARK"),
-        "OK":    ("blue",  "🔵 OK"),
-        "VÄNTA": ("yellow","🟡 VÄNTA"),
-        "EJ AKTUELL": ("red", "🔴 EJ"),
-        "BUY":   ("green", "🟢 KÖP"),
-        "SELL":  ("red",   "🔴 SÄLJ"),
-        "NEUTRAL": ("grey","⚪ NEUTRAL"),
-    }
-    cls, label = m.get(sig, ("grey", sig))
-    return f'<span class="tag-{cls}">{label}</span>'
 
 
 def pct_fmt(v, plus=True) -> str:
@@ -213,12 +176,6 @@ def num_fmt(v, decimals=1) -> str:
     except Exception:
         return "—"
 
-
-def score_bar_col(col_name: str):
-    """Returnerar ColumnConfig för ett score-fält med progress-bar."""
-    return st.column_config.ProgressColumn(
-        col_name, min_value=0, max_value=100, format="%.0f"
-    )
 
 
 def _sector_options(df: pd.DataFrame) -> list:
@@ -344,14 +301,6 @@ def kpi_row(metrics: list):
             unsafe_allow_html=True,
         )
 
-
-def section_divider():
-    """Gradient-avdelare — ersätter st.markdown('---')."""
-    st.markdown(
-        '<div style="height:1px;background:linear-gradient(to right,transparent,'
-        '#2d3250 20%,#2d3250 80%,transparent);margin:28px 0 20px 0;"></div>',
-        unsafe_allow_html=True,
-    )
 
 
 def _apply_chart_style(fig: "go.Figure") -> "go.Figure":

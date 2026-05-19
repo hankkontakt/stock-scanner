@@ -76,14 +76,8 @@ def _github_commit_file(repo_path: str, content: str, token: str,
 
 
 def _get_github_token() -> str:
-    """Hämtar GITHUB_TOKEN från Streamlit Secrets eller miljövariabel."""
-    token = os.getenv("GITHUB_TOKEN", "")
-    if not token:
-        try:
-            token = st.secrets.get("GITHUB_TOKEN", "")
-        except Exception:
-            pass
-    return token or ""
+    """Hämtar GITHUB_TOKEN från miljövariabel eller Streamlit Secrets."""
+    return _get_st_secret("GITHUB_TOKEN")
 
 
 def _save_holdings_df(df: pd.DataFrame) -> bool:
@@ -456,11 +450,11 @@ def _render_overview_tab():
     st.markdown("**🔑 API-nyckelstatus**")
     api_cols = st.columns(5)
     keys = [
-        ("GitHub",   bool(os.getenv("GITHUB_TOKEN") or _get_st_secret("GITHUB_TOKEN"))),
-        ("Finnhub",  bool(os.getenv("FINNHUB_API_KEY") or _get_st_secret("FINNHUB_API_KEY"))),
-        ("DeepSeek", bool(os.getenv("DEEPSEEK_API_KEY") or _get_st_secret("DEEPSEEK_API_KEY"))),
-        ("Gemini",   bool(os.getenv("GEMINI_API_KEY") or _get_st_secret("GEMINI_API_KEY"))),
-        ("E-post",   bool(os.getenv("EMAIL_SENDER") or _get_st_secret("EMAIL_SENDER"))),
+        ("GitHub",   bool(_get_st_secret("GITHUB_TOKEN"))),
+        ("Finnhub",  bool(_get_st_secret("FINNHUB_API_KEY"))),
+        ("DeepSeek", bool(_get_st_secret("DEEPSEEK_API_KEY"))),
+        ("Gemini",   bool(_get_st_secret("GEMINI_API_KEY"))),
+        ("E-post",   bool(_get_st_secret("EMAIL_SENDER"))),
     ]
     for col, (name, ok) in zip(api_cols, keys):
         col.markdown(f"{'✅' if ok else '❌'} **{name}**")
@@ -527,7 +521,12 @@ def _render_overview_tab():
 
 
 def _get_st_secret(key: str) -> str:
-    """Läs ett Streamlit-secret säkert (returnerar '' om det misslyckas)."""
+    """Läs ett secret från miljövariabel eller Streamlit Secrets (returnerar '' om det misslyckas).
+    Prioriterar os.environ (fungerar i GitHub Actions och lokal .env) och faller tillbaka
+    till st.secrets (Streamlit Cloud runtime). Samma beteende som _get_secret i ai_analysis.py."""
+    val = os.getenv(key, "")
+    if val:
+        return val
     try:
         return st.secrets.get(key, "") or ""
     except Exception:
@@ -765,9 +764,11 @@ def _render_cache_tab():
                 removed = 0
                 for pattern in [f"{safe}*", f"*{safe}*"]:
                     for f in cache_dir.glob(pattern):
-                        if f.exists():
+                        try:
                             f.unlink()
                             removed += 1
+                        except Exception:
+                            pass
                 st.success(f"✅ Raderade {removed} cache-filer för {clear_ticker}")
 
     with col_b:
@@ -792,8 +793,11 @@ def _render_cache_tab():
             if cache_dir.exists():
                 removed = 0
                 for f in cache_dir.glob("*"):
-                    f.unlink()
-                    removed += 1
+                    try:
+                        f.unlink()
+                        removed += 1
+                    except Exception:
+                        pass
                 st.success(f"✅ All priscache rensad ({removed} filer)")
                 st.rerun()
 
