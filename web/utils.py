@@ -709,6 +709,8 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
         margin=dict(l=0, r=0, t=8 if not fund_constant else 28, b=0),
         showlegend=False,
         hovermode="x unified",
+        title={"text": ""},
+        yaxis_title="",
         **layout_extra,
     )
     return _apply_chart_style(fig)
