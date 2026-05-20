@@ -427,7 +427,9 @@ def conviction_meter_chart(row) -> "go.Figure":
     avg = sum(values) / len(values)
     color = "#4caf50" if avg >= 65 else ("#ff9800" if avg >= 45 else "#ef5350")
 
-    fill_color = color + "26"  # ~15% opacity hex
+    # Convert hex to rgba for plotly compatibility
+    r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+    fill_color = f"rgba({r}, {g}, {b}, 0.15)"
 
     fig = go.Figure(go.Scatterpolar(
         r=values_closed,
