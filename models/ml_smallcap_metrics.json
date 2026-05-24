@@ -1,7 +1,7 @@
 {
   "universe": "smallcap",
-  "trained_at": "2026-05-17T08:26:48.715740+00:00",
-  "n_rows": 12689,
+  "trained_at": "2026-05-24T06:43:17.578552+00:00",
+  "n_rows": 14372,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -20,10 +20,10 @@
     "momentum_3_vs_12"
   ],
   "test_metrics": {
-    "mae": 0.1202,
-    "ic": 0.0145,
-    "hit_rate": 0.4957,
-    "n_train": 10151,
-    "n_test": 2538
+    "mae": 0.12,
+    "ic": 0.0332,
+    "hit_rate": 0.4817,
+    "n_train": 11497,
+    "n_test": 2875
   }
 }
