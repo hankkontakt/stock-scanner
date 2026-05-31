@@ -255,6 +255,40 @@ def _search_ticker_yfinance(query: str):
         return hits
 
 
+_INVALID_TICKER_PATTERNS = {
+    # Vanliga fond-/index-namn som av misstag läggs in som tickers
+    "LÄNSFÖRSÄKRINGAR", "GLOBAL INDEX", "AVANZA", "NORDNET",
+    "SPILTAN", "FOND", "FONDER", "AKTIESPARARNA",
+}
+
+def validate_ticker(ticker: str) -> tuple[bool, str]:
+    """Kontrollerar att en ticker är giltig (ej ett fond-namn, ej tom).
+
+    Returnerar (True, "") om giltig, eller (False, felmeddelande) om ogiltig.
+    Syftet är att fånga inmatningsfel som 'LÄNSFÖRSÄKRINGAR GLOBAL INDEX'
+    som annars genererar 404-fel vid varje scan.
+    """
+    if not ticker or not ticker.strip():
+        return False, "Ticker är tom."
+
+    t = ticker.strip().upper()
+
+    # Fond-/index-namn har blanksteg och är för långa
+    if " " in t and len(t) > 20:
+        return False, f"'{ticker}' ser ut som ett fond­namn, inte en ticker (innehåller mellanslag). Använd en börsticker, t.ex. 'LSAV.ST'."
+
+    # Kända ogiltiga mönster
+    for pat in _INVALID_TICKER_PATTERNS:
+        if pat in t:
+            return False, f"'{ticker}' är ett fond-/index­namn, inte en giltig börsticker."
+
+    # För lång ticker → troligen ett namn, inte en symbol
+    if len(t) > 20:
+        return False, f"'{ticker}' är för lång för att vara en ticker (max 20 tecken)."
+
+    return True, ""
+
+
 def _check_admin_access() -> bool:
     """Kontrollera om den inloggade användaren är admin.
 

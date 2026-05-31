@@ -72,17 +72,18 @@ EXTRA_FACTOR_WEIGHTS = {
 
 # ════════════════ FAKTORVIKTER ════════════════
 FACTOR_WEIGHTS = {
-    "value":     0.22,
-    "quality":   0.18,
-    "momentum":  0.18,
-    "growth":    0.13,
-    "risk":      0.09,
-    "size":      0.05,
-    "dividend":  0.05,
-    "sentiment": 0.10,
+    "value":          0.2134,  # 0.22 × 0.97
+    "quality":        0.1746,  # 0.18 × 0.97
+    "momentum":       0.1746,  # 0.18 × 0.97
+    "growth":         0.1261,  # 0.13 × 0.97
+    "risk":           0.0873,  # 0.09 × 0.97
+    "size":           0.0485,  # 0.05 × 0.97
+    "dividend":       0.0485,  # 0.05 × 0.97
+    "sentiment":      0.0970,  # 0.10 × 0.97
+    "short_interest": 0.0300,  # Ny faktor: låg blankning = positivt signal
 }
-# Om EXTRA_FACTOR_WEIGHTS läggs till, justeras FACTOR_WEIGHTS proportionellt
-# Detta görs i scoring.py med en helper-funktion
+# Vikterna skalas så att sum = 1.0. short_interest lades till 2026-06-01.
+# Källdata: short_pct_float / short_ratio från yfinance (hämtas sedan länge men var oanvänd).
 
 assert abs(sum(FACTOR_WEIGHTS.values()) - 1.0) < 0.001
 

@@ -465,8 +465,11 @@ def calc_momentum_score(df: pd.DataFrame) -> pd.Series:
 
 def calc_growth_score(df: pd.DataFrame) -> pd.Series:
     """
-    Growth score: revenue and earnings growth.
-    Higher growth = higher score.
+    Growth score: revenue, earnings growth + earnings_surprise_pct boost.
+
+    earnings_surprise_pct (earningsForecastsGrowthRate från yfinance) mäter
+    hur snabbt analytiker höjer sina estimat — positivt = bolaget överträffar
+    förväntningar (PEAD-signal). Läggs in som en likaviktad komponent.
     """
     components = []
 
@@ -475,6 +478,13 @@ def calc_growth_score(df: pd.DataFrame) -> pd.Series:
             score = _try_rank(df[col], ascending=True)
             if score is not None:
                 components.append(score)
+
+    # Earnings surprise / estimat-revision — positivt är bättre
+    if "earnings_surprise_pct" in df.columns and df["earnings_surprise_pct"].notna().any():
+        surprise = pd.to_numeric(df["earnings_surprise_pct"], errors="coerce")
+        score = _try_rank(surprise, ascending=True)
+        if score is not None:
+            components.append(score)
 
     if not components:
         return _neutral_series(df.index)
@@ -594,6 +604,51 @@ def _insider_decay_weight(df: pd.DataFrame) -> pd.Series:
     return decay.fillna(1.0)
 
 
+def calc_short_interest_score(df: pd.DataFrame) -> pd.Series:
+    """
+    Short interest score — låg blankning är positivt (färre skeptiker),
+    men EXTREM blankning kan vara contrarian-signal (short squeeze potential).
+
+    Primärt mått: short_pct_float (% av float som är blankat).
+    Fallback:     short_ratio (dagar att täcka = dagar till short cover).
+
+    Logik:
+    - 0–10 % blankat → högt score (låg skepticism)
+    - 10–20 % → medel
+    - >30 % → bottnar, kan ha contrarian-boost (short squeeze risk)
+
+    Skalning: inverterad percentil­rankning → låg blankning = högt score.
+    Contrarian-boost: om short_pct_float > 20 % adderas upp till +10 extra
+    (squeeze-potential bestraffas inte utan bel­önas marginellt).
+    """
+    series = None
+
+    if "short_pct_float" in df.columns and df["short_pct_float"].notna().any():
+        series = pd.to_numeric(df["short_pct_float"], errors="coerce")
+    elif "short_ratio" in df.columns and df["short_ratio"].notna().any():
+        # short_ratio (dagar) är positivt korrelerad med blankning
+        series = pd.to_numeric(df["short_ratio"], errors="coerce")
+
+    if series is None or series.isna().all():
+        return _neutral_series(df.index)
+
+    # Rensa outliers: cap vid 98:e percentilen
+    series = winsorize(series, lower=0.0, upper=0.98).replace([np.inf, -np.inf], np.nan)
+    if series.notna().sum() < MIN_VALID_OBSERVATIONS:
+        return _neutral_series(df.index)
+
+    # Inverterad rankning: låg blankning → högt score
+    base_score = percentile_rank(series, ascending=False)
+
+    # Contrarian-boost: hög blankning → liten positiv justering (short-squeeze)
+    if "short_pct_float" in df.columns:
+        high_short = pd.to_numeric(df["short_pct_float"], errors="coerce").fillna(0) > 0.20
+        boost = high_short.astype(float) * 10
+        base_score = (base_score + boost).clip(upper=99)
+
+    return base_score
+
+
 def calc_sentiment_score(df: pd.DataFrame) -> pd.Series:
     """
     Sentiment score från Finnhub-nyhetsdata + insiderhandelssignaler.
@@ -633,26 +688,28 @@ def _apply_scores_and_discounts(df: pd.DataFrame, w: dict) -> pd.DataFrame:
     """Gemensam faktorberäkning, composite score och holding/commodity-rabatter.
     Anropas av både score_universe() och score_universe_sector_neutralized()."""
     # ── Faktorscore ───────────────────────────────────────────────────────────
-    df["score_value"]     = calc_value_score(df)
-    df["score_quality"]   = calc_quality_score(df)
-    df["score_momentum"]  = calc_momentum_score(df)
-    df["score_growth"]    = calc_growth_score(df)
-    df["score_risk"]      = calc_risk_score(df)
-    df["score_size"]      = calc_size_score(df)
-    df["score_dividend"]  = calc_dividend_score(df)
-    df["score_fcf_yield"] = calc_fcf_yield_score(df)
-    df["score_sentiment"] = calc_sentiment_score(df)
+    df["score_value"]          = calc_value_score(df)
+    df["score_quality"]        = calc_quality_score(df)
+    df["score_momentum"]       = calc_momentum_score(df)
+    df["score_growth"]         = calc_growth_score(df)
+    df["score_risk"]           = calc_risk_score(df)
+    df["score_size"]           = calc_size_score(df)
+    df["score_dividend"]       = calc_dividend_score(df)
+    df["score_fcf_yield"]      = calc_fcf_yield_score(df)
+    df["score_sentiment"]      = calc_sentiment_score(df)
+    df["score_short_interest"] = calc_short_interest_score(df)
 
     # ── Composite score ───────────────────────────────────────────────────────
     df["score_total"] = (
-        w.get("value", 0)     * df["score_value"]     +
-        w.get("quality", 0)   * df["score_quality"]   +
-        w.get("momentum", 0)  * df["score_momentum"]  +
-        w.get("growth", 0)    * df["score_growth"]    +
-        w.get("risk", 0)      * df["score_risk"]      +
-        w.get("size", 0)      * df["score_size"]      +
-        w.get("dividend", 0)  * df["score_dividend"]  +
-        w.get("sentiment", 0) * df["score_sentiment"]
+        w.get("value", 0)          * df["score_value"]          +
+        w.get("quality", 0)        * df["score_quality"]        +
+        w.get("momentum", 0)       * df["score_momentum"]       +
+        w.get("growth", 0)         * df["score_growth"]         +
+        w.get("risk", 0)           * df["score_risk"]           +
+        w.get("size", 0)           * df["score_size"]           +
+        w.get("dividend", 0)       * df["score_dividend"]       +
+        w.get("sentiment", 0)      * df["score_sentiment"]      +
+        w.get("short_interest", 0) * df["score_short_interest"]
     )
 
     # ── Holdingbolag & råvarubolag: score-rabatt ──────────────────────────────

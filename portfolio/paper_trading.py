@@ -54,6 +54,12 @@ DCA_MULTIPLIER      = 1.5     # Köp 1.5× mer vid DCA
 MAX_DCA_PER_TICKER  = 2       # Max antal DCA-köp per ticker
 CLOSE_AFTER_WEEKS   = 8       # Stäng position efter N veckor oavsett
 
+# ── Transaktionskostnader (slippage + courtage) ────────────────────────────
+# Modellerar realistiska friktionskostnader för att undvika överoptimism.
+# Typiska svenska mäklararvoden: 0.05–0.15% courtage + 0.05% bid-ask-spread.
+COMMISSION_PCT  = 0.0010   # 0.10% courtage per affär (köp + sälj = 0.20% round-trip)
+SLIPPAGE_PCT    = 0.0005   # 0.05% prisslippage per order (bid-ask-spread)
+
 (_ROOT / "data").mkdir(exist_ok=True)
 
 
@@ -325,8 +331,10 @@ def record_weekly_picks(
         if price is None or (isinstance(price, float) and (price != price)) or price == 0:
             continue
 
-        shares = round(capital_per_stock / price, 4)
-        buy_price = round(float(price), 4)
+        # Applicera slippage + courtage på köp-priset (köparen betalar spread + avgift)
+        effective_buy_price = float(price) * (1 + COMMISSION_PCT + SLIPPAGE_PCT)
+        shares = round(capital_per_stock / effective_buy_price, 4)
+        buy_price = round(effective_buy_price, 4)
 
         # Beräkna stop-loss och take-profit nivåer vid köp
         stop_loss_price = round(buy_price * (1 + STOP_LOSS_PCT / 100), 4)
@@ -584,7 +592,9 @@ def update_prices(close_after_weeks: int = CLOSE_AFTER_WEEKS,
         # Stäng position
         if actions.get("sell_all") or age_weeks >= close_after_weeks:
             trade["status"] = "CLOSED"
-            trade["sell_price"] = current_price
+            # Applicera sälj-friktioner: säljaren förlorar spread + courtage
+            effective_sell_price = current_price * (1 - COMMISSION_PCT - SLIPPAGE_PCT)
+            trade["sell_price"] = round(effective_sell_price, 4)
             trade["sell_date"] = today.isoformat()
             trade["exit_reason"] = actions.get("exit_reason") or f"time_{close_after_weeks}w"
 
