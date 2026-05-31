@@ -893,6 +893,46 @@ All ideas discovered during system analysis. Add to this section as you find mor
 
 > Lägg nyaste överst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-01 — Förbättringsplan Fas 1–3 (quick wins + analysmotor + hemsida/UX)
+
+**Fas 1 — Quick wins:**
+- ✅ **Short interest som ny scoring-faktor (vikt 3%)** — `calc_short_interest_score()` i
+  `core/scoring.py` använder `short_pct_float`/`short_ratio` (hämtades sedan länge men var oanvänt).
+  Contrarian-boost om >20% av float är blankat. `FACTOR_WEIGHTS` rescalades (sum=1.0) i `core/config.py`.
+- ✅ **Earnings surprise i growth-score** — `earnings_surprise_pct` (earningsForecastsGrowthRate)
+  läggs in som ytterligare komponent i `calc_growth_score()` (PEAD-signal). `core/scoring.py`.
+- ✅ **Data-färskhetsvarning** — Orange/röd banner i sidebar-footern om senaste `scored_universe_*`
+  är >48h (info) eller >72h (warning). `web/streamlit_app.py`.
+- ✅ **Ticker-validering vid inmatning** — `validate_ticker()` i `web/pages/admin.py` avvisar
+  fond-namn med mellanslag (t.ex. "LÄNSFÖRSÄKRINGAR GLOBAL INDEX"), kopplad till watchlist-formuläret.
+- ✅ **36 delistade tickers rensade** ur `data/universe.json` — MAN.DE, VATTENFALL.ST, NYFOSA.ST
+  m.fl. som failade 404 vid varje scan. 
+- ✅ **Transaktionskostnader + slippage i paper trading** — `COMMISSION_PCT=0.10%` + `SLIPPAGE_PCT=0.05%`
+  appliceras vid köp (effektivt pris × 1.0015) och sälj (× 0.9985). `portfolio/paper_trading.py`.
+
+**Fas 2 — Hemsida/UX:**
+- ✅ **Score-breakdown panel** — `_score_breakdown()` i `web/stock_detail.py` visar varje faktors
+  poäng som färgad progress-bar + de viktigaste underliggande nyckeltalen. Svar på "varför fick
+  aktien denna poäng?". Visas bredvid radar-chartet på aktie­detalj-sidan.
+- ✅ **Bollinger Bands (20d, ±2σ)** — Ritade i candlestick-chartet i `web/stock_detail.py`.
+  `bb_position` beräknades redan men visualiserades aldrig.
+- ✅ **Ny "Korrelation & Rebalans"-tab i portföljsidan** — `_tab_rebalans()` i
+  `web/pages/portfolio.py` med: korrelationsmatris (heatmap + auto-varning vid >0.80 par),
+  diversifieringsförslag (via befintlig `suggest_diversifiers()`), Black-Litterman-optimering
+  (via befintlig `black_litterman_weights()`) med nuvarande vs föreslagna vikter som stapeldiagram.
+
+**Fas 3 — Point-in-time backtest:**
+- ✅ **`backtesting/backtest_snapshots.py`** (ny fil) — `save_snapshot()` sparar en tunn
+  scoring-snapshot efter varje veckoscan i `data/bt_snapshots/`; `run_snapshot_backtest()`
+  backtestas mot dessa riktiga historiska rekommendationer (inget look-ahead bias).
+- ✅ **`core/daily_pipeline.py`** — anropar `save_snapshot()` efter varje lyckad veckoscan.
+- ✅ **`web/pages/backtesting_page.py`** — ny sektion "Point-in-time Backtest" med UI för att
+  konfigurera och köra snapshot-backtesten; visar equity-kurva + per-period-avkastning vs benchmark.
+  Informationsmeddelande när <3 snapshots finns (byggs upp löpande).
+
+**Notering:** Snapshot-backtesten byggs upp automatiskt — varje veckoscan lägger till ett datapunkt.
+Meningsfull historik finns efter 6–12 veckor.
+
 ### 2026-05-31 — Reliability-pass (data-persistens, scans, nyhetslarm)
 
 **Data försvann vid Streamlit Cloud-omstart (ephemeral filsystem):**
