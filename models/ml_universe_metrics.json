@@ -1,7 +1,7 @@
 {
   "universe": "universe",
-  "trained_at": "2026-05-24T06:43:15.416259+00:00",
-  "n_rows": 52884,
+  "trained_at": "2026-05-31T06:59:47.879242+00:00",
+  "n_rows": 52849,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -20,10 +20,10 @@
     "momentum_3_vs_12"
   ],
   "test_metrics": {
-    "mae": 0.1061,
-    "ic": -0.0226,
-    "hit_rate": 0.5402,
-    "n_train": 42307,
-    "n_test": 10577
+    "mae": 0.1053,
+    "ic": 0.0023,
+    "hit_rate": 0.544,
+    "n_train": 42279,
+    "n_test": 10570
   }
 }
