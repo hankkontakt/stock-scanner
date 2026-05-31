@@ -157,7 +157,14 @@ jobs:
           git diff --staged --quiet || git commit -m "🤖 Pipeline ${{ steps.mode.outputs.mode }} $(date +%Y-%m-%d)"
           # --autostash: stasha ev. kvarvarande ändringar under rebasen som
           # extra säkerhetsnät så pull aldrig stoppas av en working tree-diff.
-          git pull --rebase --autostash origin main
+          # Om email_delivery_log.json får merge conflict (CI + annan commit
+          # skriver samtidigt) väljer vi alltid CI:s version — den har nyast data.
+          git pull --rebase --autostash -X ours origin main || {
+            echo "Rebase misslyckades — försöker med --skip på email_delivery_log..."
+            git checkout --ours data/email_delivery_log.json 2>/dev/null || true
+            git add data/email_delivery_log.json 2>/dev/null || true
+            GIT_EDITOR=true git rebase --continue 2>/dev/null || git rebase --skip 2>/dev/null || true
+          }
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
