@@ -13,12 +13,23 @@ _CONFIG_DIR = Path(__file__).resolve().parent.parent
 _UNIVERSE_FILE = _CONFIG_DIR / "data" / "universe.json"
 
 def _load_universe():
-    """Läs tickerlistor från data/universe.json. Fallback till tomma listor."""
+    """Läs tickerlistor från data/universe.json. Fallback till tomma listor.
+
+    Fångar ALLA fel (inte bara FileNotFoundError): en trasig/halvskriven
+    universe.json (merge-konflikt, avbruten commit) kastar annars
+    JSONDecodeError vid import av config.py → hela appen OCH alla pipelines
+    kraschar. Graciös fallback till {} → tom UNIVERSE → pipeline laddar
+    senaste cache istället för att braka.
+    """
     try:
         with open(_UNIVERSE_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-        return data
+            return json.load(f)
     except FileNotFoundError:
+        return {}
+    except (json.JSONDecodeError, ValueError, OSError) as e:
+        import sys
+        print(f"⚠ KRITISKT: data/universe.json kunde inte läsas ({e}). "
+              f"Använder tom universe – kontrollera filen!", file=sys.stderr)
         return {}
 
 _UNIVERSE_DATA = _load_universe()
