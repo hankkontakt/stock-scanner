@@ -1,5 +1,6 @@
 """admin/config_tab.py – Konfiguration tab for admin page."""
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -36,18 +37,12 @@ def render():
     secret_rows = []
     for key in secrets_to_show:
         val = os.getenv(key, "") or ""
-        masked = val[:6] + "..." if val and len(val) > 6 else (val[:1] + "..." if val else "Saknas")
-        secret_rows.append({"Nyckel": key, "Varde": "Satt" if val else "Saknas"})
-
-    import os
-    for key in secrets_to_show:
-        val = os.getenv(key, "") or ""
         try:
-            import streamlit as _st
-            if not val and hasattr(_st, "secrets") and key in _st.secrets:
-                val = _st.secrets[key]
+            if not val:
+                val = st.secrets.get(key, "")
         except Exception:
             pass
+        secret_rows.append({"Nyckel": key, "Varde": "Satt" if val else "Saknas"})
 
     st.dataframe(pd.DataFrame(secret_rows), use_container_width=True, hide_index=True)
     st.caption("*Varden visas inte av sakerhetsskal. 'Satt' = nyckeln ar konfigurerad.*")
