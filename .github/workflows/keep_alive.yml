@@ -1,0 +1,24 @@
+name: 💤 Keep Alive
+
+on:
+  schedule:
+    # Var 20:e minut (GitHub Actions minimum är 5 min, men 20 min räcker för Streamlit)
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🏓 Pinga Streamlit-appen
+        run: |
+          URL="${{ secrets.STREAMLIT_APP_URL || 'https://stock-scanner-hank.streamlit.app' }}"
+          echo "Pingar $URL"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$URL")
+          echo "HTTP-status: $STATUS"
+          # 200 = OK, 302 = redirect (lösenordsskyddad) — båda räknas som liv
+          if [[ "$STATUS" == "200" || "$STATUS" == "302" || "$STATUS" == "301" ]]; then
+            echo "✅ Appen är vaken"
+          else
+            echo "⚠️ Oväntat svar: $STATUS (kan vara tillfälligt)"
+          fi
