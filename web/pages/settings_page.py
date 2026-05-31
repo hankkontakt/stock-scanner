@@ -107,26 +107,38 @@ def page_settings():
                 })
 
             ok = save_subscribers(subscribers)
-            # Committa till GitHub så att pipeline alltid har uppdaterad lista
+            # Committa till GitHub — KRITISKT för att överleva Streamlit Cloud-omstarter.
+            # Streamlit Cloud har ephemeral filsystem; utan GitHub-commit försvinner datan.
+            gh_ok = False
             try:
                 from web.pages.admin import _get_github_token, _github_commit_file
-                import json
+                import json as _json
                 token = _get_github_token()
                 if token:
-                    content = json.dumps({"subscribers": subscribers}, indent=2, ensure_ascii=False)
-                    _github_commit_file(
+                    content = _json.dumps({"subscribers": subscribers}, indent=2, ensure_ascii=False)
+                    gh_ok = _github_commit_file(
                         "data/email_subscribers.json",
                         content,
                         token,
                         message=f"Update email subscriptions for {username}",
                     )
-            except Exception:
-                pass
+                else:
+                    st.warning(
+                        "⚠️ **GITHUB_TOKEN saknas i Streamlit Secrets** – din e-post sparades "
+                        "lokalt men *försvinner* nästa gång appen startar om. "
+                        "Lägg till en GitHub Personal Access Token (PAT med `repo`-behörighet) "
+                        "som `GITHUB_TOKEN` i Streamlit Cloud → Settings → Secrets."
+                    )
+            except Exception as gh_err:
+                st.warning(f"⚠️ GitHub-commit misslyckades ({gh_err}) – e-post sparad lokalt men kan försvinna vid omstart.")
 
             if ok:
-                st.success("✅ Inställningarna sparade!")
+                if gh_ok:
+                    st.success("✅ Inställningarna sparade och synkade till GitHub!")
+                else:
+                    st.success("✅ Inställningarna sparade lokalt.")
             else:
-                st.warning("⚠️ Kunde inte spara lokalt, men ändringen skickades till GitHub.")
+                st.warning("⚠️ Kunde inte spara.")
 
     # ── Status-visning ────────────────────────────────────────────────────────
     if my_sub or (submitted and email):
