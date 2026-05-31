@@ -782,8 +782,6 @@ def run_portfolio_refresh(verbose: bool = True) -> dict:
         logger.error(f"  ❌ Kunde inte spara holdings.csv: {e}")
 
     return result
-    return succeeded
-
 
 def _find_missing_data_tickers(max_tickers: int = 50) -> list[str]:
     """
@@ -1018,8 +1016,8 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         logger.info("📡 Hämtar nya priser för re-scoring...")
         try:
             tickers = scored["ticker"].dropna().unique().tolist()
-            # Begränsa till max 100 för att inte överbelasta yfinance
-            price_tickers = [t for t in tickers if not t.startswith("^")][:100]
+            # Begränsa för att inte överbelasta yfinance
+            price_tickers = [t for t in tickers if not t.startswith("^")][:300]
             
             price_data = fetch_prices_only(price_tickers, period="6mo", max_workers=12)
             if price_data:

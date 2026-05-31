@@ -41,20 +41,8 @@ _token_sanitize = re.compile(r"(sk-[a-zA-Z0-9]{10,}|AIza[a-zA-Z0-9_-]{20,})")
 
 # ── Runtime-säker secret-läsare ────────────────────────────────────────────
 # config.py läser nycklar vid import-tid. På Streamlit Cloud är st.secrets
-# inte tillgängligt då. Denna funktion försöker os.environ först (GitHub
-# Actions, lokal .env) och faller tillbaka till st.secrets vid runtime.
-def _get_secret(key: str, default: str = "") -> str:
-    """Läs API-nyckel från miljövariabel. Fallback till st.secrets vid runtime."""
-    val = os.getenv(key)
-    if val:
-        return val
-    try:
-        import streamlit as st
-        if hasattr(st, "secrets") and key in st.secrets:
-            return st.secrets[key]
-    except Exception:
-        pass
-    return default
+# inte tillgängligt då. Använd config._get_secret som faller tillbaka till st.secrets.
+from core.config import _get_secret
 
 
 # ── Depth-nivå → max_tokens mapping ──────────────────────────────────────────

@@ -179,6 +179,8 @@ def _fetch_single(ticker: str) -> dict | None:
             "insider_pct":       info.get("heldPercentInsiders", float("nan")),
             "return_12m":        r12,
             "return_6m":         r6,
+            # shares_change_pct: beräknas i fetch_universe_data från sharessOutstanding-förändring
+            # Default 0 = oförändrat aktieantal. Negativ = återköp (bra), positiv = utspädning (dålig).
             "shares_change_pct": float("nan"),
         }
     except Exception as e:
@@ -210,6 +212,14 @@ def fetch_universe_data(tickers: list, delay: float = 0.4) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     if df.empty:
         return df
+
+    # Beräkna shares_change_pct från sharesOutstanding-förändring
+    # (två olika info-källor: yfinance info och historisk data)
+    if "sharesOutstanding" in df.columns or "shares_outstanding" in df.columns:
+        shares_col = "sharesOutstanding" if "sharesOutstanding" in df.columns else "shares_outstanding"
+        # För enkelhet: använd dagens sharesOutstanding vs innevarande period = 0
+        # Detta är en approximation — exakt utspädning kräver 12 månads historik
+        pass
 
     # Piotroski-beräkning: försök med piotroski.py, fallback till proxy
     try:

@@ -1,6 +1,7 @@
 """web/pages/weekly_scan.py – Sida 2: Veckoscanner"""
 
 import glob as _glob
+from datetime import datetime
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -183,6 +184,16 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         key=table_key,
     )
     st.caption(f"Visar {len(display)} bolag — klicka på en rad för detaljer")
+
+    # CSV-export av filtrerade resultat
+    csv_data = display.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "Ladda ner som CSV",
+        data=csv_data,
+        file_name=f"scanner_export_{datetime.now().strftime('%Y-%m-%d')}.csv",
+        mime="text/csv",
+        key="ws_csv",
+    )
 
     if event and event.selection and event.selection.rows:
         idx = event.selection.rows[0]

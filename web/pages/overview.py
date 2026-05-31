@@ -8,6 +8,7 @@ import streamlit as st
 from web.utils import (
     kpi_row, sector_bar_chart, score_distribution_chart,
     load_watchlist, load_portfolio, _get_provider, _get_depth,
+    _load_nth_latest_scored, REPORT_DIR,
 )
 from web.stock_detail import render_stock_detail
 from core import ai_analysis
@@ -388,7 +389,13 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                 on_select="rerun", selection_mode="single-row",
                 key="ov_toplists_table",
             )
+            # Visa veckans toppmovers (score-delta mellan senaste och näst senaste scan)
+            _render_top_movers(df)
             if event and event.selection and event.selection.rows:
+                selected_idx = event.selection.rows[0]
+                sel_ticker = display_df.iloc[selected_idx]["ticker"]
+                price_col = "price" if "price" in df.columns else "close"
+                row = df[df["ticker"] == sel_ticker]
                 selected_idx = event.selection.rows[0]
                 sel_ticker = display_df.iloc[selected_idx]["ticker"]
                 price_col = "price" if "price" in df.columns else "close"
@@ -423,3 +430,62 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
         st.caption(f"{len(display_df)} aktier visas")
     else:
         st.info("Ladda scandata för att visa topplistan.")
+
+
+def _render_top_movers(df: pd.DataFrame):
+    """Visar veckans toppmovers — tickers med storst score-forandring."""
+    if df.empty:
+        return
+    prev = _load_nth_latest_scored(2)
+    if prev.empty:
+        return
+    if "ticker" not in prev.columns or "score_total" not in prev.columns:
+        return
+    merged = df[["ticker", "score_total"]].merge(
+        prev[["ticker", "score_total"]], on="ticker", how="inner", suffixes=("", "_prev")
+    )
+    if merged.empty:
+        return
+    merged["delta"] = merged["score_total"] - merged["score_total_prev"]
+    merged = merged.dropna(subset=["delta"])
+    if merged.empty:
+        return
+    top = merged.nlargest(10, "delta")[["ticker", "score_total_prev", "score_total", "delta"]]
+    bot = merged.nsmallest(10, "delta")[["ticker", "score_total_prev", "score_total", "delta"]]
+    import plotly.graph_objects as go
+    fig_up = go.Figure()
+    fig_up.add_trace(go.Bar(
+        y=top["ticker"].tolist()[::-1],
+        x=top["delta"].tolist()[::-1],
+        orientation="h",
+        marker_color="#16a34a",
+        text=[f"+{d:.0f}" for d in top["delta"].tolist()[::-1]],
+        textposition="outside",
+    ))
+    fig_up.update_layout(
+        title="Storsta score-okningar",
+        height=250,
+        margin=dict(l=20, r=50, t=40, b=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        hovermode="y unified",
+    )
+    fig_down = go.Figure()
+    fig_down.add_trace(go.Bar(
+        y=bot["ticker"].tolist()[::-1],
+        x=bot["delta"].tolist()[::-1],
+        orientation="h",
+        marker_color="#dc2626",
+        text=[f"{d:.0f}" for d in bot["delta"].tolist()[::-1]],
+        textposition="outside",
+    ))
+    fig_down.update_layout(
+        title="Storsta score-minskningar",
+        height=250,
+        margin=dict(l=20, r=50, t=40, b=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        hovermode="y unified",
+    )
+    st.plotly_chart(fig_up, use_container_width=True)
+    st.plotly_chart(fig_down, use_container_width=True)
