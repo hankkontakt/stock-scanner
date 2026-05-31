@@ -338,35 +338,46 @@ def calc_value_score(df: pd.DataFrame) -> pd.Series:
     # ── Conditioning: EV/EBITDA (30% of value score) ───────────────────
     # Also serves as penalty flag: if EV/EBITDA is extremely low (< 3) while
     # FCF yield is poor → possible aggressive accruals / tax deferral
-    ev_ebitda = df["ev_to_ebitda"].where(df["ev_to_ebitda"] > 0)
-    ev_score = _try_rank(ev_ebitda, ascending=False)
-    if ev_score is not None:
-        components.append(ev_score)
-        component_weights.append(0.30)
+    ev_ebitda = df.get("ev_to_ebitda")
+    if ev_ebitda is not None:
+        ev_ebitda = ev_ebitda.where(ev_ebitda > 0)
+        ev_score = _try_rank(ev_ebitda, ascending=False)
+        if ev_score is not None:
+            components.append(ev_score)
+            component_weights.append(0.30)
 
     # ── No primary available? Fall back to P/E, P/B, P/S ───────────────
     if not components:
         # Forward P/E (preferred over trailing if available)
-        pe = df["pe_forward"].fillna(df["pe_trailing"])
-        pe = pe.where(pe > 0)
-        score = _try_rank(pe, ascending=False)
-        if score is not None:
-            components.append(score)
-            component_weights.append(0.40)
+        pe = df.get("pe_forward")
+        if pe is not None:
+            pe = pe.fillna(df.get("pe_trailing", pd.Series(dtype="float64")))
+        else:
+            pe = df.get("pe_trailing")
+        if pe is not None:
+            pe = pe.where(pe > 0)
+            score = _try_rank(pe, ascending=False)
+            if score is not None:
+                components.append(score)
+                component_weights.append(0.40)
 
         # Price-to-Book
-        pb = df["price_to_book"].where(df["price_to_book"] > 0)
-        score = _try_rank(pb, ascending=False)
-        if score is not None:
-            components.append(score)
-            component_weights.append(0.35)
+        pb = df.get("price_to_book")
+        if pb is not None:
+            pb = pb.where(pb > 0)
+            score = _try_rank(pb, ascending=False)
+            if score is not None:
+                components.append(score)
+                component_weights.append(0.35)
 
         # Price-to-Sales
-        ps = df["price_to_sales"].where(df["price_to_sales"] > 0)
-        score = _try_rank(ps, ascending=False)
-        if score is not None:
-            components.append(score)
-            component_weights.append(0.25)
+        ps = df.get("price_to_sales")
+        if ps is not None:
+            ps = ps.where(ps > 0)
+            score = _try_rank(ps, ascending=False)
+            if score is not None:
+                components.append(score)
+                component_weights.append(0.25)
 
     if not components:
         return _neutral_series(df.index)
@@ -618,6 +629,62 @@ def calc_sentiment_score(df: pd.DataFrame) -> pd.Series:
     return score
 
 
+def _apply_scores_and_discounts(df: pd.DataFrame, w: dict) -> pd.DataFrame:
+    """Gemensam faktorberäkning, composite score och holding/commodity-rabatter.
+    Anropas av både score_universe() och score_universe_sector_neutralized()."""
+    # ── Faktorscore ───────────────────────────────────────────────────────────
+    df["score_value"]     = calc_value_score(df)
+    df["score_quality"]   = calc_quality_score(df)
+    df["score_momentum"]  = calc_momentum_score(df)
+    df["score_growth"]    = calc_growth_score(df)
+    df["score_risk"]      = calc_risk_score(df)
+    df["score_size"]      = calc_size_score(df)
+    df["score_dividend"]  = calc_dividend_score(df)
+    df["score_fcf_yield"] = calc_fcf_yield_score(df)
+    df["score_sentiment"] = calc_sentiment_score(df)
+
+    # ── Composite score ───────────────────────────────────────────────────────
+    df["score_total"] = (
+        w.get("value", 0)     * df["score_value"]     +
+        w.get("quality", 0)   * df["score_quality"]   +
+        w.get("momentum", 0)  * df["score_momentum"]  +
+        w.get("growth", 0)    * df["score_growth"]    +
+        w.get("risk", 0)      * df["score_risk"]      +
+        w.get("size", 0)      * df["score_size"]      +
+        w.get("dividend", 0)  * df["score_dividend"]  +
+        w.get("sentiment", 0) * df["score_sentiment"]
+    )
+
+    # ── Holdingbolag & råvarubolag: score-rabatt ──────────────────────────────
+    if "industry" in df.columns:
+        ind_lower = df["industry"].fillna("").str.lower()
+
+        is_holding = ind_lower.apply(
+            lambda i: any(h in i for h in HOLDING_INDUSTRIES)
+        )
+        df.loc[is_holding, "score_total"] = (
+            df.loc[is_holding, "score_total"] * HOLDING_DISCOUNT
+        ).clip(0, 100)
+        df.loc[is_holding, "company_type"] = "holding"
+
+        is_commodity = ind_lower.apply(
+            lambda i: any(c in i for c in COMMODITY_INDUSTRIES)
+        )
+        df.loc[is_commodity & ~is_holding, "score_total"] = (
+            df.loc[is_commodity & ~is_holding, "score_total"] * COMMODITY_DISCOUNT
+        ).clip(0, 100)
+        df.loc[is_commodity & ~is_holding, "company_type"] = "commodity"
+
+    if "company_type" not in df.columns:
+        df["company_type"] = "standard"
+    df["company_type"] = df["company_type"].fillna("standard")
+
+    # ── Rank ──────────────────────────────────────────────────────────────────
+    df["rank"] = df["score_total"].rank(ascending=False, method="min").astype("Int64")
+
+    return df
+
+
 def score_universe_sector_neutralized(df: pd.DataFrame) -> pd.DataFrame:
     """
     Calculate factor scores with BOTH region- and sector-neutralization.
@@ -627,11 +694,6 @@ def score_universe_sector_neutralized(df: pd.DataFrame) -> pd.DataFrame:
            skillnader i värderingsregim mellan marknader (US tech vs Nordic industrial).
         2. Sektor-neutralisering (subtrahera sektormedianen) — isolerar
            bolagsspecifik alpha från sektorexponering.
-
-    Per the architecture review: the within-sector portfolio (W) dominates the
-    across-sector portfolio (A) with a 78% win-rate in long-short applications.
-    Combining with region-neutralization removes the cross-market valuation bias
-    that distorts single-region percentile rankings.
 
     Returns df with same schema as score_universe() + low_liquidity flag.
     """
@@ -657,46 +719,11 @@ def score_universe_sector_neutralized(df: pd.DataFrame) -> pd.DataFrame:
             sector_median = df.groupby(sectors)[col].transform("median")
             df[col] = df[col] - sector_median
 
-    # ── Steg 3: Faktorscore ───────────────────────────────────────────────────
-    df["score_value"]     = calc_value_score(df)
-    df["score_quality"]   = calc_quality_score(df)
-    df["score_momentum"]  = calc_momentum_score(df)
-    df["score_growth"]    = calc_growth_score(df)
-    df["score_risk"]      = calc_risk_score(df)
-    df["score_size"]      = calc_size_score(df)
-    df["score_dividend"]  = calc_dividend_score(df)
-    df["score_fcf_yield"] = calc_fcf_yield_score(df)
-    df["score_sentiment"] = calc_sentiment_score(df)
-
-    # Dynamic weights (neutral mode → use base weights)
+    # ── Steg 3: Faktorscore + rabatter + rank ─────────────────────────────────
     w = get_dynamic_weights("OSÄKER", config.FACTOR_WEIGHTS)
+    df = _apply_scores_and_discounts(df, w)
 
-    df["score_total"] = (
-        w.get("value", 0)     * df["score_value"]     +
-        w.get("quality", 0)   * df["score_quality"]   +
-        w.get("momentum", 0)  * df["score_momentum"]  +
-        w.get("growth", 0)    * df["score_growth"]    +
-        w.get("risk", 0)      * df["score_risk"]      +
-        w.get("size", 0)      * df["score_size"]      +
-        w.get("dividend", 0)  * df["score_dividend"]  +
-        w.get("sentiment", 0) * df["score_sentiment"]
-    )
-
-    # Same holding/commodity discounts as score_universe
-    if "industry" in df.columns:
-        ind_lower = df["industry"].fillna("").str.lower()
-        is_holding = ind_lower.apply(lambda i: any(h in i for h in HOLDING_INDUSTRIES))
-        df.loc[is_holding, "score_total"] = (
-            df.loc[is_holding, "score_total"] * HOLDING_DISCOUNT
-        ).clip(0, 100)
-        is_commodity = ind_lower.apply(lambda i: any(c in i for c in COMMODITY_INDUSTRIES))
-        df.loc[is_commodity & ~is_holding, "score_total"] = (
-            df.loc[is_commodity & ~is_holding, "score_total"] * COMMODITY_DISCOUNT
-        ).clip(0, 100)
-
-    df["rank"] = df["score_total"].rank(ascending=False, method="min").astype("Int64")
-
-    # ── Steg 4: Likviditetsflagg (identisk med score_universe) ───────────────
+    # ── Steg 4: Likviditetsflagg ──────────────────────────────────────────────
     turnover = _estimate_daily_turnover_usd(df)
     df["est_daily_turnover_usd"] = turnover.round(0).astype("Int64", errors="ignore")
     df["low_liquidity"] = (
@@ -721,79 +748,13 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     df = df.copy()
 
     # ── Steg 1: Region-neutralisera fundamentala metrics ─────────────────────
-    # Subtraherar regionmedianen för P/E, P/B, ROE, marginaler m.fl. INNAN
-    # percentilrankning. Nordiska aktier rankas mot nordiska peers.
-    # Momentum-kolumner (return_*) är undantagna — de rankas globalt.
     df = _region_neutralize_fundamentals(df)
 
-    # ── Steg 2: Beräkna faktorscore ──────────────────────────────────────────
-    # Calculate each factor score
-    df["score_value"]     = calc_value_score(df)
-    df["score_quality"]   = calc_quality_score(df)
-    df["score_momentum"]  = calc_momentum_score(df)
-    df["score_growth"]    = calc_growth_score(df)
-    df["score_risk"]      = calc_risk_score(df)
-    df["score_size"]      = calc_size_score(df)
-    df["score_dividend"]  = calc_dividend_score(df)
-    df["score_fcf_yield"] = calc_fcf_yield_score(df)  # Exponerat för AI Djup-analys
-    
-    # Beräkna sentimentpoäng alltid – calc_sentiment_score() hanterar saknad
-    # sentiment_raw genom att starta från neutral (50) och applicerar ändå
-    # insider-boostarna (insider_executive_buy, insider_cluster) om de finns.
-    df["score_sentiment"] = calc_sentiment_score(df)
-
-    # Hämta dynamiska vikter
+    # ── Steg 2: Faktorscore + rabatter + rank ─────────────────────────────────
     w = get_dynamic_weights(regime, config.FACTOR_WEIGHTS)
+    df = _apply_scores_and_discounts(df, w)
 
-    # Composite score using the dynamic weights
-    # Alla faktorer (inklusive sentiment) ingår i vikterna – summan = 1.0
-    df["score_total"] = (
-        w.get("value", 0)     * df["score_value"]     +
-        w.get("quality", 0)   * df["score_quality"]   +
-        w.get("momentum", 0)  * df["score_momentum"]  +
-        w.get("growth", 0)    * df["score_growth"]    +
-        w.get("risk", 0)      * df["score_risk"]      +
-        w.get("size", 0)      * df["score_size"]      +
-        w.get("dividend", 0)  * df["score_dividend"]  +
-        w.get("sentiment", 0) * df["score_sentiment"]
-    )
-
-    # ── Holdingbolag & råvarubolag: score-rabatt ────────────────────────
-    # Dessa bolag ser "fantastiska" ut i en faktormodell men av fel skäl:
-    #   Holdingbolag  → vinster = orealiserade portföljuppgångar, ej operativ lönsamhet
-    #   Guld/Silver   → marginaler driven av råvarupris, ej uthållig quality
-    # Rabatten hindrar dem från att dominera topp-10 utan att utesluta dem helt.
-
-    if "industry" in df.columns:
-        ind_lower = df["industry"].fillna("").str.lower()
-
-        # Holdingbolag: 15% rabatt
-        is_holding = ind_lower.apply(
-            lambda i: any(h in i for h in HOLDING_INDUSTRIES)
-        )
-        df.loc[is_holding, "score_total"] = (
-            df.loc[is_holding, "score_total"] * HOLDING_DISCOUNT
-        ).clip(0, 100)
-        df.loc[is_holding, "company_type"] = "holding"
-
-        # Råvarubolag: 10% rabatt (cykliska, commoditypris-beroende)
-        is_commodity = ind_lower.apply(
-            lambda i: any(c in i for c in COMMODITY_INDUSTRIES)
-        )
-        df.loc[is_commodity & ~is_holding, "score_total"] = (
-            df.loc[is_commodity & ~is_holding, "score_total"] * COMMODITY_DISCOUNT
-        ).clip(0, 100)
-        df.loc[is_commodity & ~is_holding, "company_type"] = "commodity"
-
-    # Sätt standard för alla som saknar company_type
-    if "company_type" not in df.columns:
-        df["company_type"] = "standard"
-    df["company_type"] = df["company_type"].fillna("standard")
-
-    # Add rank column
-    df["rank"] = df["score_total"].rank(ascending=False, method="min").astype("Int64")
-
-    # Add data quality indicator (% of fields populated)
+    # ── Steg 3: Data quality ─────────────────────────────────────────────────
     metric_cols = [
         "pe_trailing", "price_to_book", "roe", "profit_margin",
         "revenue_growth", "debt_to_equity", "return_12m", "beta"
@@ -802,7 +763,6 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     if available_cols:
         df["data_quality"] = df[available_cols].notna().sum(axis=1) / len(available_cols)
     else:
-        # Inga metric-kolumner alls (t.ex. korrupt cache) → undvik division med noll
         df["data_quality"] = 0.0
 
     # ── Steg 4: Likviditetsflagg ──────────────────────────────────────────────
