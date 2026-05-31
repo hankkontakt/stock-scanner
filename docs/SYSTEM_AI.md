@@ -1,5 +1,47 @@
 # MarketScan — Full System Architecture Reference for AI Agents
 
+---
+
+## 0. Underhållsprotokoll (LÄS FÖRST — gäller alla AI-modeller)
+
+> 🔴 **DETTA DOKUMENT ÄR LEVANDE. DU MÅSTE HÅLLA DET UPPDATERAT.**
+
+Om du är en AI-modell (Claude, Gemini, GPT, etc.) som läser, felsöker eller utvecklar
+detta projekt gäller följande **obligatoriska regler**:
+
+1. **Uppdatera detta dokument löpande** — inte bara i slutet av en uppgift. Så fort du:
+   - ändrar kod (ny funktion, ändrad logik, ny fil, borttagen fil),
+   - hittar en bugg (även en du inte hinner/ska fixa nu),
+   - upptäcker en förbättringsmöjlighet, eller
+   - ser något som *borde* ändras/läggas till
+   → **skriv in det här direkt.**
+
+2. **Även orelaterade fynd ska med.** Om du felsöker X och råkar se ett problem i Y —
+   logga det i §16 (Known Weaknesses) eller §17 (Improvement Ideas) ändå. Tappa aldrig en
+   observation bara för att den ligger utanför din nuvarande uppgift.
+
+3. **Var ska det skrivas?**
+   | Vad du upptäckte | Skriv i |
+   |---|---|
+   | Genomförd ändring (kod/arkitektur) | Relevant avsnitt (§3–§13) + en rad i §18 Ändringslogg |
+   | Bugg eller risk (oavsett om den är fixad) | §16 Known Weaknesses & Technical Debt |
+   | Idé/förbättring som inte är gjord | §17 Improvement Ideas |
+   | Möjlig bugg du är osäker på | §16 med taggen `[MISSTÄNKT]` |
+
+4. **Format på loggrader:** datum (YYYY-MM-DD) + kort beskrivning + fil(er). Håll det kort
+   och konkret så nästa AI snabbt förstår.
+
+5. **Om du fixar något som står i §16/§17** — markera det `DONE ✅` istället för att radera,
+   så historiken bevaras.
+
+6. **Commit-disciplin:** dokumentuppdateringen ska ingå i samma commit som kodändringen
+   (eller en direkt uppföljande commit), aldrig glömmas bort.
+
+> Syftet: vem som helst — människa eller AI — ska kunna öppna detta dokument och se hela
+> systemets nuläge, kända problem och idéer, utan att läsa all kod eller all git-historik.
+
+---
+
 ## Purpose
 
 This document is a **complete technical reference** for AI coding assistants (Claude Code, Gemini, etc.) that need to understand, debug, and extend this project. It supersedes `SYSTEM_AI.md` (old structure reference) and `CLAUDE.md` (developer guide).
@@ -771,9 +813,20 @@ All in `core/config.py` (~350 lines ticker lists + ~100 lines constants):
 | No notification when a trigger score changes dramatically | MEDIUM | Score deltas tracked but no push notification |
 | No deduplication of scoring code | LOW | `score_universe_sector_neutralized()` duplicates `score_universe()` logic |
 | No comprehensive integration test | MEDIUM | Pipeline end-to-end not testable without API keys |
-| Manual ticker universe maintenance | LOW | Hand-curated lists in config.py — no auto-discovery |
+| Manual ticker universe maintenance | LOW | Now in `data/universe.json` (editable via admin), still hand-curated |
 | Point-in-time reconstruction impossible | MEDIUM | Backtesting has look-ahead bias risk |
 | No metrics scraping | LOW | No Grafana/Prometheus for pipeline health |
+| ~~Nordic holdings get no news alerts~~ | DONE ✅ | Fixed 2026-05-31 — `news_alerts` faller tillbaka till `fetch_company_news()` |
+| ~~Email exposes all recipients in To:~~ | DONE ✅ | Fixed 2026-05-31 — BCC via envelope |
+
+### 16.4 Misstänkta / overifierade problem (`[MISSTÄNKT]` — verifiera innan fix)
+
+| Observation | Impact | Var | Status |
+|---|---|---|---|
+| `[MISSTÄNKT]` news_alerts scrapar Google/DDG/Nasdaq per nordisk ticker var 30:e min | LOW-MED | `core/news_fetcher.py` | Dedup minskar mail-spam men inte web-anropen. Överväg cache på fetch_company_news-resultatet om rate-limiting blir problem. |
+| `[MISSTÄNKT]` Delistade tickers (MAN.DE, VATTENFALL.ST, NYFOSA.ST m.fl.) retryas varje scan tills 3-strike-blacklist | LOW | `data/universe.json` + `core/filters.py` | Blacklist persisteras nu (fixat) → självläker över ~3 körningar. Kan snabbas upp genom att rensa dem ur universe.json. |
+| `[MISSTÄNKT]` "LÄNSFÖRSÄKRINGAR GLOBAL INDEX" som ticker i watchlist/custom_universe | LOW | användardata | Fond-namn, ej giltig yfinance-ticker → genererar 404 varje körning. Bör filtreras bort i UI vid inmatning. |
+| `[MISSTÄNKT]` `news_alerts.yml` använder `git push \|\| true` för state-commit | LOW | `.github/workflows/news_alerts.yml` | Medvetet (icke-kritisk state), men race mellan körningar kan tappa enstaka dedup-poster. |
 
 ### 16.3 Design decisions (not debt)
 
@@ -833,6 +886,75 @@ All ideas discovered during system analysis. Add to this section as you find mor
 | **Event bus** | pub/sub for pipeline events (fetch_done, score_ready, etc.) | Decouple pipeline steps, add custom hooks without modifying core |
 | **Versioned universe** | Track which tickers were in universe at each snapshot | Enable point-in-time correct backtesting |
 | **API-first architecture** | REST API for all functionality | Enable CLI, web, mobile, scheduled tasks through same interface |
+
+---
+
+## 18. Ändringslogg (uppdateras av varje AI vid varje ändring)
+
+> Lägg nyaste överst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
+
+### 2026-05-31 — Reliability-pass (data-persistens, scans, nyhetslarm)
+
+**Data försvann vid Streamlit Cloud-omstart (ephemeral filsystem):**
+- ✅ Seed-filer skapade så de alltid finns efter checkout: `data/email_subscribers.json`,
+  `data/paper_trades.json`, `data/ml_paper_universe.json`, `data/ml_paper_smallcap.json`,
+  `data/ai_trade_journal.json`, `data/news_alert_state.json`.
+- ✅ GitHub-commit tillagd i fler spar-vägar som tidigare bara skrev lokalt:
+  `_save_konton()` (`web/pages/portfolio.py`), `_save_journal()` (`web/pages/ai_journal.py`),
+  `_update_user_password()` (`web/streamlit_app.py` — lösenordsbyten försvann annars).
+- ✅ `settings_page.py` visar nu tydlig varning om `GITHUB_TOKEN` saknas/commit misslyckas.
+
+**GitHub Actions — push-fel maskerades:**
+- ✅ `permissions: contents: write` tillagd i `daily_scan.yml`, `smallcap_scan.yml`,
+  `train_ml.yml`, `news_alerts.yml` (default-token saknade skrivrättighet → tyst push-fail).
+- ✅ `git push || true` ersatt med `git pull --rebase` + `git push` (fel syns nu).
+- ✅ `git add` uppdelat per fil-grupp med `2>/dev/null || true` — ett saknat fil
+  (`data/watchlist.json` när WATCHLIST_JSON-secret saknas) avbröt annars hela `git add`,
+  vilket gav `error: cannot pull with rebase: unstaged changes` (exit 128) i alla scans.
+- ✅ `daily_scan.yml` committar nu även `blacklist.json`, `strike_list.json`,
+  `stark_alert_state.json` (uppdaterades varje körning men persisterades aldrig).
+
+**Scoring/pipeline:**
+- ✅ `_region_neutralize_fundamentals()` tvingar numerisk typ (`pd.to_numeric(coerce)`) —
+  yfinance returnerar strängen `"Infinity"` för P/E vid vinst ≈ 0, vilket kraschade
+  groupby-median med `TypeError` och stoppade hela weekly-scannen (`core/scoring.py`).
+- ✅ `data_quality` skyddad mot division-med-noll om alla metric-kolumner saknas (`scoring.py`).
+- ✅ `n_pt`-räkning i `daily_pipeline.py` fixad: `len(dict)` gav alltid 2; läser nu
+  `len(result["trades"])`.
+
+**Email:**
+- ✅ Integritetsläcka: alla mottagare exponerades i `To:`-headern → nu BCC via envelope
+  (`core/email_template.py:send_email`).
+- ✅ AI-analys kapades till `[:500]` (~70 ord) mitt i mening i larmmail → trunkering borttagen
+  (`core/news_alerts.py`).
+- ✅ `smallcap_scan.yml` satte `EMAIL_USER/EMAIL_PASS` men koden läser
+  `EMAIL_SENDER/EMAIL_PASSWORD` → måndagsmailet skickades aldrig. Rättat.
+
+**AI:**
+- ✅ Symmetrisk fallback DeepSeek→Gemini i `_provider_call` (`core/ai_analysis.py`). Tidigare
+  fanns bara Gemini→DeepSeek; när default-provider var DeepSeek och den failade (402/429)
+  fick weekly-rapporten bara feltext trots giltig GEMINI_API_KEY.
+
+**Nyhetslarm (ny funktion):**
+- ✅ `news_alerts._fetch_news()` faller nu tillbaka till
+  `core.news_fetcher.fetch_company_news()` (Google News RSS + Nasdaq Nordic + DuckDuckGo)
+  för icke-US-tickers. Tidigare fick nordiska innehav (.ST/.HE) ALDRIG nyhetslarm
+  (Finnhub company-news stödjer bara US-symboler).
+- ✅ Daglig dedup-state (`data/news_alert_state.json`): varje nyhet/prisrörelse larmas max
+  en gång per dag; committas mellan 30-min-körningar (`news_alerts.yml`).
+
+**Robusthet:**
+- ✅ `config._load_universe()` fångar nu `JSONDecodeError/ValueError/OSError` (inte bara
+  `FileNotFoundError`). En trasig `data/universe.json` kraschade annars config-importen →
+  hela appen + alla pipelines (`core/config.py`).
+- ✅ Felplacerad `@st.cache_data`-dekorator på `_get()` borttagen (`web/utils.py`).
+- ✅ `core/currency.py` ffill/bfill begränsad till 5 dagar (känd FX-100x-buggklass).
+- ✅ 6 st `except: pass` → `except Exception: pass` (fångade tidigare även SystemExit/
+  KeyboardInterrupt): earnings_calendar, extra_data, macro_regime, relative_strength,
+  sector_momentum, portfolio_analysis.
+
+**Infrastruktur:**
+- ✅ `keep_alive.yml` skapad — pingar Streamlit-appen var 20:e min så den inte somnar.
 
 ---
 
