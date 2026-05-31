@@ -34,6 +34,62 @@ except ImportError:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# SCORE-HISTORIK (från scored_universe_*.csv snapshots)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _score_history(ticker: str) -> Optional[go.Figure]:
+    """Linjediagram över score_total över tid för en ticker.
+    Läser alla scored_universe_*.csv-filer i reports/ och extraherar score-värden.
+    """
+    import glob as _glob
+    from pathlib import Path as _Path
+
+    root = _Path(__file__).resolve().parent.parent
+    files = sorted(root.glob("reports/scored_universe_*.csv"))
+    if not files:
+        files = sorted(root.glob("reports/scored_universe_*.parquet"))
+
+    dates = []
+    scores = []
+    for f in files:
+        try:
+            date_str = f.stem.replace("scored_universe_", "")
+            if f.suffix == ".csv":
+                df = pd.read_csv(f, low_memory=False, usecols=["ticker", "score_total"])
+            else:
+                df = pd.read_parquet(f, columns=["ticker", "score_total"])
+            row = df[df["ticker"].str.upper() == ticker.upper()]
+            if not row.empty and row["score_total"].notna().any():
+                dates.append(date_str)
+                scores.append(float(row["score_total"].iloc[0]))
+        except Exception:
+            continue
+
+    if len(dates) < 2:
+        return None
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=dates, y=scores, mode="lines+markers",
+        name="Score", line=dict(color="#4c9be8", width=2),
+        marker=dict(size=6, color="#4c9be8"),
+    ))
+    fig.update_layout(
+        title="Score-historik",
+        xaxis_title="Datum",
+        yaxis_title="Score (0-100)",
+        yaxis=dict(range=[0, 100]),
+        height=200,
+        margin=dict(l=20, r=20, t=40, b=20),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(size=11),
+    )
+    fig.update_xaxes(tickangle=45, nticks=8)
+    return fig
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # HJÄLPFUNKTIONER
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -878,6 +934,11 @@ def render_stock_detail(
                 pass  # Utrymme för framtida användning
             with c2:
                 st.plotly_chart(_radar_chart(row), use_container_width=True)
+
+        # Score-historik (under prisgraf)
+        score_fig = _score_history(ticker)
+        if score_fig is not None:
+            st.plotly_chart(score_fig, use_container_width=True)
 
     st.markdown("---")
 

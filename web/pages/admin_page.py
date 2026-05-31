@@ -671,7 +671,12 @@ def _render_debug_tab():
         except Exception as e:
             st.warning(f"Kunde inte läsa strike_list: {e}")
 
-    # ── 3. API-nycklar ────────────────────────────────────────────────────────
+    # ── 3. Cache-ålder ───────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 🗄️ Cache-status")
+    _render_cache_age()
+
+    # ── 4. API-nycklar ────────────────────────────────────────────────────────
     st.markdown("---")
     st.markdown("### 🔑 API-nycklar")
     _check_api_key("DEEPSEEK_API_KEY", "DeepSeek", core_required=True)
@@ -688,7 +693,7 @@ def _render_debug_tab():
     st.markdown("### 📋 Datatäckning (senaste scored_universe)")
     _render_data_coverage()
 
-    # ── 5. Vanliga fel och lösningar ──────────────────────────────────────────
+    # ── 6. Vanliga fel och lösningar ──────────────────────────────────────────
     st.markdown("---")
     st.markdown("### ❓ Vanliga fel & felsökning")
     with st.expander("❌ Pipeline misslyckades med 'ModuleNotFoundError'"):
@@ -737,6 +742,45 @@ Filsystemet är ephemeral — ändringar som inte commitats till GitHub försvin
 Se `.github/workflows/keep_alive.yml`.
 För data som måste sparas: använd GitHub-commit från Streamlit (via `_github_commit_file()`).
         """)
+
+
+def _render_cache_age():
+    """Visa cache-filernas ålder och antal."""
+    cache_dir = DATA_DIR / "cache"
+    if not cache_dir.exists():
+        st.info("Cache-katalogen finns inte ännu — första pipeline-körningen skapar den.")
+        return
+
+    files = list(cache_dir.glob("*.pkl"))
+    if not files:
+        st.info("Cache-katalogen är tom.")
+        return
+
+    now = datetime.now()
+    ages = []
+    for f in files:
+        mtime = datetime.fromtimestamp(f.stat().st_mtime)
+        age_h = (now - mtime).total_seconds() / 3600
+        ages.append(age_h)
+
+    oldest = max(ages) if ages else 0
+    newest = min(ages) if ages else 0
+    avg_age = sum(ages) / len(ages) if ages else 0
+
+    total_size = sum(f.stat().st_size for f in files) / (1024 * 1024)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Cache-filer", str(len(files)))
+    c2.metric("Totalt storlek", f"{total_size:.0f} MB")
+    c3.metric("Äldsta", f"{oldest:.0f}h" if oldest < 720 else f"{oldest/24:.0f}d")
+    c4.metric("Nyaste", f"{newest:.0f}h" if newest < 24 else f"{newest/24:.0f}d")
+    c5.metric("Medelålder", f"{avg_age:.0f}h" if avg_age < 24 else f"{avg_age/24:.0f}d")
+
+    # Flagga om åldern är oroväckande
+    if oldest > 720:  # > 30 dagar = static fundamentals som inte uppdaterats
+        st.warning(f"⚠️ Äldsta cache-fil är {oldest/24:.0f} dagar — statiska fundamenta borde refreshas snart.")
+    if oldest > 1440:  # > 60 dagar
+        st.error(f"🚨 Äldsta cache-fil är {oldest/24:.0f} dagar — data kan vara inaktuell!")
 
 
 def _check_api_key(key_name: str, label: str, core_required: bool = False):
