@@ -39,7 +39,7 @@ def _rc(key, max_h):
 def _wc(key, data):
     try:
         with open(_cp(key), "wb") as f: pickle.dump(data, f)
-    except: pass
+    except Exception: pass
 
 
 # ══════════════════════════════════════════════════════════════

@@ -980,9 +980,9 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         try:
             from portfolio.paper_trading import record_weekly_picks
             pt_universe = "smallcap" if mode == "smallcap" else "universe"
-            n_pt = len(record_weekly_picks(scored, top_n=10, universe=pt_universe, verbose=False))
-            if n_pt:
-                logger.info(f"  📊 Klassisk paper trading: {n_pt} positioner registrerade ({pt_universe})")
+            pt_result = record_weekly_picks(scored, top_n=10, universe=pt_universe, verbose=False)
+            n_pt = len(pt_result.get("trades", [])) if isinstance(pt_result, dict) else 0
+            logger.info(f"  📊 Klassisk paper trading: {n_pt} positioner registrerade ({pt_universe})")
         except Exception as e:
             logger.warning(f"  ⚠ Klassisk paper trading hoppades över: {e}")
 

@@ -148,6 +148,8 @@ jobs:
           git add data/scan_log.json data/paper_trades.json data/email_subscribers.json data/custom_universe.json 2>/dev/null || true
           git add data/ml_paper_*.json 2>/dev/null || true
           git add data/watchlist.json 2>/dev/null || true
+          git add data/blacklist.json data/strike_list.json 2>/dev/null || true
+          git add data/stark_alert_state.json 2>/dev/null || true
           git add reports/scored_universe_*.csv 2>/dev/null || true
           git add reports/smallcap_scored_*.csv 2>/dev/null || true
           git add reports/*.md 2>/dev/null || true

@@ -35,7 +35,7 @@ def _rc(key, max_h):
 def _wc(key, data):
     try:
         with open(_cp(key), "wb") as f: pickle.dump(data, f)
-    except: pass
+    except Exception: pass
 
 
 def fetch_earnings_date(ticker: str) -> dict | None:
