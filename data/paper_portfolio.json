@@ -16,5 +16,23 @@
       "UPSALE.ST",
       "SUSG.ST"
     ]
+  },
+  "2026-05-31": {
+    "capital": 100000,
+    "universe": "universe",
+    "n_picks": 10,
+    "benchmark_buy": 756.47998046875,
+    "tickers": [
+      "NVDA",
+      "KLAC",
+      "NDAQ",
+      "AVGO",
+      "MNST",
+      "CDNS",
+      "PSA",
+      "KO",
+      "QCOM",
+      "BHP"
+    ]
   }
 }
