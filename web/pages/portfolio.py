@@ -1852,31 +1852,46 @@ def _tab_rebalans(holdings: pd.DataFrame, df: pd.DataFrame):
             holdings_tickers = set(tickers)
             relevant_df = df[df["ticker"].isin(holdings_tickers)].copy()
             if len(relevant_df) >= 2:
-                weights_df = black_litterman_weights(relevant_df, holdings)
+                # Korrekt anrop: bara scored_df, inget holdings-argument
+                weights_df = black_litterman_weights(relevant_df)
                 if weights_df is not None and not weights_df.empty:
-                    # Hämta nuvarande allokering
-                    total_val = (holdings["shares"] * holdings.get("current_price", holdings.get("cost_basis", 1))).sum()
+                    # Beräkna nuvarande vikter från holdings (shares × pris / totalt värde)
+                    h_prices = {}
+                    for _, hr in holdings.iterrows():
+                        t = str(hr.get("ticker", "")).upper()
+                        sc = df[df["ticker"] == t]
+                        price = float(sc["current_price"].iloc[0]) if not sc.empty and "current_price" in sc.columns and sc["current_price"].notna().any() else float(hr.get("cost_basis") or 0)
+                        h_prices[t] = float(hr.get("shares", 0)) * price
+                    total_val = sum(h_prices.values()) or 1.0
+                    current_w = {t: v / total_val for t, v in h_prices.items()}
+
+                    # Merge nuvarande + BL-föreslagna vikter
+                    weights_df["current_weight"] = weights_df["ticker"].map(current_w).fillna(0.0)
+                    weights_df = weights_df.rename(columns={"weight": "optimal_weight"})
+                    display_df = weights_df[["ticker", "current_weight", "optimal_weight"]].copy()
+                    display_df = display_df[display_df["optimal_weight"] > 0.001]
 
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown("**Nuvarande vs föreslagna vikter**")
                         st.dataframe(
-                            weights_df.style.format("{:.1%}").background_gradient(cmap="Blues", axis=0),
+                            display_df.style.format({"current_weight": "{:.1%}", "optimal_weight": "{:.1%}"}),
                             use_container_width=True,
+                            hide_index=True,
                         )
                     with col2:
                         # Bar-chart för jämförelse
-                        if "current_weight" in weights_df.columns and "optimal_weight" in weights_df.columns:
+                        if "current_weight" in display_df.columns and "optimal_weight" in display_df.columns:
                             import plotly.graph_objects as go
                             fig2 = go.Figure()
                             fig2.add_trace(go.Bar(
-                                name="Nu", x=weights_df.index,
-                                y=weights_df["current_weight"],
+                                name="Nu", x=display_df["ticker"],
+                                y=display_df["current_weight"],
                                 marker_color="#4c9be8",
                             ))
                             fig2.add_trace(go.Bar(
-                                name="Föreslaget", x=weights_df.index,
-                                y=weights_df["optimal_weight"],
+                                name="Föreslaget", x=display_df["ticker"],
+                                y=display_df["optimal_weight"],
                                 marker_color="#00d4aa",
                             ))
                             fig2.update_layout(

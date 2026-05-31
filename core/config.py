@@ -12,6 +12,24 @@ load_dotenv()
 _CONFIG_DIR = Path(__file__).resolve().parent.parent
 _UNIVERSE_FILE = _CONFIG_DIR / "data" / "universe.json"
 
+_BLACKLIST_FILE = _CONFIG_DIR / "data" / "blacklist.json"
+
+def _load_blacklist_set() -> set:
+    """Laddar data/blacklist.json och returnerar set av blacklistade tickers.
+    Undviker cirkulär import av core.filters — läser filen direkt.
+    Returnerar tom set vid fel så universe-load aldrig kraschar.
+    """
+    try:
+        if not _BLACKLIST_FILE.exists():
+            return set()
+        data = json.loads(_BLACKLIST_FILE.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            return set(data.keys())
+        return set()
+    except Exception:
+        return set()
+
+
 def _load_universe():
     """Läs tickerlistor från data/universe.json. Fallback till tomma listor.
 
@@ -32,7 +50,8 @@ def _load_universe():
               f"Använder tom universe – kontrollera filen!", file=sys.stderr)
         return {}
 
-_UNIVERSE_DATA = _load_universe()
+_UNIVERSE_DATA  = _load_universe()
+_BLACKLISTED    = _load_blacklist_set()   # Tickers som exkluderas automatiskt
 
 # Exportera varje kategori som en separat variabel för bakåtkompatibilitet
 US_LARGE_CAP = _UNIVERSE_DATA.get("US_LARGE_CAP", {}).get("tickers", [])
@@ -47,8 +66,9 @@ BRAZIL      = _UNIVERSE_DATA.get("BRAZIL", {}).get("tickers", [])
 EMERGING    = BRAZIL  # Behåller EMERGING alias för bakåtkompabilitet
 
 UNIVERSE = list(dict.fromkeys(
-    US_LARGE_CAP + UK + GERMANY + NORDIC + OMX_SE + EUROPE +
-    ASIA_PACIFIC + CANADA + EMERGING
+    t for t in (US_LARGE_CAP + UK + GERMANY + NORDIC + OMX_SE + EUROPE +
+                ASIA_PACIFIC + CANADA + EMERGING)
+    if t not in _BLACKLISTED   # Auto-exkludera blacklistade (delistade) tickers
 ))
 
 # Smallcap tickers (separat kategori i JSON med market-struktur)

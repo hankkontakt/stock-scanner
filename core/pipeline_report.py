@@ -76,6 +76,69 @@ def _section_header(title: str, subtitle: str = "") -> str:
     return s + "\n"
 
 
+def format_factor_attribution_md(row: dict, compact: bool = True) -> str:
+    """
+    Renderar en kompakt faktor-attribution för en aktie i markdown-format.
+    Återanvänder samma faktor-/KPI-struktur som _score_breakdown() i web/stock_detail.py
+    men som ren text för email/rapport-rendering.
+
+    Args:
+        row: Dict med score_* kolumner + nyckeltal (från scored_universe).
+        compact: True=en rad per faktor (för email), False=utökad med KPI-värden.
+
+    Returns:
+        Markdown-sträng med faktorpoäng + nyckeltal.
+    """
+    # Faktorer: (score-kolumn, label, [(nyckeltal-kolumn, label, format)])
+    FACTORS = [
+        ("score_value",    "Värdering",  [("pe_trailing", "P/E", ".1f"), ("price_to_book", "P/B", ".2f")]),
+        ("score_quality",  "Kvalitet",   [("roe", "ROE", ".0%"), ("profit_margin", "Marginal", ".0%")]),
+        ("score_momentum", "Momentum",   [("return_12m", "12m", "+.0f"), ("return_6m", "6m", "+.0f")]),
+        ("score_growth",   "Tillväxt",   [("revenue_growth", "Omsättn.", ".0%"), ("earnings_growth", "Vinst", ".0%")]),
+        ("score_risk",     "Risk",       [("debt_to_equity", "D/E", ".1f"), ("volatility", "Vol.", ".0%")]),
+        ("score_dividend", "Utdelning",  [("dividend_yield", "Yield", ".1%")]),
+        ("score_sentiment","Sentiment",  [("sentiment_raw", "Sent.", ".2f")]),
+    ]
+
+    def _sfmt(v, fmt) -> str:
+        try:
+            fv = float(v)
+            if fv != fv:  # NaN
+                return "—"
+            # Procentformat: om värdet är i decimalform (|v| < 1) multiplicera med 100
+            if fmt.endswith("%") and abs(fv) < 1:
+                return f"{fv * 100:{fmt[:-1]}f}%"
+            return f"{fv:{fmt}}"
+        except Exception:
+            return "—"
+
+    def _score_bar(s: float) -> str:
+        """Mini progress bar: ██░░░"""
+        n = min(10, max(0, int(s / 10)))
+        return "█" * n + "░" * (10 - n)
+
+    parts = []
+    for score_col, label, kpis in FACTORS:
+        s = row.get(score_col)
+        if s is None:
+            continue
+        try:
+            s = float(s)
+        except Exception:
+            continue
+        if compact:
+            kpi_vals = []
+            for col, kl, kfmt in kpis:
+                v = row.get(col)
+                if v is not None:
+                    kpi_vals.append(f"{kl}:{_sfmt(v, kfmt)}")
+            kpi_str = " · ".join(kpi_vals) if kpi_vals else ""
+            parts.append(f"`{label[:6]:<6}` `{s:5.1f}` `{_score_bar(s)}` {kpi_str}")
+        else:
+            parts.append(f"**{label}**: {s:.0f}/100")
+    return "\n".join(parts)
+
+
 def _build_ai_morning_context(indices, enriched, watchlist, top_10, bottom_5,
                                opportunities, news_text, regime, vix) -> str:
     """Bygg kontext för morgonbriefens AI-anrop."""
