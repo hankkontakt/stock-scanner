@@ -866,6 +866,30 @@ All ideas discovered during system analysis. Add to this section as you find mor
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-01 — ML-modellen omarbetad (near-zero IC → tvärsnittlig signal)
+
+**Diagnos:** Universe-modellens IC var 0.0023 (≈ noll), hit-rate ~50%. Grundorsak:
+modellen tränades på *absolut* `forward_return_30d` poolad över alla datum → marknadsbreda
+rörelser dominerade och dränkte den tvärsnittliga urvalssignalen.
+
+- ✅ **P0.1 — 8 saknade feature-hjälpfunktioner implementerade** (`core/ml_predictor.py`):
+  `_log_return`, `_hurst_exponent` (R/S), `_serial_corr`, `_volume_price_corr`,
+  `_klinger_oscillator`, `_max_drawdown`, `_consecutive_direction`, `_rsi_divergence`.
+  Commit 4871bc5 deklarerade 11 features men glömde funktionerna → de blev tyst NaN →
+  modellen tränades bara på 15 features. Regressionstest tillagt (`tests/test_ml_predictor.py`).
+- ✅ **Tvärsnittlig target** (`_add_cross_sectional_target`): tränar nu på `target_cs` =
+  forward-return demeanad PER DATUM. Tar bort marknadsfaktorn → modellen lär sig RELATIV
+  styrka. A/B-test (syntetiskt, dominerande marknad): per-datum-IC +48 % (0.41 → 0.61).
+  Inference oförändrad (predicted_return rankas redan tvärsnittligt → ml_rank).
+- ✅ **Per-datum-IC** (`_per_date_ic`): headline-IC mäts nu per datum (Spearman inom varje
+  datum, medelvärde) istället för poolat — det meningsfulla urvalsmåttet. Poolad IC behålls
+  som referens (`ic_pooled`).
+- ✅ **CPCV-träning aktiverad** (`scripts/train_ml.py` → `train_with_cpcv`) för ärligare
+  validering (purge=30d + embargo). Final-modell + DSR tränas också på `target_cs`.
+- **Nästa steg (CI):** kör om `train_ml.yml` (manuell dispatch eller söndagsschema) för att
+  bygga om dataset med de 11 features + träna med ny target. Kontrollera att `ic` i
+  `models/*_metrics.json` lyfter från ~0 mot ett positivt per-datum-IC.
+
 ### 2026-06-01 — Batch 2: Kreditspread, options flow, ML-features, HRP, per-sector ML
 
 **Fas 1 — Quick wins:**

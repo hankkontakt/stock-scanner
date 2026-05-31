@@ -27,13 +27,14 @@ from core.ml_predictor import (  # noqa: E402
     MODELS_DIR,
     save_model,
     train_from_dataset,
+    train_with_cpcv,
 )
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
 
-def train(universe: str, parquet_path: Path | None = None) -> dict:
+def train(universe: str, parquet_path: Path | None = None, use_cpcv: bool = True) -> dict:
     parquet_path = parquet_path or (ROOT / "data" / "ml" / f"{universe}_training.parquet")
     if not parquet_path.exists():
         raise FileNotFoundError(
@@ -41,8 +42,16 @@ def train(universe: str, parquet_path: Path | None = None) -> dict:
             f"Kör först: python -m scripts.build_ml_dataset --universe {universe}"
         )
 
-    logger.info(f"🏋️  Tränar {universe}-modell från {parquet_path}")
-    trained = train_from_dataset(parquet_path, universe)
+    if use_cpcv:
+        logger.info(f"🏋️  Tränar {universe}-modell med CPCV (Combinatorial Purged CV) från {parquet_path}")
+        # CPCV ger ärligare validering: purge=30d + embargo för att undvika
+        # att framtida return-data läcker in i träningsfold.
+        # Tidigare användes train_from_dataset (enkel tidssplit) → optimistiska metrics.
+        trained = train_with_cpcv(parquet_path, universe)
+    else:
+        logger.info(f"🏋️  Tränar {universe}-modell (enkel tidssplit) från {parquet_path}")
+        trained = train_from_dataset(parquet_path, universe)
+
     if trained is None:
         raise RuntimeError("Träning misslyckades (för lite data eller felaktig struktur)")
 
