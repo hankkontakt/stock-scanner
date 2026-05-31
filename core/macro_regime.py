@@ -65,9 +65,10 @@ def detect_regime() -> dict:
         "spy_vs_ma200":  None,
         "vix_level":     None,
         "spy_3m_return": None,
-        "breadth_delta": None,   # RSP/SPY-kvot vs 60-dagars snitt
-        "yield_spread":  None,   # 10y - 3m Treasury (positiv = normal kurva)
-        "composite":     None,   # Viktad sammanvägning 0.0–1.0
+        "breadth_delta": None,
+        "yield_spread":  None,
+        "credit_spread_delta": None,  # HYG/TLT ratio vs 20-day avg
+        "composite":     None,
         "confidence":    0.5,
         "as_of":         datetime.now().strftime("%Y-%m-%d %H:%M"),
         "notes":         [],
@@ -128,17 +129,39 @@ def detect_regime() -> dict:
         except Exception:
             pass
 
+        # --- Kreditspread: HYG/TLT ratio (high-yield vs treasuries) ---
+        # Stigande HYG vs TLT = risk-pa (bullish), fallande = risk-av (bearish)
+        # Kreditspreadar vidgas INNAN aktier faller (1-2 v ledande indikator)
+        credit_component = 0.5
+        try:
+            time.sleep(0.3)
+            hyg = yf.Ticker("HYG").history(period="3mo")
+            tlt = yf.Ticker("TLT").history(period="3mo")
+            if not hyg.empty and not tlt.empty:
+                hyg_close = hyg["Close"]
+                tlt_close = tlt["Close"]
+                ratio = hyg_close / tlt_close
+                ratio_ma20 = ratio.rolling(20).mean().iloc[-1]
+                ratio_now = ratio.iloc[-1]
+                credit_delta = (ratio_now / ratio_ma20 - 1) if ratio_ma20 else 0
+                result["credit_spread_delta"] = float(credit_delta)
+                # ±5% → 0.0-1.0: -5% = 0.0 (kreditstress), 0% = 0.5, +5% = 1.0 (risk-pa)
+                credit_component = float(np.clip(0.5 + credit_delta * 10, 0.0, 1.0))
+        except Exception:
+            pass
+
         # --- Kontinuerlig scoring per signal (0.0–1.0) ---
         spy_component = float(np.clip(0.5 + spy_vs_ma200 * 5,  0.0, 1.0))  # ±10% → ±0.5
         vix_component = float(np.clip(1 - (vix_level - 15) / 15, 0.0, 1.0)) # 15→1.0, 30→0.0
         mom_component = float(np.clip(0.5 + spy_3m * 6.25,    0.0, 1.0))  # ±8% → ±0.5
 
         composite = (
-            spy_component     * 0.35 +
-            vix_component     * 0.25 +
-            mom_component     * 0.20 +
+            spy_component     * 0.30 +  # Minskad från 0.35
+            vix_component     * 0.20 +  # Minskad från 0.25
+            mom_component     * 0.15 +  # Minskad från 0.20
             breadth_component * 0.10 +
-            yield_component   * 0.10
+            yield_component   * 0.10 +
+            credit_component  * 0.15   # Ny: kreditspread (HYG/TLT)
         )
         result["composite"] = float(composite)
 
@@ -166,6 +189,10 @@ def detect_regime() -> dict:
             result["notes"].append(f"Yieldkurva (10y−3m): {result['yield_spread']:+.2f}%{inv}")
         if vix_level > 32:
             result["notes"].append("⚠ VIX > 32 – panik-nivå")
+        if result.get("credit_spread_delta") is not None:
+            credit_label = "risk-pa (HYG stiger)" if result["credit_spread_delta"] > 0.02 else \
+                           "risk-av (HYG faller)" if result["credit_spread_delta"] < -0.02 else "neutral kreditmarknad"
+            result["notes"].append(f"Kreditspread (HYG/TLT): {result['credit_spread_delta']*100:+.1f}% → {credit_label}")
 
         _wc("regime", result)
         return result
@@ -258,6 +285,8 @@ def build_regime_section(regime_info: dict, macro: dict = None) -> str:
     if regime_info.get("yield_spread") is not None:
         inv = " ⚠" if regime_info["yield_spread"] < 0 else ""
         lines.append(f"| Yieldkurva (10y−3m) | {regime_info['yield_spread']:+.2f}%{inv} |")
+    if regime_info.get("credit_spread_delta") is not None:
+        lines.append(f"| Kreditspread (HYG/TLT) | {regime_info['credit_spread_delta']*100:+.1f}% |")
     if regime_info.get("composite") is not None:
         lines.append(f"| Sammansatt signal | {regime_info['composite']:.2f} / 1.00 |")
 

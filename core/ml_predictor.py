@@ -125,6 +125,18 @@ TECH_FEATURES = [
     "dist_from_52w_low",
     "bb_position",
     "momentum_3_vs_12",
+    # === New features ===
+    "log_return_1m",          # Log return (more normally distributed)
+    "volatility_skew_30d",    # Downside vs upside volatility asymmetry
+    "hurst_exponent_60d",     # Trending (H>0.5) vs mean-reverting (H<0.5)
+    "serial_correlation_20d", # Autocorrelation at lag 1 (momentum persistence)
+    "volume_price_corr_20d",  # Correlation between returns and volume
+    "klinger_oscillator",     # Volume-force momentum
+    "max_drawdown_60d",       # Peak-to-trough over last 60 days
+    "consecutive_down_days",  # Streak of down days (exhaustion signal)
+    "rsi_divergence",         # Price vs RSI divergence (reversal signal)
+    "skewness_30d",           # Skew of daily returns (tail risk)
+    "kurtosis_30d",           # Kurtosis of daily returns (fat tail risk)
 ]
 
 # Fundamentala features (point-in-time-säkra om de beräknas från yfinance .info
@@ -262,6 +274,33 @@ def compute_features_at(close: pd.Series, volume: pd.Series) -> dict:
         if r3 == r3 and r12 == r12:  # ej NaN
             out["momentum_3_vs_12"] = r3 - r12
 
+        # Log return 1m
+        out["log_return_1m"] = _log_return(close, 21)
+
+        # Volatility skew: ratio of positive to negative return mean
+        returns = close.pct_change(fill_method=None).dropna()
+        if len(returns) > 30:
+            pos_mean = returns[returns > 0].mean() if (returns > 0).any() else 0.001
+            neg_mean = abs(returns[returns < 0].mean()) if (returns < 0).any() else 0.001
+            out["volatility_skew_30d"] = float(pos_mean / neg_mean) if neg_mean else float("nan")
+        else:
+            out["volatility_skew_30d"] = float("nan")
+
+        out["hurst_exponent_60d"] = _hurst_exponent(close.tail(252))
+        out["serial_correlation_20d"] = _serial_corr(close.tail(60), lag=1)
+        out["volume_price_corr_20d"] = _volume_price_corr(close, volume, days=20)
+        out["klinger_oscillator"] = _klinger_oscillator(close, volume)
+        out["max_drawdown_60d"] = _max_drawdown(close, days=60)
+        out["consecutive_down_days"] = float(_consecutive_direction(close, direction="down"))
+        out["rsi_divergence"] = _rsi_divergence(close, out["rsi_14"])
+
+        if len(returns) >= 30:
+            ret_30 = returns.tail(30)
+            out["skewness_30d"] = float(ret_30.skew()) if len(ret_30) > 2 else float("nan")
+            out["kurtosis_30d"] = float(ret_30.kurtosis()) if len(ret_30) > 3 else float("nan")
+        else:
+            out["skewness_30d"] = float("nan")
+            out["kurtosis_30d"] = float("nan")
     except Exception as e:
         logger.warning(f"compute_features_at: {e}")
 

@@ -71,8 +71,9 @@ FACTOR_WEIGHTS = {
     "risk":           0.0873,  # 0.09 × 0.97
     "size":           0.0485,  # 0.05 × 0.97
     "dividend":       0.0485,  # 0.05 × 0.97
-    "sentiment":      0.0970,  # 0.10 × 0.97
-    "short_interest": 0.0300,  # Ny faktor: låg blankning = positivt signal
+    "sentiment":      0.0770,  # 0.10 × 0.97, minskat 2% for options_flow
+    "short_interest": 0.0300,  # Låg blankning = positivt signal
+    "options_flow":   0.0200,  # Options flow (put/call ratio)
 }
 # Vikterna skalas så att sum = 1.0. short_interest lades till 2026-06-01.
 # Källdata: short_pct_float / short_ratio från yfinance (hämtas sedan länge men var oanvänd).
@@ -255,5 +256,6 @@ try:
         for _k, _v in _override["smallcap_config"].items():
             if _k in SMALLCAP_CONFIG:
                 SMALLCAP_CONFIG[_k] = _v
-except Exception:
-    pass
+except Exception as exc:
+    import logging as _lg
+    _lg.getLogger(__name__).warning("Kunde inte ladda scoring_config.json: %s", exc)

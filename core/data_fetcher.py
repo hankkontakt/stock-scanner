@@ -735,6 +735,9 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         # NEW: Earnings surprise (hur ofta slår bolaget estimat)
         "earnings_revision_rate": info.get("earningsForecastsGrowthRate"),
 
+        # Options flow signal (put/call ratio) — sätts nedan från extra_data
+        "options_flow_signal": None,
+
         # NEW: Omsättning och volym
         "avg_volume":       info.get("averageVolume"),
         "avg_volume_10d":   info.get("averageVolume10days"),
@@ -857,11 +860,20 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
     except Exception:
         pass
 
-    # ── Schema-validering: tvinga numeriska fält, fånga Infinity/None ──────
+    # Options flow signal (put/call ratio)
+    try:
+        from core.extra_data import fetch_options_flow_signal as _fetch_of
+        of = _fetch_of(ticker)
+        if of is not None:
+            metrics["options_flow_signal"] = of
+    except Exception:
+        pass
+
+    # Schema-validering: tvinga numeriska fält, fånga Infinity/None ──────
     _string_fields = frozenset({
         "ticker", "name", "sector", "industry", "country", "currency",
         "insider_cluster", "insider_executive_buy", "insider_recent_date",
-        "macd_above_signal",
+        "macd_above_signal", "options_flow_signal",
     })
     for key, value in list(metrics.items()):
         if key in _string_fields or value is None:
