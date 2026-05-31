@@ -652,6 +652,35 @@ def calc_short_interest_score(df: pd.DataFrame) -> pd.Series:
     return base_score
 
 
+def calc_options_flow_score(df: pd.DataFrame) -> pd.Series:
+    """
+    Options flow score baserat pa put/call ratio.
+    options_flow_signal = 0.1-0.9 fran extra_data.py (0.1=bearish, 0.9=bullish).
+    Hogre signal = hogre options flow score.
+    Tickers utan optionsdata far neutral score (50).
+    """
+    if "options_flow_signal" not in df.columns:
+        return _neutral_series(df.index)
+
+    signal = pd.to_numeric(df["options_flow_signal"], errors="coerce")
+
+    if signal.notna().sum() < MIN_VALID_OBSERVATIONS:
+        return _neutral_series(df.index)
+
+    # Signal ar redan 0.1-0.9 — skala till 10-90
+    score = signal * 100
+    score = score.fillna(NEUTRAL_SCORE)
+
+    # Boost: om signal > 0.8 (mycket bullish options flow), lagg till +10
+    bullish = signal > 0.8
+    score = pd.Series(
+        [min(100, s + 10) if b else s for s, b in zip(score, bullish)],
+        index=score.index,
+    )
+
+    return score
+
+
 def calc_sentiment_score(df: pd.DataFrame) -> pd.Series:
     """
     Sentiment score från Finnhub-nyhetsdata + insiderhandelssignaler.
@@ -701,6 +730,7 @@ def _apply_scores_and_discounts(df: pd.DataFrame, w: dict) -> pd.DataFrame:
     df["score_fcf_yield"]      = calc_fcf_yield_score(df)
     df["score_sentiment"]      = calc_sentiment_score(df)
     df["score_short_interest"] = calc_short_interest_score(df)
+    df["score_options_flow"]   = calc_options_flow_score(df)
 
     # ── Composite score ───────────────────────────────────────────────────────
     df["score_total"] = (
@@ -712,7 +742,8 @@ def _apply_scores_and_discounts(df: pd.DataFrame, w: dict) -> pd.DataFrame:
         w.get("size", 0)           * df["score_size"]           +
         w.get("dividend", 0)       * df["score_dividend"]       +
         w.get("sentiment", 0)      * df["score_sentiment"]      +
-        w.get("short_interest", 0) * df["score_short_interest"]
+        w.get("short_interest", 0) * df["score_short_interest"] +
+        w.get("options_flow", 0)   * df["score_options_flow"]
     )
 
     # ── Holdingbolag & råvarubolag: score-rabatt ──────────────────────────────

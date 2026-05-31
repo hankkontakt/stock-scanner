@@ -7,8 +7,9 @@
     "risk": 0.0873,
     "size": 0.0485,
     "dividend": 0.0485,
-    "sentiment": 0.097,
-    "short_interest": 0.03
+    "sentiment": 0.077,
+    "short_interest": 0.03,
+    "options_flow": 0.02
   },
   "smallcap_config": {
     "scoring_weights": {

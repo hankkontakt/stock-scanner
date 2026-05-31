@@ -1008,6 +1008,11 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         scored = pd.DataFrame()
         _ml_universe = None
 
+    # Guard: om scored fortfarande är tom efter all dataladdning → avbryt
+    if scored.empty and mode in ("weekly", "smallcap", "morning", "evening"):
+        logger.error("  ❌ Ingen scored_universe-data tillgänglig – avbryter pipeline")
+        return
+
     # ═══════════════════════════════════════════════════════════════════════
     # 1b. DAGLIG RE-SCORING (endast för morning/evening)
     #     Hämta nya priser för alla tickers → uppdatera scores

@@ -306,13 +306,6 @@ def page_stock_search():
                     is_weekend = "HELG" if now.weekday() >= 5 else "BÖRSDAG"
                     swedish_time = now.strftime("%H:%M")
                     context_lines.append(f"Tid: {day_name} {swedish_time} ({is_weekend})")
-                    # Lägg till dagskännedom
-                    now = datetime.now()
-                    days = ["måndag","tisdag","onsdag","torsdag","fredag","lördag","söndag"]
-                    day_name = days[now.weekday()]
-                    is_weekend = "HELG" if now.weekday() >= 5 else "BÖRSDAG"
-                    swedish_time = now.strftime("%H:%M")
-                    context_lines.append(f"Tid: {day_name} {swedish_time} ({is_weekend})")
                     context_str = "\n".join(context_lines)
 
                     # Fetch live news so AI can reference current headlines
