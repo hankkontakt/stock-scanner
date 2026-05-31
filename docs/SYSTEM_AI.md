@@ -866,6 +866,21 @@ All ideas discovered during system analysis. Add to this section as you find mor
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-01 — Bugg: dubbel-neutralisering vid morning/evening re-scoring
+
+Vid granskning av sektor-arbetet hittades en **pre-existerande bugg**: morning/evening
+re-scorar via `update_scored_with_prices` → `score_universe()`, men den sparade
+scored_universe-CSV:n har redan region/sektor-neutraliserade fundamentals (kolumnerna skrivs
+över in-place). Re-scoring körde `_region_neutralize_fundamentals` IGEN → fundamentals driftade
+mot noll varje dag (bekräftat: `debt_to_equity` median −0.45, 263/521 negativa i sparad CSV).
+
+- ✅ **Idempotens-flaggor** `_fundamentals_neutralized` + `_sector_neutralized` i `core/scoring.py`:
+  neutralisering hoppas över om flaggan redan finns. Weekly startar från rå data (ingen flagga),
+  morning/evening laddar CSV med flaggan satt → hoppar över. Verifierat: drift = 0.000000 vid
+  re-score. Regressionstest `test_neutralization_is_idempotent`.
+- Sektor-etiketter verifierade mot scandata: alla 11 profiler matchar yfinances `sector`-värden
+  (bara "Unknown" får default) — ingen dead config.
+
 ### 2026-06-01 — Sektor-relativ scoring (icke-ML-motorn anpassar sig efter bransch)
 
 Problem: `score_universe()` rankade fundamentals GLOBALT → en banks lågt P/E rankades mot

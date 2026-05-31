@@ -626,3 +626,15 @@ class TestSectorRelativeScoring:
         # Bankerna har låg volatilitet/beta och sektor-normal skuld → risk-score ej kollektivt låg
         assert bank_risk > 40, f"Banker straffas fortfarande för hävstång (risk={bank_risk:.0f})"
         assert out["score_total"].between(0, 100).all()
+
+    def test_neutralization_is_idempotent(self):
+        """Re-scoring (morning/evening på sparad CSV) får INTE dubbel-neutralisera."""
+        df = _FactorTestHelper._make_base()
+        r1 = sc.score_universe(df)
+        assert "_fundamentals_neutralized" in r1.columns
+        pe1 = r1["pe_trailing"].tolist()
+        r2 = sc.score_universe(r1.copy())   # simulerar morning re-score
+        pe2 = r2["pe_trailing"].tolist()
+        for a, b in zip(pe1, pe2):
+            if a == a and b == b:  # ej NaN
+                assert abs(a - b) < 1e-9, "fundamentals dubbel-neutraliserades"
