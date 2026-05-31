@@ -383,17 +383,31 @@ def _get_top_bottom(scored: pd.DataFrame, top_n: int = 5) -> tuple[list, list]:
     top = scored.nlargest(top_n, "score_total")
     bottom = scored.nsmallest(top_n, "score_total")
 
+    # Faktorkolumner som inkluderas för mail-attribution
+    _FACTOR_COLS = [
+        "score_value", "score_quality", "score_momentum", "score_growth",
+        "score_risk", "score_dividend", "score_sentiment", "score_short_interest",
+        "pe_trailing", "price_to_book", "roe", "profit_margin",
+        "return_12m", "return_6m", "revenue_growth", "earnings_growth",
+        "debt_to_equity", "volatility", "dividend_yield", "sentiment_raw",
+    ]
+
     def _fmt(df):
-        return [
-            {
-                "ticker": r.get("ticker", "?"),
-                "score": r.get("score_total"),
-                "entry": r.get("entry_signal", "—"),
-                "sector": r.get("sector", "—"),
+        rows = []
+        for _, r in df.iterrows():
+            entry = {
+                "ticker":    r.get("ticker", "?"),
+                "score":     r.get("score_total"),
+                "entry":     r.get("entry_signal", "—"),
+                "sector":    r.get("sector", "—"),
                 "return_1m": r.get("return_1m"),
             }
-            for _, r in df.iterrows()
-        ]
+            # Inkludera faktordata för email-attribution
+            for col in _FACTOR_COLS:
+                if col in r.index:
+                    entry[col] = r.get(col)
+            rows.append(entry)
+        return rows
 
     return _fmt(top), _fmt(bottom)
 
@@ -402,6 +416,7 @@ from core.pipeline_report import (
     _section, _table, _portfolio_table, _opportunity_section, _section_header,
     _build_ai_morning_context, _build_ai_evening_context,
     _build_ai_weekly_context, _build_ai_smallcap_context,
+    format_factor_attribution_md,
 )
 from core.pipeline_alerts import _send_stark_alerts, _get_rec
 
@@ -944,6 +959,26 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
 
         raw_df = fetch_universe_data(all_tickers, verbose=True)
 
+        # Auto-flagga misslyckade tickers (P1.3: strike-system integration).
+        # Tickers som fetch_universe_data inte lyckades hämta alls (404/delisted)
+        # får ett strike. 3 strikes → auto-blacklist (skyddat av NEVER_BLACKLIST).
+        # Nästa `config._load_blacklist_set()` (nästa pipeline-start) exkluderar dem.
+        try:
+            from core.filters import update_ticker_health
+            survived = set(raw_df["ticker"].tolist()) if not raw_df.empty and "ticker" in raw_df.columns else set()
+            failed_tickers = [t for t in all_tickers if t not in survived]
+            if failed_tickers:
+                _warnings, _removed = update_ticker_health(
+                    attempted_tickers=all_tickers,
+                    survived_tickers=list(survived),
+                    df_raw=raw_df,
+                    fetch_failed=failed_tickers,
+                )
+                if _removed:
+                    logger.info(f"  🚫 Auto-blacklistad: {[r['ticker'] for r in _removed[:5]]}")
+        except Exception as _the:
+            logger.debug(f"  ℹ ticker-health update hoppades över: {_the}")
+
         if not raw_df.empty:
             # Detektera marknadsregim för dynamiska vikter
             try:
@@ -994,6 +1029,12 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 from backtesting.backtest_snapshots import save_snapshot
                 if save_snapshot(scored, date_str):
                     logger.info(f"  📸 Backtest-snapshot sparad: {date_str}")
+                    # Score-drift-larm: jämför med föregående snapshot
+                    try:
+                        from core.pipeline_alerts import send_score_drift_alerts
+                        send_score_drift_alerts(date_str)
+                    except Exception as _dae:
+                        logger.debug(f"  ℹ drift-larm hoppades över: {_dae}")
             except Exception as _sne:
                 logger.debug(f"  ℹ Snapshot ej sparad: {_sne}")
         else:
@@ -1342,7 +1383,16 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         if top_10:
             report_lines.append(_section_header("🏆 Topp-10 köprekommendationer"))
             for i, t in enumerate(top_10[:10], 1):
-                report_lines.append(f"  {i}. **{flag_for_ticker(t['ticker'])} {t['ticker']}** – Score {t['score']:.0f} | {t['entry']} | {t['sector']}")
+                report_lines.append(
+                    f"  {i}. **{flag_for_ticker(t['ticker'])} {t['ticker']}** "
+                    f"– Score {t['score']:.0f} | {t['entry']} | {t['sector']}"
+                )
+                # Faktor-attribution: visa varför aktien rankas högt
+                attr = format_factor_attribution_md(t, compact=True)
+                if attr:
+                    for attr_line in attr.split("\n"):
+                        report_lines.append(f"     {attr_line}")
+                    report_lines.append("")
 
         # ── Bottom-5 ─────────────────────────────────────────────────────
         if bottom_5:
