@@ -37,7 +37,7 @@ import pandas as pd
 import numpy as np
 
 TRANSACTIONS_FILE = Path("data/transactions.csv")
-HOLDINGS_FILE     = Path("holdings.csv")
+HOLDINGS_FILE     = Path("data/holdings.csv")
 
 
 # ══════════════════════════════════════════════════════════════

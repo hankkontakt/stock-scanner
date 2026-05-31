@@ -4,30 +4,40 @@ En kvantitativ aktiescanner som rangordnar 800+ aktier baserat på akademiskt va
 
 **Designad för att fungera helt gratis** — yfinance + GitHub Actions + Streamlit Cloud + Gemini.
 
-## Arkitekturförbättringar (2026)
+## Arkitektur
 
-| Förbättring | Beskrivning | Fil |
-|---|---|---|
-| **FCF Yield primär (70%)** | EV/EBITDA ersatt som primär värderingsfaktor. | core/scoring.py |
-| **Piotroski F-Score med YoY-jämförelser** | Fundamental-snapshots för år-över-år. | core/piotroski.py |
-| **Insider: rutin vs opportunistisk** | Historisk databas filtrerar bort brus. | core/fi_insider_fetcher.py |
-| **Black-Litterman portföljoptimering** | Bayesian med IC-konfidens + shrinkage. | portfolio/black_litterman.py |
-| **Half-Kelly positionsstorlek** | f* = 0.5 x (p x b - q) / b | portfolio/paper_trading.py |
-| **Dynamisk ATR stop-loss** | 2.5x-1.0x baserat på SPY volatilitet. | portfolio/paper_trading.py |
-| **ML-features utökade** | Fundamentala + tekniska features. | core/ml_predictor.py |
-| **Sektorneutralisering** | Subtraherar sektormedianer före ranking. | core/scoring.py |
+```
+core/daily_pipeline.py        ← Central orchestrator (5 modes: morning/evening/weekly/smallcap/targeted)
+core/scoring.py               ← 8-factor scoring engine (Value, Quality, Momentum, Growth, Risk, Size, Dividend, Sentiment)
+core/data_fetcher.py          ← yfinance data fetching with caching/retry/timeout
+core/macro_regime.py          ← Market regime detection (bull/bear/uncertain)
+core/ai_analysis.py           ← AI analysis (DeepSeek + Gemini)
+web/streamlit_app.py          ← Streamlit dashboard (20 pages)
+```
 
 ## 8 faktorer
 
-## Användning
+| Faktor | Vikt | Vad den mäter |
+|---|---|---|
+| **Value** | 22% | FCF Yield (primär), EV/EBITDA, fallback P/E/PB |
+| **Quality** | 18% | ROE, marginaler, D/E |
+| **Momentum** | 18% | 1/3/6/12m return, RSI, MA50/MA200 |
+| **Growth** | 13% | Revenue/earnings growth |
+| **Risk** | 9% | Beta, volatilitet, drawdown |
+| **Sentiment** | 10% | Finnhub news sentiment, insider signals |
+| **Size** | 5% | Small-cap premium |
+| **Dividend** | 5% | Yield + payout ratio |
+
+## Komma igång
 
 ```
-python scan.py                    # Daglig universumscan
-python smallcap/scanner.py        # Svenska småbolag
-streamlit run streamlit_app.py    # Dashboard
-python -m portfolio.black_litterman  # Black-Litterman optimering
-python portfolio/paper_trading.py status  # Paper trading status
+pip install -r requirements.txt
+cp .env.example .env    # Fyll i API-nycklar
+streamlit run streamlit_app.py
 ```
+
+Se `docs/KOMMANDON.md` för alla kommandon.
+Se `docs/SYSTEM_AI.md` för full systemdokumentation.
 
 ## Datakällor
 
