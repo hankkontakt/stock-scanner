@@ -14,6 +14,9 @@ Anvandning:
 
 import json
 import os
+import time
+import hashlib
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -28,14 +31,23 @@ MODULE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = MODULE_DIR / "data"
 BLACKLIST_FILE = DATA_DIR / "blacklist.json"
 REPORT_DIR = MODULE_DIR / "reports"
+CACHE_DIR = MODULE_DIR / "data" / "cache"
+CACHE_TTL_SEC = 86400  # 24 timmars cache for health check-resultat
 
 
 def load_blacklist() -> list:
-    """Lass svartlistfil bas pa sokmanigar i den."""
+    """Ladda svartlistan. Hanterar både dict-format (ticker → info) och list-format (alla historiska)."""
     try:
         if BLACKLIST_FILE.exists():
             data = json.loads(BLACKLIST_FILE.read_text(encoding="utf-8"))
-            return data if isinstance(data, list) else []
+            if isinstance(data, list):
+                return data
+            if isinstance(data, dict):
+                # Konvertera dict → list för att kunna iterera
+                return [
+                    {"ticker": k, "reason": v.get("reason", ""), "date": v.get("date", "")}
+                    for k, v in data.items()
+                ]
     except Exception:
         pass
     return []
@@ -70,35 +82,103 @@ def remove_from_blacklist(ticker: str) -> bool:
 
 
 def detect_invalid_tickers(df: pd.DataFrame) -> list:
-    """Koll om tickers i dataframe ar avnoterade/ogiltiga."""
+    """Kolla om tickers i dataframe är avnoterade/ogiltiga.
+    Använder ThreadPoolExecutor + caching + timeout för att undvika
+    yfinance rate-limit och hängningar."""
     if df.empty or "ticker" not in df.columns:
         return []
     blacklist = {i.get("ticker") for i in load_blacklist()}
-    invalid = []
     current_tickers = set(df["ticker"].dropna().str.upper().unique())
-    for ticker in current_tickers:
-        if ticker in blacklist:
-            invalid.append({"ticker": ticker, "name": "", "reason": "finns i svartlistan"})
-            continue
+
+    # Hoppa över svartlistade direkt — de är redan kända
+    remaining = [t for t in current_tickers if t not in blacklist]
+    if not remaining:
+        return []
+
+    # Ladda cached resultat från förra körningen
+    cache_file = CACHE_DIR / "universe_health_cache.json"
+    cache = {}
+    if cache_file.exists():
         try:
+            cache_data = json.loads(cache_file.read_text(encoding="utf-8"))
+            cache = cache_data.get("results", {})
+            cache_time = cache_data.get("timestamp", 0)
+            # Rensa cache om den är äldre än TTL
+            if time.time() - cache_time > CACHE_TTL_SEC:
+                cache = {}
+        except Exception:
+            cache = {}
+
+    invalid = []
+    skipped_blacklisted = [{"ticker": t, "name": "", "reason": "finns i svartlistan"} for t in current_tickers if t in blacklist]
+    invalid.extend(skipped_blacklisted)
+
+    # Kolla cache först
+    to_fetch = [t for t in remaining if t not in cache]
+    if cache:
+        for t in remaining:
+            if t in cache and cache[t].get("invalid"):
+                invalid.append(cache[t]["info"])
+
+    if not to_fetch:
+        return invalid
+
+    # Hämta resterande med ThreadPoolExecutor + timeout
+    MAX_WORKERS = 8
+    TIMEOUT_SEC = 15
+
+    def _check_one(ticker: str) -> tuple:
+        """Kontrollera en enskild ticker med timeout."""
+        try:
+            import socket
+            socket.setdefaulttimeout(TIMEOUT_SEC)
             stock = yf.Ticker(ticker)
             info = stock.info or {}
             quote_type = info.get("quoteType", "")
             if not quote_type or quote_type == "NONE":
-                invalid.append({"ticker": ticker, "name": info.get("shortName", info.get("longName", "")), "reason": "ingen quoteType – troligen avnoterad"})
-                continue
+                reason = "ingen quoteType – troligen avnoterad"
+                name = info.get("shortName", info.get("longName", ""))
+                return (ticker, True, {"ticker": ticker, "name": name, "reason": reason})
             exchange = info.get("exchange", "")
             if exchange == "NONE" or exchange == "":
-                invalid.append({"ticker": ticker, "name": info.get("shortName", info.get("longName", "")), "reason": "tom exchange – ogiltig ticker"})
-                continue
+                reason = "tom exchange – ogiltig ticker"
+                name = info.get("shortName", info.get("longName", ""))
+                return (ticker, True, {"ticker": ticker, "name": name, "reason": reason})
             try:
                 hist = stock.history(period="5d")
                 if hist.empty or len(hist) == 0:
-                    invalid.append({"ticker": ticker, "name": info.get("shortName", info.get("longName", "")), "reason": "ingen prisdata senaste 5 dagarna"})
+                    reason = "ingen prisdata senaste 5 dagarna"
+                    name = info.get("shortName", info.get("longName", ""))
+                    return (ticker, True, {"ticker": ticker, "name": name, "reason": reason})
             except Exception:
-                invalid.append({"ticker": ticker, "name": "", "reason": "kunde inte hamta prisdata"})
+                reason = "kunde inte hämta prisdata"
+                return (ticker, True, {"ticker": ticker, "name": "", "reason": reason})
+            return (ticker, False, None)
         except Exception as e:
-            invalid.append({"ticker": ticker, "name": "", "reason": f"yfinance-fel: {str(e)[:80]}"})
+            reason = f"yfinance-fel: {str(e)[:80]}"
+            return (ticker, True, {"ticker": ticker, "name": "", "reason": reason})
+
+    checked = 0
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = {pool.submit(_check_one, t): t for t in to_fetch}
+        for future in as_completed(futures):
+            ticker, is_invalid, info = future.result()
+            checked += 1
+            if is_invalid and info:
+                invalid.append(info)
+            # Uppdatera cache
+            cache[ticker] = {"invalid": is_invalid, "info": info}
+
+    # Spara cache
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(
+            json.dumps({"timestamp": time.time(), "results": cache}, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
     return invalid
 
 
