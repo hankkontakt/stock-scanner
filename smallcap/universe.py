@@ -14,8 +14,28 @@ Verifiera: python -m smallcap.validate_universe
 
 from pathlib import Path
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Ticker-universum laddas från data/universe.json.
+# Hårdkodade listor finns som fallback.
+# ══════════════════════════════════════════════════════════════════════════════
+
+import json as _json
+_UNIVERSE_FILE = Path(__file__).resolve().parent.parent / "data" / "universe.json"
+
+def _load_universe_tickers(key: str) -> list:
+    try:
+        with open(_UNIVERSE_FILE, encoding="utf-8") as _f:
+            data = _json.load(_f)
+        return data.get("SMALLCAP", {}).get("markets", {}).get(key, [])
+    except Exception:
+        return []
+
+_JSON_FIRST_NORTH = _load_universe_tickers("FIRST_NORTH")
+_JSON_SMALL_CAP = _load_universe_tickers("SMALL_CAP")
+_JSON_SPOTLIGHT = _load_universe_tickers("SPOTLIGHT")
+
 # ── NASDAQ FIRST NORTH GROWTH MARKET ─────────────────────────────────────────
-FIRST_NORTH = [
+FIRST_NORTH = _JSON_FIRST_NORTH or [
     # ── Mjukvara & SaaS ──────────────────────────────────────────────────────
     "LIME.ST",      # Lime Technologies – CRM för SME
     "FNOX.ST",      # Fortnox – molnredovisning
@@ -179,7 +199,7 @@ FIRST_NORTH = [
 
 
 # ── NASDAQ STOCKHOLM SMALL CAP & MID CAP ─────────────────────────────────────
-SMALL_CAP = [
+SMALL_CAP = _JSON_SMALL_CAP or [
     # ── Industri & Verkstad ───────────────────────────────────────────────────
     "BUFAB.ST",     # Bufab – global distributör av fästelement
     "LIAB.ST",      # Lindab International – ventilationssystem
@@ -365,7 +385,7 @@ NORDIC_MARKETS = [
 
 # ── SPOTLIGHT STOCK MARKET & NGM (urval) ─────────────────────────────────────
 # Mikrokap. Hög risk. Filtret tar bort illikvida bolag.
-SPOTLIGHT = [
+SPOTLIGHT = _JSON_SPOTLIGHT or [
     # ── Biotech & MedTech ────────────────────────────────────────────────────
     "BIOT.ST",      # Biotage – analytiska instrument (alt. notering)
     "ELIC.ST",      # Elicera Therapeutics – CAR-T
