@@ -27,9 +27,43 @@ from core import ai_analysis
 
 DATA_DIR = ROOT / "data"
 REPORT_DIR = ROOT / "reports"
+_STATE_FILE = DATA_DIR / "news_alert_state.json"
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+
+# ── Dedup-state (förhindrar att samma nyhet larmas var 30:e minut) ────────────
+
+def _load_seen() -> set:
+    """Laddar redan larmade nyheter/prisrörelser för IDAG. Nollställs dagligen."""
+    try:
+        data = json.loads(_STATE_FILE.read_text(encoding="utf-8"))
+        if data.get("date") == date.today().isoformat():
+            return set(data.get("seen", []))
+    except Exception:
+        pass
+    return set()
+
+
+def _save_seen(seen: set):
+    """Sparar dagens larm-state. (CI committar filen så den överlever omstart.)"""
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _STATE_FILE.write_text(
+            json.dumps({"date": date.today().isoformat(), "seen": sorted(seen)},
+                       ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def _alert_key(ticker: str, kind: str, detail: str) -> str:
+    """Stabil nyckel för dedup: ticker + typ + innehåll (hashat)."""
+    import hashlib
+    raw = f"{ticker}|{kind}|{detail}".lower()
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
 
 
 # ── Hjälpfunktioner ──────────────────────────────────────────────────────────
@@ -74,48 +108,80 @@ def _load_top_tickers(n: int = 10) -> list:
         return []
 
 
+def _is_us_ticker(ticker: str) -> bool:
+    """US-tickers saknar börssuffix (ingen punkt). Finnhub company-news
+    fungerar bara för dessa – nordiska/europeiska .ST/.HE/.DE m.fl. ger tomt."""
+    return "." not in ticker
+
+
 def _fetch_news(ticker: str, max_items: int = 3) -> list:
     """
-    Hämta nyheter för en ticker via Finnhub.
+    Hämta nyheter för en ticker.
+
+    1. Finnhub (snabbt, men endast US-tickers).
+    2. Fallback till core.news_fetcher.fetch_company_news() för icke-US-tickers
+       (nordiska/europeiska) ELLER när Finnhub inte gav något. Den källan
+       använder Google News RSS + Nasdaq Nordic + DuckDuckGo och fungerar för
+       .ST/.HE-aktier – tidigare fick svenska innehav ALDRIG nyhetslarm.
+
     Returnerar lista med dict: {headline, summary, source, url, datetime}
     """
     api_key = os.getenv("FINNHUB_API_KEY", "")
-    if not api_key:
-        return []
+    result = []
 
+    # ── 1. Finnhub (endast meningsfullt för US-tickers) ──────────────────
+    if api_key and _is_us_ticker(ticker):
+        try:
+            import requests
+            url = "https://finnhub.io/api/v1/company-news"
+            params = {
+                "symbol": ticker,
+                "from": date.today().strftime("%Y-%m-%d"),
+                "to": date.today().strftime("%Y-%m-%d"),
+                "token": api_key,
+            }
+            resp = requests.get(url, params=params, timeout=15)
+            if resp.status_code == 200:
+                articles = resp.json()
+                if isinstance(articles, list):
+                    for article in articles[:max_items]:
+                        headline = article.get("headline", "").strip()
+                        if not headline:
+                            continue
+                        summary = article.get("summary", "").strip()
+                        result.append({
+                            "headline": headline[:200],
+                            "summary": summary[:300] if summary else "",
+                            "source": article.get("source", "Finnhub"),
+                            "url": article.get("url", ""),
+                            "datetime": article.get("datetime", ""),
+                        })
+        except Exception:
+            pass
+
+    if result:
+        return result
+
+    # ── 2. Multi-källa fallback (fungerar för nordiska/europeiska aktier) ─
     try:
-        import requests
-        url = f"https://finnhub.io/api/v1/company-news"
-        params = {
-            "symbol": ticker,
-            "from": date.today().strftime("%Y-%m-%d"),
-            "to": date.today().strftime("%Y-%m-%d"),
-            "token": api_key,
-        }
-        resp = requests.get(url, params=params, timeout=15)
-        if resp.status_code != 200:
-            return []
-
-        articles = resp.json()
-        if not isinstance(articles, list):
-            return []
-
-        result = []
+        from core.news_fetcher import fetch_company_news
+        # Bara dagsfärska nyheter är relevanta för realtidslarm
+        articles = fetch_company_news(ticker, days_back=1)
         for article in articles[:max_items]:
-            headline = article.get("headline", "").strip()
-            summary = article.get("summary", "").strip()
+            headline = (article.get("headline") or "").strip()
             if not headline:
                 continue
             result.append({
                 "headline": headline[:200],
-                "summary": summary[:300] if summary else "",
-                "source": article.get("source", "Finnhub"),
+                "summary": "",
+                "source": article.get("source", "News"),
                 "url": article.get("url", ""),
-                "datetime": article.get("datetime", ""),
+                "datetime": article.get("datetime_str", ""),
             })
-        return result
-    except Exception:
-        return []
+    except Exception as e:
+        logger.debug(f"  ⚠ Nyhetsfallback misslyckades för {ticker}: {e}")
+
+    return result
 
 
 def _check_price_move(ticker: str, threshold: float = 5.0) -> dict | None:
@@ -211,33 +277,45 @@ def check_alerts(debug: bool = False) -> list:
                 f"Topp-10: {len(top_set)}")
 
     alerts = []
+    seen = _load_seen()        # Redan larmade nyheter/prisrörelser idag
+    new_keys = set()           # Nya nycklar att lägga till state efter körning
 
     for ticker in tickers_to_check:
         status = _classify_status(ticker, portfolio_set, watchlist_set, top_set)
 
-        # 1. Kolla nyheter via Finnhub
+        # 1. Kolla nyheter (Finnhub för US, multi-källa för nordiska)
         news = _fetch_news(ticker, max_items=2)
         for article in news:
             headline = article.get("headline", "")
-            source = article.get("source", "")
+            if not headline:
+                continue
+            # Dedup: hoppa över nyheter vi redan larmat om idag
+            key = _alert_key(ticker, "news", headline)
+            if key in seen:
+                logger.info(f"  ↩ {ticker}: redan larmad nyhet, hoppar över")
+                continue
             logger.info(f"  📰 {ticker} [{status}]: {headline[:80]}...")
 
             # AI-bedömning
             alert = _evaluate_alert(ticker, headline, article, portfolio, status, debug)
             if alert:
                 alerts.append(alert)
+                new_keys.add(key)
 
-        # 2. Kolla prisrörelse >5%
+        # 2. Kolla prisrörelse >5% (en gång per ticker+riktning per dag)
         price_alert = _check_price_move(ticker, threshold=5.0)
         if price_alert:
             direction = price_alert["direction"]
             change = price_alert["change_pct"]
-            logger.info(f"  📈 {ticker} [{status}]: {direction} {change:+.1f}%")
-
-            # AI-förklaring av rörelsen
-            alert = _evaluate_price_move(ticker, price_alert, status, debug)
-            if alert:
-                alerts.append(alert)
+            price_key = _alert_key(ticker, "price", direction)
+            if price_key in seen:
+                logger.info(f"  ↩ {ticker}: prisrörelse redan larmad idag, hoppar över")
+            else:
+                logger.info(f"  📈 {ticker} [{status}]: {direction} {change:+.1f}%")
+                alert = _evaluate_price_move(ticker, price_alert, status, debug)
+                if alert:
+                    alerts.append(alert)
+                    new_keys.add(price_key)
 
         # Vänta lite mellan anropen för att inte rate-limit Finnhub
         time.sleep(1.5)
@@ -245,6 +323,8 @@ def check_alerts(debug: bool = False) -> list:
     # Skicka mail om det finns alerts
     if alerts and not debug:
         _send_alert_email(alerts)
+        # Spara state först EFTER lyckad bearbetning så inget tappas vid krasch
+        _save_seen(seen | new_keys)
 
     elapsed = time.time() - start
     logger.info(f"\n✅ Klart! {len(alerts)} alerts på {elapsed:.0f}s")
