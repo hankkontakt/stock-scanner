@@ -39,7 +39,17 @@ def _load_konton() -> dict:
 
 def _save_konton(konton: dict):
     _KONTON_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _KONTON_PATH.write_text(json.dumps(konton, indent=2, ensure_ascii=False), encoding="utf-8")
+    content = json.dumps(konton, indent=2, ensure_ascii=False)
+    _KONTON_PATH.write_text(content, encoding="utf-8")
+    # Committa till GitHub — Streamlit Cloud har ephemeral filsystem
+    try:
+        from web.pages.admin import _get_github_token, _github_commit_file
+        token = _get_github_token()
+        if token:
+            _github_commit_file("data/konton.json", content, token,
+                                message="Update konton config via Streamlit")
+    except Exception:
+        pass
 
 
 def _ensure_konto(name: str, typ: str = "aktier") -> dict:

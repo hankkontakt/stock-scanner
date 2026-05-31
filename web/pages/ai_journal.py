@@ -18,7 +18,17 @@ def _load_journal() -> list:
 
 def _save_journal(entries: list):
     JOURNAL_FILE.parent.mkdir(parents=True, exist_ok=True)
-    JOURNAL_FILE.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
+    content = json.dumps(entries, ensure_ascii=False, indent=2)
+    JOURNAL_FILE.write_text(content, encoding="utf-8")
+    # Committa till GitHub — Streamlit Cloud har ephemeral filsystem
+    try:
+        from web.pages.admin import _get_github_token, _github_commit_file
+        token = _get_github_token()
+        if token:
+            _github_commit_file("data/ai_trade_journal.json", content, token,
+                                message="Update AI trade journal via Streamlit")
+    except Exception:
+        pass
 
 
 def log_ai_recommendation(ticker: str, recommendation: str, score_at_time: float,
