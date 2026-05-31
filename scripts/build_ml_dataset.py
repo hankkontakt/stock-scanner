@@ -45,7 +45,32 @@ def _get_universe(name: str) -> list:
     raise ValueError(f"Okänt universum: {name!r}. Använd 'universe' eller 'smallcap'.")
 
 
-def _build_rows_for_ticker(ticker: str, hist: pd.DataFrame, step_days: int = 21) -> list:
+def _build_sector_map() -> dict:
+    """Bygg ticker→sektor-karta från senaste scored_universe-rapporten.
+
+    Undviker extra yfinance-anrop genom att återanvända sektor-etiketterna som
+    redan finns i scan-datan. Används för att träna per-sektor ML-modeller.
+    Returnerar {} om ingen rapport finns (då blir 'sector' = "Unknown").
+    """
+    reports_dir = ROOT / "reports"
+    files = sorted(reports_dir.glob("scored_universe_*.csv"), reverse=True)
+    files += sorted(reports_dir.glob("smallcap_scored_*.csv"), reverse=True)
+    sector_map = {}
+    for f in files:
+        try:
+            sdf = pd.read_csv(f, usecols=["ticker", "sector"], low_memory=False)
+            for t, s in zip(sdf["ticker"], sdf["sector"]):
+                tk = str(t).upper().strip()
+                if tk and tk not in sector_map and isinstance(s, str) and s:
+                    sector_map[tk] = s
+        except Exception:
+            continue
+    logger.info(f"  Sektor-karta byggd: {len(sector_map)} tickers")
+    return sector_map
+
+
+def _build_rows_for_ticker(ticker: str, hist: pd.DataFrame, step_days: int = 21,
+                           sector: str = "Unknown") -> list:
     """Bygg en lista av {date, ticker, ...features, forward_return_30d} per
     månadsändpunkt i historiken.
 
@@ -88,6 +113,7 @@ def _build_rows_for_ticker(ticker: str, hist: pd.DataFrame, step_days: int = 21)
 
         row = {
             "ticker": ticker,
+            "sector": sector,
             "date": close.index[i].strftime("%Y-%m-%d") if hasattr(close.index[i], "strftime") else str(close.index[i]),
             **feats,
             "forward_return_30d": fwd_return,
@@ -105,6 +131,8 @@ def build_dataset(universe: str, years: int, max_tickers: int | None = None,
         tickers = tickers[:max_tickers]
     logger.info(f"Bygger ML-dataset för {universe}: {len(tickers)} tickers, {years} år historik")
 
+    sector_map = _build_sector_map()
+
     import yfinance as yf
 
     all_rows = []
@@ -120,7 +148,9 @@ def build_dataset(universe: str, years: int, max_tickers: int | None = None,
             if hist is None or hist.empty:
                 n_fail += 1
                 continue
-            rows = _build_rows_for_ticker(ticker, hist)
+            rows = _build_rows_for_ticker(
+                ticker, hist, sector=sector_map.get(ticker.upper().strip(), "Unknown")
+            )
             all_rows.extend(rows)
             n_ok += 1
         except Exception as e:

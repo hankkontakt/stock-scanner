@@ -24,6 +24,7 @@ Output i daily_pipeline: två nya kolumner i scored DataFrame:
 from __future__ import annotations
 
 import datetime
+import json
 import logging
 import math
 import pickle
@@ -697,7 +698,8 @@ def _cpcv_split(dates: pd.Series, n_splits: int = 6, embargo_pct: float = 0.01) 
     return splits
 
 
-def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]:
+def train_with_cpcv(parquet_path: Optional[Path], universe: str,
+                    df: Optional[pd.DataFrame] = None) -> Optional[TrainedModel]:
     """
     CPCV-validerad träning. Ersätter train_from_dataset() för bättre
     IC-estimat utan forward-looking bias.
@@ -708,14 +710,19 @@ def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]
     3. Träna slutgiltig modell på hela datasetet
     4. Returnera modell med CPCV-validerade metrics
 
+    Args:
+        parquet_path: Sökväg till träningsdata (ignoreras om df ges).
+        universe: Etikett för modellen (universe/smallcap/sector_*).
+        df: Förfiltrerad DataFrame (används av sektor-träning) — om None läses parquet.
+
     Returns:
         TrainedModel med cpcv_avg_ic i test_metrics, eller None vid fel.
     """
-    if not parquet_path.exists():
-        logger.error(f"Saknar träningsdata: {parquet_path}")
-        return None
-
-    df = pd.read_parquet(parquet_path)
+    if df is None:
+        if parquet_path is None or not parquet_path.exists():
+            logger.error(f"Saknar träningsdata: {parquet_path}")
+            return None
+        df = pd.read_parquet(parquet_path)
     if df.empty or len(df) < 200:
         logger.error(f"För lite träningsdata: {len(df)} rader")
         return None
@@ -735,8 +742,8 @@ def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]
 
     splits = _cpcv_split(df["date"])
     if not splits:
-        logger.warning("CPCV: för lite data – faller tillbaka till train_from_dataset()")
-        return train_from_dataset(parquet_path, universe)
+        logger.warning("CPCV: för lite data – för få CPCV-folds, hoppar över denna modell")
+        return None
 
     all_ic     = []
     all_hitrate = []
@@ -847,6 +854,67 @@ def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]
             "n_train_total":    len(df),
         },
     )
+
+
+def train_sector_models(parquet_path: Path, min_rows: int = MIN_SECTOR_ROWS) -> dict:
+    """
+    Tränar en separat ML-modell per sektor (handel, banker, industri, …).
+
+    Varje sektor får en egen modell eftersom drivkrafterna skiljer sig: banker
+    styrs av räntor/kreditspread, handel av konsumtion, tech av tillväxt osv.
+    En sektor-specifik modell kan fånga dessa mönster bättre än en universell.
+
+    Sektorer definieras i SECTOR_MODELS. Sektorer i SMALL_SECTORS eller med
+    < min_rows träningsrader hoppas över (använder universe-modellen som fallback
+    vid inference via predict_returns_sector).
+
+    Förutsätter att datasetet har en 'sector'-kolumn (byggd av build_ml_dataset).
+
+    Returns:
+        dict {sector_key: metrics} för de sektorer som tränades.
+    """
+    if not parquet_path.exists():
+        logger.error(f"Saknar träningsdata: {parquet_path}")
+        return {}
+
+    df = pd.read_parquet(parquet_path)
+    if "sector" not in df.columns:
+        logger.warning("Datasetet saknar 'sector'-kolumn — bygg om med uppdaterad "
+                       "build_ml_dataset.py. Hoppar över sektor-träning.")
+        return {}
+
+    results = {}
+    for sector_name, model_key in SECTOR_MODELS.items():
+        if sector_name in SMALL_SECTORS:
+            logger.info(f"  ⏭ {sector_name}: i SMALL_SECTORS → använder universe-fallback")
+            continue
+        sector_df = df[df["sector"] == sector_name].copy()
+        if len(sector_df) < min_rows:
+            logger.info(f"  ⏭ {sector_name}: {len(sector_df)} rader < {min_rows} → hoppar över")
+            continue
+
+        logger.info(f"  🏋️  Tränar sektor-modell: {sector_name} ({model_key}, {len(sector_df)} rader)")
+        trained = train_with_cpcv(None, model_key, df=sector_df)
+        if trained is None:
+            logger.warning(f"  ⚠ {sector_name}: träning misslyckades — hoppar över")
+            continue
+
+        save_model(trained, model_key)
+        metrics_file = MODELS_DIR / f"ml_{model_key}_metrics.json"
+        metrics_file.write_text(json.dumps({
+            "universe": model_key,
+            "sector": sector_name,
+            "trained_at": trained.trained_at,
+            "n_rows": trained.n_rows,
+            "feature_cols": trained.feature_cols,
+            "test_metrics": trained.test_metrics,
+        }, indent=2))
+        results[model_key] = trained.test_metrics
+        logger.info(f"  ✅ {sector_name}: IC={trained.test_metrics.get('ic')}, "
+                    f"sparad → ml_{model_key}.pkl")
+
+    logger.info(f"  📊 Sektor-modeller tränade: {len(results)}/{len(SECTOR_MODELS)}")
+    return results
 
 
 def save_model(trained: TrainedModel, universe: str) -> Path:
