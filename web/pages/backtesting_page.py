@@ -362,3 +362,95 @@ men garanterar ingenting om framtiden.
                 if not per_df.empty:
                     with st.expander("📋 Per period"):
                         st.dataframe(per_df, use_container_width=True, hide_index=True)
+
+    # ── A/B-test av faktorvikter ────────────────────────────────────────────
+    st.markdown("---")
+    st.subheader("⚖️ A/B-test av faktorvikter")
+    st.caption(
+        "Jämför två viktuppsättningar mot historiska snapshots — omviktar de lagrade "
+        "faktorpoängen utan att hämta om data. Bra för att se om en viktändring hade lönat sig."
+    )
+    if len(snaps) < 3:
+        st.info(f"Behöver ≥3 snapshots för A/B-test (har {len(snaps)}).")
+    else:
+        from core.config import FACTOR_WEIGHTS as _FW
+        _factor_keys = ["value", "quality", "momentum", "growth", "risk",
+                        "dividend", "sentiment", "short_interest"]
+        st.markdown("**Viktset B** (A = nuvarande config). Justera vikterna att testa mot:")
+        cols = st.columns(4)
+        weights_b = {}
+        for i, k in enumerate(_factor_keys):
+            with cols[i % 4]:
+                weights_b[k] = st.number_input(
+                    k, min_value=0.0, max_value=1.0,
+                    value=float(round(_FW.get(k, 0.0), 3)), step=0.01,
+                    key=f"ab_w_{k}",
+                )
+        if st.button("⚖️ Kör A/B-test", key="btn_ab_test", type="primary"):
+            from backtesting.backtest_snapshots import ab_test_weights
+            with st.spinner("Backtestar båda viktseten..."):
+                ab = ab_test_weights(
+                    weights_a={k: float(_FW.get(k, 0.0)) for k in _factor_keys},
+                    weights_b=weights_b,
+                    top_n=10, holding_days=30,
+                    label_a="Nuvarande", label_b="Test",
+                )
+            if "error" in ab:
+                st.error(ab["error"])
+            else:
+                ca, cb = st.columns(2)
+                for col, lbl in [(ca, "Nuvarande"), (cb, "Test")]:
+                    r = ab.get(lbl, {})
+                    with col:
+                        st.markdown(f"**{lbl}**" + (" 🏆" if ab.get("winner") == lbl else ""))
+                        st.metric("Kumulativ avk.", f"{r.get('cum_return_pct', 0):+.1f}%")
+                        st.caption(f"Sharpe {r.get('sharpe', 0):.2f} · Win-rate {r.get('win_rate', 0):.0f}% · {r.get('n_periods', 0)} perioder")
+
+    # ── Score-drift: top movers mellan senaste snapshots (P3.1) ──────────────
+    st.markdown("---")
+    st.subheader("📊 Score-rörelser (senaste två scans)")
+    if len(snaps) < 2:
+        st.info("Behöver ≥2 snapshots för att visa score-rörelser.")
+    else:
+        from backtesting.backtest_snapshots import compare_snapshots
+        diff = compare_snapshots(snaps[-2], snaps[-1], top_n=15, min_score_change=3.0)
+        if "error" in diff:
+            st.caption(diff["error"])
+        else:
+            st.caption(f"Jämför {snaps[-2]} → {snaps[-1]}")
+            cu, cd = st.columns(2)
+            with cu:
+                st.markdown("**⬆️ Största ökningar**")
+                mu = pd.DataFrame(diff.get("movers_up", []))
+                if not mu.empty:
+                    st.dataframe(mu[["ticker", "score_total_a", "score_total_b", "score_delta"]],
+                                 use_container_width=True, hide_index=True)
+            with cd:
+                st.markdown("**⬇️ Största minskningar**")
+                md = pd.DataFrame(diff.get("movers_down", []))
+                if not md.empty:
+                    st.dataframe(md[["ticker", "score_total_a", "score_total_b", "score_delta"]],
+                                 use_container_width=True, hide_index=True)
+            new_e = diff.get("new_entries", [])
+            fallen = diff.get("fallen", [])
+            if new_e:
+                st.success("🆕 Nya i topp-15: " + ", ".join(f"{e['ticker']} ({e['score']:.0f})" for e in new_e[:10]))
+            if fallen:
+                st.warning("📉 Föll ur topp-15: " + ", ".join(f"{e['ticker']} ({e['score']:.0f})" for e in fallen[:10]))
+
+    # ── Historisk replay: vad rekommenderade systemet då? (P3.2) ─────────────
+    st.markdown("---")
+    st.subheader("🕰️ Historisk replay — vad rekommenderade systemet då?")
+    if not snaps:
+        st.info("Inga snapshots ännu.")
+    else:
+        from backtesting.backtest_snapshots import load_snapshot
+        replay_date = st.selectbox("Välj datum", options=list(reversed(snaps)), key="replay_date")
+        if replay_date:
+            rsnap = load_snapshot(replay_date)
+            if not rsnap.empty and "score_total" in rsnap.columns:
+                top15 = rsnap.nlargest(15, "score_total")
+                show_cols = [c for c in ["ticker", "name", "sector", "score_total", "entry_signal"]
+                             if c in top15.columns]
+                st.caption(f"Systemets topp-15 den {replay_date}:")
+                st.dataframe(top15[show_cols], use_container_width=True, hide_index=True)

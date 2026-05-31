@@ -866,6 +866,17 @@ All ideas discovered during system analysis. Add to this section as you find mor
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-01 — Sista batch-punkterna: A/B-vikter, score-rörelser, historisk replay
+
+- ✅ **P1.2 A/B-test av faktorvikter** (`backtesting/backtest_snapshots.py`):
+  `ab_test_weights(weights_a, weights_b, ...)` omviktar de lagrade faktorpoängen per snapshot
+  (`_recompute_score`) och jämför två viktuppsättningars topp-N-avkastning — utan att hämta om
+  scoring-data (bara priser, delad cache). UI i backtesting-sidan: justera viktset B, kör, se vinnare.
+- ✅ **P3.1 Score-rörelser i UI** (`web/pages/backtesting_page.py`): visar största score-ökningar/
+  minskningar + nya/fallna ur topp-15 mellan de två senaste snapshotsen (via `compare_snapshots`).
+- ✅ **P3.2 Historisk replay** (`web/pages/backtesting_page.py`): datumväljare som laddar en
+  historisk snapshot och visar systemets topp-15-rekommendation den dagen (via `load_snapshot`).
+
 ### 2026-06-01 — Per-sektor ML-modeller (handel, banker, industri, …)
 
 Sektor-*inferensen* fanns redan (`predict_returns_sector` med fallback) men sektor-modellerna

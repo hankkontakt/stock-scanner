@@ -359,3 +359,125 @@ def run_snapshot_backtest(
         "hit_rate":       round(hit_rate, 1),
         "avg_alpha":      round(float(df_p["alpha"].dropna().mean()), 2) if "alpha" in df_p else None,
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 4. A/B-TEST AV FAKTORVIKTER
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Faktorscore-kolumner → viktnyckel (matchar config.FACTOR_WEIGHTS)
+_FACTOR_SCORE_COLS = {
+    "score_value":          "value",
+    "score_quality":        "quality",
+    "score_momentum":       "momentum",
+    "score_growth":         "growth",
+    "score_risk":           "risk",
+    "score_dividend":       "dividend",
+    "score_sentiment":      "sentiment",
+    "score_short_interest": "short_interest",
+}
+
+
+def _recompute_score(snap: pd.DataFrame, weights: dict) -> pd.Series:
+    """Räknar om score_total från lagrade faktorpoäng med en given viktuppsättning.
+
+    Bara faktorer som finns BÅDE i snapshoten och i weights används; vikterna
+    omnormaliseras till de tillgängliga faktorerna så summan blir 1.0.
+    """
+    avail = {col: weights.get(key, 0.0)
+             for col, key in _FACTOR_SCORE_COLS.items()
+             if col in snap.columns and weights.get(key, 0.0) > 0}
+    total_w = sum(avail.values())
+    if total_w <= 0:
+        # Fallback: använd lagrad score_total om inga faktorvikter matchar
+        return snap.get("score_total", pd.Series(50.0, index=snap.index))
+    score = pd.Series(0.0, index=snap.index)
+    for col, w in avail.items():
+        score += (w / total_w) * pd.to_numeric(snap[col], errors="coerce").fillna(50.0)
+    return score
+
+
+def _backtest_with_weights(weights: dict, top_n: int, holding_days: int,
+                           price_cache: dict) -> dict:
+    """Kör snapshot-backtest men rangordnar på OMVIKTAD score istället för lagrad."""
+    snapshots = list_snapshots()
+    rets_per_period = []
+    for snap_date in snapshots[:-1]:
+        snap = load_snapshot(snap_date)
+        if snap.empty or "ticker" not in snap.columns:
+            continue
+        snap = snap.copy()
+        snap["_score_ab"] = _recompute_score(snap, weights)
+        top = snap.nlargest(top_n, "_score_ab")
+
+        buy_dt  = snap_date
+        sell_dt = (pd.Timestamp(buy_dt) + timedelta(days=holding_days)).strftime("%Y-%m-%d")
+        rets = []
+        for _, row in top.iterrows():
+            buy_p  = _fetch_price_at(str(row["ticker"]), buy_dt,  price_cache)
+            sell_p = _fetch_price_at(str(row["ticker"]), sell_dt, price_cache)
+            if buy_p and sell_p and buy_p > 0:
+                rets.append((sell_p / buy_p) - 1.0)
+            time.sleep(0.02)
+        if rets:
+            rets_per_period.append(float(np.mean(rets)))
+
+    if not rets_per_period:
+        return {"n_periods": 0}
+
+    arr = np.array(rets_per_period)
+    equity = float(100_000 * np.prod(1 + arr))
+    sharpe = float(arr.mean() / arr.std() * np.sqrt(12)) if arr.std() > 0 else 0.0
+    return {
+        "n_periods":      len(arr),
+        "cum_return_pct": round((equity / 100_000 - 1) * 100, 2),
+        "avg_period_pct": round(float(arr.mean()) * 100, 2),
+        "sharpe":         round(sharpe, 2),
+        "win_rate":       round(float((arr > 0).mean() * 100), 1),
+    }
+
+
+def ab_test_weights(
+    weights_a: dict,
+    weights_b: dict,
+    top_n: int = 10,
+    holding_days: int = 30,
+    label_a: str = "A",
+    label_b: str = "B",
+) -> dict:
+    """
+    A/B-testar två faktorviktuppsättningar mot historiska snapshots.
+
+    Insikt: snapshots lagrar redan per-faktor-poäng → vi kan omvikta dem med
+    olika viktuppsättningar och mäta vilken topp-N-portfölj som presterat bäst,
+    UTAN att hämta om någon scoring-data. Endast priser hämtas (delad cache).
+
+    Args:
+        weights_a/b: dicts {faktornyckel: vikt} (samma format som config.FACTOR_WEIGHTS).
+        top_n, holding_days: backtest-parametrar (samma för båda för rättvis jämförelse).
+        label_a/b: etiketter för resultatet.
+
+    Returns:
+        dict med resultat per viktset + vinnare, eller {"error": ...} om för få snapshots.
+    """
+    snapshots = list_snapshots()
+    if len(snapshots) < 3:
+        return {"error": f"Bara {len(snapshots)} snapshots — behöver ≥3 för A/B-test.",
+                "n_snapshots": len(snapshots)}
+
+    price_cache: dict = {}  # Delad cache → priserna hämtas bara en gång för båda
+    res_a = _backtest_with_weights(weights_a, top_n, holding_days, price_cache)
+    res_b = _backtest_with_weights(weights_b, top_n, holding_days, price_cache)
+
+    winner = None
+    if res_a.get("n_periods") and res_b.get("n_periods"):
+        winner = label_a if res_a["cum_return_pct"] >= res_b["cum_return_pct"] else label_b
+
+    return {
+        "n_snapshots": len(snapshots),
+        "top_n":       top_n,
+        "holding_days": holding_days,
+        label_a:       res_a,
+        label_b:       res_b,
+        "winner":      winner,
+    }
