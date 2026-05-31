@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 from web.utils import DATA_DIR, REPORT_DIR
@@ -52,8 +53,6 @@ def render_cache():
                                        "Storlek": f"{size_kb:.1f} KB"})
                 st.dataframe(pd.DataFrame(file_info), use_container_width=True, hide_index=True)
                 st.caption("Visar de 50 senast andrade filerna.")
-
-    import pandas as pd
 
     st.markdown("---")
     st.markdown("**Rensa AI-cache**")
