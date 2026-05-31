@@ -293,3 +293,72 @@ men garanterar ingenting om framtiden.
                 if st.button("🗑️ Rensa chatt", key="bt_clear_chat"):
                     st.session_state["bt_chat"] = []
                     st.rerun()
+
+    # ── Point-in-time backtest (snapshots) ──────────────────────────────────
+    st.markdown("---")
+    st.subheader("📸 Point-in-time Backtest (reella score-snapshots)")
+    st.caption(
+        "Backtestas mot de **faktiska score­rekommendationer** som systemet gav vid varje "
+        "veckoscan — ingen look-ahead bias eller rekonstruerad scoring. "
+        "Historiken byggs upp löpande; ju fler vecko­scanningar som körts, desto mer data."
+    )
+
+    from backtesting.backtest_snapshots import list_snapshots, run_snapshot_backtest
+    snaps = list_snapshots()
+    st.metric("Tillgängliga snapshots", len(snaps),
+              help=f"Senaste: {snaps[-1] if snaps else '—'}, Första: {snaps[0] if snaps else '—'}")
+
+    if len(snaps) < 3:
+        st.info(
+            f"Bara {len(snaps)} snapshot(s) hittills. Backtesten byggs upp automatiskt varje gång "
+            f"veckoscanen körs (varje lördag). Kom tillbaka om några veckor för meningsfull data."
+        )
+    else:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            snap_top_n = st.number_input("Topp-N", min_value=3, max_value=30, value=10, key="snap_top_n")
+        with col2:
+            snap_hold = st.number_input("Hållperiod (dagar)", min_value=7, max_value=90, value=30, key="snap_hold")
+        with col3:
+            snap_bench = st.text_input("Benchmark", value="^OMXS30", key="snap_bench")
+
+        if st.button("▶️ Kör point-in-time backtest", key="btn_snap_bt", type="primary"):
+            with st.spinner("Hämtar priser och beräknar..."):
+                snap_result = run_snapshot_backtest(
+                    top_n=int(snap_top_n),
+                    holding_days=int(snap_hold),
+                    benchmark=snap_bench.strip(),
+                    verbose=False,
+                )
+
+            if "error" in snap_result:
+                st.error(snap_result["error"])
+            else:
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Kumulativ avkastning", f"{snap_result['cum_return_pct']:+.1f}%")
+                c2.metric("Sharpe (annualiserad)", f"{snap_result['sharpe']:.2f}")
+                c3.metric("Max drawdown", f"{snap_result['max_drawdown']:.1f}%")
+                c4.metric("Hit rate", f"{snap_result['hit_rate']:.0f}%",
+                          help="% av perioder där portföljen slog benchmark")
+
+                import plotly.graph_objects as go
+                eq_df = pd.DataFrame(snap_result["equity_curve"])
+                if not eq_df.empty:
+                    fig = go.Figure(go.Scatter(
+                        x=eq_df["date"], y=eq_df["equity"],
+                        fill="toself", fillcolor="rgba(66,165,245,0.15)",
+                        line=dict(color="#42a5f5", width=2),
+                        name="Equity",
+                    ))
+                    fig.update_layout(
+                        title="Equity-kurva (point-in-time backtest, 100k SEK start)",
+                        template="plotly_dark",
+                        paper_bgcolor="#131722", plot_bgcolor="#1e2230",
+                        height=320, margin=dict(t=44, b=16, l=16, r=16),
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                per_df = pd.DataFrame(snap_result["periods"])
+                if not per_df.empty:
+                    with st.expander("📋 Per period"):
+                        st.dataframe(per_df, use_container_width=True, hide_index=True)
