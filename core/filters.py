@@ -238,8 +238,18 @@ def apply_quality_filter(df: pd.DataFrame) -> tuple:
     mask_bad = pd.Series(False, index=df.index)
     reasons  = pd.Series("", index=df.index)
 
-    # 1. Negativt eget kapital (tekniskt konkurs)
-    if "price_to_book" in df.columns:
+    # 1. Negativt eget kapital (tekniskt konkurs) — men inte for finans/REIT
+    # Finansiella bolag, banker, REITs har ofta negativt eget kapital som en
+    # normal konsekvens av skuldstruktur och aktieaterekop — det ar inte konkurs.
+    if "price_to_book" in df.columns and "sector" in df.columns:
+        is_financial = df["sector"].str.contains(
+            "Financial|Real Estate|Insurance|Bank|REIT", case=False, na=False
+        )
+        neg_book = (~is_financial) & df["price_to_book"].notna() & (df["price_to_book"] < 0)
+        mask_bad |= neg_book
+        reasons = reasons.where(~neg_book, reasons + "Negativt eget kapital; ")
+    elif "price_to_book" in df.columns:
+        # Fallback om sector-kolumn saknas — ta bort alla med negativt PB
         neg_book = df["price_to_book"].notna() & (df["price_to_book"] < 0)
         mask_bad |= neg_book
         reasons = reasons.where(~neg_book, reasons + "Negativt eget kapital; ")
