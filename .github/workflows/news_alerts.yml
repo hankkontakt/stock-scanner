@@ -11,6 +11,8 @@ jobs:
   alerts:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write   # Krävs för att committa dedup-state
     env:
       PYTHONPATH: .
 
@@ -37,3 +39,15 @@ jobs:
           GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
         run: |
           python -c "from core.news_alerts import check_alerts; check_alerts()"
+
+      - name: 💾 Committa dedup-state
+        if: always()
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "MarketScan Alerts Bot"
+          git add data/news_alert_state.json 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "🤖 News alert state $(date +%Y-%m-%dT%H:%M)"
+          git pull --rebase origin main || true
+          git push || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
