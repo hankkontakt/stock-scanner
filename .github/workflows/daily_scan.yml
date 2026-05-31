@@ -36,6 +36,8 @@ jobs:
   pipeline:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write   # Krävs för git push via GITHUB_TOKEN
     env:
       PYTHONPATH: .
 
@@ -142,6 +144,8 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "MarketScan Bot"
+          # Pull först för att undvika rebase-konflikter vid push
+          git pull --rebase origin main
           git add \
             data/scan_log.json \
             data/paper_trades.json \
@@ -153,8 +157,7 @@ jobs:
             reports/smallcap_scored_*.csv \
             reports/*.md || true
           git diff --staged --quiet || git commit -m "🤖 Pipeline ${{ steps.mode.outputs.mode }} $(date +%Y-%m-%d)"
-          git pull --rebase origin main || true
-          git push || true
+          git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
