@@ -1,72 +1,85 @@
-Här är din småbolagsanalys baserad på den data du delat.
+Här är din småbolagsanalys baserad på tillgänglig data och marknadssignaler.
 
 ---
 
 ### 📊 Småbolagsöversikt
 
-Den globala riskaptiten har förbättrats markant de senaste dagarna. Asiatiska index som Nikkei 225 (+2,53 %) och KOSPI (+3,55 %) leder uppgången, medan europeiska och amerikanska index visar mer dämpad styrka. VIX har fallit 2,67 %, vilket signalerar minskad oro och gynnar småbolag som ofta är känsligare för riskpremien.
+Småbolagsmarknaden just nu uppvisar en **blandad men försiktigt positiv** bild. Av de 55 bolag som skannats ser vi att Asien-ledda index (Nikkei +2,53%, KOSPI +3,55%) drar upp humöret, medan europeiska och amerikanska index mestadels är stillastående eller svagt negativa. VIX har sjunkit med -2,67%, vilket tyder på minskad oro – ett gynnsamt klimat för riskfyllda tillgångar som småbolag.
 
-Inhemskt har Stockholmsbörsen (OMX) stigit 0,45 %, men småbolagssegmentet har potential att överprestera om riskviljan fortsätter öka. Du har 55 bolag i ditt universum – en bra bredd för att fånga upp köpvärda case. Fokus bör ligga på bolag med starka tekniska signaler och positiv nyhetsdrivning.
+**Vad sticker ut?**  
+- **Asienexponering** är het just nu – bolag med verksamhet i Sydkorea, Japan eller Indien kan få en extra skjuts.  
+- **Låg volatilitet** (VIX ned) gynnar småbolag som ofta lider i turbulenta tider.  
+- **Svag europeisk makro** (FTSE, CAC, DAX nära noll) innebär att du måste vara selektiv – inte alla småbolag är köpvärda.
 
----
-
-### 💼 Din portfölj – genomgång och rekommendationer
-
-**INVE-B.ST (Investor AB)** – *Neutral, RSI 63,9*
-Investor är inget småbolag, men en stabil kärninnehav. Aktien handlas 4,4 % över 50-dagars glidande medelvärde och RSI är neutral. Nyheterna är dämpade – fokus på styrelseförändringar och valutaeffekter. **Behåll**, men överväg att minska om du vill frigöra kapital till renodlade småbolag.
-
-**LÄNSFÖRSÄKRINGAR GLOBAL INDEX** – *Ingen prisdata*
-Saknar aktuell kurs. Kontrollera att fonden är korrekt inrapporterad. Om den är en indexfond, låt den vara som bred exponering.
-
-**NCAB.ST (NCAB Group)** – *Överköpt, RSI 70,1*
-Aktien har rusat 23,3 % över 50-dagars MA och RSI indikerar överköpt. Q1-rapporten (2026) visade stark orderingång, men frågan är om uppgången är prissatt. **Risk för rekyl.** Sätt en hård stop-loss på 5–7 % under dagens kurs (ca 76–78 kr). Ta hem delvinst om du har överskott.
-
-**TAGM-B.ST (TagMaster)** – *Oförändrad, RSI saknas*
-Aktien ligger kring din ingångskurs. En färsk analys från Simply Wall St (54h sedan) pekar på att aktien kan vara undervärderad vid 41 kr. Du ligger 35,9 kr – potential uppåt. **Behåll**, men sätt stop-loss vid 30 kr (-15 %). Bolaget är litet och volatilt; håll positionen liten.
+**Slutsats:** Marknaden är redo för rotation mot småbolag, men du måste fokusera på bolag med starka egna drivkrafter, inte bara indexexponering.
 
 ---
 
-### 🏆 Topp-5 köpkandidater
+### 💼 Din portfölj – Genomgång och rekommendationer
 
-Baserat på tillgänglig data och marknadssignalerna identifierar jag följande köpkandidater (notera att du inte har fullständig data för alla 55 bolag – nedan är en syntes av vad som sticker ut):
+**1. INVE-B.ST (Investor AB)**  
+- **Status:** +5,1%, RSI 63,9 (neutralt), över 50-dagars glidande medelvärde (+4,43%).  
+- **Analys:** Investor är ett investmentbolag, inte ett renodlat småbolag, men fungerar som en stabil kärna. Nyheterna är neutrala (styrelseförändringar, fokus på värdering). Inget alarm.  
+- **Rekommendation:** **BEHÅLL**. Stop-loss på -15% från köpkurs (ca 308 kr) är rimlig. Ingen anledning att öka.
 
-1. **TagMaster (TAGM-B.ST)** – *Köp vid 35–36 kr*
-   - Nyhetsdriven uppvärdering. Analytiker pekar på substansvärde över 41 kr. Låg värdering i sektorn (Industri & Verkstad). Risk/reward gynnsam.
+**2. LÄNSFÖRSÄKRINGAR GLOBAL INDEX**  
+- **Status:** Pris saknas, ingen aktiv handel.  
+- **Analys:** En indexfond – inte ett småbolag. Fungerar som bred exponering.  
+- **Rekommendation:** **BEHÅLL** som bas, men fokusera småbolagsjakten på enskilda aktier.
 
-2. **NCAB (NCAB.ST)** – *Avvakta köp, överväg vid rekyl*
-   - Starkt momentum, men överköpt. Vänta på en rekyl till 75–78 kr innan nytt köp. Orderboken är stark – långsiktigt case håller.
+**3. NCAB.ST (NCAB Group)**  
+- **Status:** +10,6%, RSI 70,1 (överköpt), +23,33% över 50-dagars MA.  
+- **Analys:** Stark kursutveckling, men RSI signalerar överköpt. Q1-rapporten (för 896h sedan) visade stark orderingång, men frågan är om det är inprisat.  
+- **Rekommendation:** **BEHÅLL men sätt en stram stop-loss**. Överväg att ta hem vinst om RSI når 75+. Stop-loss: sätt på 74 kr (din köpkurs) eller 5% under dagens kurs (ca 77,80 kr).
 
-3. **Investor (INVE-B.ST)** – *Behåll, ej köp*
-   - För stabilt för småbolagsportföljen. Använd som kassa om du vill minska risk.
-
-4. **Länsförsäkringar Global Index** – *Behåll som bas*
-   - Fungerar som diversifiering. Ingen aktiv åtgärd.
-
-5. *(Saknas data för fler småbolag – rekommenderar att du screener efter bolag med RSI 30–50 och positiv nyhetsdrivning)*
-
----
-
-### ⚠️ Varningar
-
-- **NCAB (NCAB.ST)** – RSI 70,1 och 23 % över MA50. Risk för vinsthemtagning. Om aktien faller under 78 kr, överväg att minska.
-- **TagMaster (TAGM-B.ST)** – Låg likviditet och ingen trenddata. Småbolag med hög volatilitet – använd strikt stop-loss.
-- **Generellt:** Småbolag är känsliga för ränte- och konjunkturförändringar. VIX är låg nu, men en plötslig uppgång kan slå hårt.
+**4. TAGM-B.ST (TagMaster)**  
+- **Status:** +0,2%, ingen RSI-data, ingen trend.  
+- **Analys:** Stillastående. Nyheten från Simply Wall St (57h sedan) indikerar att aktien kan vara undervärderad vid 41 kr (nu 35,90 kr). Bolaget är litet och illikvid – hög risk.  
+- **Rekommendation:** **AVVAKTA**. Ingen köpsignal än. Sätt stop-loss på 30,50 kr (-15%). Om den bryter över 38 kr med volym, överväg att öka.
 
 ---
 
-### 🎯 Rekommendation – 1–2 konkreta åtgärder just nu
+### 🏆 Topp-5 köpkandidater (baserat på data och marknadsläge)
 
-1. **Köp TagMaster (TAGM-B.ST) vid 35–36 kr**  
-   Sätt stop-loss vid 30 kr. Målkurs: 41 kr (baserat på Simply Wall St:s analys). Risk/reward: 1:3.
+*Not: Din data innehåller inga topplistor, så jag identifierar kandidater från dina innehav och marknadssignaler.*
 
-2. **Sätt stop-loss på NCAB (NCAB.ST) vid 76 kr**  
-   Om aktien faller tillbaka, ta hem vinst. Återköp vid rekyl till 75–78 kr.
+1. **NCAB.ST** – Stark orderingång, men vänta på en rekyl (RSI 70). Köp vid 78-79 kr.  
+2. **TAGM-B.ST** – Potentiellt undervärderad enligt analys. Köp vid utbrott över 38 kr med stop på 34 kr.  
+3. **INVE-B.ST** – Stabil, men inte en småbolagsraket. Köp vid rekyl till 365 kr.  
+4. *(Ingen ytterligare data för fler kandidater – men håll utkik efter:*  
+   - **Bolag med Asienexponering** (gynnas av KOSPI/Nikkei-rallyt)  
+   - **Lågt RSI (<30) och positiv nyhetsflow** – leta efter överkölda pärlor)  
+5. *(Samma som ovan – brist på data)*
+
+**Rekommendation:** Fokusera på **NCAB** på rekyl och **TAGM** vid utbrott.
 
 ---
 
-### Kortsiktig utsikt för småbolag
+### ⚠️ Varningar – Aktier med svaga signaler
 
-**Läge: KÖPA**  
-Marknaden andas optimism med fallande VIX och starka asiatiska index. Småbolag har potential att överprestera de närmaste veckorna. Fokusera på bolag med låg värdering och positiv nyhetsdrivning – som TagMaster. Var beredd på rekyler i överköpta namn som NCAB.
+- **NCAB.ST** – RSI 70,1 = överköpt. Risk för vinsthemtagning. Sätt stop-loss hårt.  
+- **TAGM-B.ST** – Ingen trend, låg likviditet. Kan falla snabbt om marknaden vänder.  
+- **Inga andra varningar i datan** – men generellt: småbolag med låg volym och ingen nyhetsbevakning är riskabla.
 
-*Handla med små positioner och använd stop-lossar – småbolag är ingen sovmatta.*
+**Stop-loss-nivåer att bevaka:**  
+- NCAB: 77,80 kr (5% under dagens kurs)  
+- TAGM: 30,50 kr (-15% från köpkurs)  
+- INVE-B: 308 kr (-15% från köpkurs)
+
+---
+
+### 🎯 Rekommendation – Konkreta åtgärder just nu
+
+1. **Sälj inget** – dina innehav är OK, men var beredd att trimma NCAB om RSI når 75+.  
+2. **Öka exponeringen mot Asien** – överväg att köpa en småbolagsfond med Japan/Sydkorea-fokus, eller enskilda bolag som gynnas av KOSPI-rallyt.  
+3. **Bevaka TAGM-B.ST** – om den bryter 38 kr med volym, köp 10-15 aktier med stop på 34 kr.
+
+**Kortsiktig utsikt för småbolag:**  
+**Läge: KÖPA** (men selektivt) – VIX faller, Asien leder, och småbolag har potential att återhämta sig. Fokusera på bolag med egna katalysatorer (orderingång, låg värdering, Asienexponering). Undvik överköpta namn utan rekyl.
+
+**Handlingsplan:**  
+- Idag: Inget akut.  
+- Inom 1 vecka: Om NCAB faller till 78 kr, köp 2-3 aktier till.  
+- Inom 2 veckor: Om TAGM bryter 38 kr, köp. Annars vänta.
+
+**Riskhantering:** Småbolag är volatila – använd alltid stop-loss och överexponera inte. Max 10-15% av portföljen i enskilda småbolag.
