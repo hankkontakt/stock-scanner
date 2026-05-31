@@ -159,6 +159,25 @@ FUNDA_FEATURES = [
 # I inference: hämtas från scored_df (för funda) + OHLCV-cache (för tech).
 ALL_FEATURES = TECH_FEATURES + FUNDA_FEATURES
 
+# Sector mapping for per-sector ML models.
+# Varje sector far en egen modell som lasers separat fran models/ml_sector_*.pkl.
+# Sektorer med for fa tickers anvander 'universe'-modellen som fallback.
+SECTOR_MODELS = {
+    "Technology":           "sector_tech",
+    "Healthcare":           "sector_healthcare",
+    "Financial Services":  "sector_financial",
+    "Consumer Cyclical":   "sector_consumer_cyc",
+    "Consumer Defensive":  "sector_consumer_def",
+    "Energy":              "sector_energy",
+    "Industrials":         "sector_industrial",
+    "Basic Materials":     "sector_materials",
+    "Real Estate":         "sector_real_estate",
+    "Utilities":           "sector_utilities",
+    "Communication Services": "sector_communication",
+}
+SMALL_SECTORS = {"Real Estate", "Utilities", "Energy"}
+MIN_SECTOR_ROWS = 2000
+
 # Halvlivstid för exponentiell tidsviktning i träning.
 # Data som är 2 år gammalt viktas till 50 %, 4 år → 25 %, COVID (6 år) → 12 %.
 SAMPLE_WEIGHT_HALFLIFE_YEARS: float = 2.0
@@ -748,6 +767,133 @@ def predict_returns(scored_df: pd.DataFrame, universe: str,
         logger.info(f"  ℹ ML: {n_filtered} aktier saknade prisdata och fick ingen prediktion")
 
     return result
+
+
+def predict_returns_sector(
+    scored_df: pd.DataFrame,
+    default_universe: str = "universe",
+    cache_dir: Optional[Path] = None,
+) -> pd.DataFrame:
+    """
+    Prediktera avkastning med per-sektor ML-modeller.
+
+    For varje sektor laddas sektorspecifik modell och predikterar.
+    Faller tillbaka till default_universe-modellen for:
+    - Sektorer utan dedikerad modell (for fa tickers)
+    - Tickers dar sektormodellen laddades men prediktion misslyckades
+    - Tickers utan sektor-etikett
+
+    Args:
+        scored_df: DataFrame med ['ticker', 'sector'] + features
+        default_universe: Fallback-modell (default: 'universe')
+        cache_dir: OHLCV-cachekatalog
+
+    Returns:
+        DataFrame med 'predicted_return' och 'ml_rank' kolumner
+    """
+    df = scored_df.copy()
+    df["predicted_return"] = float("nan")
+    df["ml_rank"] = 0.0
+
+    # Ladda default-modell
+    default_model = load_model(default_universe)
+    if default_model is None:
+        logger.info(f"  ⚠ Ingen ML-modell hittad for {default_universe} — hoppar over sektor-prediktion")
+        return df
+
+    # Bygg feature-matris från OHLCV-cache (gemensam for alla sektorer)
+    cache_dir = cache_dir or (ROOT / "data" / "cache")
+    tech_rows = []
+    for ticker in scored_df["ticker"].tolist():
+        feats = _load_features_from_cache(ticker, cache_dir)
+        tech_rows.append(feats)
+    tech_df = pd.DataFrame(tech_rows, index=scored_df.index)
+
+    # Extrahera fundamentala features från scored_df
+    funda_cols_available = [c for c in FUNDA_FEATURES if c in scored_df.columns]
+    funda_df = None
+    if funda_cols_available:
+        funda_df = scored_df[funda_cols_available].copy()
+        for c in funda_cols_available:
+            funda_df[c] = pd.to_numeric(funda_df[c], errors="coerce").fillna(0)
+
+    # Prediktera sektor for sektor
+    all_preds = pd.Series(float("nan"), index=df.index)
+
+    if "sector" in df.columns:
+        for sector_name, model_key in SECTOR_MODELS.items():
+            mask = df["sector"] == sector_name
+            if not mask.any():
+                continue
+            if sector_name in SMALL_SECTORS:
+                # For fa tickers — anvander default-modell istallet
+                continue
+
+            sector_model = load_model(model_key)
+            if sector_model is None:
+                continue
+
+            try:
+                # Bygg feature-matris for denna sektor
+                idx = df.index[mask]
+                X_tech = tech_df.reindex(
+                    columns=[c for c in sector_model.feature_cols if c in TECH_FEATURES]
+                ).fillna(0).loc[idx].values
+
+                if funda_df is not None:
+                    funda_cols_model = [c for c in funda_cols_available if c in sector_model.feature_cols]
+                    if funda_cols_model:
+                        X_funda = funda_df.loc[idx, funda_cols_model].values
+                        X = np.hstack([X_tech, X_funda])
+                    else:
+                        X = X_tech
+                else:
+                    X = X_tech
+
+                preds = sector_model.model.predict(X)
+                all_preds.loc[idx] = preds
+            except Exception:
+                pass  # Faller tillbaka till default-modell
+
+    # Fyll kvarvarande med default-modell
+    remaining = all_preds.isna()
+    if remaining.any():
+        try:
+            idx = df.index[remaining]
+            cols = default_model.feature_cols
+            X_tech = tech_df.reindex(
+                columns=[c for c in cols if c in TECH_FEATURES]
+            ).fillna(0).loc[idx].values
+
+            if funda_df is not None:
+                funda_cols_model = [c for c in funda_cols_available if c in cols]
+                if funda_cols_model:
+                    X_funda = funda_df.loc[idx, funda_cols_model].values
+                    X = np.hstack([X_tech, X_funda])
+                else:
+                    X = X_tech
+            else:
+                X = X_tech
+
+            preds = default_model.model.predict(X)
+            all_preds.loc[idx] = preds
+        except Exception as e:
+            logger.warning(f"ML-prediktion (fallback) misslyckades: {e}")
+
+    # Sätt NaN for rader utan prisdata
+    tech_cols_used = [c for c in default_model.feature_cols if c in TECH_FEATURES]
+    if tech_cols_used:
+        no_data_mask = tech_df.reindex(columns=tech_cols_used).isna().all(axis=1)
+        all_preds[no_data_mask] = float("nan")
+
+    df["predicted_return"] = all_preds
+    df["ml_rank"] = (
+        df["predicted_return"]
+        .rank(pct=True, ascending=True, na_option="keep")
+        .fillna(0) * 100
+    ).round(1)
+
+    return df
 
 
 def _load_features_from_cache(ticker: str, cache_dir: Path) -> dict:
