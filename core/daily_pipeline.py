@@ -680,8 +680,8 @@ def run_targeted(tickers: list[str]) -> int:
 
     # ML-prediktion (om modell finns)
     try:
-        from core.ml_predictor import predict_returns
-        scored = predict_returns(scored, "universe")
+        from core.ml_predictor import predict_returns_sector
+        scored = predict_returns_sector(scored, default_universe="universe")
     except Exception as e:
         logger.warning(f"  ⚠ ML-prediktion hoppades över: {e}")
 
@@ -1044,8 +1044,8 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     # ═══════════════════════════════════════════════════════════════════════
     if _ml_universe and not scored.empty and "ticker" in scored.columns:
         try:
-            from core.ml_predictor import predict_returns
-            scored_ml = predict_returns(scored, _ml_universe)
+            from core.ml_predictor import predict_returns_sector
+            scored_ml = predict_returns_sector(scored, default_universe=_ml_universe)
             if "predicted_return" in scored_ml.columns:
                 scored = scored_ml
                 logger.info(f"  🤖 ML-prediktioner tillagda för {_ml_universe} ({len(scored)} rader)")
