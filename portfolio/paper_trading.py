@@ -33,8 +33,12 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 
-TRADES_FILE    = Path("data/paper_trades.json")
-PORTFOLIO_FILE = Path("data/paper_portfolio.json")
+# Absoluta sökvägar förankrade i repo-roten. Tidigare var dessa relativa
+# (Path("data/...")) vilket bröts om processen kördes från en annan CWD —
+# pipelinen skrev då till en annan fil än den Streamlit-appen läste.
+_ROOT          = Path(__file__).resolve().parent.parent
+TRADES_FILE    = _ROOT / "data" / "paper_trades.json"
+PORTFOLIO_FILE = _ROOT / "data" / "paper_portfolio.json"
 BENCHMARK      = "SPY"
 DEFAULT_CAPITAL = 100_000  # SEK per vecka
 
@@ -50,7 +54,7 @@ DCA_MULTIPLIER      = 1.5     # Köp 1.5× mer vid DCA
 MAX_DCA_PER_TICKER  = 2       # Max antal DCA-köp per ticker
 CLOSE_AFTER_WEEKS   = 8       # Stäng position efter N veckor oavsett
 
-Path("data").mkdir(exist_ok=True)
+(_ROOT / "data").mkdir(exist_ok=True)
 
 
 # ══════════════════════════════════════════════════════════════

@@ -6,9 +6,13 @@
 
 # Cache-data (aldrig committa, kan vara GB-stora)
 data/cache/
+# yfinance-historik, återställs av actions/cache – ska aldrig committas
+data/history/
 
 # Personlig lokal data (hanteras via GitHub Secrets i CI)
 data/ticker_map.json
+# Lösenordsåterställnings-tokens – kortlivade, ska aldrig hamna i git
+data/password_reset_tokens.json
 
 # ML-träningsdataset (regenereras av train_ml-workflow, lagras EJ i git)
 data/ml/
