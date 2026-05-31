@@ -633,7 +633,8 @@ def _score_breakdown(row: pd.Series):
         ("score_growth",   "Tillväxt",    "📈", [
             ("revenue_growth","Omsättn.tillv.",".1%"),
             ("earnings_growth","Vinsttillv.", ".1%"),
-            ("earnings_surprise_pct","Estimat-revision",".1%"),
+            ("earnings_revision_rate","Estimat-revision",".1%"),
+            ("earnings_surprise","Earnings Surprise",".3f"),
         ]),
         ("score_risk",     "Risk",        "🛡️", [
             ("debt_to_equity","D/E",          ".1f"),

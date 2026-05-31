@@ -730,7 +730,7 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         "insider_executive_buy": False,
 
         # NEW: Earnings surprise (hur ofta slår bolaget estimat)
-        "earnings_surprise_pct": info.get("earningsForecastsGrowthRate"),
+        "earnings_revision_rate": info.get("earningsForecastsGrowthRate"),
 
         # NEW: Omsättning och volym
         "avg_volume":       info.get("averageVolume"),
@@ -842,7 +842,46 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
     metrics["insider_executive_buy"] = ins.get("insider_executive_buy", False)
     metrics["insider_recent_date"]   = ins.get("insider_recent_date")
 
+    # ── Earnings surprise (från earnings_history) ─────────────────────────────
+    # Körs inuti extract_metrics för att hålla ihop med övrig datahämtning
+    # Cachad 72h i extra_data.py så extra nätverkskostnad är liten från dag 2
+    metrics["earnings_surprise"] = 0.5  # neutral default
+    try:
+        from core.extra_data import fetch_earnings_surprise_signal as _fetch_es
+        es = _fetch_es(ticker)
+        if es is not None:
+            metrics["earnings_surprise"] = es
+    except Exception:
+        pass
+
+    # ── Schema-validering: tvinga numeriska fält, fånga Infinity/None ──────
+    _string_fields = frozenset({
+        "ticker", "name", "sector", "industry", "country", "currency",
+        "insider_cluster", "insider_executive_buy", "insider_recent_date",
+        "macd_above_signal",
+    })
+    for key, value in list(metrics.items()):
+        if key in _string_fields or value is None:
+            continue
+        coerced = _coerce_numeric(value)
+        if coerced is None and value is not None:
+            pass  # Tyst — yfinance returnerar ofta "Infinity" eller liknande
+        metrics[key] = coerced
+
     return metrics
+
+
+def _coerce_numeric(value) -> float | None:
+    """Tvinga ett varde till float. Returnerar None om det inte gar (Infinity, NaN, None)."""
+    if value is None:
+        return None
+    try:
+        result = pd.to_numeric(value, errors="coerce")
+        if np.isinf(result) or pd.isna(result):
+            return None
+        return float(result)
+    except Exception:
+        return None
 
 
 def _safe_return(series: pd.Series, days_back: int):
