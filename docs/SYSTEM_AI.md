@@ -168,6 +168,7 @@ stock-scanner/
 │   └── history.py              # Score history tracking (2KB)
 ├── backtesting/                # Backtesting & optimization
 │   ├── backtest.py             # Historical backtest engine (28KB)
+│   ├── backtest_snapshots.py   # Point-in-time backtest + A/B-vikter + compare_snapshots
 │   ├── walk_forward.py         # Walk-forward validation (12KB)
 │   └── factor_optimizer.py     # Bayesian factor weight opt (18KB)
 ├── data_management/            # Data import & tracking
@@ -183,7 +184,7 @@ stock-scanner/
 ├── reporting/                  # Report generation
 │   └── report_builder.py       # Markdown helper (14KB)
 ├── tests/                      # Test suite
-│   ├── test_scoring.py         # 56 scoring tests (NEW)
+│   ├── test_scoring.py         # 60 scoring tests (faktorer, sektor, idempotens)
 │   ├── test_config.py          # Config integrity tests
 │   ├── test_data_fetcher.py    # RSI calculation tests
 │   ├── test_filters.py         # Strike system tests
@@ -228,43 +229,49 @@ stock-scanner/
 
 ## 3. Scoring Engine — Detailed Reference
 
-### 3.1 The 8 Factors
+### 3.1 The 10 Factors (vikter rescaled 2026-06-01)
 
 | # | Factor | Weight | Key Inputs | Function | Lower Is Better? |
 |---|---|---|---|---|---|
-| 1 | **Value** | 22% | FCF Yield (70%), EV/EBITDA (30%), fallback P/E→P/B→P/S | `calc_value_score()` | Yes (P/E/PB) |
-| 2 | **Quality** | 18% | ROE, ROA, profit margin, operating margin, gross margin | `calc_quality_score()` | No |
-| 3 | **Momentum** | 18% | return_12m, return_6m, return_3m, pct_from_52w_high | `calc_momentum_score()` | No |
-| 4 | **Growth** | 13% | revenue_growth, earnings_growth, earnings_quarterly_growth | `calc_growth_score()` | No |
-| 5 | **Risk** | 9% | D/E (inverted), current_ratio, volatility (inv), beta (inv) | `calc_risk_score()` | Yes (volatility) |
-| 6 | **Size** | 5% | market_cap (log, inverted) | `calc_size_score()` | Yes (smaller=better) |
-| 7 | **Dividend** | 5% | dividend_yield (capped 15%), payout_ratio penalty | `calc_dividend_score()` | No |
-| 8 | **Sentiment** | 10% | sentiment_raw, insider_executive_buy (+20), insider_cluster (+30) | `calc_sentiment_score()` | No |
+| 1 | **Value** | 21.3% | FCF Yield (70%), EV/EBITDA (30%), fallback P/E→P/B→P/S | `calc_value_score()` | Yes (P/E/PB) |
+| 2 | **Quality** | 17.5% | ROE, ROA, profit margin, operating margin, gross margin | `calc_quality_score()` | No |
+| 3 | **Momentum** | 17.5% | return_12m, return_6m, return_3m, pct_from_52w_high | `calc_momentum_score()` | No |
+| 4 | **Growth** | 12.6% | revenue_growth, earnings_growth, earnings_quarterly_growth, earnings_surprise/revision | `calc_growth_score()` | No |
+| 5 | **Risk** | 8.7% | D/E (inverted), current_ratio, volatility (inv), beta (inv) | `calc_risk_score()` | Yes (volatility) |
+| 6 | **Size** | 4.85% | market_cap (log, inverted) | `calc_size_score()` | Yes (smaller=better) |
+| 7 | **Dividend** | 4.85% | dividend_yield (capped 15%), payout_ratio penalty | `calc_dividend_score()` | No |
+| 8 | **Sentiment** | 9.7% | sentiment_raw, insider_executive_buy (+20), insider_cluster (+30) | `calc_sentiment_score()` | No |
+| 9 | **Short interest** | 3% | short_pct_float / short_ratio (low=good, >20%=contrarian boost) | `calc_short_interest_score()` | Yes |
+| 10 | **Options flow** | 2% | options_flow_signal (put/call, 0.1–0.9) | `calc_options_flow_score()` | No |
 
-### 3.2 Scoring pipeline
+Vikter definieras i `config.FACTOR_WEIGHTS` (summa = 1.0, vaktas av test). FCF yield exponeras
+separat som `score_fcf_yield` men ingår i Value (ej egen composite-vikt).
+
+### 3.2 Scoring pipeline (sektor-relativ sedan 2026-06-01)
+
+Pipelinen körs i `sector_neutral`-läge som default (`config.SCORE_MODE`). Weekly använder
+`score_universe_sector_neutralized()`; morning/evening re-scorar via `score_universe()` (samma
+faktorberäkning, men neutralisering hoppas över tack vare idempotens-flaggor).
 
 ```
-score_universe(df, regime)        # Main entry point — core/scoring.py:709
+score_universe_sector_neutralized(df, regime)   # core/scoring.py — weekly default
   │
-  ├─ _region_neutralize_fundamentals(df)   # Subtrahera regionmedian
-  │                                         # P/E, ROE, margins adjusted per region
+  ├─ _region_neutralize_fundamentals(df)   # Subtrahera REGIONmedian (idempotent flagga)
+  ├─ sektor-demeaning per sector           # Subtrahera SEKTORmedian (idempotent flagga)
+  │                                         # → bank jämförs med banker, ej tech
   │                                         # Momentum INTENTIONALLY global
   │
-  ├─ calc_value_score(df)          → score_value      0-100
-  ├─ calc_quality_score(df)        → score_quality    0-100
-  ├─ calc_momentum_score(df)       → score_momentum   0-100
-  ├─ calc_growth_score(df)         → score_growth     0-100
-  ├─ calc_risk_score(df)           → score_risk       0-100
-  ├─ calc_size_score(df)           → score_size       0-100
-  ├─ calc_dividend_score(df)       → score_dividend   0-100
-  └─ calc_sentiment_score(df)      → score_sentiment  0-100 (incl insider boost)
+  ├─ calc_value/quality/momentum/growth/risk/size/dividend/sentiment_score
+  ├─ calc_short_interest_score / calc_options_flow_score
   │
-  ├─ get_dynamic_weights(regime, FACTOR_WEIGHTS)
-  ├─ Weighted average → score_total
+  ├─ get_dynamic_weights(regime, FACTOR_WEIGHTS)         # regimjustering
+  ├─ get_sector_weights(sector, w) per rad → composite   # PER-SEKTOR-vikter:
+  │     banker↑kvalitet/värde, tech↑tillväxt/momentum, utilities↑utdelning …
+  │     (config.SECTOR_FACTOR_WEIGHTS; guardad på "sector" i df)
   ├─ Holding discount (×0.85) / Commodity discount (×0.90)
-  ├─ rank column (1=best)
-  ├─ data_quality column (% filled)
-  └─ low_liquidity flag (daily turnover < $50k)
+  ├─ rank column (1=best) · data_quality · low_liquidity flag (<$50k/dag)
+  └─ idempotens-flaggor: _fundamentals_neutralized, _sector_neutralized
+       (förhindrar dubbel-neutralisering vid daglig re-scoring)
 ```
 
 ### 3.3 Region grouping
@@ -449,25 +456,32 @@ Fills: trailingPE, priceToBook, returnOnEquity, returnOnAssets, enterpriseValueT
 
 ## 7. ML Model — Detailed Reference
 
-### 7.1 Model architecture
+### 7.1 Model architecture (omarbetad 2026-06-01)
 
 - **Algorithm:** XGBoost regressor (fallback: sklearn HistGradientBoostingRegressor)
-- **Target:** 30-calendar-day forward return
-- **Features (15 technical, point-in-time safe):**
-  - `ret_1m, ret_3m, ret_6m, ret_12m` — past returns
-  - `rsi_14` — relative strength index
-  - `macd_signal` — 12/26/9 EMA crossover (bool)
-  - `vs_ma50, vs_ma200` — price vs moving averages
-  - `volume_ratio` — volume vs 20-day average
-  - `volatility` — annualized std dev of daily returns
-  - `bb_position` — Bollinger Band position (0-1)
-  - `price_vs_52w_high` — distance from 52-week high
-  - `momentum_3m_rank, momentum_6m_rank` — momentum percentile ranks
-  - `pct_from_52w_high` — percentage from 52w high
-- **Two models:** `ml_universe.pkl` (global) + `ml_smallcap.pkl` (Swedish small-caps)
-- **Training:** `train_with_cpcv()` — Combinatorial Purged Cross-Validation, 6 folds, purge=30 days, embargo=1%
-- **Metrics tracked:** IC (information coefficient), hit rate, MAE
-- **Fundamentals excluded:** Point-in-time reconstruction impossible without look-ahead bias
+- **Target:** `target_cs` = 30-dagars forward-return **demeanad PER DATUM** (tvärsnittlig).
+  Tar bort marknadsfaktorn → modellen lär sig RELATIV styrka, inte absolut avkastning.
+  Detta var den avgörande fixen (tidigare absolut return → IC ≈ 0 pga marknadsdominans).
+- **Features (26 tekniska, point-in-time-säkra)** — definieras i `TECH_FEATURES`:
+  - Bas (15): `ret_1m/3m/6m/12m`, `rsi_14`, `macd_hist`, `ma50_over_ma200`,
+    `price_over_ma50/ma200`, `volatility_30d`, `volume_ratio_20d`,
+    `dist_from_52w_high/low`, `bb_position`, `momentum_3_vs_12`
+  - Nya (11, tidigare trasiga — hjälpfunktioner saknades, fixat 2026-06-01):
+    `log_return_1m`, `volatility_skew_30d`, `hurst_exponent_60d`,
+    `serial_correlation_20d`, `volume_price_corr_20d`, `klinger_oscillator`,
+    `max_drawdown_60d`, `consecutive_down_days`, `rsi_divergence`,
+    `skewness_30d`, `kurtosis_30d`
+- **Modeller:** `ml_universe.pkl` (global) + `ml_smallcap.pkl` (svenska småbolag)
+  + **per-sektor** `ml_sector_<key>.pkl` (tech/financial/industrial/… via `train_sector_models`,
+  ≥2000 rader/sektor; små sektorer faller tillbaka till universe). Inference:
+  `predict_returns_sector()`.
+- **Training:** `train_with_cpcv()` — Combinatorial Purged CV, 6 folds, purge=30d, embargo=1%.
+  Aktiverad i `train_ml.py` (tidigare användes enkel tidssplit).
+- **Metrics:** `ic` = **per-datum-IC** (Spearman inom varje datum, medel) = headline-måttet;
+  `ic_pooled` = referens; hit_rate, MAE, DSR.
+- **Fundamentals exkluderade i backtest:** point-in-time-rekonstruktion omöjlig utan look-ahead.
+- **OBS:** kräver omträning via `train_ml.yml` för att de 11 features + tvärsnittlig target +
+  sektor-modeller ska slå igenom i de live-committade `.pkl`-filerna.
 
 ### 7.2 ML paper trading
 
@@ -742,7 +756,7 @@ All in `core/config.py` (~350 lines ticker lists + ~100 lines constants):
 
 | File | Tests | What it covers | CI |
 |---|---|---|---|
-| `tests/test_scoring.py` | **56 tests** | ALL 8 factor scores, helpers, region-neutralization, holding/commodity discounts, full pipeline | ✅ |
+| `tests/test_scoring.py` | **60 tests** | ALL factor scores, helpers, region/sektor-neutralization, sektor-vikter, idempotens, holding/commodity discounts, full pipeline | ✅ |
 | `tests/test_config.py` | 9 tests | Universe integrity, factor weights sum to 1.0, smallcap weights, API keys defined | ✅ |
 | `tests/test_data_fetcher.py` | 5 tests | RSI calculation (flat, gains, losses, too few, mixed) | ✅ |
 | `tests/test_filters.py` | 3 tests | Strike idempotency (same day), strike increment (new day), never_blacklist protection | ✅ |
@@ -750,7 +764,8 @@ All in `core/config.py` (~350 lines ticker lists + ~100 lines constants):
 | `tests/test_ml_paper_trading.py` | 5 tests | Signal recording, idempotency, summary, open positions, universe separation | ✅ |
 | `tests/test_ml_predictor.py` | 5 tests | Feature computation, short series, RSI neutral, trending, load/predict | ✅ |
 
-**Note:** scoring.py had ZERO tests before this document was created (56 tests were added).
+**Note:** scoring.py had ZERO tests before this document was created. Sviten är nu **99 tester**
+totalt (kör `pytest tests/`).
 
 ### 14.2 Test patterns
 
@@ -848,9 +863,9 @@ All ideas discovered during system analysis. Add to this section as you find mor
 
 | Idea | Summary | Impact | Files to change |
 |---|---|---|---|
-| **Score decay warning** | Warning in admin when last scored_universe is >48h old | Low | `web/pages/admin_page.py` |
+| ~~Score decay warning~~ | DONE ✅ — färskhetsbanner i sidebar + admin (>48h/>72h) | Low | `web/streamlit_app.py` |
 | **Better pipeline error messages** | Log WHICH tickers failed and why | Medium | `core/data_fetcher.py` |
-| **Per-ticker debug page** | Show WHY a stock got its score (factor breakdown) | High | New page in `web/pages/` |
+| ~~Per-ticker factor breakdown~~ | DONE ✅ — `_score_breakdown()` på aktie­detalj + i mail (`format_factor_attribution_md`) | High | `web/stock_detail.py` |
 | **CI log link in dashboard** | Link to GitHub Actions run from admin | Low | `core/daily_pipeline.py` |
 
 ### 17.2 Medium-term (week)
@@ -858,7 +873,7 @@ All ideas discovered during system analysis. Add to this section as you find mor
 | Idea | Summary | Impact | Prerequisite |
 |---|---|---|---|
 | **Unified data quality dashboard** | Show missing data per ticker, per factor, over time | High | — |
-| **Score change alerts** | Email/Push when a watched stock changes score by >10 | High | — |
+| ~~Score change alerts~~ | DONE ✅ — `send_score_drift_alerts()` mailar vid \|Δscore\|≥10 på bevakade | High | `core/pipeline_alerts.py` |
 | **Calendar-based event reminders** | Earnings + macro, auto-email N days ahead | High | — |
 ---
 
