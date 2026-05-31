@@ -279,6 +279,24 @@ def get_dynamic_weights(regime: str, base_weights: dict) -> dict:
     return {k: v / total for k, v in w.items()}
 
 
+def get_sector_weights(sector: str, base_weights: dict) -> dict:
+    """Justerar faktorvikter för en specifik sektor.
+
+    Lägger SECTOR_FACTOR_WEIGHTS-deltan ovanpå de (regimjusterade) basvikterna och
+    normaliserar om till summa 1.0. En bank viktar då kvalitet/värde högre och
+    tillväxt lägre; tech tvärtom. Sektorer utan profil får basvikterna oförändrade.
+    """
+    sector_deltas = getattr(config, "SECTOR_FACTOR_WEIGHTS", {})
+    delta = sector_deltas.get(sector)
+    if not delta:
+        return base_weights
+    w = base_weights.copy()
+    for k, dv in delta.items():
+        w[k] = max(0.0, w.get(k, 0.0) + dv)
+    total = sum(w.values())
+    return {k: v / total for k, v in w.items()} if total > 0 else base_weights
+
+
 def percentile_rank(series: pd.Series, ascending: bool = True) -> pd.Series:
     """
     Convert a series to percentile ranks (0-100).
@@ -733,18 +751,32 @@ def _apply_scores_and_discounts(df: pd.DataFrame, w: dict) -> pd.DataFrame:
     df["score_options_flow"]   = calc_options_flow_score(df)
 
     # ── Composite score ───────────────────────────────────────────────────────
-    df["score_total"] = (
-        w.get("value", 0)          * df["score_value"]          +
-        w.get("quality", 0)        * df["score_quality"]        +
-        w.get("momentum", 0)       * df["score_momentum"]       +
-        w.get("growth", 0)         * df["score_growth"]         +
-        w.get("risk", 0)           * df["score_risk"]           +
-        w.get("size", 0)           * df["score_size"]           +
-        w.get("dividend", 0)       * df["score_dividend"]       +
-        w.get("sentiment", 0)      * df["score_sentiment"]      +
-        w.get("short_interest", 0) * df["score_short_interest"] +
-        w.get("options_flow", 0)   * df["score_options_flow"]
-    )
+    _factor_map = {
+        "value": "score_value", "quality": "score_quality", "momentum": "score_momentum",
+        "growth": "score_growth", "risk": "score_risk", "size": "score_size",
+        "dividend": "score_dividend", "sentiment": "score_sentiment",
+        "short_interest": "score_short_interest", "options_flow": "score_options_flow",
+    }
+
+    def _composite(weights: dict) -> pd.Series:
+        s = pd.Series(0.0, index=df.index)
+        for wkey, scol in _factor_map.items():
+            s = s + weights.get(wkey, 0) * df[scol]
+        return s
+
+    sector_profiles = getattr(config, "SECTOR_FACTOR_WEIGHTS", {})
+    if "sector" in df.columns and sector_profiles:
+        # Per-sektor-vikter: banker viktar kvalitet/värde, tech tillväxt/momentum osv.
+        score_total = pd.Series(0.0, index=df.index)
+        for sector_name, idx in df.groupby(df["sector"].fillna("Unknown")).groups.items():
+            sw = get_sector_weights(sector_name, w)
+            sub = pd.Series(0.0, index=idx)
+            for wkey, scol in _factor_map.items():
+                sub = sub + sw.get(wkey, 0) * df.loc[idx, scol]
+            score_total.loc[idx] = sub
+        df["score_total"] = score_total
+    else:
+        df["score_total"] = _composite(w)
 
     # ── Holdingbolag & råvarubolag: score-rabatt ──────────────────────────────
     if "industry" in df.columns:
@@ -776,7 +808,7 @@ def _apply_scores_and_discounts(df: pd.DataFrame, w: dict) -> pd.DataFrame:
     return df
 
 
-def score_universe_sector_neutralized(df: pd.DataFrame) -> pd.DataFrame:
+def score_universe_sector_neutralized(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     """
     Calculate factor scores with BOTH region- and sector-neutralization.
 
@@ -811,7 +843,8 @@ def score_universe_sector_neutralized(df: pd.DataFrame) -> pd.DataFrame:
             df[col] = df[col] - sector_median
 
     # ── Steg 3: Faktorscore + rabatter + rank ─────────────────────────────────
-    w = get_dynamic_weights("OSÄKER", config.FACTOR_WEIGHTS)
+    # Respektera marknadsregimen (tidigare hårdkodat "OSÄKER" → ignorerade TJUR/BJÖRN).
+    w = get_dynamic_weights(regime, config.FACTOR_WEIGHTS)
     df = _apply_scores_and_discounts(df, w)
 
     # ── Steg 4: Likviditetsflagg ──────────────────────────────────────────────

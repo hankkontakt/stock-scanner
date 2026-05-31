@@ -581,3 +581,48 @@ class TestHoldingCommodityDiscount:
         assert result["company_type"].iloc[0] == "holding"
         assert result["company_type"].iloc[1] == "commodity"
         assert result["company_type"].iloc[2] == "standard"
+
+
+class TestSectorRelativeScoring:
+    """Testar sektor-relativ scoring: per-sektor-vikter + sektor-neutralisering."""
+
+    def test_get_sector_weights_adjusts_financials(self):
+        """Banker ska vikta kvalitet/värde högre och tillväxt lägre än default."""
+        from core import config
+        base = config.FACTOR_WEIGHTS
+        bank_w = sc.get_sector_weights("Financial Services", base)
+        assert bank_w["quality"] > base["quality"]
+        assert bank_w["growth"] < base["growth"]
+        assert abs(sum(bank_w.values()) - 1.0) < 1e-6  # normaliserad
+
+    def test_get_sector_weights_unknown_sector_unchanged(self):
+        """Okänd sektor → basvikterna oförändrade."""
+        from core import config
+        base = config.FACTOR_WEIGHTS
+        assert sc.get_sector_weights("Nonexistent Sector", base) == base
+
+    def test_sector_neutralized_does_not_punish_bank_leverage(self):
+        """Banker ska inte kollektivt straffas för normal (hög) hävstång."""
+        rows = []
+        for i in range(4):
+            rows.append(dict(ticker=f"BANK{i}", sector="Financial Services",
+                industry="Banks", pe_trailing=10 + i, price_to_book=1.0,
+                debt_to_equity=3.0, roe=0.13, return_12m=0.1, return_6m=0.05,
+                return_3m=0.02, current_ratio=1.2, volatility=0.18, beta=0.9,
+                market_cap=1e10, current_price=100, avg_volume_10d=1e6,
+                sentiment_raw=0.1, revenue_growth=0.03, earnings_growth=0.04,
+                dividend_yield=0.04, profit_margin=0.2))
+        for i in range(4):
+            rows.append(dict(ticker=f"TECH{i}", sector="Technology",
+                industry="Software", pe_trailing=35 + i, price_to_book=6.0,
+                debt_to_equity=0.2, roe=0.18, return_12m=0.4, return_6m=0.2,
+                return_3m=0.1, current_ratio=2.5, volatility=0.4, beta=1.5,
+                market_cap=5e10, current_price=200, avg_volume_10d=5e6,
+                sentiment_raw=0.3, revenue_growth=0.3, earnings_growth=0.3,
+                dividend_yield=0.0, profit_margin=0.25))
+        df = pd.DataFrame(rows)
+        out = sc.score_universe_sector_neutralized(df, regime="OSÄKER")
+        bank_risk = out[out.sector == "Financial Services"]["score_risk"].mean()
+        # Bankerna har låg volatilitet/beta och sektor-normal skuld → risk-score ej kollektivt låg
+        assert bank_risk > 40, f"Banker straffas fortfarande för hävstång (risk={bank_risk:.0f})"
+        assert out["score_total"].between(0, 100).all()

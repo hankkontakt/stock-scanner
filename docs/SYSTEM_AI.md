@@ -866,6 +866,26 @@ All ideas discovered during system analysis. Add to this section as you find mor
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-01 — Sektor-relativ scoring (icke-ML-motorn anpassar sig efter bransch)
+
+Problem: `score_universe()` rankade fundamentals GLOBALT → en banks lågt P/E rankades mot
+tech, varje bank straffades för (sektor-normal) hög skuld, value-faktorn blev en ren
+sektor-vadslagning. Den sektor-neutrala varianten fanns men var vilande (`SCORE_MODE` odefinierad)
+och hade hårdkodad regim.
+
+- ✅ **`SCORE_MODE = "sector_neutral"`** satt som default i `core/config.py` → pipelinen kör nu
+  sektor-relativ scoring (region- + sektor-demeaning av fundamentals).
+- ✅ **`SECTOR_FACTOR_WEIGHTS`** (config.py): per-sektor viktdeltan. Banker viktar kvalitet/värde,
+  tech tillväxt/momentum, utilities/fastighet utdelning/stabilitet, energi/material value (cyklisk).
+- ✅ **`get_sector_weights()`** + per-sektor composite i `_apply_scores_and_discounts`
+  (`core/scoring.py`): varje akties score_total beräknas med sektorns egna vikter. Guardad på
+  `"sector" in df.columns` → påverkar inte tester/data utan sektor.
+- ✅ **Regim-bugg fixad:** `score_universe_sector_neutralized(df, regime=...)` respekterar nu
+  TJUR/BJÖRN (tidigare hårdkodat "OSÄKER"). `daily_pipeline` skickar regimen.
+- Verifierat: banker straffas inte längre kollektivt för hävstång (risk-score 73 vs tech 40 i
+  test). 3 nya tester i `tests/test_scoring.py`. Speglar logiken bakom per-sektor-ML-modellerna
+  men för den transparenta regelbaserade motorn.
+
 ### 2026-06-01 — Sista batch-punkterna: A/B-vikter, score-rörelser, historisk replay
 
 - ✅ **P1.2 A/B-test av faktorvikter** (`backtesting/backtest_snapshots.py`):

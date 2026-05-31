@@ -996,8 +996,8 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             if use_sector_neutral:
                 try:
                     from core.scoring import score_universe_sector_neutralized
-                    scored = score_universe_sector_neutralized(raw_df)
-                    logger.info(f"  ✅ Scorat {len(scored)} tickers (sektorneutralt)")
+                    scored = score_universe_sector_neutralized(raw_df, regime=regime)
+                    logger.info(f"  ✅ Scorat {len(scored)} tickers (sektorneutralt, regim={regime})")
                 except Exception as _sne:
                     logger.warning(f"  ⚠ Sektorneutral scoring misslyckades: {_sne} – fallback till absolut")
                     scored = score_universe(raw_df, regime=regime)
