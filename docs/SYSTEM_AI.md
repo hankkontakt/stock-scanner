@@ -866,6 +866,40 @@ All ideas discovered during system analysis. Add to this section as you find mor
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-01 — Per-sektor ML-modeller (handel, banker, industri, …)
+
+Sektor-*inferensen* fanns redan (`predict_returns_sector` med fallback) men sektor-modellerna
+tränades aldrig och datasetet saknade `sector`-kolumn → all prediktion föll tillbaka på
+universe-modellen. Nu tränas en egen modell per sektor:
+
+- ✅ **`build_ml_dataset.py`**: `_build_sector_map()` bygger ticker→sektor från senaste
+  `scored_universe_*.csv` (inga extra yfinance-anrop); varje träningsrad taggas med `sector`.
+- ✅ **`ml_predictor.train_sector_models(parquet)`**: tränar en modell per sektor i
+  `SECTOR_MODELS` med ≥ `MIN_SECTOR_ROWS` (2000) rader, sparar `ml_sector_<key>.pkl` +
+  metrics. Använder samma tvärsnittliga target + CPCV (demeaning sker då inom sektor-datum =
+  "relativ styrka inom sektorn"). `train_with_cpcv` tar nu valfri `df`-param.
+- ✅ **`train_ml.py --sectors`** + **`train_ml.yml`** kör sektor-träning efter universe-modellen.
+- Sektorer i `SMALL_SECTORS` (Real Estate/Utilities/Energy) eller med för få rader använder
+  universe-modellen som fallback (oförändrat). Syntetiskt test: 2 sektorer med distinkt signal
+  → IC 0.65 var.
+- **Nästa steg (CI):** kör `train_ml.yml` (dispatch) för att bygga dataset med sektor-kolumn +
+  träna sektor-modellerna. predict_returns_sector plockar automatiskt upp dem.
+
+### 2026-06-01 — Övriga batch-fixar (BL, auto-flagga, drift-larm, mail-attribution)
+
+- ✅ **P0.2 BL-fix** (`web/pages/portfolio.py`): Korrelation & Rebalans-fliken kraschade —
+  `black_litterman_weights` anropades med fel argument + lästa kolumner fanns inte. Nu korrekt
+  anrop + nuvarande-vs-föreslagna vikter beräknade från holdings.
+- ✅ **P1.3 Auto-flagga delistade** (`core/config.py` + `daily_pipeline.py`): blacklistade
+  tickers exkluderas vid universe-load; `update_ticker_health()` wirad efter fetch → 3 strikes
+  → auto-blacklist.
+- ✅ **P1.4 Score-drift-larm** (`core/pipeline_alerts.py`): `send_score_drift_alerts()` jämför
+  två senaste snapshots, larmar vid |Δscore| ≥ 10 på bevakade/innehavda aktier. State-fil
+  `data/score_drift_state.json`. Wirad i daily_pipeline efter snapshot.
+- ✅ **P1.1 Faktor-attribution i mail** (`core/pipeline_report.py`):
+  `format_factor_attribution_md()` visar per-faktor-breakdown under varje topp-10-pick i
+  veckomailet.
+
 ### 2026-06-01 — ML-modellen omarbetad (near-zero IC → tvärsnittlig signal)
 
 **Diagnos:** Universe-modellens IC var 0.0023 (≈ noll), hit-rate ~50%. Grundorsak:

@@ -86,9 +86,9 @@ jobs:
             python -m scripts.build_ml_dataset --universe smallcap --years ${{ github.event.inputs.years || '5' }} $FLAGS
           fi
 
-      - name: 🏋️  Träna modell (universum)
+      - name: 🏋️  Träna modell (universum + per-sektor)
         if: ${{ github.event.inputs.universe == 'universe' || github.event.inputs.universe == 'both' || github.event_name == 'schedule' }}
-        run: python -m scripts.train_ml --universe universe
+        run: python -m scripts.train_ml --universe universe --sectors
 
       - name: 🏋️  Träna modell (smallcap)
         if: ${{ github.event.inputs.universe == 'smallcap' || github.event.inputs.universe == 'both' || github.event_name == 'schedule' }}

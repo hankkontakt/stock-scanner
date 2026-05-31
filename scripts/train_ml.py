@@ -28,6 +28,7 @@ from core.ml_predictor import (  # noqa: E402
     save_model,
     train_from_dataset,
     train_with_cpcv,
+    train_sector_models,
 )
 
 logger = logging.getLogger(__name__)
@@ -75,10 +76,19 @@ def main():
     ap.add_argument("--universe", choices=["universe", "smallcap"], required=True)
     ap.add_argument("--parquet", type=Path, default=None,
                     help="Sökväg till träningsdata (default: data/ml/<universe>_training.parquet)")
+    ap.add_argument("--sectors", action="store_true",
+                    help="Träna även per-sektor-modeller (handel, banker, industri, …)")
     args = ap.parse_args()
 
     metrics = train(args.universe, args.parquet)
     print(json.dumps(metrics, indent=2))
+
+    # Per-sektor-modeller (bara meningsfullt för det stora universumet)
+    if args.sectors and args.universe == "universe":
+        parquet = args.parquet or (ROOT / "data" / "ml" / f"{args.universe}_training.parquet")
+        logger.info("🏭 Tränar per-sektor-modeller...")
+        sector_metrics = train_sector_models(parquet)
+        print(json.dumps({"sector_models": sector_metrics}, indent=2))
 
 
 if __name__ == "__main__":
