@@ -31,7 +31,7 @@ import pandas as pd
 import yfinance as yf
 
 TICKER_MAP_FILE = Path("data/ticker_map.json")
-HOLDINGS_FILE   = Path("holdings.csv")
+HOLDINGS_FILE   = Path("data/holdings.csv")
 
 # ── Inbyggd mappning (de vanligaste svenska + nordiska aktierna) ──────────────
 BUILTIN_MAP = {

@@ -1,65 +1,35 @@
 # Manuella kommandon – Stock Scanner
 
 Alla Python-kommandon för att köra systemet manuellt.
-Kör från projektets rotmapp: `D:\Trader\stock-scanner\`
+Kör från projektets rotmapp.
 
 ---
 
-## Dagliga skanningar
+## Pipeline-körningar (via daily_pipeline)
 
-### Morgonkoll (dagsbrev)
 ```bash
-# Standard – skickar alltid e-post
-python scans/morning_scan.py
+# Morgonbrief
+python -c "from core.daily_pipeline import run_pipeline; run_pipeline('morning')"
 
-# Utan e-post (bara utskrift i terminalen)
-python scans/morning_scan.py --no-email
+# Kvällsrapport
+python -c "from core.daily_pipeline import run_pipeline; run_pipeline('evening')"
 
-# Tyst (minimalt output)
-python scans/morning_scan.py --quiet
-```
+# Veckoscan (full universum)
+python -c "from core.daily_pipeline import run_pipeline; run_pipeline('weekly')"
 
-### Kvällsrapport (portföljstatus + hold/sälj)
-```bash
-# Standard
-python scans/evening_scan.py
+# Småbolagsscan
+python -c "from core.daily_pipeline import run_pipeline; run_pipeline('smallcap')"
 
-# Utan e-post
-python scans/evening_scan.py --no-email
+# Targeted refresh (specifika tickers)
+python -c "from core.daily_pipeline import run_pipeline; run_pipeline('targeted')"
 
-# Tyst
-python scans/evening_scan.py --quiet
+# Refresh missing data
+python -c "from core.daily_pipeline import run_pipeline; run_pipeline('refresh_missing')"
 ```
 
 ---
 
-## Veckoskanning (söndagsrapport)
-
-```bash
-# Full scan – hela universumet
-python scans/scan.py
-
-# Bara specifika tickers
-python scans/scan.py --tickers "AAPL,MSFT,NVDA"
-
-# Snabb körning (hoppar över extra data)
-python scans/scan.py --quick
-
-# Tyst
-python scans/scan.py --quiet
-```
-
----
-
-## Möjlighetsscan
-
-```bash
-python scans/opportunity_scan.py
-```
-
----
-
-## Småbolagsskanner (svenska small caps)
+## Småbolagsskanner (direkt)
 
 ```bash
 # Hela universumet (First North + Small Cap + Spotlight)
@@ -96,22 +66,14 @@ python -m smallcap.scanner --market first_north --top 15 --output reports/ --ema
 
 ---
 
-## Webbgränssnitt (portföljhantering)
-
-```bash
-# Starta webbservern (öppnar på http://localhost:5001)
-python web/app.py
-```
-
-Funktioner: innehav, bevakningslista, Avanza CSV-import, GitHub-synk.
-
----
-
-## Streamlit Dashboard
+## Webbgränssnitt
 
 ```bash
 # Starta Streamlit-dashboarden
-streamlit run web/streamlit_app.py
+streamlit run streamlit_app.py
+
+# Starta Flask-servern (portföljhantering, port 5001)
+python web/app.py
 ```
 
 ---
@@ -158,7 +120,7 @@ python portfolio/positions.py sync
 
 ---
 
-## Paper Trading (simulera systemet)
+## Paper Trading
 
 ```bash
 # Visa aktuell status och track record
@@ -178,7 +140,6 @@ python portfolio/paper_trading.py report
 
 ## Backtest & Optimering
 
-### Enkel backtest
 ```bash
 # Standard (3 år, top-20, jämfört mot SPY)
 python backtesting/backtest.py
@@ -186,23 +147,15 @@ python backtesting/backtest.py
 # Anpassa
 python backtesting/backtest.py --years 5
 python backtesting/backtest.py --years 5 --top 15 --bench QQQ
-```
 
-### Walk-forward backtest (mer tillförlitlig)
-```bash
-# Standard (4 år totalt, 2 träning + 1 test)
+### Walk-forward backtest
 python backtesting/walk_forward.py
 
 # Anpassa
 python backtesting/walk_forward.py --years 5 --train 2 --test 6
-python backtesting/walk_forward.py --years 6 --top 15 --bench ^OMX
-```
 
-### Faktoroptimering (hitta bästa vikter)
-```bash
-# Kör optimering – visa resultat utan att ändra
+### Faktoroptimering
 python backtesting/factor_optimizer.py
-python backtesting/factor_optimizer.py --trials 500 --tickers 80
 
 # Applicera bästa vikter till config.py
 python backtesting/factor_optimizer.py --apply
@@ -225,18 +178,27 @@ python -m tools.ticker_health --blacklist
 
 ---
 
+## ML-träning
+
+```bash
+# Bygg dataset och träna manuellt
+python -m scripts.build_ml_dataset --universe universe --years 5
+python -m scripts.train_ml --universe universe
+```
+
+---
+
 ## Snabbguide – vanligaste användningen
 
 | Vad | Kommando |
 |---|---|
-| Morgonkoll | `python scans/morning_scan.py` |
-| Kvällsrapport | `python scans/evening_scan.py` |
-| Söndagsskanning | `python scans/scan.py` |
-| Möjlighetsscan | `python scans/opportunity_scan.py` |
+| Morgonbrief | `python -c "from core.daily_pipeline import run_pipeline; run_pipeline('morning')"` |
+| Kvällsrapport | `python -c "from core.daily_pipeline import run_pipeline; run_pipeline('evening')"` |
+| Söndagsscanning | `python -c "from core.daily_pipeline import run_pipeline; run_pipeline('weekly')"` |
 | Småbolag (snabb) | `python -m smallcap.scanner --no-insider` |
 | Småbolag (full) | `python -m smallcap.scanner --email` |
+| Streamlit | `streamlit run streamlit_app.py` |
 | Portföljwebb | `python web/app.py` |
-| Streamlit | `streamlit run web/streamlit_app.py` |
 | Avanza-import | `python data_management/avanza_import.py import fil.csv` |
 | Ticker-hälsa | `python -m tools.ticker_health` |
 | Backtest | `python backtesting/backtest.py --years 3` |
