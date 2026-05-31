@@ -848,7 +848,6 @@ All ideas discovered during system analysis. Add to this section as you find mor
 
 | Idea | Summary | Impact | Files to change |
 |---|---|---|---|
-| **Add scoring integration test** | DONE ✅ — 56 tests added | ✅ | `tests/test_scoring.py` |
 | **Score decay warning** | Warning in admin when last scored_universe is >48h old | Low | `web/pages/admin_page.py` |
 | **Better pipeline error messages** | Log WHICH tickers failed and why | Medium | `core/data_fetcher.py` |
 | **Per-ticker debug page** | Show WHY a stock got its score (factor breakdown) | High | New page in `web/pages/` |
@@ -858,42 +857,16 @@ All ideas discovered during system analysis. Add to this section as you find mor
 
 | Idea | Summary | Impact | Prerequisite |
 |---|---|---|---|
-| **Extract scoring from daily_pipeline** | Break out the 10+ scoring+filter+ml steps into a `run_scoring()` function | Medium | — |
 | **Unified data quality dashboard** | Show missing data per ticker, per factor, over time | High | — |
-| **Config-driven factor weights** | Move from hard-coded dict to JSON file | Low | — |
-| **Auto-null-handling in all scores** | `calc_value_score()` crashes on missing `price_to_sales` | Medium | — |
-| **Refactor admin_page.py** | Split 159KB into separate files per tab | Medium | — |
 | **Score change alerts** | Email/Push when a watched stock changes score by >10 | High | — |
-
-### 17.3 Larger projects (month+)
-
-| Idea | Summary | Impact | Prerequisite |
-|---|---|---|---|
-| **SQLite migration** | Replace JSON/CSV files with SQLite | High | Keep git-commit via CSV export |
-| **ML feedback loop** | Use paper trading results to retrain models | Very High | Requires sufficient trade history |
-| **Periodic rebalance in paper trading** | Instead of weekly top-N, rebalance dynamically | Medium | Paper trading v3 |
-| **Event-driven news alerts** | Webhook-based instead of polling every 30 min | Medium | Needs paid Finnhub plan |
-| **Börsdata API integration** | Better Nordic data quality | High | Cost: ~599 SEK/mo |
-| **Sector-rotation trading** | Go long top-3 sectors, short bottom-2 | High | Requires options/CFD broker |
-
-### 17.4 Architecture improvements
-
-| Idea | Summary | Why |
-|---|---|---|
-| **Unified factor score interface** | Factor scores as independent callable units | Simplifies testing, enables A/B comparison of scoring methods |
-| **Scoring pipeline as DAG** | Directed acyclic graph of scoring steps | Visualize dependencies, parallelize independent factors |
-| **Pluggable data sources** | Abstract data fetching behind interface | Swap yfinance for Börsdata/EODHD without rewriting |
-| **Event bus** | pub/sub for pipeline events (fetch_done, score_ready, etc.) | Decouple pipeline steps, add custom hooks without modifying core |
-| **Versioned universe** | Track which tickers were in universe at each snapshot | Enable point-in-time correct backtesting |
-| **API-first architecture** | REST API for all functionality | Enable CLI, web, mobile, scheduled tasks through same interface |
-
+| **Calendar-based event reminders** | Earnings + macro, auto-email N days ahead | High | — |
 ---
 
-## 18. Ändringslogg (uppdateras av varje AI vid varje ändring)
+## 18. Andringslogg (uppdateras av varje AI vid varje andring)
 
-> Lägg nyaste överst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
+> Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
-### 2026-06-01 — Förbättringsplan Fas 1–3 (quick wins + analysmotor + hemsida/UX)
+### 2026-06-01 — Batch 2: Kreditspread, options flow, ML-features, HRP, per-sector ML
 
 **Fas 1 — Quick wins:**
 - ✅ **Short interest som ny scoring-faktor (vikt 3%)** — `calc_short_interest_score()` i
