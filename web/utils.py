@@ -150,14 +150,16 @@ def load_watchlist(data_dir: Path | None = None) -> list:
         return []
 
 
-@st.cache_data(ttl=300)
-
 # ══════════════════════════════════════════════════════════════════════════════
 # HJÄLPFUNKTIONER
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _get(df: pd.DataFrame, col: str, default=None) -> pd.Series:
-    return df[col] if col in df.columns else pd.Series([default] * len(df))
+    # OBS: ingen @st.cache_data här – en felplacerad dekorator cachade tidigare
+    # denna kolumn-accessor, vilket gav fel index/innehåll vid återanvändning.
+    if col in df.columns:
+        return df[col]
+    return pd.Series([default] * len(df), index=df.index)
 
 
 

@@ -31,8 +31,10 @@ def convert_prices_to_sek(prices_df: pd.DataFrame) -> pd.DataFrame:
         fx_data = fx_data.to_frame(name=fx_tickers[0])
 
     # 3. Synka datumen (valutamarknaden har ibland andra helgdagar än börsen)
-    # Fyll i saknade värden med föregående dags kurs
-    fx_data = fx_data.reindex(prices_df.index).ffill().bfill()
+    # Fyll i saknade värden med föregående dags kurs — men BEGRÄNSAT till 5 dagar.
+    # Obegränsad ffill().bfill() propagerade tidigare gamla kurser över långa
+    # luckor och gav FX-priser som var 100x för stora (känd bugg, se CLAUDE.md).
+    fx_data = fx_data.reindex(prices_df.index).ffill(limit=5).bfill(limit=5)
     
     converted_prices = prices_df.copy()
     

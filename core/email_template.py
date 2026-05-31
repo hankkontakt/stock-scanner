@@ -645,7 +645,13 @@ def send_email(
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
     msg["From"]    = f"{from_name} <{sender}>"
-    msg["To"]      = ", ".join(recipients)
+    # Integritet: vid flera mottagare exponera INTE allas adresser i To-headern.
+    # Den faktiska leveransen styrs av envelope-argumentet i server.sendmail()
+    # nedan, så vi kan sätta To till avsändaren och BCC:a alla i praktiken.
+    if len(recipients) == 1:
+        msg["To"] = recipients[0]
+    else:
+        msg["To"] = sender
     
     # List-Unsubscribe header – minskar spam-risk och krävs av många email-klienter
     if unsubscribe_url:

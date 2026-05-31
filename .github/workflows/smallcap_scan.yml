@@ -65,9 +65,14 @@ jobs:
       - name: 🚀 Kör småbolagsskanner
         env:
           PYTHONWARNINGS: "ignore"
-          EMAIL_USER:     ${{ secrets.EMAIL_SENDER }}
-          EMAIL_PASS:     ${{ secrets.EMAIL_PASSWORD }}
-          EMAIL_TO:       ${{ secrets.EMAIL_TO }}
+          # OBS: koden läser EMAIL_SENDER/EMAIL_PASSWORD (se core/email_template._get_email_config).
+          # Tidigare hette dessa EMAIL_USER/EMAIL_PASS → mailet skickades aldrig.
+          EMAIL_SENDER:     ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:   ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO:         ${{ secrets.EMAIL_TO }}
+          FINNHUB_API_KEY:  ${{ secrets.FINNHUB_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
         run: |
           MARKET="${{ github.event.inputs.market || 'all' }}"
           TOP="${{ github.event.inputs.top_n || '20' }}"
