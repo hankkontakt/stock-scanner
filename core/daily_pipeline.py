@@ -903,6 +903,14 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
 
             csv_path = REPORT_DIR / f"scored_universe_{date_str}"
             _save_scored(scored, csv_path)
+
+            # Spara tunn backtest-snapshot (point-in-time-korrekt historik)
+            try:
+                from backtesting.backtest_snapshots import save_snapshot
+                if save_snapshot(scored, date_str):
+                    logger.info(f"  📸 Backtest-snapshot sparad: {date_str}")
+            except Exception as _sne:
+                logger.debug(f"  ℹ Snapshot ej sparad: {_sne}")
         else:
             logger.warning("  ⚠ Universe fetch returnerade tom DataFrame – laddar senaste cache")
             scored = _load_latest_scored("scored_universe_*.parquet")
