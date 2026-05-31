@@ -566,6 +566,271 @@ def _render_alarms_tab():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# FELSÖKNINGSFLIK
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _render_debug_tab():
+    """Diagnostik-flik under Admin – pipeline-status, felhistorik, data coverage."""
+    st.subheader("🔍 Systemdiagnostik")
+    st.caption("Här ser du status på pipeline-körningar, felhistorik och datakvalitet.")
+
+    scan_log = _load_scan_log()
+    blacklist_path = DATA_DIR / "blacklist.json"
+    strike_path = DATA_DIR / "strike_list.json"
+
+    # ── 1. Pipeline-statuskort ────────────────────────────────────────────────
+    st.markdown("### 📊 Pipeline-status")
+
+    if scan_log:
+        last = scan_log[-1]
+        last_status = last.get("status", "?")
+        icon = "✅" if last_status == "OK" else "❌" if last_status == "ERROR" else "⚠️"
+        last_type = last.get("scan_type", "?")
+        last_time = last.get("timestamp", "?")[:16].replace("T", " ")
+        last_detail = last.get("details", {})
+        last_elapsed = last_detail.get("elapsed_seconds", "—")
+        last_n = last_detail.get("n_scored", last_detail.get("n_tickers", "—"))
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Senaste körning", f"{icon} {last_type}", last_time)
+        c2.metric("Status", last_status)
+        c3.metric("Tickers", str(last_n))
+        c4.metric("Körtid", f"{last_elapsed}s" if isinstance(last_elapsed, (int, float)) else "—")
+
+        # Felhistorik (senaste 10)
+        errors = [e for e in reversed(scan_log) if e.get("status") == "ERROR"][:10]
+        if errors:
+            st.markdown("#### ❌ Senaste pipeline-fel")
+            rows = []
+            for e in errors:
+                ts = e.get("timestamp", "?")[:16].replace("T", " ")
+                typ = e.get("scan_type", "?")
+                err = e.get("error", "")
+                remedy = e.get("remediation", "")
+                # Korta ner fel till 120 tecken
+                short_err = err[:120] + "..." if len(err) > 120 else err
+                rows.append({"Tid": ts, "Typ": typ, "Fel": short_err, "Åtgärd": remedy})
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+        # Senaste 5 OK-körningar
+        ok_runs = [e for e in reversed(scan_log) if e.get("status") == "OK"][:5]
+        if ok_runs:
+            st.markdown("#### ✅ Senaste OK-körningar")
+            rows = []
+            for e in ok_runs:
+                d = e.get("details", {})
+                rows.append({
+                    "Tid": e.get("timestamp", "?")[:16].replace("T", " "),
+                    "Typ": e.get("scan_type", "?"),
+                    "Tickers": d.get("n_scored", d.get("n_tickers", "—")),
+                    "Portfölj": d.get("n_holdings", "—"),
+                    "Körtid": f"{d.get('elapsed_seconds', '—')}s",
+                })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("Ingen pipeline-logg hittades ännu. Första körningen skapar den automatiskt.")
+
+    # ── 2. Blacklist ──────────────────────────────────────────────────────────
+    st.markdown("---")
+    col_bl, col_st = st.columns(2)
+    with col_bl:
+        st.markdown("### 🚫 Blacklist")
+        try:
+            bl = json.loads(blacklist_path.read_text(encoding="utf-8")) if blacklist_path.exists() else {}
+            if bl:
+                bl_rows = []
+                for ticker, info in bl.items():
+                    bl_rows.append({
+                        "Ticker": ticker,
+                        "Anledning": info.get("reason", "?"),
+                        "Datum": info.get("date", "?"),
+                    })
+                st.dataframe(pd.DataFrame(bl_rows), use_container_width=True, hide_index=True)
+                st.caption(f"{len(bl)} tickers blacklistade")
+            else:
+                st.info("Blacklist är tom.")
+        except Exception as e:
+            st.warning(f"Kunde inte läsa blacklist: {e}")
+
+    with col_st:
+        st.markdown("### ⚠️ Strikes (varningar)")
+        try:
+            sl = json.loads(strike_path.read_text(encoding="utf-8")) if strike_path.exists() else {}
+            if sl:
+                sl_rows = []
+                for ticker, info in sl.items():
+                    sl_rows.append({
+                        "Ticker": ticker,
+                        "Strikes": info.get("count", 0),
+                        "Senast": info.get("date", "?"),
+                    })
+                st.dataframe(pd.DataFrame(sl_rows), use_container_width=True, hide_index=True)
+                st.caption(f"{len(sl)} tickers med strikes")
+            else:
+                st.info("Strike-listan är tom — inga tickers på väg mot blacklist.")
+        except Exception as e:
+            st.warning(f"Kunde inte läsa strike_list: {e}")
+
+    # ── 3. API-nycklar ────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 🔑 API-nycklar")
+    _check_api_key("DEEPSEEK_API_KEY", "DeepSeek", core_required=True)
+    _check_api_key("GEMINI_API_KEY", "Gemini (fallback)")
+    _check_api_key("FMP_API_KEY", "FMP (earnings)")
+    _check_api_key("FINNHUB_API_KEY", "Finnhub (sentiment)")
+    _check_api_key("EMAIL_SENDER", "E-post (avsändare)")
+    _check_api_key("EMAIL_PASSWORD", "E-post (lösenord)")
+    _check_api_key("EMAIL_TO", "E-post (mottagare)")
+    _check_api_key("GITHUB_TOKEN", "GitHub (synk)")
+
+    # ── 4. Data coverage ──────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 📋 Datatäckning (senaste scored_universe)")
+    _render_data_coverage()
+
+    # ── 5. Vanliga fel och lösningar ──────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### ❓ Vanliga fel & felsökning")
+    with st.expander("❌ Pipeline misslyckades med 'ModuleNotFoundError'"):
+        st.markdown("""
+**Orsak:** En dependency saknas i `requirements.txt` eller pip-installationen misslyckades.
+
+**Lösning:** Kolla GitHub Actions-loggen — vilket modul saknas? Lägg till i `requirements.txt` och pusha.
+Om det är `curl_cffi` eller `mistune` — kör `pip install -r requirements.txt` lokalt först för att verifiera att pip hittar paketet.
+        """)
+    with st.expander("❌ Pipeline timeout (30 min)"):
+        st.markdown("""
+**Orsak:** yfinance hänger på en eller flera tickers. Kör `targeted`-läge eller `refresh_missing` för att
+reparera specifika tickers utan att göra en full scan.
+
+**Lösning:** Identifiera problemtickers via GitHub Actions-loggen. Användワークフロー `workflow_dispatch` → `targeted` för att bara uppdatera dem.
+        """)
+    with st.expander("❌ 'ValueError: If using all scalar values'"):
+        st.markdown("""
+**Orsak:** `dict` → `DataFrame` med skalärvärden. Använd `pd.concat(list, axis=1)` istället för `pd.DataFrame(dict)`.
+
+**Var:** Se `web/streamlit_app.py:1817` för guard.
+        """)
+    with st.expander("❌ Streamlit Cloud kraschar efter deploy"):
+        st.markdown("""
+**Orsak:** Oftast en import som inte finns i Streamlit Cloud-miljön, eller en fil som inte commitats.
+
+**Lösning:** Kolla Streamlit Cloud → Manage app → Logs. Vanligaste:
+- `ModuleNotFoundError` — saknat paket i `requirements.txt`
+- `FileNotFoundError` — fil som inte commitats (kolla `.gitignore`)
+- `st.secrets` saknas — lägg till i Streamlit Cloud → Settings → Secrets
+        """)
+    with st.expander("❌ 'KeyError: ev_to_ebitda' eller 'KeyError: price_to_sales'"):
+        st.markdown("""
+**Orsak:** `calc_value_score()` förutsätter att vissa kolumner finns i datan. Detta är normalt — pipelinen
+tillhandahåller alltid full data via yfinance. Om felet uppstår är det troligen i en testmiljö eller
+om `fetch_universe_data` returnerade ofullständig data för just den tickern.
+
+**Lösning:** Kör `targeted`-läge för den tickern, eller kolla om tickern är delisted.
+        """)
+    with st.expander("❌ Streamlit Cloud sleepar — data försvinner"):
+        st.markdown("""
+**Orsak:** Streamlit Cloud lägger appen i sleep efter ~30 minuters inaktivitet (gratis-plan).
+Filsystemet är ephemeral — ändringar som inte commitats till GitHub försvinner.
+
+**Lösning:** Keep-alive-workflowet (`keep_alive.yml`) pingar appen var 20:e minut för att förhindra sleep.
+Se `.github/workflows/keep_alive.yml`.
+För data som måste sparas: använd GitHub-commit från Streamlit (via `_github_commit_file()`).
+        """)
+
+
+def _check_api_key(key_name: str, label: str, core_required: bool = False):
+    """Visa grön/röd indikator för en API-nyckel."""
+    try:
+        from web.pages.admin import _get_st_secret
+        val = _get_st_secret(key_name)
+    except Exception:
+        val = ""
+    has = bool(val and val.strip())
+    status = "✅ Tillgänglig" if has else ("❌ SAKNAS (krävs!)" if core_required else "⚠️ Saknas (valfri)")
+    st.markdown(f"- {status} — **{label}** (`{key_name}`)")
+
+
+def _render_data_coverage():
+    """Visa datatäckning per faktor från senaste scored_universe."""
+    import glob
+    parquet_files = sorted(REPORT_DIR.glob("scored_universe_*.parquet"))
+    csv_files = sorted(REPORT_DIR.glob("scored_universe_*.csv"))
+
+    latest = None
+    if parquet_files:
+        try:
+            latest = pd.read_parquet(parquet_files[-1])
+        except Exception:
+            pass
+    if latest is None and csv_files:
+        try:
+            latest = pd.read_csv(csv_files[-1], low_memory=False)
+        except Exception:
+            pass
+
+    if latest is None or latest.empty:
+        st.info("Ingen scored_universe-fill hittades — kör en pipeline först.")
+        return
+
+    st.caption(f"Baserad på senaste filen ({len(latest)} tickers)")
+
+    # Kolumner som borde finnas
+    vital_cols = {
+        "score_value": "Value",
+        "score_quality": "Quality",
+        "score_momentum": "Momentum",
+        "score_growth": "Growth",
+        "score_risk": "Risk",
+        "score_size": "Size",
+        "score_dividend": "Dividend",
+        "score_sentiment": "Sentiment",
+        "score_total": "Total Score",
+        "entry_signal": "Entry Signal",
+    }
+    raw_cols = {
+        "pe_trailing": "P/E",
+        "roe": "ROE",
+        "return_12m": "Return 12m",
+        "revenue_growth": "Revenue Growth",
+        "debt_to_equity": "D/E",
+        "volatility": "Volatility",
+        "market_cap": "Market Cap",
+        "dividend_yield": "Div Yield",
+        "free_cash_flow": "FCF",
+    }
+
+    rows = []
+    for col, label in {**vital_cols, **raw_cols}.items():
+        if col in latest.columns:
+            pct = latest[col].notna().mean() * 100
+            missing = latest[col].isna().sum()
+        else:
+            pct = 0.0
+            missing = len(latest)
+        rows.append({"Faktor/Mått": label, "Kolumn": col, "Täckning": f"{pct:.0f}%",
+                     "Saknas": str(missing)})
+
+    df_cov = pd.DataFrame(rows)
+
+    # Färgkoda täckning
+    def _color_pct(val):
+        try:
+            p = float(val.strip("%"))
+            if p >= 95:
+                return "color: #16a34a"
+            if p >= 70:
+                return "color: #f59e0b"
+            return "color: #dc2626; font-weight: bold"
+        except Exception:
+            return ""
+
+    styled = df_cov.style.applymap(_color_pct, subset=["Täckning"])
+    st.dataframe(styled, use_container_width=True, hide_index=True)
+    st.caption("Röd = <70%, Gul = 70-95%, Grön = >95%")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # ADMIN-SIDA
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -583,10 +848,11 @@ def page_admin():
 
     (tab_overview, tab_wl, tab_hold, tab_scan, tab_import,
      tab_health, tab_email, tab_users,
-     tab_config, tab_cache, tab_ai_log, tab_alarms) = st.tabs([
+     tab_config, tab_cache, tab_ai_log, tab_alarms, tab_debug) = st.tabs([
         "📊 Översikt", "⭐ Bevakningslista", "💼 Portfölj", "🚀 Starta scan",
         "📥 Avanza-import", "🩺 Universe Health", "📧 E-post", "👥 Användare",
         "⚙️ Konfiguration", "🗄️ Cache", "🤖 AI-logg", "🚨 Larm",
+        "🔍 Felsökning",
     ])
 
     # ── Flik 0: Översikt ─────────────────────────────────────────────────────
@@ -1570,3 +1836,7 @@ def page_admin():
     # ── Flik 11: Larm ────────────────────────────────────────────────────────
     with tab_alarms:
         _render_alarms_tab()
+
+    # ── Flik 12: Felsökning ──────────────────────────────────────────────────
+    with tab_debug:
+        _render_debug_tab()
