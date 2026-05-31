@@ -260,9 +260,12 @@ def apply_quality_filter(df: pd.DataFrame) -> tuple:
         mask_bad |= strong_sell
         reasons = reasons.where(~strong_sell, reasons + "Analytiker: Strong Sell; ")
 
-    # 4. Fallande kniv (ned >55% senaste 12m) UTAN fundamental förbättring
+    # 4. Fallande kniv (ned >55% senaste 12m) — bara for icke-finansiella bolag
     if "return_12m" in df.columns:
-        knife = df["return_12m"].fillna(0) < -0.55
+        is_financial = df.get("sector", pd.Series("")).str.contains(
+            "Financial|Real Estate|Insurance|Bank|REIT", case=False, na=False
+        )
+        knife = (~is_financial) & (df["return_12m"].fillna(0) < -0.55)
         mask_bad |= knife
         reasons = reasons.where(~knife, reasons + "Ned >55% senaste 12m; ")
 
