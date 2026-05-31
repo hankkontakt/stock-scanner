@@ -1,4 +1,111 @@
 {
-  "trades": [],
-  "equity_curve": []
+  "trades": [
+    {
+      "date": "2026-05-31",
+      "ticker": "DMYD-B.ST",
+      "name": "Diamyd Medical AB (publ)",
+      "entry_price": 1.12,
+      "predicted_return": 0.630428671836853,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-05-31",
+      "ticker": "TOBII.ST",
+      "name": "Tobii AB (publ)",
+      "entry_price": 2.768,
+      "predicted_return": 0.2016606628894806,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-05-31",
+      "ticker": "IMPC.ST",
+      "name": "Impact Coatings AB (publ)",
+      "entry_price": 3.16,
+      "predicted_return": 0.17599500715732574,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-05-31",
+      "ticker": "BUSER.ST",
+      "name": "Bambuser AB (publ)",
+      "entry_price": 29.2,
+      "predicted_return": 0.1384747177362442,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-05-31",
+      "ticker": "DICOT.ST",
+      "name": "Dicot Pharma AB",
+      "entry_price": 0.2146,
+      "predicted_return": 0.1277359277009964,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-05-31",
+      "ticker": "NIL-B.ST",
+      "name": "Nilörngruppen AB (publ)",
+      "entry_price": 74.4,
+      "predicted_return": 0.10001295059919357,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-05-31",
+      "ticker": "PRFO.ST",
+      "name": "Profoto Holding AB (publ)",
+      "entry_price": 9.22,
+      "predicted_return": 0.09265585243701935,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-05-31",
+      "ticker": "CANTA.ST",
+      "name": "Cantargia AB (publ)",
+      "entry_price": 3.11,
+      "predicted_return": 0.09161185473203659,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-05-31",
+      "ticker": "ANGL.ST",
+      "name": "Angler Gaming plc",
+      "entry_price": 4.34,
+      "predicted_return": 0.08539066463708878,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-05-31",
+      "ticker": "BPCINS.ST",
+      "name": "BPC Instruments AB",
+      "entry_price": 16.3,
+      "predicted_return": 0.08268507570028305,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    }
+  ],
+  "equity_curve": [
+    {
+      "date": "2026-05-31",
+      "equity": 100000.0,
+      "n_open": 10
+    }
+  ]
 }

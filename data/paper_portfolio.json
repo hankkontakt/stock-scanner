@@ -1,1 +1,20 @@
-{}
+{
+  "2026-05-31_smallcap": {
+    "capital": 100000,
+    "universe": "smallcap",
+    "n_picks": 10,
+    "benchmark_buy": 756.47998046875,
+    "tickers": [
+      "MAGI.ST",
+      "CTM.ST",
+      "MEKKO.HE",
+      "ALCA.ST",
+      "ADTR.ST",
+      "ADMCM.HE",
+      "TAGM-B.ST",
+      "SAFETY-B.ST",
+      "UPSALE.ST",
+      "SUSG.ST"
+    ]
+  }
+}
