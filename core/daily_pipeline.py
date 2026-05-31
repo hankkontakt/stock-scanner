@@ -699,6 +699,89 @@ def run_targeted(tickers: list[str]) -> int:
             logger.info(f"  ✓ {row['ticker']}: score={score:.1f}, entry={entry}")
 
     logger.info(f"\n✅ Targeted refresh klar — {succeeded} ticker(s) uppdaterade\n")
+
+
+def run_portfolio_refresh(verbose: bool = True) -> dict:
+    """
+    Lattvikts-prisrefresh av holdings.csv. Inget scoring, inget universum.
+    Hamtar live-priser for alla tickers i portfoljen och uppdaterar market_value.
+    Hanterar fonder (ISIN-baserade, ingen ticker) genom att hoppa over dem.
+    """
+    result = {"n_holdings": 0, "n_updated": 0, "n_skipped": 0}
+    holdings = _load_portfolio()
+    if holdings.empty:
+        logger.info("  ℹ Ingen portfölj att refresh:a")
+        return result
+
+    # Filtrera bort rader utan ticker (t.ex. ISIN-baserade fonder)
+    valid = holdings[holdings["ticker"].notna() & (holdings["ticker"] != "")]
+    result["n_holdings"] = len(holdings)
+    skipped_count = len(holdings) - len(valid)
+    result["n_skipped"] = skipped_count
+
+    if valid.empty:
+        logger.info("  ℹ Inga ticker-baserade innehav att uppdatera")
+        return result
+
+    tickers = valid["ticker"].unique().tolist()
+    if verbose:
+        logger.info(f"  📡 Hamtar priser for {len(tickers)} tickers...")
+
+    try:
+        from core.data_fetcher import fetch_prices_only
+        prices = fetch_prices_only(tickers, period="1mo", max_workers=8)
+    except Exception as e:
+        logger.error(f"  ❌ fetch_prices_only misslyckades: {e}")
+        return result
+
+    if prices is None or prices.empty:
+        logger.warning("  ⚠ Inga priser kunde hamtas")
+        return result
+
+    # Skapa lookup: ticker -> senaste close
+    price_lookup = {}
+    for ticker in tickers:
+        ticker_upper = ticker.upper()
+        for col in prices.columns:
+            if col[0].upper() == ticker_upper or col[0] == ticker:
+                serie = prices[col]
+                if isinstance(serie, pd.DataFrame):
+                    serie = serie.iloc[:, 0]
+                if not serie.empty:
+                    price_lookup[ticker] = float(serie.dropna().iloc[-1])
+                break
+
+    updated = 0
+    for idx, row in holdings.iterrows():
+        t = str(row.get("ticker", "")).upper().strip()
+        if not t or t not in price_lookup:
+            continue
+        shares = row.get("shares", 0)
+        try:
+            shares = float(shares)
+        except (ValueError, TypeError):
+            continue
+        if shares <= 0:
+            continue
+        price = price_lookup[t]
+        holdings.at[idx, "market_value"] = round(price * shares, 2)
+        holdings.at[idx, "current_price"] = price
+        updated += 1
+
+    result["n_updated"] = updated
+    if updated == 0:
+        logger.warning("  ⚠ Inga priser kunde matchas")
+        return result
+
+    # Spara
+    try:
+        holdings.to_csv(DATA_DIR / "holdings.csv", index=False)
+        if verbose:
+            logger.info(f"  ✅ holdings.csv uppdaterad — {updated} innehav med nya priser")
+    except Exception as e:
+        logger.error(f"  ❌ Kunde inte spara holdings.csv: {e}")
+
+    return result
     return succeeded
 
 
@@ -821,6 +904,10 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
 
     if mode == "refresh_missing":
         run_refresh_missing()
+        return
+
+    if mode == "portfolio_refresh":
+        run_portfolio_refresh()
         return
 
     # ═══════════════════════════════════════════════════════════════════════

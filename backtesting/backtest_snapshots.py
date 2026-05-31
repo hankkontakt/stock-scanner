@@ -134,6 +134,98 @@ def _fetch_price_at(ticker: str, date_str: str, price_cache: dict) -> float | No
     return float(series.loc[valid[-1]])
 
 
+def compare_snapshots(
+    date_a: str,
+    date_b: str,
+    top_n: int = 20,
+    min_score_change: float = 5.0,
+) -> dict:
+    """
+    Jamfor scores mellan tva snapshot-datum.
+
+    Identifierar:
+    - Storsta score-okningar (top_n)
+    - Storsta score-minskningar (top_n)
+    - Nya i topp-N (i date_b men inte i date_a)
+    - Fallna ur topp-N (i date_a men inte i date_b)
+    - Aggregerad statistik
+
+    Args:
+        date_a: Tidigare snapshot (YYYY-MM-DD)
+        date_b: Senare snapshot (YYYY-MM-DD)
+        top_n: Antal topp-movers att returnera
+        min_score_change: Minsta absoluta forandring for att inkluderas
+
+    Returns:
+        dict med movers_up, movers_down, new_entries, fallen, stats
+    """
+    snap_a = load_snapshot(date_a)
+    snap_b = load_snapshot(date_b)
+
+    if snap_a.empty or snap_b.empty:
+        return {"error": "En eller bada snapshots saknas"}
+
+    # Slå ihop på ticker
+    score_cols = [c for c in [
+        "score_total", "score_value", "score_quality", "score_momentum",
+        "score_growth", "score_risk", "score_dividend", "score_sentiment",
+        "score_short_interest",
+    ] if c in snap_a.columns and c in snap_b.columns]
+
+    merged = snap_a[["ticker"] + score_cols].merge(
+        snap_b[["ticker"] + score_cols],
+        on="ticker", how="outer", suffixes=("_a", "_b"),
+        indicator=True,
+    )
+
+    # Beräkna score_total-delta for alla gemensamma
+    common = merged[merged["_merge"] == "both"].copy()
+    if common.empty:
+        return {"error": "Inga gemensamma tickers mellan snapshoterna"}
+
+    common["score_delta"] = common["score_total_b"] - common["score_total_a"]
+
+    # Movers
+    filtered = common[common["score_delta"].abs() >= min_score_change].copy()
+    movers_up = filtered.nlargest(top_n, "score_delta")[[
+        "ticker", "score_total_a", "score_total_b", "score_delta"
+    ]].to_dict("records")
+    movers_down = filtered.nsmallest(top_n, "score_delta")[[
+        "ticker", "score_total_a", "score_total_b", "score_delta"
+    ]].to_dict("records")
+
+    # Nytt i topp-N
+    top_a = set(snap_a.nlargest(top_n, "score_total")["ticker"])
+    top_b = set(snap_b.nlargest(top_n, "score_total")["ticker"])
+    new_entries = []
+    for t in (top_b - top_a):
+        row = snap_b[snap_b["ticker"] == t]
+        if not row.empty:
+            new_entries.append({"ticker": t, "score": float(row["score_total"].iloc[0])})
+    fallen = []
+    for t in (top_a - top_b):
+        row = snap_a[snap_a["ticker"] == t]
+        if not row.empty:
+            fallen.append({"ticker": t, "score": float(row["score_total"].iloc[0])})
+
+    # Aggregerad statistik
+    stats = {
+        "n_common": len(common),
+        "mean_abs_change": float(common["score_delta"].abs().mean()),
+        "median_abs_change": float(common["score_delta"].abs().median()),
+        "max_increase": float(common["score_delta"].max()),
+        "max_decrease": float(common["score_delta"].min()),
+    }
+
+    return {
+        "movers_up": [{k: (round(v, 2) if isinstance(v, float) else v) for k, v in m.items()} for m in movers_up],
+        "movers_down": [{k: (round(v, 2) if isinstance(v, float) else v) for k, v in m.items()} for m in movers_down],
+        "new_entries": new_entries,
+        "fallen": fallen,
+        "stats": stats,
+    }
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 3. BACKTEST-MOTOR
 # ══════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,25 @@
+{
+  "factor_weights": {
+    "value": 0.2134,
+    "quality": 0.1746,
+    "momentum": 0.1746,
+    "growth": 0.1261,
+    "risk": 0.0873,
+    "size": 0.0485,
+    "dividend": 0.0485,
+    "sentiment": 0.097,
+    "short_interest": 0.03
+  },
+  "smallcap_config": {
+    "scoring_weights": {
+      "insider": 0.18,
+      "fcf_yield": 0.16,
+      "piotroski": 0.15,
+      "growth": 0.13,
+      "balance": 0.12,
+      "value": 0.12,
+      "momentum": 0.09,
+      "liquidity": 0.05
+    }
+  }
+}

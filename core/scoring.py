@@ -465,11 +465,7 @@ def calc_momentum_score(df: pd.DataFrame) -> pd.Series:
 
 def calc_growth_score(df: pd.DataFrame) -> pd.Series:
     """
-    Growth score: revenue, earnings growth + earnings_surprise_pct boost.
-
-    earnings_surprise_pct (earningsForecastsGrowthRate från yfinance) mäter
-    hur snabbt analytiker höjer sina estimat — positivt = bolaget överträffar
-    förväntningar (PEAD-signal). Läggs in som en likaviktad komponent.
+    Growth score: revenue, earnings growth + analyst revision + earnings surprise.
     """
     components = []
 
@@ -479,9 +475,16 @@ def calc_growth_score(df: pd.DataFrame) -> pd.Series:
             if score is not None:
                 components.append(score)
 
-    # Earnings surprise / estimat-revision — positivt är bättre
-    if "earnings_surprise_pct" in df.columns and df["earnings_surprise_pct"].notna().any():
-        surprise = pd.to_numeric(df["earnings_surprise_pct"], errors="coerce")
+    # Analyst revision rate (earningsForecastsGrowthRate from yfinance)
+    if "earnings_revision_rate" in df.columns and df["earnings_revision_rate"].notna().any():
+        revision = pd.to_numeric(df["earnings_revision_rate"], errors="coerce")
+        score = _try_rank(revision, ascending=True)
+        if score is not None:
+            components.append(score)
+
+    # Real earnings surprise from yfinance earnings_history (0.0-1.0 signal)
+    if "earnings_surprise" in df.columns and df["earnings_surprise"].notna().any():
+        surprise = pd.to_numeric(df["earnings_surprise"], errors="coerce")
         score = _try_rank(surprise, ascending=True)
         if score is not None:
             components.append(score)

@@ -401,29 +401,29 @@ def apply_best_weights(results_df: pd.DataFrame, dry_run: bool = True) -> dict:
 
 
 def _write_weights_to_config(weights: dict):
-    """Skriver de nya vikterna direkt till config.py."""
-    config_path = Path("config.py")
-    content     = config_path.read_text(encoding="utf-8")
+    """Skriver de nya vikterna till data/scoring_config.json istallet for config.py."""
+    scoring_config_path = Path("data/scoring_config.json")
 
-    # Hitta och ersätt FACTOR_WEIGHTS-blocket
-    import re
-    block_pattern = r"(FACTOR_WEIGHTS\s*=\s*\{)[^}]+(})"
-    new_block = "FACTOR_WEIGHTS = {\n"
-    for f, w in weights.items():
-        new_block += f'    "{f}": {w},\n'
-    new_block += "}"
+    if scoring_config_path.exists():
+        existing = json.loads(scoring_config_path.read_text(encoding="utf-8"))
+    else:
+        existing = {}
 
-    new_content = re.sub(block_pattern, new_block, content, flags=re.DOTALL)
-    if new_content == content:
-        print("⚠ Kunde inte hitta FACTOR_WEIGHTS i config.py – inga ändringar")
-        return
+    existing["factor_weights"] = weights
 
-    # Säkerhetskopia
-    backup = config_path.with_suffix(".py.optimizer_bak")
-    backup.write_text(content, encoding="utf-8")
-    print(f"  Säkerhetskopia: {backup}")
+    # Bevara smallcap-config om den finns
+    if "smallcap_config" not in existing:
+        from core import config as _cfg
+        existing["smallcap_config"] = {
+            "scoring_weights": _cfg.SMALLCAP_CONFIG.get("scoring_weights", {}),
+        }
 
-    config_path.write_text(new_content, encoding="utf-8")
+    scoring_config_path.write_text(
+        json.dumps(existing, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    print(f"  Vikter sparade till {scoring_config_path}")
+    print(f"  (config.py läser denna fil vid import — starta python pa nytt for att se andringarna)")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -443,7 +443,7 @@ if __name__ == "__main__":
     parser.add_argument("--test",     type=int, default=12,
                         help="Testperiod i månader (default: 12)")
     parser.add_argument("--apply",    action="store_true",
-                        help="Applicera bästa vikter till config.py")
+                        help="Applicera basta vikter till data/scoring_config.json")
     parser.add_argument("--dry-run",  action="store_true", default=True,
                         help="Visa ändringar utan att skriva (default)")
     args = parser.parse_args()
