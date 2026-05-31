@@ -17,6 +17,25 @@ from web.utils import (
 )
 from core import ai_analysis
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_live_price_cached(ticker: str) -> float | None:
+    """Hämtar live-pris via yfinance fast_info (lätt anrop, cachat 1 timme).
+    Används som fallback när scandata saknas eller är gammal (>24h)."""
+    try:
+        import yfinance as yf
+        fi = yf.Ticker(ticker).fast_info
+        price = getattr(fi, "last_price", None) or getattr(fi, "regular_market_price", None)
+        if price and float(price) > 0:
+            return float(price)
+        # Fallback: senaste stängning från prishistorik
+        hist = yf.Ticker(ticker).history(period="2d", auto_adjust=True)
+        if not hist.empty:
+            return float(hist["Close"].iloc[-1])
+    except Exception:
+        pass
+    return None
+
+
 # ── Kontoregister (konton.json) ───────────────────────────────────────────────
 
 _KONTON_PATH = DATA_DIR / "konton.json"
@@ -359,6 +378,16 @@ def _build_rows(holdings_view: pd.DataFrame, score_data: dict) -> list:
         cost   = h.get("cost_basis")
         shares = h.get("shares", 0)
         is_fund_acc = _is_fund_holding(typ, konto, ticker=t)
+
+        # Live-pris fallback: om scandata saknas, är noll, eller är gammal (>48h)
+        # används ett färskt yfinance-uppslag (cachat 1h). Det säkerställer att
+        # portföljvärdet inte speglar ett gammalt pris när scannern misslyckas.
+        if not is_fund_acc and (price is None or price == 0):
+            stored_mv = float(h.get("market_value") or 0)
+            if stored_mv > 0 and float(shares or 0) > 0:
+                price = stored_mv / float(shares)  # Snabb fallback: lagrat Avanza-värde
+            else:
+                price = _fetch_live_price_cached(t)  # Sista utväg: live yfinance
         if is_fund_acc and not price:
             # Försök hämta live NAV via Yahoo Finance-sökning (cachat 1h)
             try:
@@ -1351,6 +1380,28 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
         ("BÄST / SÄMST",
          f"+{max(pnl_vals):.1f}% / {min(pnl_vals):.1f}%" if pnl_vals else "—", None),
     ])
+
+    # ── Live-pris-uppdatering ────────────────────────────────────────────────
+    _c_refresh, _c_note = st.columns([1, 4])
+    with _c_refresh:
+        if st.button("🔄 Uppdatera priser", key="btn_portfolio_live_refresh",
+                     help="Hämtar aktuella kurser direkt från Yahoo Finance (cachat 1h)"):
+            # Rensa live-pris-cachen så nya priser hämtas
+            _fetch_live_price_cached.clear()
+            st.rerun()
+    with _c_note:
+        # Visa när priserna senast uppdaterades
+        from pathlib import Path as _Path
+        from web.utils import REPORT_DIR as _RDIR
+        _scan_files = sorted(_RDIR.glob("scored_universe_*.csv"), reverse=True)
+        if _scan_files:
+            import os as _os
+            _age_h = (datetime.datetime.now() -
+                      datetime.datetime.fromtimestamp(_os.path.getmtime(_scan_files[0]))).total_seconds() / 3600
+            if _age_h > 48:
+                st.caption(f"⚠️ Scandata {_age_h/24:.0f} dagar gammal — klicka Uppdatera för live-priser")
+            else:
+                st.caption(f"Priser från senaste scan ({_age_h:.0f}h sedan)")
 
     # ── Innehav-detaljer (klickbar) ──────────────────────────────────────────
     with st.expander(f"📋 Visa alla innehav ({n_pos} aktier{f' + {n_funds_ov} fonder' if n_funds_ov else ''})"):
