@@ -590,7 +590,18 @@ def _update_user_password(username: str, new_hashed: str) -> bool:
                 "added": _dt.now().strftime("%Y-%m-%d"),
                 "password_reset": True,
             })
-        path.write_text(_j.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        content = _j.dumps(data, indent=2, ensure_ascii=False)
+        path.write_text(content, encoding="utf-8")
+        # Committa till GitHub — annars försvinner lösenordsbytet vid nästa
+        # Streamlit Cloud-omstart och användaren låses ute / får tillbaka gammalt lösen.
+        try:
+            from web.pages.admin import _get_github_token, _github_commit_file
+            token = _get_github_token()
+            if token:
+                _github_commit_file("data/users_config.json", content, token,
+                                    message=f"Update password for {uname_lower}")
+        except Exception:
+            pass
         return True
     except Exception:
         pass
