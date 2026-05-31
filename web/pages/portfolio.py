@@ -12,7 +12,7 @@ import streamlit as st
 from web.utils import (
     kpi_row, holdings_pie, num_fmt, pct_fmt,
     load_portfolio, load_watchlist, _get_provider, _get_depth,
-    _active_data_dir, DATA_DIR,
+    _active_data_dir, DATA_DIR, REPORT_DIR,
     portfolio_value_chart, calc_period_returns, save_portfolio_snapshot,
 )
 from core import ai_analysis
@@ -379,16 +379,35 @@ def _build_rows(holdings_view: pd.DataFrame, score_data: dict) -> list:
         shares = h.get("shares", 0)
         is_fund_acc = _is_fund_holding(typ, konto, ticker=t)
 
-        # Live-pris fallback: om scandata saknas, är noll, eller är gammal (>48h)
+        # Live-pris fallback: om scandata saknas, är noll, eller är gammal (>24h)
         # används ett färskt yfinance-uppslag (cachat 1h). Det säkerställer att
         # portföljvärdet inte speglar ett gammalt pris när scannern misslyckas.
-        if not is_fund_acc and (price is None or price == 0):
-            stored_mv = float(h.get("market_value") or 0)
-            if stored_mv > 0 and float(shares or 0) > 0:
-                price = stored_mv / float(shares)  # Snabb fallback: lagrat Avanza-värde
+        _use_live_fallback = False
+        if not is_fund_acc:
+            if price is None or price == 0:
+                _use_live_fallback = True
             else:
-                price = _fetch_live_price_cached(t)  # Sista utväg: live yfinance
-        if is_fund_acc and not price:
+                # Kolla om priserna i scored_universe är gamla (>24h)
+                _scan_files = sorted(REPORT_DIR.glob("scored_universe_*.csv"), reverse=True)
+                if _scan_files:
+                    import os as _os
+                    _age_h = (datetime.datetime.now() -
+                              datetime.datetime.fromtimestamp(_os.path.getmtime(_scan_files[0]))).total_seconds() / 3600
+                    if _age_h > 24:
+                        _use_live_fallback = True
+        if _use_live_fallback:
+            # Försök live yfinance först
+            live_price = _fetch_live_price_cached(t)
+            if live_price:
+                price = live_price
+            else:
+                # Fallback: lagrat Avanza-värde
+                stored_mv = float(h.get("market_value") or 0)
+                if stored_mv > 0 and float(shares or 0) > 0:
+                    price = stored_mv / float(shares)
+                else:
+                    price = None
+        if is_fund_acc:
             # Försök hämta live NAV via Yahoo Finance-sökning (cachat 1h)
             try:
                 from web.utils import fetch_fund_nav
