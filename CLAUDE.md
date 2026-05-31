@@ -2,6 +2,12 @@
 
 > ⚠️ **LÄS FÖRST:** `docs/SYSTEM_AI.md` — komplett systemdokumentation med varenda fil, funktion och dataflöde.
 > All kodlogik, arkitektur, konfiguration och förbättringsidéer finns där.
+>
+> 🔴 **OBLIGATORISKT FÖR ALLA AI-MODELLER:** Du MÅSTE hålla `docs/SYSTEM_AI.md` uppdaterad.
+> Varje gång du ändrar kod, hittar en bugg, eller upptäcker en förbättringsmöjlighet —
+> **även om det inte hör ihop med uppgiften du arbetar med just nu** — ska du lägga in det
+> i `docs/SYSTEM_AI.md` (se avsnittet "0. Underhållsprotokoll" överst i den filen).
+> Detta gäller löpande under hela arbetet, inte bara i slutet.
 
 ## Snabbreferens
 
