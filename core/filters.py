@@ -17,8 +17,10 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-STRIKE_FILE = Path("data/strike_list.json")
-BLACKLIST_FILE = Path("data/blacklist.json")
+# Absoluta sökvägar förankrade i repo-roten (tidigare relativa → bröts vid annan CWD)
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+STRIKE_FILE = _DATA_DIR / "strike_list.json"
+BLACKLIST_FILE = _DATA_DIR / "blacklist.json"
 
 # ═══════════════════════════════════════════════════════════════
 # 1. TRENDFILTER

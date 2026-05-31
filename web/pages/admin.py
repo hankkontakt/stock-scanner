@@ -46,7 +46,12 @@ def _save_users_config(users: list):
 def _github_commit_file(repo_path: str, content: str, token: str,
                          owner: str = "hankkontakt", repo: str = "stock-scanner",
                          message: str = "") -> bool:
-    """Committar en fil till GitHub via Contents API så att ändringar överlever Streamlit Cloud-omstarter."""
+    """Committar en fil till GitHub via Contents API så att ändringar överlever Streamlit Cloud-omstarter.
+
+    Retryar vid 409 Conflict: om SHA:n blev inaktuell mellan GET och PUT
+    (t.ex. en parallell CI-commit skrev filen) hämtar vi färsk SHA och
+    försöker igen. Tidigare tappades sådana skrivningar tyst.
+    """
     import base64
     if not token:
         return False
@@ -57,22 +62,29 @@ def _github_commit_file(repo_path: str, content: str, token: str,
     }
     url = f"https://api.github.com/repos/{owner}/{repo}/contents/{repo_path}"
     commit_msg = message or f"chore: update {repo_path} via Streamlit"
-    try:
-        sha = None
-        get_resp = requests.get(url, headers=headers, timeout=10)
-        if get_resp.status_code == 200:
-            sha = get_resp.json().get("sha")
-        payload = {
-            "message": commit_msg,
-            "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
-            "branch": "main",
-        }
-        if sha:
-            payload["sha"] = sha
-        resp = requests.put(url, json=payload, headers=headers, timeout=15)
-        return resp.status_code in (200, 201)
-    except Exception:
-        return False
+    b64 = base64.b64encode(content.encode("utf-8")).decode("ascii")
+
+    for attempt in range(3):
+        try:
+            sha = None
+            get_resp = requests.get(url, headers=headers, timeout=10)
+            if get_resp.status_code == 200:
+                sha = get_resp.json().get("sha")
+            payload = {"message": commit_msg, "content": b64, "branch": "main"}
+            if sha:
+                payload["sha"] = sha
+            resp = requests.put(url, json=payload, headers=headers, timeout=15)
+            if resp.status_code in (200, 201):
+                return True
+            # 409 = SHA inaktuell (samtidig skrivning). Hämta färsk SHA och retry.
+            if resp.status_code == 409 and attempt < 2:
+                continue
+            return False
+        except Exception:
+            if attempt < 2:
+                continue
+            return False
+    return False
 
 
 def _get_st_secret(key: str) -> str:

@@ -49,7 +49,8 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
     total = len(tickers)
 
     # Ladda blacklist – skippa kända trasiga tickers
-    _bl_path = Path("data/blacklist.json")
+    # Absolut sökväg förankrad i repo-roten (tidigare relativ → bröts vid annan CWD)
+    _bl_path = Path(__file__).resolve().parent.parent / "data" / "blacklist.json"
     try:
         _blacklist = set(json.loads(_bl_path.read_text()).keys()) if _bl_path.exists() else set()
     except Exception:
