@@ -799,7 +799,11 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
         "revenue_growth", "debt_to_equity", "return_12m", "beta"
     ]
     available_cols = [c for c in metric_cols if c in df.columns]
-    df["data_quality"] = df[available_cols].notna().sum(axis=1) / len(available_cols)
+    if available_cols:
+        df["data_quality"] = df[available_cols].notna().sum(axis=1) / len(available_cols)
+    else:
+        # Inga metric-kolumner alls (t.ex. korrupt cache) → undvik division med noll
+        df["data_quality"] = 0.0
 
     # ── Steg 4: Likviditetsflagg ──────────────────────────────────────────────
     # Beräkna uppskattad daglig omsättning i USD. Aktier under tröskeln

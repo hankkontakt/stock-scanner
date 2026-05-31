@@ -572,7 +572,21 @@ def _ai_call(messages: list, system_prompt: str = "",
             return result or "⚠️ **Gemini ej tillgänglig.** Kontrollera GEMINI_API_KEY i Streamlit Secrets."
         return result
     else:
-        return _deepseek_call(messages, system_prompt, max_tokens, temperature)
+        result = _deepseek_call(messages, system_prompt, max_tokens, temperature)
+        # Symmetrisk fallback: om DeepSeek misslyckas (tomt, ⚠️ eller ❌ – t.ex.
+        # 402 slut på saldo, 429 rate-limit) prova Gemini om nyckel finns.
+        # Tidigare saknades denna riktning helt trots att CLAUDE.md anger
+        # Gemini som fallback när DeepSeek failar.
+        ds_failed = not result or result.startswith("⚠️") or result.startswith("❌")
+        if ds_failed:
+            gemini_key = _get_secret("GEMINI_API_KEY", "")
+            if gemini_key:
+                gem_result = _gemini_call(messages, system_prompt, max_tokens,
+                                          temperature, use_grounding=use_grounding)
+                if gem_result and not gem_result.startswith("⚠️"):
+                    ds_reason = result if result else "tomt svar"
+                    return gem_result + f"\n\n---\n*ℹ️ DeepSeek ej tillgänglig ({ds_reason[:60]}) – svar från Gemini (fallback)*"
+        return result
 
 
 def _make_cache_key(*args) -> str:
