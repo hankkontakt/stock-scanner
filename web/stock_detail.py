@@ -162,9 +162,17 @@ def _price_chart(ticker: str, period: str = "1y") -> Optional[go.Figure]:
     if hist.empty:
         return None
 
-    # Beräkna glidande medelvärden
-    hist["MA50"] = hist["Close"].rolling(50).mean() if len(hist) >= 50 else None
+    # Beräkna glidande medelvärden och Bollinger Bands (20d, ±2σ)
+    hist["MA50"]  = hist["Close"].rolling(50).mean()  if len(hist) >= 50  else None
     hist["MA200"] = hist["Close"].rolling(200).mean() if len(hist) >= 200 else None
+    if len(hist) >= 20:
+        bb_sma  = hist["Close"].rolling(20).mean()
+        bb_std  = hist["Close"].rolling(20).std()
+        hist["BB_upper"] = bb_sma + 2 * bb_std
+        hist["BB_lower"] = bb_sma - 2 * bb_std
+        hist["BB_mid"]   = bb_sma
+    else:
+        hist["BB_upper"] = hist["BB_lower"] = hist["BB_mid"] = None
 
     fig = make_subplots(
         rows=2, cols=1,
@@ -196,6 +204,29 @@ def _price_chart(ticker: str, period: str = "1y") -> Optional[go.Figure]:
             x=hist.index, y=hist["MA200"],
             line=dict(color="#e040fb", width=1.2),
             name="MA200",
+        ), row=1, col=1)
+
+    # ── Bollinger Bands (20d, ±2σ) ───────────────────────────────────────
+    if hist.get("BB_upper") is not None and not hist["BB_upper"].isna().all():
+        fig.add_trace(go.Scatter(
+            x=hist.index, y=hist["BB_upper"],
+            line=dict(color="rgba(100,181,246,0.5)", width=1, dash="dot"),
+            name="BB övre",
+            showlegend=True,
+        ), row=1, col=1)
+        fig.add_trace(go.Scatter(
+            x=hist.index, y=hist["BB_lower"],
+            line=dict(color="rgba(100,181,246,0.5)", width=1, dash="dot"),
+            name="BB nedre",
+            fill="tonexty",
+            fillcolor="rgba(100,181,246,0.05)",
+            showlegend=True,
+        ), row=1, col=1)
+        fig.add_trace(go.Scatter(
+            x=hist.index, y=hist["BB_mid"],
+            line=dict(color="rgba(100,181,246,0.25)", width=1),
+            name="BB mitten",
+            showlegend=False,
         ), row=1, col=1)
 
     # ── Volym ────────────────────────────────────────────────────────────
@@ -577,6 +608,110 @@ def _detail_table(row: pd.Series):
 # 4. SCORE-RADARCHART
 # ══════════════════════════════════════════════════════════════════════════════
 
+def _score_breakdown(row: pd.Series):
+    """Visar en detaljerad breakdown av alla faktorscore och deras viktigaste
+    underliggande nyckeltal — 'Varför fick aktien denna poäng?'"""
+
+    # Faktorer: (score-kolumn, label, emoji, [lista av (nyckeltal-kolumn, label, format)])
+    FACTORS = [
+        ("score_value",    "Värdering",   "💰", [
+            ("pe_trailing",   "P/E (TTM)",    ".1f"),
+            ("pe_forward",    "P/E (fwd)",    ".1f"),
+            ("price_to_book", "P/B",          ".2f"),
+            ("ev_to_ebitda",  "EV/EBITDA",    ".1f"),
+        ]),
+        ("score_quality",  "Kvalitet",    "⭐", [
+            ("roe",           "ROE",          ".1%"),
+            ("profit_margin", "Vinstmarginal",".1%"),
+            ("roa",           "ROA",          ".1%"),
+        ]),
+        ("score_momentum", "Momentum",    "🚀", [
+            ("return_12m",    "12m avkastn.", "+.1f"),
+            ("return_6m",     "6m avkastn.",  "+.1f"),
+            ("rsi_14",        "RSI (14)",     ".0f"),
+        ]),
+        ("score_growth",   "Tillväxt",    "📈", [
+            ("revenue_growth","Omsättn.tillv.",".1%"),
+            ("earnings_growth","Vinsttillv.", ".1%"),
+            ("earnings_surprise_pct","Estimat-revision",".1%"),
+        ]),
+        ("score_risk",     "Risk",        "🛡️", [
+            ("debt_to_equity","D/E",          ".1f"),
+            ("current_ratio", "Current ratio",".2f"),
+            ("volatility",    "Volatilitet",  ".1%"),
+        ]),
+        ("score_sentiment","Sentiment",   "🧠", [
+            ("sentiment_raw", "Sentiment",    ".2f"),
+        ]),
+        ("score_dividend", "Utdelning",   "💵", [
+            ("dividend_yield","Direktavkastn.",".1%"),
+            ("payout_ratio",  "Payout ratio", ".0%"),
+        ]),
+        ("score_short_interest","Blankning","📉", [
+            ("short_pct_float","Blankat %",   ".1%"),
+            ("short_ratio",   "Dagar täcka",  ".1f"),
+        ]),
+    ]
+
+    def _fmt(val, fmt):
+        try:
+            v = float(val)
+            if pd.isna(v):
+                return "—"
+            if fmt.startswith("+"):
+                return f"{v:{fmt}}"
+            return f"{v:{fmt}}"
+        except Exception:
+            return "—"
+
+    def _score_color(s: float) -> str:
+        if s >= 70: return "#00c853"
+        if s >= 50: return "#ffc107"
+        return "#f44336"
+
+    st.markdown("**🔬 Poängbrytning — varför fick aktien denna score?**")
+
+    # Hämta regime-info för att visa om vikter är justerade
+    regime = row.get("regime", "OSÄKER") if hasattr(row, "get") else "OSÄKER"
+    if regime and regime != "OSÄKER":
+        st.caption(f"Marknadsregim: **{regime}** — vikter dynamiskt justerade")
+
+    total = row.get("score_total")
+    if total is not None and not pd.isna(total):
+        st.metric("Total score", f"{float(total):.0f} / 100")
+
+    for score_col, label, emoji, kpis in FACTORS:
+        score = row.get(score_col)
+        if score is None or (isinstance(score, float) and pd.isna(score)):
+            continue
+        s = float(score)
+        color = _score_color(s)
+        bar = "█" * int(s / 10) + "░" * (10 - int(s / 10))
+
+        # Bygg KPI-sträng från underliggande nyckeltal
+        kpi_parts = []
+        for col, klabel, kfmt in kpis:
+            val = row.get(col)
+            if val is not None and not (isinstance(val, float) and pd.isna(val)):
+                # Procentvärden: om värdet är < 1 och formatet är %, multiplicera
+                try:
+                    fv = float(val)
+                    if kfmt.endswith("%") and abs(fv) < 1:
+                        val = fv  # redan i decimalform, format-strängen hanterar
+                except Exception:
+                    pass
+                kpi_parts.append(f"{klabel}: {_fmt(val, kfmt)}")
+
+        kpi_str = " · ".join(kpi_parts) if kpi_parts else "Data saknas"
+        st.markdown(
+            f"{emoji} **{label}** "
+            f"<span style='color:{color};font-weight:bold'>{s:.0f}</span> "
+            f"<span style='font-family:monospace;color:#4c9be8'>{bar}</span><br>"
+            f"<small style='color:#8892a4'>{kpi_str}</small>",
+            unsafe_allow_html=True,
+        )
+
+
 def _radar_chart(row: pd.Series) -> go.Figure:
     """Skapa en radarchart över de 8 faktorerna."""
     score_fields = [
@@ -927,13 +1062,13 @@ def render_stock_detail(
         else:
             st.info("Prisdata saknas för denna aktie.")
 
-        # Radar-chart bredvid prisgraf?
+        # Radar-chart + score-breakdown sida vid sida
         if row is not None and not row.empty:
-            c1, c2 = st.columns([3, 2])
+            c1, c2 = st.columns([2, 3])
             with c1:
-                pass  # Utrymme för framtida användning
-            with c2:
                 st.plotly_chart(_radar_chart(row), use_container_width=True)
+            with c2:
+                _score_breakdown(row)
 
         # Score-historik (under prisgraf)
         score_fig = _score_history(ticker)
