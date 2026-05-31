@@ -295,7 +295,7 @@ def _evaluate_alert(ticker: str, headline: str, article: dict,
             "headline": headline,
             "status": is_holding,
             "source": article.get("source", ""),
-            "ai_analysis": result[:500],
+            "ai_analysis": result,
             "timestamp": datetime.now().isoformat(),
         }
     except Exception as e:
@@ -335,7 +335,7 @@ def _evaluate_price_move(ticker: str, price_alert: dict,
             "status": status,
             "change_pct": price_alert["change_pct"],
             "current_price": price_alert["current_price"],
-            "ai_analysis": result[:500] if result else f"⚠️ {ticker} rörde sig {price_alert['change_pct']:+.1f}% – sök efter nyheter.",
+            "ai_analysis": result if result else f"⚠️ {ticker} rörde sig {price_alert['change_pct']:+.1f}% – sök efter nyheter.",
             "timestamp": datetime.now().isoformat(),
         }
     except Exception:

@@ -176,7 +176,11 @@ def _region_neutralize_fundamentals(df: pd.DataFrame) -> pd.DataFrame:
     for col, _ in _REGION_NEUTRALIZE_COLS:
         if col not in df.columns:
             continue
-        series = df[col]
+        # Tvinga numerisk typ — yfinance kan returnera strängen "Infinity"
+        # (eller "-Infinity") som JSON-token för P/E när vinst ≈ 0.
+        # pd.to_numeric(..., errors="coerce") konverterar sådana strängar till NaN.
+        series = pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan)
+        df[col] = series
         if series.isna().all():
             continue
         # Beräkna regionmedian för varje rad
