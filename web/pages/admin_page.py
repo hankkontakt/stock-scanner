@@ -24,6 +24,7 @@ from web.pages.admin import (
     _load_users_config, _save_users_config, _save_holdings_df,
     _save_watchlist_data, _search_ticker_yfinance, _trigger_gh_workflow,
     _trigger_targeted_refresh, _github_commit_file, USERS_CONFIG_FILE,
+    validate_ticker,
 )
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -963,18 +964,22 @@ def page_admin():
             manual_name = st.text_input("Namn (valfritt)", key="wl_manual_name")
             if st.button("➕ Lägg till", key="btn_wl_manual"):
                 if manual_ticker:
-                    exists = any(i["ticker"] == manual_ticker for i in items)
-                    if not exists:
-                        items.append({
-                            "ticker": manual_ticker,
-                            "name": manual_name or manual_ticker,
-                            "added": str(date.today()),
-                        })
-                        _save_watchlist_data(items)
-                        st.success(f"`{manual_ticker}` tillagd!")
-                        st.rerun()
+                    ok, err = validate_ticker(manual_ticker)
+                    if not ok:
+                        st.error(f"❌ Ogiltig ticker: {err}")
                     else:
-                        st.info(f"`{manual_ticker}` finns redan.")
+                        exists = any(i["ticker"] == manual_ticker for i in items)
+                        if not exists:
+                            items.append({
+                                "ticker": manual_ticker,
+                                "name": manual_name or manual_ticker,
+                                "added": str(date.today()),
+                            })
+                            _save_watchlist_data(items)
+                            st.success(f"`{manual_ticker}` tillagd!")
+                            st.rerun()
+                        else:
+                            st.info(f"`{manual_ticker}` finns redan.")
                 else:
                     st.warning("Ange en ticker.")
 

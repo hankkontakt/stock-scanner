@@ -457,6 +457,15 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             _time_str = _mt.astimezone(_tz).strftime("%Y-%m-%d %H:%M")
         st.caption(f"🟢 {len(scan_dates) if scan_dates else 0} datum · Senast: {max(scan_dates) if scan_dates else '—'} [{_time_str}]")
 
+        # Data-färskhetsvarning: visa orange/röd banner om data är gammal
+        if _latest_scan_file:
+            from datetime import timedelta
+            _age_hours = (datetime.now() - datetime.fromtimestamp(_latest_scan_file.stat().st_mtime)).total_seconds() / 3600
+            if _age_hours > 72:
+                st.warning(f"⚠️ Scandata är **{_age_hours/24:.0f} dagar** gammal — senaste vecko­scan misslyckades troligen. Trigga manuellt via Admin → Kör scan.", icon="⚠️")
+            elif _age_hours > 48:
+                st.info(f"ℹ️ Scandata är **{_age_hours:.0f}h** gammal. Nästa schema­lagda uppdatering sker snart.", icon="ℹ️")
+
     return page, scan_date, sc_date, filters
 
 
