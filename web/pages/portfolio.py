@@ -379,34 +379,20 @@ def _build_rows(holdings_view: pd.DataFrame, score_data: dict) -> list:
         shares = h.get("shares", 0)
         is_fund_acc = _is_fund_holding(typ, konto, ticker=t)
 
-        # Live-pris fallback: om scandata saknas, är noll, eller är gammal (>24h)
-        # används ett färskt yfinance-uppslag (cachat 1h). Det säkerställer att
-        # portföljvärdet inte speglar ett gammalt pris när scannern misslyckas.
-        _use_live_fallback = False
+        # Live-pris: ALLTID försök hämta färskt pris för aktier, oavsett scandata.
+        # Fallback-kedja: 1) yfinance live, 2) lagrat market_value från Avanza, 3) scandata.
+        # Detta säkerställer att totalt värde och chart alltid matchar.
         if not is_fund_acc:
-            if price is None or price == 0:
-                _use_live_fallback = True
-            else:
-                # Kolla om priserna i scored_universe är gamla (>24h)
-                _scan_files = sorted(REPORT_DIR.glob("scored_universe_*.csv"), reverse=True)
-                if _scan_files:
-                    import os as _os
-                    _age_h = (datetime.datetime.now() -
-                              datetime.datetime.fromtimestamp(_os.path.getmtime(_scan_files[0]))).total_seconds() / 3600
-                    if _age_h > 24:
-                        _use_live_fallback = True
-        if _use_live_fallback:
-            # Försök live yfinance först
+            # Steg 1: Försök live yfinance (cachat 1h)
             live_price = _fetch_live_price_cached(t)
             if live_price:
                 price = live_price
             else:
-                # Fallback: lagrat Avanza-värde
+                # Steg 2: Lagrat Avanza-värde
                 stored_mv = float(h.get("market_value") or 0)
                 if stored_mv > 0 and float(shares or 0) > 0:
                     price = stored_mv / float(shares)
-                else:
-                    price = None
+                # Steg 3: scandata-priset används redan via sc.get ovan — blir kvar om allt fallerat
         if is_fund_acc:
             # Försök hämta live NAV via Yahoo Finance-sökning (cachat 1h)
             try:
