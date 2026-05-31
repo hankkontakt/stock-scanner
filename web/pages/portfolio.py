@@ -1704,6 +1704,145 @@ def _portfolio_ai_chat(holdings_view: pd.DataFrame, score_data: dict, df: pd.Dat
                     st.error(f"AI-fel: {e}")
 
 
+def _tab_rebalans(holdings: pd.DataFrame, df: pd.DataFrame):
+    """Korrelationsmatris + Black-Litterman-baserade rebalanseringsförslag."""
+    from portfolio.portfolio_analysis import calc_correlation_matrix, suggest_diversifiers
+    from portfolio.black_litterman import black_litterman_weights
+
+    if holdings.empty:
+        st.info("Lägg till innehav i portföljen för att se rebalanserings­förslag.")
+        return
+
+    tickers = holdings["ticker"].dropna().str.upper().str.strip().unique().tolist()
+    if len(tickers) < 2:
+        st.info("Behöver minst 2 innehav för korrelationsanalys.")
+        return
+
+    # ── Korrelationsmatris ────────────────────────────────────────────────────
+    st.subheader("📐 Korrelationsmatris (1 år)")
+    with st.spinner("Hämtar prishistorik..."):
+        try:
+            corr_df = calc_correlation_matrix(holdings)
+        except Exception as e:
+            st.warning(f"Kunde inte beräkna korrelation: {e}")
+            corr_df = None
+
+    if corr_df is not None and not corr_df.empty:
+        import plotly.graph_objects as go
+
+        fig = go.Figure(go.Heatmap(
+            z=corr_df.values,
+            x=corr_df.columns.tolist(),
+            y=corr_df.index.tolist(),
+            colorscale="RdYlGn",
+            zmin=-1, zmax=1,
+            text=corr_df.round(2).values,
+            texttemplate="%{text}",
+            hovertemplate="%{y} × %{x}: %{z:.2f}<extra></extra>",
+        ))
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="#131722",
+            plot_bgcolor="#1e2230",
+            height=max(300, len(tickers) * 40 + 80),
+            margin=dict(t=20, b=20, l=20, r=20),
+            font=dict(size=11),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Varning om hög korrelation
+        high_corr = [
+            f"{r} & {c} ({corr_df.loc[r, c]:.2f})"
+            for r in corr_df.index for c in corr_df.columns
+            if r < c and corr_df.loc[r, c] > 0.80
+        ]
+        if high_corr:
+            st.warning(
+                f"⚠️ **Hög korrelation (>0.80):** {', '.join(high_corr[:5])}. "
+                f"Dessa aktier rör sig nästan likadant — låg diversifiering."
+            )
+    else:
+        st.caption("Korrelationsdata ej tillgänglig.")
+
+    st.markdown("---")
+
+    # ── Diversifieringsförslag ────────────────────────────────────────────────
+    st.subheader("💡 Diversifieringsförslag")
+    if df is not None and not df.empty:
+        try:
+            suggestions = suggest_diversifiers(holdings, df, top_n=5)
+            if suggestions is not None and not suggestions.empty:
+                st.caption("Aktier med hög score som minskar portföljkorrelationen mest:")
+                cols = ["ticker", "name", "sector", "score_total"]
+                show_cols = [c for c in cols if c in suggestions.columns]
+                st.dataframe(suggestions[show_cols].head(5), use_container_width=True, hide_index=True)
+            else:
+                st.info("Inga diversifieringsförslag tillgängliga.")
+        except Exception as e:
+            st.caption(f"Diversifieringsförslag ej tillgängliga: {e}")
+    else:
+        st.info("Kör veckoscanen för att få diversifieringsförslag.")
+
+    st.markdown("---")
+
+    # ── Black-Litterman optimala vikter ──────────────────────────────────────
+    st.subheader("⚖️ Föreslagna portföljvikter (Black-Litterman)")
+    st.caption(
+        "Kombinerar marknadskapitaliseringsvikter (prior) med systemets score-prediktion "
+        "för att föreslå optimala portföljvikter (max 15% per position)."
+    )
+    if df is not None and not df.empty:
+        try:
+            holdings_tickers = set(tickers)
+            relevant_df = df[df["ticker"].isin(holdings_tickers)].copy()
+            if len(relevant_df) >= 2:
+                weights_df = black_litterman_weights(relevant_df, holdings)
+                if weights_df is not None and not weights_df.empty:
+                    # Hämta nuvarande allokering
+                    total_val = (holdings["shares"] * holdings.get("current_price", holdings.get("cost_basis", 1))).sum()
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("**Nuvarande vs föreslagna vikter**")
+                        st.dataframe(
+                            weights_df.style.format("{:.1%}").background_gradient(cmap="Blues", axis=0),
+                            use_container_width=True,
+                        )
+                    with col2:
+                        # Bar-chart för jämförelse
+                        if "current_weight" in weights_df.columns and "optimal_weight" in weights_df.columns:
+                            import plotly.graph_objects as go
+                            fig2 = go.Figure()
+                            fig2.add_trace(go.Bar(
+                                name="Nu", x=weights_df.index,
+                                y=weights_df["current_weight"],
+                                marker_color="#4c9be8",
+                            ))
+                            fig2.add_trace(go.Bar(
+                                name="Föreslaget", x=weights_df.index,
+                                y=weights_df["optimal_weight"],
+                                marker_color="#00d4aa",
+                            ))
+                            fig2.update_layout(
+                                barmode="group",
+                                template="plotly_dark",
+                                paper_bgcolor="#131722",
+                                plot_bgcolor="#1e2230",
+                                height=300,
+                                margin=dict(t=20, b=40, l=20, r=20),
+                                yaxis=dict(tickformat=".0%"),
+                            )
+                            st.plotly_chart(fig2, use_container_width=True)
+                else:
+                    st.info("Black-Litterman-optimering ej tillgänglig (för få datapunkter).")
+            else:
+                st.info("Behöver fler innehav i scan­datan för optimering.")
+        except Exception as e:
+            st.caption(f"Optimeringen ej tillgänglig: {e}")
+    else:
+        st.info("Kör veckoscanen för att aktivera portföljoptimering.")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # HUVUD-FUNKTION
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1726,8 +1865,8 @@ def page_portfolio(df: pd.DataFrame = None, holdings: pd.DataFrame = None,
     holdings_view, _sel_konto = _konto_filter_section(holdings)
 
     # 3 SUB-TABS
-    tab_overview, tab_analys, tab_hantera = st.tabs([
-        "📊 Översikt", "🧠 Analys", "⚙️ Hantera"
+    tab_overview, tab_analys, tab_rebalans, tab_hantera = st.tabs([
+        "📊 Översikt", "🧠 Analys", "🔄 Korrelation & Rebalans", "⚙️ Hantera"
     ])
 
     with tab_overview:
@@ -1735,6 +1874,9 @@ def page_portfolio(df: pd.DataFrame = None, holdings: pd.DataFrame = None,
 
     with tab_analys:
         _tab_analys(holdings_view, score_data, df)
+
+    with tab_rebalans:
+        _tab_rebalans(holdings, df)
 
     with tab_hantera:
         _manage_portfolio_section(holdings)
