@@ -219,6 +219,155 @@ def _macd_hist(close: pd.Series, fast: int = 12, slow: int = 26, sig: int = 9) -
     return float(hist) if not pd.isna(hist) else float("nan")
 
 
+# ── 11 nya feature-hjälpfunktioner (commit 4871bc5 definierade features ──────
+# men glömde implementera hjälpfunktionerna → NameError fångades tyst → NaN).
+
+def _log_return(close: pd.Series, days: int) -> float:
+    """Logaritmisk avkastning över N dagar (mer normalfördelad än aritmetisk)."""
+    if len(close) <= days:
+        return float("nan")
+    try:
+        p_now  = float(close.iloc[-1])
+        p_prev = float(close.iloc[-days - 1])
+        if p_prev <= 0 or p_now <= 0:
+            return float("nan")
+        return float(np.log(p_now / p_prev))
+    except Exception:
+        return float("nan")
+
+
+def _hurst_exponent(close: pd.Series, min_n: int = 60) -> float:
+    """Hurst-exponent via R/S-analys (H>0.5=trend, H<0.5=mean-reverting, H≈0.5=random)."""
+    if len(close) < min_n:
+        return float("nan")
+    try:
+        series = close.pct_change(fill_method=None).dropna().values
+        n = len(series)
+        if n < 20:
+            return float("nan")
+        lags = [max(4, n // 8), max(8, n // 4), max(16, n // 2)]
+        rs_vals = []
+        lag_vals = []
+        for lag in lags:
+            if lag >= n:
+                continue
+            sub = series[:lag]
+            mean_sub = sub.mean()
+            deviation = (sub - mean_sub).cumsum()
+            r = deviation.max() - deviation.min()
+            s = sub.std()
+            if s > 0:
+                rs_vals.append(r / s)
+                lag_vals.append(lag)
+        if len(rs_vals) < 2:
+            return float("nan")
+        log_lags = np.log(lag_vals)
+        log_rs   = np.log(rs_vals)
+        h = float(np.polyfit(log_lags, log_rs, 1)[0])
+        return float(np.clip(h, 0.0, 1.0))
+    except Exception:
+        return float("nan")
+
+
+def _serial_corr(close: pd.Series, lag: int = 1) -> float:
+    """Autokorrelation av dagliga returns vid given lag (momentum-persistens)."""
+    if len(close) < lag + 10:
+        return float("nan")
+    try:
+        rets = close.pct_change(fill_method=None).dropna()
+        if len(rets) < lag + 5:
+            return float("nan")
+        return float(rets.autocorr(lag=lag))
+    except Exception:
+        return float("nan")
+
+
+def _volume_price_corr(close: pd.Series, volume: pd.Series | None, days: int = 20) -> float:
+    """Korrelation mellan dagliga returns och volym de senaste N dagarna."""
+    if volume is None or len(close) < days or len(volume) < days:
+        return float("nan")
+    try:
+        rets = close.pct_change(fill_method=None).dropna().tail(days)
+        vol  = volume.reindex(rets.index).tail(days)
+        if len(rets) < 5 or len(vol) < 5:
+            return float("nan")
+        corr = rets.corr(vol)
+        return float(corr) if not pd.isna(corr) else float("nan")
+    except Exception:
+        return float("nan")
+
+
+def _klinger_oscillator(close: pd.Series, volume: pd.Series | None,
+                        fast: int = 34, slow: int = 55) -> float:
+    """Klinger Volume Oscillator: (EMA_fast - EMA_slow) av Volume Force."""
+    if volume is None or len(close) < slow + 1 or len(volume) < slow + 1:
+        return float("nan")
+    try:
+        # Volume Force = volym × riktning (1 om pris stiger, -1 om faller)
+        direction = close.diff().apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+        vf = volume * direction
+        ema_fast = vf.ewm(span=fast, adjust=False).mean()
+        ema_slow = vf.ewm(span=slow, adjust=False).mean()
+        kvo = (ema_fast - ema_slow).iloc[-1]
+        # Normalisera mot volym för jämförbarhet
+        avg_vol = float(volume.tail(20).mean() or 1)
+        return float(kvo / avg_vol) if avg_vol else float("nan")
+    except Exception:
+        return float("nan")
+
+
+def _max_drawdown(close: pd.Series, days: int = 60) -> float:
+    """Maximalt peak-to-trough-drawdown de senaste N dagarna (negativt värde)."""
+    if len(close) < days:
+        return float("nan")
+    try:
+        window = close.tail(days)
+        peak   = window.expanding().max()
+        dd     = (window / peak) - 1
+        return float(dd.min())
+    except Exception:
+        return float("nan")
+
+
+def _consecutive_direction(close: pd.Series, direction: str = "down") -> int:
+    """Räknar antal konsekutiva dagar i given riktning (up/down) till idag."""
+    if len(close) < 2:
+        return 0
+    try:
+        diffs = close.diff().iloc[1:]
+        streak = 0
+        for val in reversed(diffs.values):
+            if direction == "down" and val < 0:
+                streak += 1
+            elif direction == "up" and val > 0:
+                streak += 1
+            else:
+                break
+        return streak
+    except Exception:
+        return 0
+
+
+def _rsi_divergence(close: pd.Series, current_rsi: float, lookback: int = 14) -> float:
+    """
+    Pris-RSI-divergens: normaliserad skillnad mellan prismömentum och RSI-momentum.
+    Positiv = bullish divergens (RSI stiger medan pris faller / RSI stiger snabbare).
+    Negativ = bearish divergens.
+    """
+    if len(close) < lookback * 2 or pd.isna(current_rsi):
+        return float("nan")
+    try:
+        prev_close = close.iloc[-lookback - 1]
+        prev_rsi   = _rsi(close.iloc[:-lookback], 14)
+        if pd.isna(prev_rsi) or prev_close <= 0:
+            return float("nan")
+        price_change = (float(close.iloc[-1]) / prev_close) - 1
+        rsi_change   = (current_rsi - prev_rsi) / 100.0
+        return float(rsi_change - price_change)
+    except Exception:
+        return float("nan")
+
+
 def compute_features_at(close: pd.Series, volume: pd.Series) -> dict:
     """Räknar ut TECH_FEATURES givet en pris- och volymserie som ENDAR vid målpunkten.
 
@@ -341,6 +490,43 @@ class TrainedModel:
     test_metrics: dict
 
 
+def _add_cross_sectional_target(df: pd.DataFrame) -> pd.DataFrame:
+    """Lägger till 'target_cs' = forward_return_30d demeanad PER DATUM.
+
+    Detta är den enskilt viktigaste förbättringen för en aktie-URVALS-modell:
+    råa 30-dagars-avkastningar domineras av marknadsbreda rörelser (alla aktier
+    rör sig ihop varje månad). Tekniska features kan inte förutsäga "var det en
+    bra månad för marknaden" → IC ≈ 0. Genom att subtrahera datumets medel­avkastning
+    tar vi bort marknadsfaktorn och låter modellen lära sig RELATIV styrka
+    ("slår denna aktie sina peers denna månad?") — vilket är exakt vad vi rankar på.
+    """
+    df = df.copy()
+    date_mean = df.groupby("date")["forward_return_30d"].transform("mean")
+    df["target_cs"] = df["forward_return_30d"] - date_mean
+    return df
+
+
+def _per_date_ic(dates, preds, actuals) -> float:
+    """Beräknar genomsnittlig per-datum Spearman-IC (den meningsfulla urvals-IC:n).
+
+    Poolad IC (alla rader på en gång) blandar tidsserie- och tvärsnittsvarians
+    och överskattar/underskattar signal. Per-datum-IC mäter exakt det vi bryr oss
+    om: rangordnar modellen aktier korrekt INOM varje datum?
+    """
+    try:
+        from scipy.stats import spearmanr
+    except Exception:
+        return 0.0
+    dfx = pd.DataFrame({"date": list(dates), "pred": list(preds), "actual": list(actuals)})
+    ics = []
+    for _, g in dfx.groupby("date"):
+        if len(g) >= 5 and g["pred"].nunique() > 1 and g["actual"].nunique() > 1:
+            ic, _ = spearmanr(g["pred"], g["actual"])
+            if not math.isnan(ic):
+                ics.append(ic)
+    return float(np.mean(ics)) if ics else 0.0
+
+
 def _make_regressor():
     """Returnerar en gradient-boosted regressor. Använder xgboost om
     installerat, annars sklearn HistGradientBoostingRegressor."""
@@ -402,15 +588,18 @@ def train_from_dataset(parquet_path: Path, universe: str) -> Optional[TrainedMod
     # Vinjet & klipp orealistiska targets (extrema outliers från split/missdata)
     df = df[df["forward_return_30d"].between(-0.9, 5.0)]
 
+    # Tvärsnittlig target: demeana forward-return per datum (tar bort marknadsfaktor)
+    df = _add_cross_sectional_target(df)
+
     # Time-based split: 80% äldre = train, 20% senare = test
     df = df.sort_values("date")
     split_idx = int(len(df) * 0.8)
     train, test = df.iloc[:split_idx], df.iloc[split_idx:]
 
     X_tr = train[TECH_FEATURES].fillna(0).values
-    y_tr = train["forward_return_30d"].values
+    y_tr = train["target_cs"].values        # Träna på RELATIV avkastning
     X_te = test[TECH_FEATURES].fillna(0).values
-    y_te = test["forward_return_30d"].values
+    y_te = test["target_cs"].values
 
     # Exponentiell tidsviktning — nyare data viktas högre.
     # Halvlivstid = SAMPLE_WEIGHT_HALFLIFE_YEARS (default 2 år).
@@ -428,22 +617,27 @@ def train_from_dataset(parquet_path: Path, universe: str) -> Optional[TrainedMod
     # Metrics
     pred_te = model.predict(X_te)
     mae = float(np.mean(np.abs(pred_te - y_te)))
-    # Information coefficient: Spearman-rank-korrelation
+
+    # Per-datum-IC (meningsfull urvals-IC) — det vi faktiskt bryr oss om
+    ic = round(_per_date_ic(test["date"].values, pred_te, y_te), 4)
+
+    # Poolad IC behålls som referens (mindre meningsfull men jämförbar med gammalt)
     try:
         from scipy.stats import spearmanr
-        ic, _ = spearmanr(pred_te, y_te)
-        ic = float(ic) if not math.isnan(ic) else 0.0
+        ic_pooled, _ = spearmanr(pred_te, y_te)
+        ic_pooled = round(float(ic_pooled), 4) if not math.isnan(ic_pooled) else 0.0
     except Exception:
-        # Fallback: enkel Pearson om scipy ej finns
-        ic = float(np.corrcoef(pred_te, y_te)[0, 1]) if len(y_te) > 1 else 0.0
+        ic_pooled = 0.0
 
-    # Hit-rate: korrekt riktning (upp/ner)
+    # Hit-rate: korrekt relativ riktning (över/under datumets medel)
     hit_rate = float(((pred_te > 0) == (y_te > 0)).mean())
 
     metrics = {
         "mae": round(mae, 4),
-        "ic": round(ic, 4),
+        "ic": ic,                 # Per-datum-IC (headline)
+        "ic_pooled": ic_pooled,   # Referens
         "hit_rate": round(hit_rate, 4),
+        "target": "cross_sectional_demeaned",
         "n_train": len(train),
         "n_test": len(test),
     }
@@ -536,6 +730,9 @@ def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]
     df = df[df["forward_return_30d"].between(-0.9, 5.0)]
     df = df.sort_values("date").reset_index(drop=True)
 
+    # Tvärsnittlig target: demeana forward-return per datum (tar bort marknadsfaktor)
+    df = _add_cross_sectional_target(df)
+
     splits = _cpcv_split(df["date"])
     if not splits:
         logger.warning("CPCV: för lite data – faller tillbaka till train_from_dataset()")
@@ -548,9 +745,9 @@ def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]
         train, test = df.iloc[train_idx], df.iloc[test_idx]
 
         X_tr = train[TECH_FEATURES].fillna(0).values
-        y_tr = train["forward_return_30d"].values
+        y_tr = train["target_cs"].values        # Träna på RELATIV avkastning
         X_te = test[TECH_FEATURES].fillna(0).values
-        y_te = test["forward_return_30d"].values
+        y_te = test["target_cs"].values
 
         # Tidsviktning inom fold (nyare data viktas mer)
         _today = datetime.date.today()
@@ -564,13 +761,9 @@ def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]
         m.fit(X_tr, y_tr, sample_weight=w_tr)
         pred = m.predict(X_te)
 
-        try:
-            from scipy.stats import spearmanr
-            ic, _ = spearmanr(pred, y_te)
-            all_ic.append(float(ic) if not math.isnan(ic) else 0.0)
-        except Exception:
-            if len(y_te) > 1:
-                all_ic.append(float(np.corrcoef(pred, y_te)[0, 1]))
+        # Per-datum-IC inom testfolden (meningsfull urvals-IC)
+        fold_ic = _per_date_ic(test["date"].values, pred, y_te)
+        all_ic.append(fold_ic)
 
         if len(y_te) > 0:
             all_hitrate.append(float(((pred > 0) == (y_te > 0)).mean()))
@@ -589,13 +782,13 @@ def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]
     try:
         all_preds  = np.concatenate([
             _make_regressor().fit(df.iloc[tr][TECH_FEATURES].fillna(0).values,
-                                  df.iloc[tr]["forward_return_30d"].values).predict(
+                                  df.iloc[tr]["target_cs"].values).predict(
                 df.iloc[te][TECH_FEATURES].fillna(0).values
             )
             for tr, te in splits[:3]  # Max 3 folds för DSR-beräkning (snabbare)
         ])
         all_actuals = np.concatenate([
-            df.iloc[te]["forward_return_30d"].values
+            df.iloc[te]["target_cs"].values
             for tr, te in splits[:3]
         ])
         if len(all_preds) > 50:
@@ -624,9 +817,9 @@ def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]
     except Exception as e:
         logger.warning(f"  ⚠ DSR-beräkning misslyckades: {e}")
 
-    # Slutgiltig modell tränas på ALL data
+    # Slutgiltig modell tränas på ALL data (på tvärsnittlig target)
     X_all = df[TECH_FEATURES].fillna(0).values
-    y_all = df["forward_return_30d"].values
+    y_all = df["target_cs"].values
     _today = datetime.date.today()
     _age   = pd.to_datetime(df["date"]).dt.date.apply(
         lambda d: (_today - d).days
@@ -644,9 +837,12 @@ def train_with_cpcv(parquet_path: Path, universe: str) -> Optional[TrainedModel]
         trained_at=pd.Timestamp.utcnow().isoformat(),
         n_rows=len(df),
         test_metrics={
-            "cpcv_avg_ic":      avg_ic,
+            "cpcv_avg_ic":      avg_ic,          # Per-datum-IC, genomsnitt över folds
+            "ic":               avg_ic,          # Alias så UI/metrics-läsare hittar IC
             "cpcv_avg_hitrate": avg_hitrate,
+            "hit_rate":         avg_hitrate,
             "dsr":              dsr_value,
+            "target":           "cross_sectional_demeaned",
             "n_folds":          len(splits),
             "n_train_total":    len(df),
         },
