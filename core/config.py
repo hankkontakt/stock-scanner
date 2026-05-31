@@ -100,6 +100,32 @@ FACTOR_WEIGHTS = {
 
 assert abs(sum(FACTOR_WEIGHTS.values()) - 1.0) < 0.001
 
+# ════════════════ SCORING-LÄGE ════════════════
+# "sector_neutral" → sektor-relativ scoring (fundamentals demeanas per sektor +
+# sektor-specifika faktorvikter). Default eftersom en bank ska jämföras med banker,
+# inte med tech. Sätt till "" för gammalt globalt beteende.
+SCORE_MODE = "sector_neutral"
+
+# ════════════════ SEKTOR-SPECIFIKA FAKTORVIKTER ════════════════
+# Per-sektor DELTAN som läggs ovanpå FACTOR_WEIGHTS (efter regimjustering) och
+# normaliseras om per sektor. Speglar att olika branscher drivs av olika faktorer:
+# banker av kvalitet/värde (ej tillväxt), tech av tillväxt/momentum, defensiva av
+# utdelning/stabilitet. Sektorer som saknas använder default-vikterna oförändrade.
+# Nycklar måste matcha yfinance sektor-etiketter (df["sector"]).
+SECTOR_FACTOR_WEIGHTS = {
+    "Financial Services": {"quality": +0.05, "value": +0.03, "growth": -0.05, "momentum": -0.03},
+    "Technology":         {"growth": +0.06, "momentum": +0.05, "value": -0.06, "dividend": -0.04},
+    "Communication Services": {"growth": +0.04, "momentum": +0.03, "dividend": -0.04},
+    "Utilities":          {"dividend": +0.06, "quality": +0.03, "momentum": -0.05, "growth": -0.04},
+    "Real Estate":        {"dividend": +0.06, "value": +0.02, "growth": -0.04, "momentum": -0.02},
+    "Energy":             {"value": +0.04, "momentum": -0.04, "growth": -0.02},   # cyklisk
+    "Basic Materials":    {"value": +0.04, "momentum": -0.03, "growth": -0.02},   # cyklisk
+    "Consumer Defensive": {"quality": +0.04, "dividend": +0.04, "momentum": -0.04},
+    "Consumer Cyclical":  {"momentum": +0.04, "growth": +0.04, "value": -0.03},
+    "Healthcare":         {"growth": +0.04, "quality": +0.03, "value": -0.04},
+    "Industrials":        {"momentum": +0.03, "quality": +0.03, "value": -0.03},
+}
+
 # ════════════════ STREAMLIT SECRETS (fallback om .env inte finns) ════════════
 # Streamlit Cloud injicerar secrets som miljövariabler, men vi läser även
 # direkt från st.secrets för säkerhets skull.
