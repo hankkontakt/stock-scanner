@@ -62,14 +62,6 @@ SMALLCAP_TICKERS = (
 
 
 
-# ════════════════ NYA FAKTORER – viktaberedskap ════════════════
-# Dessa vikter läggs till om short_interest/seasonality/options_flow integreras
-EXTRA_FACTOR_WEIGHTS = {
-    "short_interest": 0.03,  # Blankningsgrad – låg blankning = positivt
-    "seasonality":    0.03,  # Säsongsmönster – stark månad = positivt
-    "options_flow":   0.02,  # Optionsflöde – puts/calls ratio
-}
-
 # ════════════════ FAKTORVIKTER ════════════════
 FACTOR_WEIGHTS = {
     "value":          0.2134,  # 0.22 × 0.97
@@ -148,7 +140,6 @@ MIN_DATA_QUALITY      = 0.5  # 0.5 = accepterar 4/8 fält (investmentbolag, råv
 # ════════════════ RAPPORT ════════════════
 TOP_N_RECOMMENDATIONS   = 10        # Topp 10 - läsbart och fokuserat
 REPORT_DIR              = "reports"
-REPORT_FILENAME_PATTERN = "weekly_report_{date}.md"
 
 # ════════════════ PORTFÖLJ ════════════════
 HOLDINGS_FILE       = "data/holdings.csv"
@@ -252,15 +243,6 @@ def remove_custom_from_universe(ticker: str) -> bool:
         return False
     _save_custom_universe(new)
     return True
-
-# Slå ihop UNIVERSE med custom-tickers
-try:
-    _custom_tickers = [c["ticker"] for c in load_custom_universe()]
-    if _custom_tickers:
-        # Behåll UNIVERSE som en tuple (original), skapa en combined-lista vid runtime
-        pass
-except Exception:
-    pass
 
 # ── Scoring-config override (sätts via admin-UI, sparas i data/scoring_config.json) ──
 import json as _json

@@ -462,12 +462,15 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
             # FX-kurs över långa luckor (kan ge 100-1000x felaktiga SEK-priser).
             fx_aligned = fx_hist.reindex(hist.index).ffill(limit=5).bfill(limit=5)
 
-            # Fallback: om fx_aligned är tom eller all-NaN (FX-fetch misslyckades)
-            # → behåll ursprungspriser istället för att skriva NaN på hela serien.
+            # Fallback: om fx_aligned är tom, all-NaN, eller har partiell NaN
+            # (FX-fetch misslyckades eller lucka >5 dagar → ersätt kvarvarande NaN med 1.0
+            # så att prishistorik inte infekteras av NaN i RSI/MACD/return-beräkningar).
             if fx_aligned.empty or fx_aligned.isna().all():
                 fx_aligned = pd.Series(1.0, index=hist.index)
-            else:
-                # Sanity check: orealistiska dag-till-dag-hopp tyder på datafel.
+            elif fx_aligned.isna().any():
+                # Partiell NaN: ersätt med 1.0 för de få datapunkter som saknar FX
+                fx_aligned = fx_aligned.fillna(1.0)
+            # Sanity check: orealistiska dag-till-dag-hopp tyder på datafel.
                 _ratio = (fx_aligned / fx_aligned.shift(1)).abs()
                 if (_ratio > 1.5).any() or (_ratio < 0.67).any():
                     print(f"  ⚠ Misstänkt FX-hopp för {ticker} ({fx_ticker}) – hoppar konvertering")
