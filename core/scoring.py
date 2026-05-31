@@ -169,7 +169,15 @@ def _region_neutralize_fundamentals(df: pd.DataFrame) -> pd.DataFrame:
 
     Returnerar en kopia av df med justerade kolumnvärden.
     Originaldatan skrivs inte tillbaka; df-schemat bibehålls.
+
+    IDEMPOTENS: sätter flaggan `_fundamentals_neutralized` och hoppar över om den
+    redan finns. Annars dubbel-neutraliserar morning/evening-re-scoringen
+    (som laddar redan-neutraliserad scored_universe-CSV) fundamentals varje dag
+    → faktorvärdena driftar mot noll. Weekly startar från rå data (ingen flagga).
     """
+    if "_fundamentals_neutralized" in df.columns:
+        return df  # Redan neutraliserad (t.ex. morning re-score på sparad CSV)
+
     df = _add_exchange_groups(df)
     groups = df["exchange_group"]
 
@@ -189,6 +197,7 @@ def _region_neutralize_fundamentals(df: pd.DataFrame) -> pd.DataFrame:
         # NaN-rader i originalet förblir NaN (transform hanterar det korrekt)
         df[col] = series - region_median
 
+    df["_fundamentals_neutralized"] = True
     return df
 
 
@@ -837,10 +846,13 @@ def score_universe_sector_neutralized(df: pd.DataFrame, regime: str = "OSÄKER")
         "revenue_growth", "earnings_growth",
         "debt_to_equity", "current_ratio",
     ]
-    for col in _SECTOR_NEUTRALIZE:
-        if col in df.columns and df[col].notna().any():
-            sector_median = df.groupby(sectors)[col].transform("median")
-            df[col] = df[col] - sector_median
+    # IDEMPOTENS: hoppa över om redan sektor-neutraliserad (morning re-score på CSV)
+    if "_sector_neutralized" not in df.columns:
+        for col in _SECTOR_NEUTRALIZE:
+            if col in df.columns and df[col].notna().any():
+                sector_median = df.groupby(sectors)[col].transform("median")
+                df[col] = df[col] - sector_median
+        df["_sector_neutralized"] = True
 
     # ── Steg 3: Faktorscore + rabatter + rank ─────────────────────────────────
     # Respektera marknadsregimen (tidigare hårdkodat "OSÄKER" → ignorerade TJUR/BJÖRN).
