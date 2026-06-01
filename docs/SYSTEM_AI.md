@@ -983,6 +983,24 @@ All ideas discovered during system analysis. Add to this section as you find mor
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-01 — Rate-limited tickers exkluderas fran strikes + fetch-fel-tab i admin
+
+**Strike-systemet skiljer nu pa rate-limited vs genuina fetch-fel:**
+- `core/daily_pipeline.py:966-995` — innan ticker-health updateras, lasers
+  `fetch_errors.json` for att filtrera bort rate-limited (429) och timeout-tickers.
+  Bara genuina fetch-fel (404/delisted) ger strikes.
+- `core/data_fetcher_batch.py` — `rate_limited_tickers` sparas explicit i
+  fetch_errors.json som en separat lista.
+
+**Ny flik "Fetch-fel (senaste korning)" i Strikes & Blacklist admin:**
+- Varje ticker visas med status, pass-nummer, "Rate-limited?"-kolumn
+- Rekommendation per ticker: "Behall (tillfalligt yahoo-fel)" eller
+  "Overvag blacklist"
+- Bulk-knapp: "Blacklista genuint misslyckade" (exkl rate-limited)
+- Bulk-knapp: "Rensa strikes for rate-limited" (aterstall tickers som
+  fatt strikes fast felet var yfinance-problem)
+- Historiktabell over senaste 10 korningar
+
 ### 2026-06-01 — Småbolag blacklist + ny admin-flik Strikes & Blacklist + cron-tider fixade
 
 **SMALLCAP_TICKERS filtrerar mot blacklist:**
