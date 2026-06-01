@@ -749,11 +749,11 @@ def run_portfolio_refresh(verbose: bool = True) -> dict:
         logger.error(f"  ❌ fetch_prices_only misslyckades: {e}")
         return result
 
-    if prices is None or prices.empty:
+    if prices is None or prices == {}:
         logger.warning("  ⚠ Inga priser kunde hamtas")
         return result
 
-    # Skapa lookup: ticker -> senaste close
+    # Filter out tickers where yfinance returned no data (e.g. delisted/fund names)
     price_lookup = {}
     for ticker in tickers:
         ticker_upper = ticker.upper()
