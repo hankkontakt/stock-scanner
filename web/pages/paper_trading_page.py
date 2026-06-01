@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from web.utils import kpi_row, _apply_chart_style
+from web.ui.components import clickable_stock_table
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -240,10 +241,11 @@ def page_paper_trading():
                     "Trail":  f"{trail:.2f}" if trail else "—",
                     "DCA":    t.get("dca_count", 0),
                 })
-            st.dataframe(
+            clickable_stock_table(
                 pd.DataFrame(rows),
-                use_container_width=True,
-                hide_index=True,
+                ticker_col="Ticker",
+                context_df=st.session_state.get("scored_df"),
+                key="pt_open_positions",
                 height=min(400, 60 + len(rows) * 36),
             )
 
@@ -267,10 +269,11 @@ def page_paper_trading():
                     "Exit":   reason.replace("_", " "),
                     "Datum":  t.get("sell_date", "—"),
                 })
-            st.dataframe(
+            clickable_stock_table(
                 pd.DataFrame(rows_c),
-                use_container_width=True,
-                hide_index=True,
+                ticker_col="Ticker",
+                context_df=st.session_state.get("scored_df"),
+                key="pt_closed_positions",
                 height=min(400, 60 + len(rows_c) * 36),
             )
 

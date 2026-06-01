@@ -149,6 +149,66 @@ def data_table(df: pd.DataFrame, *, column_help: dict | None = None,
                  height=height, column_config=col_cfg or None)
 
 
+# ── Klickbar aktietabell (öppnar detaljvy vid klick) ─────────────────────────
+
+def clickable_stock_table(df: pd.DataFrame, *, ticker_col: str = "ticker",
+                          context_df: pd.DataFrame | None = None,
+                          column_help: dict | None = None,
+                          column_config: dict | None = None,
+                          height: int | None = None, key: str = "cst",
+                          detail_kwargs: dict | None = None,
+                          caption: str = "Klicka på en rad för full analys.") -> None:
+    """Visar en aktietabell där ett klick på en rad öppnar stock_detail-panelen.
+
+    Återanvändbar överallt (teknisk analys, paper trading, småbolag, …) så att
+    alla tabeller beter sig som ranking-tabellen.
+
+    Args:
+        df: tabellen att visa (måste ha en ticker-kolumn, ev. med flagg-prefix).
+        ticker_col: kolumnnamn som innehåller tickern.
+        context_df: scored_universe för att slå upp full rad + AI-kontext (valfritt).
+        key: unik nyckel per tabell.
+        detail_kwargs: extra argument till render_stock_detail (t.ex. show_news=False).
+    """
+    if df is None or len(df) == 0:
+        empty_state("Ingen data att visa.")
+        return
+    if ticker_col not in df.columns:
+        # Ingen ticker-kolumn → vanlig tabell utan klick
+        data_table(df, column_help=column_help, height=height)
+        return
+
+    st.caption(caption)
+    col_cfg: dict = {}
+    for col in df.columns:
+        h = (column_help or {}).get(col) or help_for(str(col))
+        if h:
+            col_cfg[col] = st.column_config.Column(help=h)
+    # Merge in caller-supplied column_config (overrides help-derived entries)
+    if column_config:
+        col_cfg.update(column_config)
+
+    event = st.dataframe(
+        df, use_container_width=True, hide_index=True, height=height,
+        column_config=col_cfg or None,
+        on_select="rerun", selection_mode="single-row", key=key,
+    )
+
+    if event and getattr(event, "selection", None) and event.selection.get("rows"):
+        idx = event.selection["rows"][0]
+        raw = str(df.iloc[idx][ticker_col]).strip()
+        # Hantera flagg-prefix som "🇸🇪 VOLV-B.ST" → ta sista ordet
+        ticker = raw.split()[-1] if " " in raw else raw
+        row = None
+        if context_df is not None and not context_df.empty and "ticker" in context_df.columns:
+            m = context_df[context_df["ticker"].astype(str).str.upper() == ticker.upper()]
+            if not m.empty:
+                row = m.iloc[0]
+        from web.stock_detail import render_stock_detail  # lat import → undvik cirkulär
+        with st.expander(f"Analys: {ticker}", expanded=True):
+            render_stock_detail(ticker, row=row, df=context_df, **(detail_kwargs or {}))
+
+
 # ── Genvägslänk (för dashboard "Visa allt →") ────────────────────────────────
 
 def shortcut(label: str, page_path: str, icon: str = "link") -> None:

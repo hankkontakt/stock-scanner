@@ -186,8 +186,15 @@ def calc_exit_signal(holding_row: pd.Series, universe_size: int) -> tuple:
     pnl_pct  = holding_row.get("unrealized_pnl_pct")  # som decimal, t.ex. 1.05 = +105%
     r3m      = holding_row.get("return_3m")
 
-    if score is None:
-        return "OKÄND", "Ingen data tillgänglig", 99
+    # Behandla NaN identiskt med None – ingen data = ingen rekommendation
+    import math
+    if score is None or (isinstance(score, float) and math.isnan(score)):
+        return "OKÄND", "Ingen scandata – kör en ny scan för uppdaterade signaler", 99
+
+    try:
+        score = float(score)
+    except (TypeError, ValueError):
+        return "OKÄND", "Ingen scandata – kör en ny scan för uppdaterade signaler", 99
 
     percentile = 100 * (1 - (rank - 1) / max(universe_size, 1))
     top_pct    = 100 - percentile

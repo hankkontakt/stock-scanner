@@ -7,6 +7,7 @@ from web.utils import (
     kpi_row, sector_bar_chart, score_distribution_chart, pct_fmt,
 )
 from web.stock_detail import render_stock_detail
+from web.ui.components import clickable_stock_table
 from core.country_flags import flag_for_ticker
 
 
@@ -121,6 +122,31 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
     )
 
     with tab1:
+        with st.expander("ℹ️ Hur läser jag rankinglistan? — Förklaring för nybörjare", expanded=False):
+            st.markdown("""
+**Rankinglistan sorterar alla småbolag efter systemets totalpoäng (0–100).**
+
+### ⭐ Stjärnbetyg
+Systemet delar in bolagen i 1–5 stjärnor baserat på totalpoängen:
+- **★★★★★ (5 stjärnor):** Starka på nästan alla faktorer — fundamenta, momentum, värdering, insider
+- **★★★★☆ (4 stjärnor):** Mycket bra bolag med bara mindre svagheter
+- **★★★☆☆ (3 stjärnor):** OK bolag — varken bra eller dåliga
+- **★★☆☆☆ (2 stjärnor):** Tydliga svagheter i analysen
+- **★☆☆☆☆ (1 stjärna):** Undvik eller analysera noggrant
+
+### 📊 Kolumnförklaringar
+| Kolumn | Vad det betyder |
+|--------|----------------|
+| **Poäng** | Totalpoäng 0–100 (blå stapel) — ju högre desto bättre |
+| **AI 30d-ret** | AI-modellens prediktion: hur mycket aktien förväntas röra sig kommande 30 dagar |
+| **AI rank** | AI-ranking (0–100) — kompletterande till klassisk poäng |
+| **Insider** | BUY = insiders har nyligen köpt egna aktier (positivt signal) |
+| **Dag% / Vecka%** | Kursrörelse senaste dag/vecka |
+| **6m% / 12m%** | Avkastning senaste 6 resp. 12 månader |
+| **Piotroski** | Finansiell styrka 0–9 (se Faktortabell-fliken för förklaring) |
+
+**Klicka på en aktie** i tabellen för att öppna en full analys!
+""")
         if filt.empty:
             st.info("Inga bolag matchar filter.")
         else:
@@ -194,6 +220,27 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
                         )
 
     with tab2:
+        with st.expander("ℹ️ Vad är nyckeltal? — Förklaring för nybörjare", expanded=False):
+            st.markdown("""
+**Nyckeltal hjälper dig bedöma om ett bolag är billigt, lönsamt och finansiellt stabilt.**
+
+| Nyckeltal | Vad det mäter | Bra värde (tumregel) |
+|-----------|--------------|---------------------|
+| **EV/EBITDA** | Pris relativt rörelseresultat | < 10 = billigt · > 20 = dyrt |
+| **P/B** | Pris relativt bokfört värde | < 1,5 = billigt · > 3 = dyrt |
+| **Bruttomarg.** | Hur stor andel av intäkten som är vinst efter direkta kostnader | > 40% = stark · < 20% = svag |
+| **Rörelsmarg.** | Vinst efter alla driftskostnader (mer komplett än bruttomarginal) | > 10% = bra |
+| **Oms.tillv.** | Hur snabbt omsättningen växer | > 10%/år = bra |
+| **Vinst.tillv.** | Hur snabbt vinsten växer | > 10%/år = bra |
+| **D/E** | Skulder i förhållande till eget kapital (skuldsättning) | < 1 = låg risk · > 2 = hög risk |
+| **CR (Current Ratio)** | Förmåga att betala kortfristiga skulder | > 1,5 = bra · < 1 = varning |
+| **FCF** | Fritt kassaflöde — faktiska pengar bolaget genererar | Positivt = bra |
+| **Kassa** | Likvida medel bolaget har | Mer = bättre buffert |
+
+**Tumregel:** Bra bolag har hög lönsamhet (marginaler), låg skuldsättning (D/E) och positivt kassaflöde (FCF).
+
+**Klicka på en aktie** för full analys med AI-kommentarer!
+""")
         if not filt.empty:
             key_cols = [c for c in [
                 "ticker", "sc_stars", "current_price",
@@ -217,9 +264,30 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
             for c in ["Bruttomarg.", "Rörelsmarg.", "Oms.tillv.", "Vinst.tillv."]:
                 if c in kn.columns:
                     kn[c] = kn[c].apply(lambda v: pct_fmt(v))
-            st.dataframe(kn, use_container_width=True, hide_index=True, height=600)
+            clickable_stock_table(kn, ticker_col="Ticker", context_df=filt,
+                                  key="sc_keynums_table", height=600)
 
     with tab3:
+        with st.expander("ℹ️ Vad är faktortabellen? — Förklaring för nybörjare", expanded=False):
+            st.markdown("""
+**Systemet betygsätter varje bolag på 7 delfaktorer — se hur stark varje aspekt är.**
+
+| Faktor | Vad bedöms | Högt = bra? |
+|--------|-----------|------------|
+| **Insider** | Insiderägande + senaste köp/sälj av styrelse/ledning | ✅ Ja — insiders som köper tror på bolaget |
+| **FCF** | Fritt kassaflöde — hur mycket pengar bolaget faktiskt tjänar | ✅ Ja — positivt kassaflöde = finansiellt friskt |
+| **Piotroski** | Finansiell hälsocheck (9 kriterier: lönsamhet, likviditet, effektivitet) | ✅ Ja — 7–9 = starkt bolag |
+| **Tillväxt** | Omsättnings- och vinsttillväxt | ✅ Ja — växande bolag är bättre på sikt |
+| **Balans** | Skuldsättning och kreditvärdighet | ✅ Ja — låg skuld = lägre risk |
+| **Värdering** | Är aktien billig eller dyr vs. bolagets verkliga värde? | ✅ Ja — billig = mer uppsida |
+| **Momentum** | Prismomentumet — rör sig aktien uppåt? | ✅ Ja — aktier i upptrend fortsätter ofta upp |
+| **Likviditet** | Hur lätt det är att köpa/sälja aktien utan att påverka kursen | ✅ Ja — hög likviditet = lättare att handla |
+| **Totalt** | Viktad summa av alla faktorer (0–100) | ✅ Ja — > 60 = starkt bolag |
+
+**Blå staplar:** Poäng 0–100. Längre stapel = bättre på den faktorn.
+
+**Klicka på en aktie** för att se detaljerad analys och AI-kommentarer!
+""")
         if not filt.empty:
             sc_factor_map = {
                 "sc_insider":   "Insider",
@@ -238,10 +306,36 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
             fact = fact.rename(columns={"ticker": "Ticker", **{c: sc_factor_map[c] for c in fact_cols}})
             col_cfg2 = {lbl: st.column_config.ProgressColumn(lbl, min_value=0, max_value=100, format="%.0f")
                         for lbl in sc_factor_map.values() if lbl in fact.columns}
-            st.dataframe(fact, use_container_width=True, hide_index=True,
-                         column_config=col_cfg2, height=600)
+            clickable_stock_table(fact, ticker_col="Ticker", context_df=filt,
+                                  key="sc_factors_table", height=600,
+                                  column_config=col_cfg2 or None)
 
     with tab4:
+        with st.expander("ℹ️ Vad är insider-data? — Förklaring för nybörjare", expanded=False):
+            st.markdown("""
+### 👔 Vad är insiderhandel (laglig)?
+**Insiders** = VD, CFO, styrelseledamöter och storägare (≥10%) i bolaget.
+De måste rapportera alla köp och sälj av egna aktier till Finansinspektionen inom 3 dagar.
+
+Det är **helt lagligt** att handla i det egna bolagets aktier — det som är olagligt är att göra det
+baserat på hemlig information som inte är offentlig.
+
+### 📊 Kolumnförklaringar
+| Kolumn | Vad det betyder |
+|--------|----------------|
+| **Insiders äger%** | Andel av totalt aktiekapital som ägs av insiders. Högt (>10%) = insiders tror starkt på bolaget |
+| **Signal** | BUY = nettoköp senaste perioden · SELL = nettosälj |
+| **Netto köp 6m** | Totalt köpvärde minus säljvärde senaste 6 månaderna (i SEK) |
+| **Antal köp** | Antal insidertransaktioner som var köp |
+| **Antal sälj** | Antal insidertransaktioner som var sälj |
+
+### 🔍 Hur tolkar jag det?
+- **BUY-signal + högt ägarskap:** Insiders satsar egna pengar → stark positiv signal
+- **SELL-signal:** Inte nödvändigtvis dåligt — de kan sälja av skattemässiga skäl eller diversifiering
+- **Klusterköp (flera insiders köper samtidigt):** Starkaste möjliga signal
+
+**Klicka på en aktie** för full analys!
+""")
         if not filt.empty:
             ins_cols = [c for c in [
                 "ticker", "insider_pct", "insider_signal",
@@ -260,7 +354,8 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
                 })
                 if "Insiders äger%" in ins.columns:
                     ins["Insiders äger%"] = ins["Insiders äger%"].apply(lambda v: pct_fmt(v))
-                st.dataframe(ins, use_container_width=True, hide_index=True, height=400)
+                clickable_stock_table(ins, ticker_col="Ticker", context_df=filt,
+                                      key="sc_insider_table", height=400)
 
                 buy_tickers = filt[filt.get("insider_signal", pd.Series()) == "BUY"]["ticker"].tolist() \
                     if "insider_signal" in filt.columns else []

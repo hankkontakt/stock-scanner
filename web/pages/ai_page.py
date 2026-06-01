@@ -10,6 +10,7 @@ from web.utils import (
     load_watchlist, load_portfolio, _get_provider, _get_depth,
 )
 from core import ai_analysis, config
+from web.ui.components import clickable_stock_table
 
 
 def _save_watchlist_data(items):
@@ -377,7 +378,10 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 show_cols = [c for c in ["ticker", "name", "score_total", "entry_signal",
                                          "trend_signal", "rsi_14"] if c in sec_df.columns]
                 if show_cols:
-                    st.dataframe(sec_df[show_cols].reset_index(drop=True), use_container_width=True, height=300)
+                    _sec_disp = sec_df[show_cols].reset_index(drop=True).rename(columns={"ticker": "Ticker"})
+                    clickable_stock_table(_sec_disp, ticker_col="Ticker", context_df=df,
+                                         key="ai_sector_stocks_table", height=300,
+                                         caption="Klicka för full analys.")
         else:
             st.info("Ingen sektordata tillgänglig.")
 
@@ -791,7 +795,8 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                     "Trend": sc.get("trend_signal", "—"),
                 })
             if rows:
-                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                clickable_stock_table(pd.DataFrame(rows), ticker_col="Ticker", context_df=df,
+                                      key="ai_portfolio_overview_table", caption="Klicka för analys.")
         else:
             st.info("Inga portföljinnehav hittade. Lägg till innehav i Admin-fliken först.")
 

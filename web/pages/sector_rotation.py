@@ -6,12 +6,45 @@ import streamlit as st
 
 from web.utils import kpi_row, _get_provider, _get_depth
 from core import ai_analysis
+from web.ui.components import clickable_stock_table
 
 
 def page_sector_rotation(df: pd.DataFrame):
     """Sektorrotation – heatmap och momentum för alla sektorer."""
     st.title("🏭 Sektorrotation")
     st.caption("Analysera sektorstyrka, rotation och momentum. Data från sektor-ETFer via yfinance.")
+
+    with st.expander("ℹ️ Vad är sektorrotation? — Förklaring för nybörjare", expanded=False):
+        st.markdown("""
+### 🏭 Vad är en sektor?
+Börsen är uppdelad i **sektorer** — grupper av bolag som gör liknande saker.
+Exempel: **Technology** (Apple, Microsoft), **Healthcare** (läkemedel, sjukvård),
+**Energy** (olja, gas), **Consumer Defensive** (mat, hushållsprodukter).
+
+### 🔄 Vad är sektorrotation?
+Pengar flödar ständigt mellan sektorer beroende på ekonomins fas.
+- **Lågkonjunktur:** Pengar flödar till defensiva sektorer (mat, sjukvård) som folk alltid köper
+- **Uppgångsfas:** Teknik och konsumtion leder
+- **Hög inflation:** Energi och råvaror gynnas
+
+Att förstå rotationen hjälper dig välja rätt sektorer *vid rätt tid*.
+
+### 📊 Momentum (1m / 3m)
+Hur mycket en sektor-ETF stigit (positivt) eller fallit (negativt) de senaste 1 respektive 3 månaderna.
+**Positivt momentum = sektorn är het just nu.**
+
+### ✅ MA50 / ✅ MA200
+**Glidande medelvärde (Moving Average):**
+- **MA50** = snittaktien sista 50 dagarna. Aktier *ovanför* MA50 = kortsiktig upptrend.
+- **MA200** = snittaktien sista 200 dagarna. Ovanför MA200 = långsiktig upptrend.
+
+En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
+
+### 💡 Handelssignaler — Vad gör jag med det här?
+- **Övervikta:** Köp/äg mer aktier i sektorer med stark trend
+- **Undervikta:** Minska eller undvik sektorer i nedtrend
+- **Neutral:** Håll normal vikt — varken öka eller minska
+""")
 
     # Använd sektor-data från scored_df om tillgänglig
     if df.empty or "sector" not in df.columns:
@@ -228,7 +261,9 @@ def page_sector_rotation(df: pd.DataFrame):
                         top_strong = strong_stocks.sort_values("score_total", ascending=False).head(10)
                     else:
                         top_strong = strong_stocks.head(10)
-                    st.dataframe(top_strong[show_cols_sr], use_container_width=True, hide_index=True)
+                    _sr_disp = top_strong[show_cols_sr].rename(columns={"ticker": "Ticker"})
+                    clickable_stock_table(_sr_disp, ticker_col="Ticker", context_df=df,
+                                         key="sector_top_stocks_table", caption="Klicka för full analys.")
                 else:
                     st.info("Ingen direktmatchning mellan ETF-sektorer och universumsektorer just nu")
 
