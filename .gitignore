@@ -81,3 +81,8 @@ _verify_msg.txt
 _report.txt
 _test*.txt
 _test_write.txt
+
+# Piotroski snapshots (consolidated to parquet)
+data/piotroski_snapshots/
+# Email delivery log (auto-generated, causes merge conflicts)
+data/email_delivery_log.json

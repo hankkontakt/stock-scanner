@@ -1,0 +1,4 @@
+# Piotroski-snapshots lagras i consolidated parquet-fil (piotroski_snapshots.parquet)
+# Enskilda JSON-filer ska inte commitas
+*
+!.gitignore

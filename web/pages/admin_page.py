@@ -101,17 +101,17 @@ def page_admin():
         _strikes_health()
     with tabs[8]:
         _data_quality()
-    with tabs[8]:
-        _email()
     with tabs[9]:
-        _users()
+        _email()
     with tabs[10]:
-        _config()
+        _users()
     with tabs[11]:
-        render_cache()
+        _config()
     with tabs[12]:
-        render_ai_log()
+        render_cache()
     with tabs[13]:
-        render_alarms()
+        render_ai_log()
     with tabs[14]:
+        render_alarms()
+    with tabs[15]:
         _debug(_load_scan_log)

@@ -40,4 +40,3 @@ jobs:
 
       - name: 🧪 Kör tester med täckning
         run: pytest tests/ -v --tb=short --cov=core --cov-fail-under=20 --cov-report=term-missing
-        run: pytest tests/ -v --tb=short
