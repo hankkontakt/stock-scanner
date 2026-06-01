@@ -1,5 +1,5 @@
 """
-ticker_health.py – Verktyg för att övervaka och validera tickers.
+ticker_health.py - Verktyg för att övervaka och validera tickers.
 
 Användning:
   python -m tools.ticker_health              # Testa alla tickers, rapportera problem
@@ -66,7 +66,7 @@ def check_ticker_health(ticker: str, timeout: int = 15) -> dict:
             result["has_prices"] = True
             result["last_price"] = float(hist["Close"].iloc[-1]) if "Close" in hist.columns else None
         else:
-            # Ingen prishistorik senaste månaden – kan vara avnoterad
+            # Ingen prishistorik senaste månaden - kan vara avnoterad
             if result["healthy"]:
                 result["healthy"] = False
                 result["status"] = "NO_PRICES"
@@ -173,7 +173,7 @@ def add_to_blacklist(ticker: str, reason: str = ""):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="🩺 Ticker Health Check – validera och övervaka tickers"
+        description="🩺 Ticker Health Check - validera och övervaka tickers"
     )
     parser.add_argument(
         "--check", nargs="+", metavar="TICKER",
@@ -237,7 +237,7 @@ def main():
         report = check_universe_health(tickers, max_workers=args.workers)
 
         print(f"\n{'='*60}")
-        print(f"🩺 HÄLSORAPPORT – {args.universe.upper()}")
+        print(f"🩺 HÄLSORAPPORT - {args.universe.upper()}")
         print(f"{'='*60}")
         print(f"  Totalt:           {report['total']}")
         print(f"  Friska:           {report['healthy']} ({report['healthy_pct']}%)")

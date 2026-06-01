@@ -1,5 +1,5 @@
 """
-scanner.py – Huvudingång för svenska småbolagsscanern.
+scanner.py - Huvudingång för svenska småbolagsscanern.
 
 Användning:
   python smallcap/scanner.py                     # kör hela universumet, top-20
@@ -32,7 +32,7 @@ try:
     _YF_AVAILABLE = True
 except ImportError:
     _YF_AVAILABLE = False
-    print("⚠️  yfinance ej installerat – kör: pip install yfinance", file=sys.stderr)
+    print("⚠️  yfinance ej installerat - kör: pip install yfinance", file=sys.stderr)
 
 # Importera data_fetcher för att aktivera curl_cffi/timeout-patchar och
 # använda samma hämtningspipeline (caching, retry) som huvudskannern.
@@ -84,7 +84,7 @@ _FETCH_FIELDS = [
 def _piotroski_proxy(row: dict) -> int:
     """
     Enkel 3-faktors Piotroski-proxy när full F-Score saknas.
-    Beräknar ett 1–9-värde baserat på tillgänglig data:
+    Beräknar ett 1-9-värde baserat på tillgänglig data:
       +1  Positiv rörelsemarginal (>5%)   -1 negativ
       +1  Positivt operativt kassaflöde   -1 negativt
       +1  Current ratio > 1.5             -1 < 1.0
@@ -218,7 +218,7 @@ def fetch_universe_data(tickers: list, delay: float = 0.4) -> pd.DataFrame:
     if "sharesOutstanding" in df.columns or "shares_outstanding" in df.columns:
         shares_col = "sharesOutstanding" if "sharesOutstanding" in df.columns else "shares_outstanding"
         # För enkelhet: använd dagens sharesOutstanding vs innevarande period = 0
-        # Detta är en approximation — exakt utspädning kräver 12 månads historik
+        # Detta är en approximation -- exakt utspädning kräver 12 månads historik
         pass
 
     # Piotroski-beräkning: försök med piotroski.py, fallback till proxy
@@ -228,13 +228,13 @@ def fetch_universe_data(tickers: list, delay: float = 0.4) -> pd.DataFrame:
         for _, r in df.iterrows():
             try:
                 s = _piotroski.compute(r.get("ticker", ""))
-                # Om compute() returnerar None (API-miss) → proxy från tillgänglig data
+                # Om compute() returnerar None (API-miss) -> proxy från tillgänglig data
                 scores.append(s if s is not None else _piotroski_proxy(r.to_dict()))
             except Exception:
                 scores.append(_piotroski_proxy(r.to_dict()))
         df["piotroski_score"] = scores
     except ImportError:
-        # Piotroski-modulen saknas helt – beräkna proxy för alla
+        # Piotroski-modulen saknas helt - beräkna proxy för alla
         df["piotroski_score"] = df.apply(
             lambda r: _piotroski_proxy(r.to_dict()), axis=1
         )
@@ -276,7 +276,7 @@ def run_scan(
         (scored_df, report_markdown)
     """
     print(f"\n{'='*60}")
-    print(f"  🔍 Småbolagsskanner – {datetime.today().strftime('%Y-%m-%d %H:%M')}")
+    print(f"  🔍 Småbolagsskanner - {datetime.today().strftime('%Y-%m-%d %H:%M')}")
     print(f"  Marknad: {market.upper()}  |  Top-{top_n}")
     print(f"{'='*60}\n")
 
@@ -316,7 +316,7 @@ def run_scan(
     top5 = scored.head(5)[["ticker", "sc_total", "sc_stars"]].to_string(index=False)
     print(f"\n  🏆 Top-5 resultat:\n{top5}\n")
 
-    # 5b. Cash Runway Watch – identifiera emissionsrisker
+    # 5b. Cash Runway Watch - identifiera emissionsrisker
     print("  Beräknar kassabana ...")
     try:
         from smallcap.cash_runway_watch import analyze_cash_runway, build_runway_section
@@ -361,7 +361,7 @@ def run_scan(
             n_adj = (scored["sector_adjustment"] != 0).sum()
             print(f"  🔄 Sektorjusterad: {n_adj} bolag fick justerade scores")
     except ImportError:
-        print("  ⚠ Sektorrotation-modulen saknas – hoppar över")
+        print("  ⚠ Sektorrotation-modulen saknas - hoppar över")
     except Exception as e:
         print(f"  ⚠ Sektorrotation: {e}")
 
@@ -370,7 +370,7 @@ def run_scan(
     nasdaq_news  = []
     if _NF_AVAILABLE:
         print("  Hämtar nyheter (Google News + Nasdaq Nordic) ...")
-        # Bygg ticker→namn mapping från topp-profiles_n
+        # Bygg ticker->namn mapping från topp-profiles_n
         name_map = {}
         if "name" in scored.columns:
             for _, r in scored.head(profiles_n).iterrows():
@@ -383,7 +383,7 @@ def run_scan(
             )
             if company_news:
                 print(f"    ✓ Google News: {len(company_news)} bolag")
-        # Nasdaq Nordic – regulatoriska meddelanden (Stockholm, senaste 7 dagar)
+        # Nasdaq Nordic - regulatoriska meddelanden (Stockholm, senaste 7 dagar)
         nasdaq_news = _nf.fetch_nasdaq_nordic_news(market="SSE", max_items=8, hours_back=168)
         if nasdaq_news:
             print(f"    ✓ Nasdaq Nordic: {len(nasdaq_news)} meddelanden")
@@ -430,7 +430,7 @@ def run_scan(
     # 10. E-post
     if send_mail:
         date_str = datetime.today().strftime("%d %b %Y")
-        top1     = scored.iloc[0]["ticker"] if not scored.empty else "—"
+        top1     = scored.iloc[0]["ticker"] if not scored.empty else "--"
         subject  = (f"📊 Småbolagsrapport {date_str} | "
                     f"Toppbolag: {top1} | {scored.iloc[0]['sc_stars']} "
                     f"{scored.iloc[0]['sc_total']:.0f}p")
@@ -442,7 +442,7 @@ def run_scan(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Svenska Småbolagsskanner – hittar guldstjärnor bland small/micro caps"
+        description="Svenska Småbolagsskanner - hittar guldstjärnor bland small/micro caps"
     )
     parser.add_argument(
         "--market",

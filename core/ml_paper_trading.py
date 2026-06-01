@@ -1,13 +1,13 @@
 """
-ml_paper_trading.py — Separat paper-trading-lager för ML-modellen.
+ml_paper_trading.py -- Separat paper-trading-lager för ML-modellen.
 
 Varje dag (när pipeline körs) sparas topp-N enligt `predicted_return` som
 virtuella köp. Nästa dag/körning beräknas P&L mot dagens close. Equity-kurva
 spåras separat per universum.
 
 Lagring:
-    data/ml_paper_universe.json    — för stora aktier
-    data/ml_paper_smallcap.json    — för svenska småbolag
+    data/ml_paper_universe.json    -- för stora aktier
+    data/ml_paper_smallcap.json    -- för svenska småbolag
 
 JSON-struktur:
 {
@@ -97,7 +97,7 @@ def record_daily_signals(scored_df: pd.DataFrame, universe: str,
             price_col = cand
             break
     if price_col is None:
-        logger.warning("Kan inte registrera ML-signaler — saknar pris-kolumn")
+        logger.warning("Kan inte registrera ML-signaler -- saknar pris-kolumn")
         return 0
 
     df = scored_df.dropna(subset=["predicted_return", price_col]).copy()
@@ -136,40 +136,6 @@ def record_daily_signals(scored_df: pd.DataFrame, universe: str,
 
     _save_store(universe, store)
     return n_added
-
-
-def close_expired_positions(latest_prices: dict, universe: str) -> int:
-    """Stäng positioner som är äldre än HOLD_DAYS. `latest_prices` är
-    {ticker: latest_close}. Returnerar antalet stängda positioner.
-    """
-    store = _load_store(universe)
-    today = date.today()
-    cutoff = today - timedelta(days=HOLD_DAYS)
-
-    n_closed = 0
-    for trade in store["trades"]:
-        if trade.get("exit_date") is not None:
-            continue
-        entry_date = datetime.strptime(trade["date"], "%Y-%m-%d").date()
-        if entry_date > cutoff:
-            continue
-        ticker = trade["ticker"]
-        latest = latest_prices.get(ticker)
-        if latest is None or not trade["entry_price"]:
-            continue
-        trade["exit_date"] = today.strftime("%Y-%m-%d")
-        trade["exit_price"] = float(latest)
-        trade["realized_return"] = (float(latest) / trade["entry_price"]) - 1
-        n_closed += 1
-
-    if n_closed:
-        store["equity_curve"].append({
-            "date": _today_str(),
-            "equity": _compute_equity(store["trades"]),
-            "n_open": sum(1 for t in store["trades"] if t.get("exit_date") is None),
-        })
-        _save_store(universe, store)
-    return n_closed
 
 
 def _compute_equity(trades: list) -> float:

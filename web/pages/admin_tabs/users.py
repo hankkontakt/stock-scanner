@@ -1,4 +1,4 @@
-"""admin/users.py – Anvandare tab for admin page."""
+"""admin/users.py - Anvandare tab for admin page."""
 import json
 from datetime import date
 

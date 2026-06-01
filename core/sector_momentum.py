@@ -4,15 +4,15 @@ sector_momentum.py
 Filtrerar bort hela sektorer som är i nedgång.
 
 Princip: Om hela tekniksektorn (XLK) trender nedåt vill du inte köpa
-ens de bästa techaktierna – du simmar mot strömmen. Sektorer i upptrend
+ens de bästa techaktierna - du simmar mot strömmen. Sektorer i upptrend
 ger medvind; sektorer i nedtrend ger motvind.
 
 Signaler per sektor:
-  STARK UPPTREND  – ETF > MA50 > MA200, positiv 3m-momentum
-  UPPTREND        – ETF > MA200
-  NEUTRAL         – Blandad signal
-  NEDTREND        – ETF < MA200
-  STARK NEDTREND  – ETF < MA50 < MA200, negativ 3m-momentum
+  STARK UPPTREND  - ETF > MA50 > MA200, positiv 3m-momentum
+  UPPTREND        - ETF > MA200
+  NEUTRAL         - Blandad signal
+  NEDTREND        - ETF < MA200
+  STARK NEDTREND  - ETF < MA50 < MA200, negativ 3m-momentum
 
 Applicering på scored DataFrame:
   - Aktier i STARK NEDTREND-sektorer: score sänks 20%
@@ -35,7 +35,7 @@ CACHE_DIR       = "data/cache"
 SECTOR_CACHE_H  = 24
 Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
 
-# Sektor → ETF-mappning (US-baserade, men representativa globalt)
+# Sektor -> ETF-mappning (US-baserade, men representativa globalt)
 SECTOR_ETFS = {
     "Technology":             "XLK",   # Technology Select Sector SPDR
     "Healthcare":             "XLV",   # Health Care Select Sector SPDR
@@ -49,7 +49,7 @@ SECTOR_ETFS = {
     "Real Estate":            "XLRE",  # Real Estate Select Sector SPDR
     "Utilities":              "XLU",   # Utilities Select Sector SPDR
 }
-# Notering: inga dubletter – Python dict skriver tyst över dublettnycklar
+# Notering: inga dubletter - Python dict skriver tyst över dublettnycklar
 
 # Justering av score baserat på sektormomtentum
 SECTOR_SCORE_ADJUSTMENT = {
@@ -74,7 +74,7 @@ def _rc(key, max_h):
         return None
     try:
         with open(p, "rb") as f: return pickle.load(f)
-    except: return None
+    except Exception: return None
 
 def _wc(key, data):
     try:
@@ -174,7 +174,7 @@ def _classify_signal(above_ma50, above_ma200, ret_3m) -> str:
         elif r3 >= -0.02:
             return "UPPTREND"          # Över båda MA men svagt eller flat momentum
         else:
-            return "NEUTRAL"           # Strukturellt upp men 3m-momentum negativ → degradera
+            return "NEUTRAL"           # Strukturellt upp men 3m-momentum negativ -> degradera
     elif not above_ma50 and not above_ma200:
         if r3 < -0.05:
             return "STARK NEDTREND"   # Under båda MA + negativ momentum
@@ -208,8 +208,8 @@ def apply_sector_momentum(scored: pd.DataFrame,
     Justerar score_total baserat på sektormomtentum.
 
     Lägger till kolumner:
-      sector_signal     – sektorsignal (STARK UPPTREND etc.)
-      sector_adjustment – poängjustering som applicerades
+      sector_signal     - sektorsignal (STARK UPPTREND etc.)
+      sector_adjustment - poängjustering som applicerades
     """
     if sector_momentum is None:
         sector_momentum = fetch_sector_momentum(verbose=verbose)
@@ -221,7 +221,7 @@ def apply_sector_momentum(scored: pd.DataFrame,
 
     df = scored.copy()
 
-    # Mappa sektor → signal
+    # Mappa sektor -> signal
     df["sector_signal"] = df["sector"].map(
         lambda s: sector_momentum.get(str(s), {}).get("signal", "NEUTRAL")
         if pd.notna(s) else "NEUTRAL"
@@ -256,7 +256,7 @@ def build_sector_momentum_section(sector_momentum: dict) -> str:
     lines.append("| Sektor | ETF | Signal | 1m | 3m | MA50 | MA200 |")
     lines.append("|--------|-----|--------|----|----|------|-------|")
 
-    # Sortera: bästa upptrend → sämsta nedtrend
+    # Sortera: bästa upptrend -> sämsta nedtrend
     order = ["STARK UPPTREND", "UPPTREND", "NEUTRAL", "NEDTREND", "STARK NEDTREND"]
     sorted_sectors = sorted(
         sector_momentum.items(),
@@ -273,13 +273,13 @@ def build_sector_momentum_section(sector_momentum: dict) -> str:
 
     for sector, data in sorted_sectors:
         sig   = data.get("signal", "NEUTRAL")
-        etf   = data.get("etf", "—")
+        etf   = data.get("etf", "--")
         r1m   = data.get("return_1m")
         r3m   = data.get("return_3m")
-        m50   = "✅" if data.get("above_ma50")  else "❌" if data.get("above_ma50") is False else "—"
-        m200  = "✅" if data.get("above_ma200") else "❌" if data.get("above_ma200") is False else "—"
-        r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "—"
-        r3m_s = f"{r3m*100:+.1f}%" if r3m is not None else "—"
+        m50   = "✅" if data.get("above_ma50")  else "❌" if data.get("above_ma50") is False else "--"
+        m200  = "✅" if data.get("above_ma200") else "❌" if data.get("above_ma200") is False else "--"
+        r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "--"
+        r3m_s = f"{r3m*100:+.1f}%" if r3m is not None else "--"
 
         lines.append(
             f"| {sector[:22]} | `{etf}` | "
@@ -451,7 +451,7 @@ def build_rotation_section(rotation_data: dict) -> str:
         return ""
 
     lines = ["\n## 🔄 Sektorrotation\n"]
-    lines.append("_Sektorer som byter favör – tidig signal för omallokering._\n")
+    lines.append("_Sektorer som byter favör - tidig signal för omallokering._\n")
 
     intensity = rotation_data.get("rotation_intensity", "OKÄND")
     intensity_icon = {"STARK": "🔴", "MÅTTLIG": "🟡", "SVAG": "🟢", "OKÄND": "⚪"}
@@ -465,8 +465,8 @@ def build_rotation_section(rotation_data: dict) -> str:
             info = rotation_data["momentum_changes"].get(sector, {})
             r1m = info.get("return_1m")
             r3m = info.get("return_3m")
-            r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "—"
-            r3m_s = f"{r3m*100:+.1f}%" if r3m is not None else "—"
+            r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "--"
+            r3m_s = f"{r3m*100:+.1f}%" if r3m is not None else "--"
             chg = info.get("rank_change", 0)
             lines.append(f"- **{sector}**: Rangförändring +{chg} | 1m: {r1m_s} | 3m: {r3m_s}")
 
@@ -478,8 +478,8 @@ def build_rotation_section(rotation_data: dict) -> str:
             info = rotation_data["momentum_changes"].get(sector, {})
             r1m = info.get("return_1m")
             r3m = info.get("return_3m")
-            r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "—"
-            r3m_s = f"{r3m*100:+.1f}%" if r3m is not None else "—"
+            r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "--"
+            r3m_s = f"{r3m*100:+.1f}%" if r3m is not None else "--"
             chg = info.get("rank_change", 0)
             lines.append(f"- **{sector}**: Rangförändring {chg} | 1m: {r1m_s} | 3m: {r3m_s}")
 
@@ -489,17 +489,17 @@ def build_rotation_section(rotation_data: dict) -> str:
     lines.append("\n### 🏆 Topp 3 sektorer\n")
     for i, s in enumerate(tops, 1):
         info = rotation_data["momentum_changes"].get(s, {})
-        sig = info.get("signal", "—")
+        sig = info.get("signal", "--")
         r1m = info.get("return_1m")
-        r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "—"
-        lines.append(f"{i}. **{s}** – {sig} (1m: {r1m_s})")
+        r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "--"
+        lines.append(f"{i}. **{s}** - {sig} (1m: {r1m_s})")
 
     lines.append("\n### 🗑️ Botten 3 sektorer\n")
     for i, s in enumerate(bottoms, 1):
         info = rotation_data["momentum_changes"].get(s, {})
-        sig = info.get("signal", "—")
+        sig = info.get("signal", "--")
         r1m = info.get("return_1m")
-        r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "—"
-        lines.append(f"{i}. **{s}** – {sig} (1m: {r1m_s})")
+        r1m_s = f"{r1m*100:+.1f}%" if r1m is not None else "--"
+        lines.append(f"{i}. **{s}** - {sig} (1m: {r1m_s})")
 
     return "\n".join(lines)

@@ -30,7 +30,7 @@ def _rc(key, max_h):
         return None
     try:
         with open(p, "rb") as f: return pickle.load(f)
-    except: return None
+    except Exception: return None
 
 def _wc(key, data):
     try:
@@ -152,45 +152,3 @@ def upcoming_in_top(scored: pd.DataFrame, top_n: int = 50,
     return cal
 
 
-def build_earnings_section(portfolio_cal: pd.DataFrame,
-                            top_cal: pd.DataFrame) -> str:
-    """Markdown-sektion för rapporten."""
-    if portfolio_cal.empty and top_cal.empty:
-        return ""
-
-    lines = ["\n## 📅 Earnings-kalender\n"]
-
-    if not portfolio_cal.empty:
-        lines.append("### ⚠ Dina innehav som rapporterar inom 30 dagar\n")
-        lines.append("| Datum | Dagar kvar | Ticker | Bolag | Score |")
-        lines.append("|-------|-----------|--------|-------|-------|")
-        for _, row in portfolio_cal.iterrows():
-            score = row.get("score_total", "—")
-            score_str = f"{score:.0f}" if isinstance(score, (int, float)) and pd.notna(score) else "—"
-            lines.append(
-                f"| {row['earnings_date']} | "
-                f"**{row['days_until']}** | "
-                f"`{row['ticker']}` | "
-                f"{str(row.get('name', ''))[:30]} | "
-                f"{score_str} |"
-            )
-        lines.append("")
-
-    if not top_cal.empty:
-        lines.append("### 🔔 Topp-aktier som rapporterar inom 14 dagar\n")
-        lines.append("_Var försiktig med köp precis innan rapport (gap-risk)_\n")
-        lines.append("| Datum | Dagar kvar | Rank | Ticker | Bolag | Score |")
-        lines.append("|-------|-----------|------|--------|-------|-------|")
-        for _, row in top_cal.head(10).iterrows():
-            score = row.get("score_total", "—")
-            score_str = f"{score:.0f}" if isinstance(score, (int, float)) and pd.notna(score) else "—"
-            lines.append(
-                f"| {row['earnings_date']} | "
-                f"**{row['days_until']}** | "
-                f"#{row.get('rank', '?')} | "
-                f"`{row['ticker']}` | "
-                f"{str(row.get('name', ''))[:30]} | "
-                f"{score_str} |"
-            )
-
-    return "\n".join(lines)

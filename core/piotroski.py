@@ -6,7 +6,7 @@ Beräknar Piotroski F-Score för varje aktie.
 Bakgrund:
   Joseph Piotroski (2000) visade att ett enkelt 9-punkts system baserat
   på bokföringssignaler kan identifiera "finansiellt starka" kontra
-  "finansiellt svaga" värdebolag – med signifikant avkastningsskillnad.
+  "finansiellt svaga" värdebolag - med signifikant avkastningsskillnad.
 
   Akademiskt bland de mest robusta och replikerade anomalierna.
 
@@ -28,9 +28,9 @@ EFFEKTIVITET (F8-F9):
   F9. Bättre omsättning     (asset turnover förbättrades)
 
 Tolkning:
-  0–3: Svag finansiell ställning
-  4–6: Neutral
-  7–9: Stark finansiell ställning (köpsignal)
+  0-3: Svag finansiell ställning
+  4-6: Neutral
+  7-9: Stark finansiell ställning (köpsignal)
 
 Förbättringar i denna version:
   - Lagrar historiska snapshotvärden i cache (data/piotroski_snapshots/)
@@ -244,7 +244,7 @@ def calc_piotroski(row: pd.Series, ticker: str = "") -> dict:
         criteria["F8_better_gross_margin"] = 0
 
     # ── F9: Bättre omsättningseffektivitet ───────────────────────────── ─
-    # Approximera asset turnover-förbättring via om → om historisk finns
+    # Approximera asset turnover-förbättring via om -> om historisk finns
     if pd.notna(om) and ticker:
         prev = _load_snapshot(ticker, datetime.now().date())
         if prev and "operating_margin" in prev and prev["operating_margin"] is not None:
@@ -319,7 +319,7 @@ def add_piotroski_to_universe(scored: pd.DataFrame,
     df["piotroski_label"] = labels
 
     # Score-boost/penalty per arkitekturrekommendationen:
-    # STARK → +8, NEUTRAL → 0, SVAG → -8
+    # STARK -> +8, NEUTRAL -> 0, SVAG -> -8
     boost_map = {"STARK": +8, "NEUTRAL": 0, "SVAG": -8}
     df["piotroski_boost"] = df["piotroski_label"].map(boost_map).fillna(0)
     df["score_total"]     = (df["score_total"] + df["piotroski_boost"]).clip(0, 100)
@@ -349,8 +349,8 @@ def build_piotroski_section(scored: pd.DataFrame, n: int = 15) -> str:
     label_icons = {"STARK": "🟢", "NEUTRAL": "⚪", "SVAG": "🔴"}
 
     for _, row in scored.head(n).iterrows():
-        f  = row.get("piotroski_f", "—")
-        lb = row.get("piotroski_label", "—")
+        f  = row.get("piotroski_f", "--")
+        lb = row.get("piotroski_label", "--")
         lines.append(
             f"| {row['rank']} | `{row['ticker']}` | "
             f"{str(row.get('name',''))[:22]} | "
@@ -362,6 +362,6 @@ def build_piotroski_section(scored: pd.DataFrame, n: int = 15) -> str:
     stark   = (scored["piotroski_label"] == "STARK").sum()  if "piotroski_label" in scored.columns else 0
     neutral = (scored["piotroski_label"] == "NEUTRAL").sum() if "piotroski_label" in scored.columns else 0
     svag    = (scored["piotroski_label"] == "SVAG").sum()    if "piotroski_label" in scored.columns else 0
-    lines.append(f"\n_Universum: {stark} STARK · {neutral} NEUTRAL · {svag} SVAG_")
+    lines.append(f"\n_Universum: {stark} STARK * {neutral} NEUTRAL * {svag} SVAG_")
 
     return "\n".join(lines)

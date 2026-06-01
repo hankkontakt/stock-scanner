@@ -1,15 +1,15 @@
 """
-country_flags.py – Landflaggor för ticker-symboler.
+country_flags.py - Landflaggor för ticker-symboler.
 
 Använder ticker-suffix för att avgöra land.
-US-aktier har inget suffix → 🇺🇸 som default.
+US-aktier har inget suffix -> 🇺🇸 som default.
 Endast kända ADR-tickers (suffix-lösa som inte är US) behöver undantag.
 
 Användning:
     from core.country_flags import flag_for_ticker, name_for_ticker
-    flag_for_ticker("VOLV-B.ST")   → "🇸🇪"
-    flag_for_ticker("AAPL")        → "🇺🇸"
-    flag_for_ticker("NVO")         → "🇩🇰"  (Novo Nordisk ADR)
+    flag_for_ticker("VOLV-B.ST")   -> "🇸🇪"
+    flag_for_ticker("AAPL")        -> "🇺🇸"
+    flag_for_ticker("NVO")         -> "🇩🇰"  (Novo Nordisk ADR)
 """
 
 _SUFFIX_MAP: dict[str, tuple[str, str]] = {
@@ -110,10 +110,10 @@ def flag_for_ticker(ticker: str) -> str:
       3. Default: 🇺🇸 (US-aktier utan suffix)
 
     Exempel:
-      >>> flag_for_ticker("VOLV-B.ST")  → "🇸🇪"
-      >>> flag_for_ticker("AAPL")       → "🇺🇸"
-      >>> flag_for_ticker("NVO")        → "🇩🇰"
-      >>> flag_for_ticker("NOVO-B.CO")  → "🇩🇰"
+      >>> flag_for_ticker("VOLV-B.ST")  -> "🇸🇪"
+      >>> flag_for_ticker("AAPL")       -> "🇺🇸"
+      >>> flag_for_ticker("NVO")        -> "🇩🇰"
+      >>> flag_for_ticker("NOVO-B.CO")  -> "🇩🇰"
     """
     t = _normalize_ticker(ticker)
 
@@ -144,6 +144,3 @@ def name_for_ticker(ticker: str) -> str:
     return "USA"
 
 
-def flag_and_name(ticker: str) -> str:
-    """Returnera flagga + landsnamn, t.ex. '🇸🇪 Sverige'."""
-    return f"{flag_for_ticker(ticker)} {name_for_ticker(ticker)}"

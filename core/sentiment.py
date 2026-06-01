@@ -4,7 +4,7 @@ sentiment.py
 Hämtar nyhetsentiment från Finnhub API.
 Returnerar ett score 0-100 (50 = neutralt) per aktie.
 
-Gratis Finnhub-nivå: 60 anrop/minut – räcker gott för veckoscanning.
+Gratis Finnhub-nivå: 60 anrop/minut - räcker gott för veckoscanning.
 Registrera gratis API-nyckel på: https://finnhub.io
 """
 
@@ -54,7 +54,7 @@ def _write_cache(key: str, data):
 def _clean_ticker_for_finnhub(ticker: str) -> str:
     """
     Finnhub använder US-tickers direkt (AAPL).
-    För svenska aktier (.ST) och europeiska – ofta ej täckta på gratisnivå.
+    För svenska aktier (.ST) och europeiska - ofta ej täckta på gratisnivå.
     Vi försöker ändå och returnerar neutral om det misslyckas.
     """
     # Ta bort exchange-suffix för icke-US marknader
@@ -69,7 +69,7 @@ def _clean_ticker_for_finnhub(ticker: str) -> str:
 def fetch_news_sentiment(ticker: str, api_key: str, delay: float = 0.3) -> float:
     """
     Hämtar Finnhub news-sentiment för en aktie.
-    Returnerar ett värde 0.0–1.0 (0.5 = neutralt).
+    Returnerar ett värde 0.0-1.0 (0.5 = neutralt).
     Returnerar 0.5 om aktien inte hittas eller API-nyckel saknas.
     """
     if not api_key:
@@ -88,7 +88,7 @@ def fetch_news_sentiment(ticker: str, api_key: str, delay: float = 0.3) -> float
         resp = requests.get(url, params={"symbol": clean, "token": api_key}, timeout=8)
 
         if resp.status_code == 429:
-            print(f"  ⚠ Finnhub rate limit – väntar 60s...")
+            print(f"  ⚠ Finnhub rate limit - väntar 60s...")
             time.sleep(60)
             resp = requests.get(url, params={"symbol": clean, "token": api_key}, timeout=8)
 
@@ -137,18 +137,18 @@ def fetch_sentiment_batch(tickers: list, api_key: str, verbose: bool = True) -> 
     """
     Hämtar sentiment för en lista aktier med parallella trådar och rate limiting.
 
-    Gratis Finnhub: 60 calls/min → vi använder 50 calls/min (headroom).
+    Gratis Finnhub: 60 calls/min -> vi använder 50 calls/min (headroom).
     Med FINNHUB_PARALLEL_WORKERS trådar blir det ~3x snabbare än sekventiellt.
     Returnerar dict: {ticker: score (0-1)}
     """
     if not api_key:
         if verbose:
-            print("  ℹ Finnhub API-nyckel saknas – sentiment sätts till neutralt (50)")
+            print("  ℹ Finnhub API-nyckel saknas - sentiment sätts till neutralt (50)")
         return {t: 0.5 for t in tickers}
 
     n_workers = min(config.FINNHUB_PARALLEL_WORKERS, len(tickers))
     if verbose:
-        print(f"  ⚙  {n_workers} parallella workers · {len(tickers)} tickers")
+        print(f"  ⚙  {n_workers} parallella workers * {len(tickers)} tickers")
 
     def _fetch_one(t: str) -> tuple:
         _FINNHUB_LIMITER.acquire()

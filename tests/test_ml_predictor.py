@@ -1,4 +1,4 @@
-"""Tester för core/ml_predictor.py — feature-beräkning och robust fallback."""
+"""Tester för core/ml_predictor.py -- feature-beräkning och robust fallback."""
 import numpy as np
 import pandas as pd
 import pytest
@@ -14,7 +14,7 @@ from core.ml_predictor import (
 
 
 # De 11 features som introducerades i commit 4871bc5 men hade saknade
-# hjälpfunktioner → returnerade tyst NaN. Regressionstest så det inte återkommer.
+# hjälpfunktioner -> returnerade tyst NaN. Regressionstest så det inte återkommer.
 _NEW_FEATURES = [
     "log_return_1m", "volatility_skew_30d", "hurst_exponent_60d",
     "serial_correlation_20d", "volume_price_corr_20d", "klinger_oscillator",
@@ -66,7 +66,7 @@ def test_compute_features_trending_up_has_positive_returns():
 
 def test_new_features_compute_non_nan():
     """REGRESSION: de 11 nya features måste faktiskt beräknas, inte tyst bli NaN.
-    (Buggen 4871bc5: hjälpfunktioner saknades → NameError fångades → NaN.)"""
+    (Buggen 4871bc5: hjälpfunktioner saknades -> NameError fångades -> NaN.)"""
     # Brusig trend så alla statistiska features har varians att räkna på
     idx = pd.date_range("2023-01-01", periods=300, freq="D")
     rng = np.random.default_rng(42)
@@ -77,7 +77,7 @@ def test_new_features_compute_non_nan():
     for f in _NEW_FEATURES:
         assert f in feats, f"{f} saknas i output"
         assert not (isinstance(feats[f], float) and np.isnan(feats[f])), \
-            f"{f} är NaN — hjälpfunktionen saknas/trasig"
+            f"{f} är NaN -- hjälpfunktionen saknas/trasig"
 
 
 def test_cross_sectional_target_demeans_per_date():
@@ -102,7 +102,7 @@ def test_per_date_ic_perfect_ranking():
 
 
 def test_load_model_returns_none_when_missing():
-    """Robust mot saknad modell — pipelinen får inte krascha."""
+    """Robust mot saknad modell -- pipelinen får inte krascha."""
     result = load_model("nonexistent_universe_xyz")
     assert result is None
 

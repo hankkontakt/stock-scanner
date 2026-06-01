@@ -1,4 +1,4 @@
-"""admin/watchlist.py – Bevakningslista tab for admin page."""
+"""admin/watchlist.py - Bevakningslista tab for admin page."""
 import json
 from datetime import date
 from pathlib import Path

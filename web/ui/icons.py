@@ -1,11 +1,11 @@
 """
-icons.py — Koncept → Material Symbols-ikon.
+icons.py -- Koncept -> Material Symbols-ikon.
 
 Streamlit stödjer Material Symbols native via ":material/<namn>:" i rubriker,
 knappar, st.Page(icon=...), st.metric-label m.m. Detta ersätter de 66+ emoji
 som gav appen en hobby-känsla, med ett enhetligt professionellt ikonset.
 
-Använd ICON["nyckel"] → ":material/...:" istället för emoji.
+Använd ICON["nyckel"] -> ":material/...:" istället för emoji.
 """
 
 ICON = {

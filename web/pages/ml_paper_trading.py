@@ -1,4 +1,4 @@
-"""web/pages/ml_paper_trading.py – Sida 14: AI Paper Trading"""
+"""web/pages/ml_paper_trading.py - Sida 14: AI Paper Trading"""
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -18,7 +18,7 @@ def page_ml_paper_trading():
     st.title("🤖 AI Paper Trading")
     st.caption(
         "Separat track record för ML-modellens topp-10 prediktioner per dag. "
-        "Klassisk paper trading körs orört parallellt — jämför dem för att se "
+        "Klassisk paper trading körs orört parallellt -- jämför dem för att se "
         "vilken som faktiskt levererar."
     )
 
@@ -37,9 +37,9 @@ def page_ml_paper_trading():
             else:
                 mt = getattr(m, "test_metrics", {})
                 st.success(
-                    f"Modell tränad: **{getattr(m, 'trained_at', '?')[:10]}** · "
-                    f"{getattr(m, 'n_rows', 0):,} rader · "
-                    f"IC={mt.get('ic', '?')} · hit-rate={mt.get('hit_rate', '?')}"
+                    f"Modell tränad: **{getattr(m, 'trained_at', '?')[:10]}** * "
+                    f"{getattr(m, 'n_rows', 0):,} rader * "
+                    f"IC={mt.get('ic', '?')} * hit-rate={mt.get('hit_rate', '?')}"
                 )
 
     st.markdown("---")
@@ -65,7 +65,7 @@ def page_ml_paper_trading():
                       help="Antal aktiva positioner som fortfarande är öppna. Varje position stängs automatiskt efter 30 dagar.")
         with c5:
             hr = summary.get("hit_rate")
-            st.metric("Hit-rate", f"{hr:.1f}%" if hr is not None else "—",
+            st.metric("Hit-rate", f"{hr:.1f}%" if hr is not None else "--",
                       help="Andel stängda positioner med positiv avkastning. >50% = modellen prickar rätt mer än hälften av gångerna. >60% = utmärkt.")
 
         eq_df = mlpt.get_equity_curve_df(universe)
@@ -78,14 +78,14 @@ def page_ml_paper_trading():
                 fill="tozeroy", fillcolor="rgba(66,165,245,0.1)",
             ))
             fig.update_layout(
-                title=f"Equity curve – {label}",
+                title=f"Equity curve - {label}",
                 template="plotly_dark", paper_bgcolor="#131722",
                 plot_bgcolor="#1e2230", height=300,
                 margin=dict(t=40, b=16, l=16, r=16),
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Ingen historik ännu — systemet börjar automatiskt registrera positioner varje vecka. Kom tillbaka om några dagar för att se hur det går.")
+            st.info("Ingen historik ännu -- systemet börjar automatiskt registrera positioner varje vecka. Kom tillbaka om några dagar för att se hur det går.")
 
         # Öppna positioner
         open_df = mlpt.get_trades_df(universe, only_open=True)
@@ -102,7 +102,7 @@ def page_ml_paper_trading():
         closed_df = all_df[all_df["exit_date"].notna()] if not all_df.empty and "exit_date" in all_df.columns else pd.DataFrame()
         with st.expander(f"✅ Stängda positioner ({len(closed_df)})", expanded=False):
             if closed_df.empty:
-                st.caption("Inga stängda positioner ännu — positioner hålls i upp till 30 dagar innan de stängs automatiskt.")
+                st.caption("Inga stängda positioner ännu -- positioner hålls i upp till 30 dagar innan de stängs automatiskt.")
             else:
                 show = closed_df.copy()
                 if "realized_return" in show.columns:

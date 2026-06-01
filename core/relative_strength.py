@@ -3,7 +3,7 @@ relative_strength.py
 ====================
 Beräknar relativ styrka mot sektor och index.
 
-Princip: En aktie som stiger 5% är bra – men inte om sektorn stiger 15%.
+Princip: En aktie som stiger 5% är bra - men inte om sektorn stiger 15%.
 Aktier som överpresterar sin sektor tenderar fortsätta överprestera.
 """
 
@@ -32,7 +32,7 @@ def _rc(key, max_h):
         return None
     try:
         with open(p, "rb") as f: return pickle.load(f)
-    except: return None
+    except Exception: return None
 
 def _wc(key, data):
     try:
@@ -40,7 +40,7 @@ def _wc(key, data):
     except Exception: pass
 
 
-# Sektor → ETF-mappning
+# Sektor -> ETF-mappning
 SECTOR_ETFS = {
     "Technology":             "XLK",
     "Healthcare":             "XLV",
@@ -81,7 +81,7 @@ def calc_relative_strength(scored: pd.DataFrame) -> pd.DataFrame:
     df = scored.copy()
     df["sector_return_3m"]  = None
     df["relative_strength"] = None
-    df["rs_label"]          = "—"
+    df["rs_label"]          = "--"
 
     if "return_3m" not in df.columns or "sector" not in df.columns:
         return df
@@ -108,7 +108,7 @@ def calc_relative_strength(scored: pd.DataFrame) -> pd.DataFrame:
         df.at[idx, "relative_strength"] = round(float(ret_3m) - float(sec_ret), 3)
 
     def lbl(r):
-        if r is None or pd.isna(r): return "—"
+        if r is None or pd.isna(r): return "--"
         if r > 0.05:    return "🟢 STARK"
         if r < -0.05:   return "🔴 SVAG"
         return "⚪ NORMAL"
@@ -126,7 +126,7 @@ def build_rs_summary_section(scored: pd.DataFrame) -> str:
     if valid.empty:
         return ""
 
-    lines = ["\n## 💪 Relativ styrka – topp och botten\n"]
+    lines = ["\n## 💪 Relativ styrka - topp och botten\n"]
     lines.append("_Aktiens avkastning minus sektorns (3 mån)_\n")
 
     strong = valid.nlargest(5, "relative_strength")

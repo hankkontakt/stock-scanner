@@ -1,7 +1,7 @@
 """
 fi_insider_fetcher.py
 =====================
-Finansinspektionens Insynsregister — Swedish insider transactions (free, public data).
+Finansinspektionens Insynsregister -- Swedish insider transactions (free, public data).
 
 All Swedish listed companies must report insider trades to FI within 3 business days
 under EU Market Abuse Regulation (MAR). This is the same data that Börsdata resells.
@@ -11,7 +11,7 @@ Data source: https://marknadssok.fi.se (FI's public search register)
 Usage:
     from core.fi_insider_fetcher import get_insider_signal_fi
     result = get_insider_signal_fi("VOLV-B.ST")
-    # → {"insider_cluster": False, "insider_executive_buy": True}
+    # -> {"insider_cluster": False, "insider_executive_buy": True}
 """
 
 import re
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # but the XHR requests return JSON when called with the right headers.
 FI_SEARCH_URL = "https://marknadssok.fi.se/publiceringsklient/sv/Search"
 
-# Session-level headers that mimic a browser (required — bare requests get 403)
+# Session-level headers that mimic a browser (required -- bare requests get 403)
 _SESSION_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -56,7 +56,7 @@ except Exception:
 _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 _CACHE_TTL_HOURS = 24  # Insider-data uppdateras löpande, cachas 24h
 
-# Historisk mönsterdatabas – lagrar varje insiders beteende över tid
+# Historisk mönsterdatabas - lagrar varje insiders beteende över tid
 # för att klassificera "routine" vs "opportunistic" trades.
 _HISTORY_DIR = Path(__file__).parent.parent / "data" / "insider_history"
 _HISTORY_DIR.mkdir(parents=True, exist_ok=True)
@@ -117,7 +117,7 @@ def _is_routine_trader(ticker: str, insider_name: str, trade: dict) -> bool:
     """
     history = _load_history(ticker)
     if not history:
-        return False  # Ingen historik → kan inte vara routine
+        return False  # Ingen historik -> kan inte vara routine
 
     # Filtrera på samma insider
     insider_trades = [
@@ -133,7 +133,7 @@ def _is_routine_trader(ticker: str, insider_name: str, trade: dict) -> bool:
     if prev_months:
         unique_months = set(prev_months[-4:])  # Senaste 4 månader
         if len(unique_months) == 1 and list(unique_months)[0] == current_month:
-            return True  # Samma månad varje år → routine
+            return True  # Samma månad varje år -> routine
 
     # 2. Beloppsmönster: handlar alltid samma belopp?
     current_val = float(trade.get("shares", 0)) * float(trade.get("price", 0) or 1)
@@ -150,7 +150,7 @@ def _is_routine_trader(ticker: str, insider_name: str, trade: dict) -> bool:
         if avg_val > 0:
             ratio = current_val / avg_val
             if 0.8 <= ratio <= 1.2:
-                return True  # Samma belopp ±20% → routine
+                return True  # Samma belopp ±20% -> routine
 
     return False
 
@@ -185,14 +185,14 @@ def _write_cache(key: str, payload: dict) -> None:
         pass
 
 
-# ── Ticker → company name lookup ──────────────────────────────────────────────
+# ── Ticker -> company name lookup ──────────────────────────────────────────────
 # FI search requires the company name, not the ticker symbol.
 # We derive it from yfinance .info or strip the suffix.
 
 def _ticker_to_company_name(ticker: str) -> str:
     """
     Best-effort: fetch longName from yfinance, fall back to cleaned ticker.
-    Example: 'VOLV-B.ST' → 'Volvo AB' or 'VOLV-B'
+    Example: 'VOLV-B.ST' -> 'Volvo AB' or 'VOLV-B'
     """
     try:
         import yfinance as yf
@@ -207,7 +207,7 @@ def _ticker_to_company_name(ticker: str) -> str:
             return name
     except Exception:
         pass
-    # Fallback: "VOLV-B.ST" → "VOLV-B"
+    # Fallback: "VOLV-B.ST" -> "VOLV-B"
     return ticker.split(".")[0]
 
 
@@ -223,7 +223,7 @@ def fetch_insider_trades_fi(
 
     Args:
         company_name: Company name to search (e.g., "Volvo", "NCC", "Hemfosa").
-                      Partial names work — FI does a contains-search.
+                      Partial names work -- FI does a contains-search.
         days_back:    How many days back to search (default 90).
         page_size:    Results per page (FI max is ~100).
 
@@ -379,7 +379,7 @@ def get_insider_signal_fi(ticker: str) -> dict:
     Analyse Finansinspektionen insider data for a Swedish stock.
 
     Returns same dict format as _get_insider_signal() in data_fetcher.py:
-        insider_cluster (bool): ≥3 distinct insiders buying within 30 days
+        insider_cluster (bool): >=3 distinct insiders buying within 30 days
         insider_executive_buy (bool): CEO/CFO buying within 90 days
 
     Args:

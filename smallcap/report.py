@@ -1,17 +1,17 @@
 """
-report.py – Markdown-rapportbyggare för svenska småbolag.
+report.py - Markdown-rapportbyggare för svenska småbolag.
 
 Genererar en strukturerad rapport med:
-  1. Exekutiv sammanfattning  – snabb blick på marknadsläge
-  2. Topp-5 Spotlight         – de fem starkaste kandidaterna med pris & trend
-  3. Poängtabell (Top-N)      – rankad lista med marknadsdatakolumner
-  4. Faktortabell             – detaljerade delpoäng per faktor
-  5. Tematiska sektioner      – Bästa värdering · Starkast tillväxt · Högst momentum
-  6. Djupdyk (Top-5)          – utförliga profiler per bolag
-  7. Sektoröversikt           – genomsnittlig poäng per sektor
-  8. Röda flaggor             – bolag med varningssignaler
-  9. Insideraktivitet         – sammanfattning av insiderköp/-sälj
-  10. Metodförklaring         – kort om hur scoringen fungerar
+  1. Exekutiv sammanfattning  - snabb blick på marknadsläge
+  2. Topp-5 Spotlight         - de fem starkaste kandidaterna med pris & trend
+  3. Poängtabell (Top-N)      - rankad lista med marknadsdatakolumner
+  4. Faktortabell             - detaljerade delpoäng per faktor
+  5. Tematiska sektioner      - Bästa värdering * Starkast tillväxt * Högst momentum
+  6. Djupdyk (Top-5)          - utförliga profiler per bolag
+  7. Sektoröversikt           - genomsnittlig poäng per sektor
+  8. Röda flaggor             - bolag med varningssignaler
+  9. Insideraktivitet         - sammanfattning av insiderköp/-sälj
+  10. Metodförklaring         - kort om hur scoringen fungerar
 
 Används av scanner.py via build_report().
 """
@@ -34,11 +34,11 @@ _RANK_MEDALS     = ["🥇", "🥈", "🥉", "4.", "5."]
 
 def _fmt_pct(v, decimals: int = 1) -> str:
     if v is None or (isinstance(v, float) and np.isnan(v)):
-        return "—"
+        return "--"
     return f"{v*100:+.{decimals}f}%"
 
 
-def _fmt_val(v, fmt: str = ".1f", fallback: str = "—") -> str:
+def _fmt_val(v, fmt: str = ".1f", fallback: str = "--") -> str:
     if v is None or (isinstance(v, float) and np.isnan(v)):
         return fallback
     return format(v, fmt)
@@ -47,7 +47,7 @@ def _fmt_val(v, fmt: str = ".1f", fallback: str = "—") -> str:
 def _fmt_price(v) -> str:
     """Formaterar pris med lämpligt antal decimaler."""
     if v is None or (isinstance(v, float) and np.isnan(v)):
-        return "—"
+        return "--"
     if v >= 100:
         return f"{v:.0f}"
     if v >= 10:
@@ -57,7 +57,7 @@ def _fmt_price(v) -> str:
 
 def _fmt_mkcap(v_sek: float) -> str:
     if np.isnan(v_sek):
-        return "—"
+        return "--"
     if v_sek >= 1e9:
         return f"{v_sek/1e9:.1f} Gsek"
     return f"{v_sek/1e6:.0f} Msek"
@@ -66,7 +66,7 @@ def _fmt_mkcap(v_sek: float) -> str:
 def _pct_arrow(v) -> str:
     """Lägger till ↑/↓ pil på en procentförändring."""
     if v is None or (isinstance(v, float) and np.isnan(v)):
-        return "—"
+        return "--"
     symbol = "↑" if v > 0 else ("↓" if v < 0 else "")
     return f"{symbol}{abs(v)*100:.1f}%"
 
@@ -82,7 +82,7 @@ def _sector_for(ticker: str) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AVSNITT 1 – EXEKUTIV SAMMANFATTNING
+# AVSNITT 1 - EXEKUTIV SAMMANFATTNING
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _section_summary(scored: pd.DataFrame, n_before: int) -> str:
@@ -96,7 +96,7 @@ def _section_summary(scored: pd.DataFrame, n_before: int) -> str:
     top1      = scored.iloc[0] if n_after > 0 else None
 
     lines = [
-        f"# 🏆 Svenska Småbolag – Rapport {date_str}",
+        f"# 🏆 Svenska Småbolag - Rapport {date_str}",
         "",
         "## Sammanfattning",
         "",
@@ -126,7 +126,7 @@ def _section_summary(scored: pd.DataFrame, n_before: int) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AVSNITT 2 – TOPP-5 SPOTLIGHT
+# AVSNITT 2 - TOPP-5 SPOTLIGHT
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _section_top5(scored: pd.DataFrame, prev_scores: dict) -> str:
@@ -135,7 +135,7 @@ def _section_top5(scored: pd.DataFrame, prev_scores: dict) -> str:
 
     top = scored.head(5)
     lines = [
-        "## 🎯 Topp 5 – Starkaste Kandidaterna",
+        "## 🎯 Topp 5 - Starkaste Kandidaterna",
         "",
         "| # | Ticker | ⭐ | Poäng | Trend | Sektor | Pris | Dag | Vecka |",
         "|---|--------|-----|------:|:-----:|--------|-----:|----:|------:|",
@@ -161,7 +161,7 @@ def _section_top5(scored: pd.DataFrame, prev_scores: dict) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AVSNITT 3 – POÄNGTABELL (rankningslista)
+# AVSNITT 3 - POÄNGTABELL (rankningslista)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _section_score_table(scored: pd.DataFrame, top_n: int, prev_scores: dict) -> str:
@@ -209,7 +209,7 @@ def _section_factor_table(scored: pd.DataFrame, top_n: int) -> str:
     header = "| Ticker | " + " | ".join(c[1] for c in factor_cols) + " |"
     sep    = "|:-------|" + "".join("---:|" for _ in factor_cols)
 
-    rows = ["## Faktortabell (delpoäng 0–100)\n", header, sep]
+    rows = ["## Faktortabell (delpoäng 0-100)\n", header, sep]
 
     for _, r in top.iterrows():
         ticker = r.get("ticker", "?")
@@ -220,14 +220,14 @@ def _section_factor_table(scored: pd.DataFrame, top_n: int) -> str:
             try:
                 cells.append(f"{float(v):.0f}")
             except (ValueError, TypeError):
-                cells.append("—")
+                cells.append("--")
         rows.append("| " + " | ".join(cells) + " |")
 
     return "\n".join(rows) + "\n"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AVSNITT 4 – TEMATISKA SEKTIONER
+# AVSNITT 4 - TEMATISKA SEKTIONER
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _thematic_block(
@@ -237,7 +237,7 @@ def _thematic_block(
     extra_cols: list[tuple[str, str]],
     top_n: int = 5,
 ) -> str:
-    """Generisk tematisk sektion – sorterar på sort_col och visar top_n."""
+    """Generisk tematisk sektion - sorterar på sort_col och visar top_n."""
     sub = scored.dropna(subset=[sort_col]).sort_values(sort_col, ascending=False).head(top_n)
     if sub.empty:
         return ""
@@ -252,24 +252,24 @@ def _thematic_block(
     for _, r in sub.iterrows():
         cells = []
         for col, _ in all_cols:
-            v = r.get(col, "—")
+            v = r.get(col, "--")
             if col == "ticker":
                 flag = flag_for_ticker(v)
                 cells.append(f"{flag} **{v}**")
             elif col == "sc_stars":
                 cells.append(str(v))
             elif col == "sc_total":
-                cells.append(f"{float(v):.1f}" if v != "—" else "—")
+                cells.append(f"{float(v):.1f}" if v != "--" else "--")
             elif col in ("revenue_growth", "earnings_growth",
                          "day_change_pct", "week_change_pct", "return_12m", "return_6m"):
-                cells.append(_fmt_pct(v if v != "—" else float("nan")))
+                cells.append(_fmt_pct(v if v != "--" else float("nan")))
             elif col == "sector":
                 cells.append(_sector_for(r.get("ticker", "")))
             else:
                 try:
                     cells.append(f"{float(v):.1f}")
                 except (ValueError, TypeError):
-                    cells.append(str(v) if v not in (None, "—") else "—")
+                    cells.append(str(v) if v not in (None, "--") else "--")
         rows.append("| " + " | ".join(cells) + " |")
 
     return "\n".join(rows) + "\n"
@@ -281,7 +281,7 @@ def _section_thematic(scored: pd.DataFrame) -> str:
     # Bästa värdering
     lines.append(_thematic_block(
         scored, "sc_valuation",
-        "💰 Bästa Värdering (EV/EBITDA · P/B)",
+        "💰 Bästa Värdering (EV/EBITDA * P/B)",
         [("sc_valuation", "Värdering"), ("ev_to_ebitda", "EV/EBITDA"), ("price_to_book", "P/B")],
     ))
 
@@ -311,7 +311,7 @@ def _section_thematic(scored: pd.DataFrame) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AVSNITT 5 – DJUPDYK (topp-N profiler)
+# AVSNITT 5 - DJUPDYK (topp-N profiler)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _company_profile(row: pd.Series, prev_scores: dict, news: list = None) -> str:
@@ -352,7 +352,7 @@ def _company_profile(row: pd.Series, prev_scores: dict, news: list = None) -> st
         fcf_yield = fcf / mkcap
 
     lines = [
-        f"### {stars} {flag} {t} — {total:.1f} poäng  {trend} ({delta}p)",
+        f"### {stars} {flag} {t} -- {total:.1f} poäng  {trend} ({delta}p)",
         f"**Sektor:** {sector}",
         "",
         "| Nyckeltal | Värde |",
@@ -361,7 +361,7 @@ def _company_profile(row: pd.Series, prev_scores: dict, news: list = None) -> st
         f"| Pris (senast) | {price} |",
         f"| Förändring dag / vecka | {day_chg} / {week_chg} |",
         f"| Avkastning 6m / 12m   | {_fmt_pct(r6)} / {_fmt_pct(r12)} |",
-        f"| Insiderägarandel | {_fmt_pct(insider_pct, 1) if not np.isnan(insider_pct) else '—'} |",
+        f"| Insiderägarandel | {_fmt_pct(insider_pct, 1) if not np.isnan(insider_pct) else '--'} |",
         f"| Insideraktivitet | {signal} |",
         f"| FCF-yield | {_fmt_pct(fcf_yield)} |",
         f"| Piotroski F-Score | {_fmt_val(piotroski, '.0f')}/9 |",
@@ -391,7 +391,7 @@ def _company_profile(row: pd.Series, prev_scores: dict, news: list = None) -> st
         except (ValueError, TypeError):
             pass
     if parts:
-        lines.append(f"**Poängfördelning:** {' · '.join(parts)}")
+        lines.append(f"**Poängfördelning:** {' * '.join(parts)}")
         lines.append("")
 
     # Nyheter (Google News RSS om tillgängliga)
@@ -403,8 +403,8 @@ def _company_profile(row: pd.Series, prev_scores: dict, news: list = None) -> st
             url   = a.get("url", "")
             title = f"[{a['headline']}]({url})" if url else a["headline"]
             src   = a.get("source", "")
-            dt_s  = a.get("datetime_str", "—")
-            meta  = f"_{src} · {dt_s}_" if src else f"_{dt_s}_"
+            dt_s  = a.get("datetime_str", "--")
+            meta  = f"_{src} * {dt_s}_" if src else f"_{dt_s}_"
             lines.append(f"{icon} {title}  \n   {meta}")
         lines.append("")
 
@@ -419,7 +419,7 @@ def _section_profiles(
 ) -> str:
     top          = scored.head(top_n)
     company_news = company_news or {}
-    parts        = [f"## Djupdyk – Top {top_n}\n"]
+    parts        = [f"## Djupdyk - Top {top_n}\n"]
     for _, row in top.iterrows():
         ticker = row.get("ticker", "")
         news   = company_news.get(ticker, [])
@@ -429,7 +429,7 @@ def _section_profiles(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AVSNITT 6 – SEKTORÖVERSIKT
+# AVSNITT 6 - SEKTORÖVERSIKT
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _section_sectors(scored: pd.DataFrame) -> str:
@@ -451,7 +451,7 @@ def _section_sectors(scored: pd.DataFrame) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AVSNITT 7 – RÖDA FLAGGOR
+# AVSNITT 7 - RÖDA FLAGGOR
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _section_red_flags(scored: pd.DataFrame) -> str:
@@ -473,7 +473,7 @@ def _section_red_flags(scored: pd.DataFrame) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AVSNITT 8 – INSIDERAKTIVITET
+# AVSNITT 8 - INSIDERAKTIVITET
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _section_insider_activity(scored: pd.DataFrame) -> str:
@@ -483,12 +483,12 @@ def _section_insider_activity(scored: pd.DataFrame) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AVSNITT 9 – METOD
+# AVSNITT 9 - METOD
 # ══════════════════════════════════════════════════════════════════════════════
 
 _METHOD_TEXT = """## ℹ️ Metodik
 
-**Scoringmodell – 8 faktorer (100p totalt):**
+**Scoringmodell - 8 faktorer (100p totalt):**
 
 | Faktor | Vikt | Beskrivning |
 |---|---:|---|
@@ -501,14 +501,14 @@ _METHOD_TEXT = """## ℹ️ Metodik
 | Momentum | 9% | 12m-avkastning (65%) + 6m-avkastning (35%) |
 | Likviditet | 5% | Daglig omsättning i SEK |
 
-**Bonusar:** +5p nettokassa · +3p grundarstyrt (>20% insider) · +3p bruttomarginal >40%
+**Bonusar:** +5p nettokassa * +3p grundarstyrt (>20% insider) * +3p bruttomarginal >40%
 
-**Avdrag:** −10p utspädning >10% · −5p Piotroski <3 · −3p D/E >200%
+**Avdrag:** −10p utspädning >10% * −5p Piotroski <3 * −3p D/E >200%
 
-**Hårda filter (eliminerar):** illikviditet <500k SEK/dag · market cap utanför 30M–25G SEK ·
-negativt eget kapital · current ratio <0.5 · D/E >300% · Piotroski ≤2 · utspädning >30%
+**Hårda filter (eliminerar):** illikviditet <500k SEK/dag * market cap utanför 30M-25G SEK *
+negativt eget kapital * current ratio <0.5 * D/E >300% * Piotroski <=2 * utspädning >30%
 
-**Trendindikatorer:** ▲ poäng ökat >2p · ▼ minskat >2p · → stabilt · • ny ticker
+**Trendindikatorer:** ▲ poäng ökat >2p * ▼ minskat >2p * -> stabilt * • ny ticker
 
 _Data från Yahoo Finance (yfinance). Rapporten är inte finansiell rådgivning._
 """
@@ -519,7 +519,7 @@ _Data från Yahoo Finance (yfinance). Rapporten är inte finansiell rådgivning.
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _section_nasdaq_nordic(nasdaq_news: list) -> str:
-    """Nasdaq Nordic regulatoriska nyheter – wrapper mot news_fetcher."""
+    """Nasdaq Nordic regulatoriska nyheter - wrapper mot news_fetcher."""
     if not nasdaq_news:
         return ""
     try:
@@ -564,7 +564,7 @@ def build_report(
 
     if scored.empty:
         return (
-            f"# 🏆 Svenska Småbolag – Rapport {datetime.today().strftime('%d %b %Y')}\n\n"
+            f"# 🏆 Svenska Småbolag - Rapport {datetime.today().strftime('%d %b %Y')}\n\n"
             "_Inga bolag passerade filtren. Kontrollera data-hämtningen._\n"
         )
 

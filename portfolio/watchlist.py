@@ -1,7 +1,7 @@
 """
 watchlist.py
 ============
-Bevakningslista – aktier som bevakas extra noga utanför portföljen.
+Bevakningslista - aktier som bevakas extra noga utanför portföljen.
 Sparas i data/watchlist.json och ingår automatiskt i alla tre rapporter.
 """
 

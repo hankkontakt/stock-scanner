@@ -1,4 +1,4 @@
-"""web/pages/alerts.py – Sida 12: Larm & Notiser (ombyggd)"""
+"""web/pages/alerts.py - Sida 12: Larm & Notiser (ombyggd)"""
 
 import pandas as pd
 import streamlit as st
@@ -20,7 +20,7 @@ def _fetch_news_for(ticker: str, days_back: int = 3) -> list:
 def _collect_mover_news(tickers: list[str], days_back: int = 2, max_per_ticker: int = 3) -> dict[str, list]:
     """
     Fetch news for a list of tickers in parallel.
-    Returns {ticker: [news_items]} — skips empties.
+    Returns {ticker: [news_items]} -- skips empties.
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
     result = {}
@@ -53,7 +53,7 @@ def _format_news_context(news_map: dict[str, list]) -> str:
             age = n.get("age_hours")
             age_str = f" ({age:.0f}h sedan)" if age is not None else ""
             if title:
-                lines.append(f"[{ticker}] {title} – {src}{age_str}")
+                lines.append(f"[{ticker}] {title} - {src}{age_str}")
     return "\n".join(lines) if len(lines) > 1 else ""
 
 
@@ -109,7 +109,7 @@ def _watchlist_health_check(watchlist: list, df_today: pd.DataFrame, df_yesterda
                 delta = float(score_today) - float(score_yest)
                 if abs(delta) >= 10:
                     direction = "Upp" if delta > 0 else "Ned"
-                    alert["changes"].append(f"{direction} {abs(delta):.0f}p (score: {score_yest:.0f}→{score_today:.0f})")
+                    alert["changes"].append(f"{direction} {abs(delta):.0f}p (score: {score_yest:.0f}->{score_today:.0f})")
                     alert["delta"] = delta
 
             # Signal change
@@ -121,7 +121,7 @@ def _watchlist_health_check(watchlist: list, df_today: pd.DataFrame, df_yesterda
                     alert["changes"].append(f"Lämnat STARK (nu: {entry_today})")
                     alert["priority"] = "medium"
                 else:
-                    alert["changes"].append(f"Signal: {entry_yest}→{entry_today}")
+                    alert["changes"].append(f"Signal: {entry_yest}->{entry_today}")
 
         # Current state info
         alert["score"] = float(score_today) if pd.notna(score_today) else None
@@ -176,7 +176,7 @@ def _get_insider_alerts(df: pd.DataFrame) -> pd.DataFrame:
             types.append("Kluster (3+ insiders)")
         if (row.get("insider_pct") or 0) > 0.15:
             types.append(f"Högt ägande ({row.get('insider_pct', 0) * 100:.0f}%)")
-        return " · ".join(types) if types else "Insynsägande"
+        return " * ".join(types) if types else "Insynsägande"
 
     result["Insynssignal"] = result.apply(_signal_type, axis=1)
 
@@ -189,7 +189,7 @@ def _get_insider_alerts(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def page_alerts_notices(df: pd.DataFrame):
-    """Larm & Notiser – ombyggd för bättre läsbarhet."""
+    """Larm & Notiser - ombyggd för bättre läsbarhet."""
     st.title("🚨 Larm & Notiser")
 
     holdings = load_portfolio()
@@ -217,23 +217,23 @@ def page_alerts_notices(df: pd.DataFrame):
     ])
 
     # ══════════════════════════════════════════════════════════════════════
-    # TAB 1 — Signaler & Larm (f.d. Positioner & Prislarm)
+    # TAB 1 -- Signaler & Larm (f.d. Positioner & Prislarm)
     # ══════════════════════════════════════════════════════════════════════
     with tab_pos:
-        with st.expander("ℹ️ Vad är det här? — Förklaring för nybörjare", expanded=False):
+        with st.expander("ℹ️ Vad är det här? -- Förklaring för nybörjare", expanded=False):
             st.markdown("""
 **Den här fliken visar automatiska larm baserade på systemets analys av dina bevakade aktier.**
 
 ### ⚡ STARK köpsignal
 Det starkaste larmet i systemet. Det innebär att aktien uppfyller *flera* positiva kriterier samtidigt:
-- **Hög totalpoäng** (≥ 60 av 100)
+- **Hög totalpoäng** (>= 60 av 100)
 - **STARK entry-signal** = tekniska indikatorer pekar uppåt (momentum, RSI, trend)
 
-Det betyder *inte* att aktien garanterat stiger — men det är systemets starkaste köprekommendation.
+Det betyder *inte* att aktien garanterat stiger -- men det är systemets starkaste köprekommendation.
 **Gör alltid din egen research** och kolla nyheter innan du köper.
 
 ### ⚠️ Prislarm
-Aktier på din bevakningslista som rört sig mer än 3% på en dag — kan vara köp- eller säljsignal
+Aktier på din bevakningslista som rört sig mer än 3% på en dag -- kan vara köp- eller säljsignal
 beroende på riktning och nyhetsbakgrund.
 
 ### 📋 Övriga aktier
@@ -241,7 +241,7 @@ Resten av bevakningslistan med nuvarande status. Grön entry = positivt, röd = 
 """)
 
         # ── STARK-signaler från bevakningslista ────────────────────────────
-        st.subheader("⚡ Köpsignaler – bevakningslista")
+        st.subheader("⚡ Köpsignaler - bevakningslista")
 
         if watchlist and not df.empty and "ticker" in df.columns:
             score_lu = df.set_index("ticker").to_dict("index")
@@ -252,10 +252,10 @@ Resten av bevakningslistan med nuvarande status. Grön entry = positivt, röd = 
                 sc    = score_lu.get(t, {})
                 price = sc.get("current_price") or sc.get("close")
                 change = sc.get("change_pct") or sc.get("day_change_pct")
-                entry  = sc.get("entry_signal", "—")
+                entry  = sc.get("entry_signal", "--")
                 score  = sc.get("score_total", 0) or 0
-                trend  = sc.get("trend_signal", "—")
-                conf   = sc.get("confidence_label", "—")
+                trend  = sc.get("trend_signal", "--")
+                conf   = sc.get("confidence_label", "--")
 
                 if entry == "STARK" and score >= 60:
                     stark_hits.append({
@@ -264,14 +264,14 @@ Resten av bevakningslistan med nuvarande status. Grön entry = positivt, röd = 
                         "Score":  f"{score:.0f}",
                         "Trend":  trend,
                         "Konfidens": conf,
-                        "Pris":   f"{price:.2f}" if price else "—",
-                        "Dag":    f"{change:+.1f}%" if change is not None else "—",
+                        "Pris":   f"{price:.2f}" if price else "--",
+                        "Dag":    f"{change:+.1f}%" if change is not None else "--",
                     })
                 elif change is not None and abs(change) >= 3:
                     alarms.append({
                         "Ticker":      t,
                         "Bolag":       item.get("name", t)[:30],
-                        "Pris":        f"{price:.2f}" if price else "—",
+                        "Pris":        f"{price:.2f}" if price else "--",
                         "Dag":         f"{change:+.1f}%",
                         "Entry":       entry,
                         "Status":      "🔴 Stor rörelse" if abs(change) >= 5 else "🟡 Rörelse",
@@ -280,20 +280,20 @@ Resten av bevakningslistan med nuvarande status. Grön entry = positivt, röd = 
                     normal.append({
                         "Ticker": t,
                         "Bolag":  item.get("name", t)[:30],
-                        "Pris":   f"{price:.2f}" if price else "—",
-                        "Dag":    f"{change:+.1f}%" if change is not None else "—",
+                        "Pris":   f"{price:.2f}" if price else "--",
+                        "Dag":    f"{change:+.1f}%" if change is not None else "--",
                         "Entry":  entry,
-                        "Score":  f"{score:.0f}" if score else "—",
+                        "Score":  f"{score:.0f}" if score else "--",
                     })
 
-            # STARK-signaler — framhäv tydligt
+            # STARK-signaler -- framhäv tydligt
             if stark_hits:
                 st.markdown(
                     f'<div style="background:#0d2a1a;border:2px solid #4caf50;border-radius:10px;'
                     f'padding:14px 18px;margin-bottom:12px;">'
                     f'<div style="font-size:14px;font-weight:700;color:#4caf50;margin-bottom:8px;">'
                     f'⚡ {len(stark_hits)} aktie(r) på din bevakning har STARK köpsignal nu!</div>'
-                    f'<div style="font-size:12px;color:#a0c4a0;">Score ≥ 60 + STARK-signal = systemets starkaste köprekommendation. '
+                    f'<div style="font-size:12px;color:#a0c4a0;">Score >= 60 + STARK-signal = systemets starkaste köprekommendation. '
                     f'Kontrollera alltid trend och nyheter innan du agerar.</div></div>',
                     unsafe_allow_html=True,
                 )
@@ -304,12 +304,12 @@ Resten av bevakningslistan med nuvarande status. Grön entry = positivt, röd = 
                     caption="Klicka på en aktie för full analys.",
                 )
             else:
-                st.info("Inga STARK-signaler på bevakningslistan just nu — systemet bevakar åt dig.")
+                st.info("Inga STARK-signaler på bevakningslistan just nu -- systemet bevakar åt dig.")
 
             # Prislarm
             if alarms:
                 st.markdown("---")
-                st.markdown(f"**⚠️ Prislarm — {len(alarms)} aktie(r) med stor rörelse idag**")
+                st.markdown(f"**⚠️ Prislarm -- {len(alarms)} aktie(r) med stor rörelse idag**")
                 clickable_stock_table(pd.DataFrame(alarms), ticker_col="Ticker", context_df=df,
                                       key="alerts_prislarm_table", caption="Klicka på en aktie för full analys.")
 
@@ -322,22 +322,22 @@ Resten av bevakningslistan med nuvarande status. Grön entry = positivt, röd = 
             st.info("Lägg till aktier i bevakningslistan (⭐ Bevakningar) för att få signaler och larm här.")
 
     # ══════════════════════════════════════════════════════════════════════
-    # TAB 2 — Vad stack ut idag?
+    # TAB 2 -- Vad stack ut idag?
     # ══════════════════════════════════════════════════════════════════════
     with tab_movers:
-        with st.expander("ℹ️ Vad är det här? — Förklaring för nybörjare", expanded=False):
+        with st.expander("ℹ️ Vad är det här? -- Förklaring för nybörjare", expanded=False):
             st.markdown("""
 **Den här fliken visar aktier som stuckit ut jämfört med föregående dag.**
 
 ### ⬆️ / ⬇️ Score-förändringar
-Systemet beräknar en **totalpoäng (0–100)** för varje aktie baserat på 10 faktorer.
-En stor poängökning (+) betyder att aktien förbättrats på flera faktorer — t.ex. bättre momentum,
+Systemet beräknar en **totalpoäng (0-100)** för varje aktie baserat på 10 faktorer.
+En stor poängökning (+) betyder att aktien förbättrats på flera faktorer -- t.ex. bättre momentum,
 tekniska signaler, eller förbättrad fundamenta. Stor poängnedgång (-) är varningssignal.
 
 ### 📈 RSI-korsningar (30↑ / 70↓)
 **RSI (Relative Strength Index)** mäter om en aktie är överköpt eller översåld:
-- **RSI korsade 30 uppåt (30↑):** Aktien var tidigare "översåld" (nedtryckt) och börjar studsa — potentiell köpsignal
-- **RSI korsade 70 nedåt (70↓):** Aktien var "överköpt" (dyr tekniskt) och börjar falla — potentiell säljsignal
+- **RSI korsade 30 uppåt (30↑):** Aktien var tidigare "översåld" (nedtryckt) och börjar studsa -- potentiell köpsignal
+- **RSI korsade 70 nedåt (70↓):** Aktien var "överköpt" (dyr tekniskt) och börjar falla -- potentiell säljsignal
 
 ### 💥 Stora kursrörelser (>4%)
 Aktier som rört sig mer än 4% på en enda dag. Kan bero på kvartalsrapport, nyhet,
@@ -349,7 +349,7 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
         yest_scored    = _load_nth_latest_scored(n=2)
 
         if today_scored.empty:
-            st.info("Aktiedata saknas ännu — systemet uppdateras automatiskt varje vecka. Kom tillbaka snart.")
+            st.info("Aktiedata saknas ännu -- systemet uppdateras automatiskt varje vecka. Kom tillbaka snart.")
             st.stop()
 
         if yest_scored.empty:
@@ -399,7 +399,7 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
                                 summary_context.append(f"Störst score-minskning: {dns}")
                             if rsi:
                                 rsi_str = ", ".join(
-                                    f"{r['ticker']} (RSI {r.get('rsi_yesterday', 0):.0f}→{r.get('rsi_14', 0):.0f})"
+                                    f"{r['ticker']} (RSI {r.get('rsi_yesterday', 0):.0f}->{r.get('rsi_14', 0):.0f})"
                                     for r in rsi[:5]
                                 )
                                 summary_context.append(f"RSI-korsningar: {rsi_str}")
@@ -435,7 +435,7 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
                                 ctx_parts.append(news_ctx)
                             ctx = "\n\n".join(ctx_parts)
 
-                            # Bygg prompt – tvinga nyhetsanvändning om sådana finns
+                            # Bygg prompt - tvinga nyhetsanvändning om sådana finns
                             if news_ctx:
                                 _user_prompt = (
                                     f"Sammanfatta vad som stack ut på börsen idag. "
@@ -494,15 +494,15 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
                                     for _ticker, _items in news_map.items():
                                         st.markdown(f"**{_ticker}**")
                                         for _n in _items:
-                                            _title = _n.get("headline", _n.get("title", "—")).strip()
+                                            _title = _n.get("headline", _n.get("title", "--")).strip()
                                             _src   = _n.get("source", "?")
                                             _age   = _n.get("age_hours")
                                             _url   = _n.get("url", "")
-                                            _age_s = f" · {_age:.0f}h sedan" if _age is not None else ""
+                                            _age_s = f" * {_age:.0f}h sedan" if _age is not None else ""
                                             if _url:
-                                                st.markdown(f"  - [{_title}]({_url}) — *{_src}*{_age_s}")
+                                                st.markdown(f"  - [{_title}]({_url}) -- *{_src}*{_age_s}")
                                             else:
-                                                st.markdown(f"  - {_title} — *{_src}*{_age_s}")
+                                                st.markdown(f"  - {_title} -- *{_src}*{_age_s}")
                                         st.markdown("")
                 except Exception:
                     pass
@@ -595,7 +595,7 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
                 # ── Nyheter för noterbara aktier (lazy expanders) ────────────
                 if notable_tickers:
                     st.markdown("---")
-                    st.markdown("##### 📰 Nyheter – aktier som stack ut idag")
+                    st.markdown("##### 📰 Nyheter - aktier som stack ut idag")
                     st.caption(
                         "Klicka på en aktie för att se senaste nyheter. "
                         "Nyheter hämtas ur cache (eller live om ingen cache finns)."
@@ -608,11 +608,11 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
                                 _nt_news = _fetch_news_for(_nt, days_back=3)
                                 if _nt_news:
                                     for _nn in _nt_news[:4]:
-                                        _t2 = _nn.get("headline", _nn.get("title", "—")).strip()
+                                        _t2 = _nn.get("headline", _nn.get("title", "--")).strip()
                                         _s2 = _nn.get("source", "?")
                                         _a2 = _nn.get("age_hours")
                                         _u2 = _nn.get("url", "")
-                                        _as2 = f" · {_a2:.0f}h" if _a2 is not None else ""
+                                        _as2 = f" * {_a2:.0f}h" if _a2 is not None else ""
                                         if _u2:
                                             st.markdown(f"[{_t2}]({_u2})  \n*{_s2}*{_as2}")
                                         else:
@@ -624,32 +624,32 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
         st.markdown("---")
 
         # ── Nyheter för bevakningslistan ──────────────────────────────────
-        st.subheader("📰 Senaste nyheter – bevakningslistan")
+        st.subheader("📰 Senaste nyheter - bevakningslistan")
         if watchlist:
             watch_tickers = [item["ticker"] for item in watchlist[:8]]
             for item in watchlist[:6]:
                 t = item["ticker"]
                 name = item.get("name", t)[:40]
-                with st.expander(f"📰 {t} — {name}", expanded=False):
+                with st.expander(f"📰 {t} -- {name}", expanded=False):
                     news = _fetch_news_for(t, days_back=3)
                     if news:
                         for n in news[:4]:
-                            title = n.get("headline", n.get("title", "—"))
+                            title = n.get("headline", n.get("title", "--"))
                             src = n.get("source", "?")
                             age = n.get("age_hours")
-                            age_str = f" · {age:.0f}h sedan" if age is not None else ""
+                            age_str = f" * {age:.0f}h sedan" if age is not None else ""
                             url = n.get("url", "")
                             if url:
-                                st.markdown(f"- [{title}]({url}) — *{src}*{age_str}")
+                                st.markdown(f"- [{title}]({url}) -- *{src}*{age_str}")
                             else:
-                                st.markdown(f"- **{title}** — *{src}*{age_str}")
+                                st.markdown(f"- **{title}** -- *{src}*{age_str}")
                     else:
                         st.caption("Inga nyheter hittade de senaste 3 dagarna.")
         else:
             st.info("Lägg till aktier i bevakningslistan för att se nyheter.")
 
     # ══════════════════════════════════════════════════════════════════════
-    # TAB 3 — Kommande händelser
+    # TAB 3 -- Kommande händelser
     # ══════════════════════════════════════════════════════════════════════
     with tab_events:
         st.subheader("📅 Kommande händelser")
@@ -661,7 +661,7 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
         col_port, col_top = st.columns(2)
 
         with col_port:
-            st.markdown("##### 📊 Rapporter – innehav (30 dagar)")
+            st.markdown("##### 📊 Rapporter - innehav (30 dagar)")
             try:
                 from core.earnings_calendar import upcoming_in_portfolio
                 if not _holdings_for_cal.empty and not _scored_for_cal.empty:
@@ -680,7 +680,7 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
                 st.caption(f"Rapportkalender ej tillgänglig: {_e}")
 
         with col_top:
-            st.markdown("##### 📊 Rapporter – topp-20 (14 dagar)")
+            st.markdown("##### 📊 Rapporter - topp-20 (14 dagar)")
             try:
                 from core.earnings_calendar import upcoming_in_top
                 if not _scored_for_cal.empty:
@@ -720,7 +720,7 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
         st.markdown("---")
 
         # ── Utdelningar ───────────────────────────────────────────────────
-        st.markdown("##### 💰 Kommande utdelningar – innehav (60 dagar)")
+        st.markdown("##### 💰 Kommande utdelningar - innehav (60 dagar)")
         try:
             from core.dividend_calendar import get_upcoming_dividends
             if not _holdings_for_cal.empty:
@@ -744,10 +744,10 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
             st.caption(f"Utdelningskalender ej tillgänglig: {_e}")
 
     # ══════════════════════════════════════════════════════════════════════
-    # TAB 4 — Bevakningslista Hälsokoll (Feature 3)
+    # TAB 4 -- Bevakningslista Hälsokoll (Feature 3)
     # ══════════════════════════════════════════════════════════════════════
     with tab_watchlist:
-        st.subheader("⭐ Bevakningslista – Hälsokoll")
+        st.subheader("⭐ Bevakningslista - Hälsokoll")
 
         if not watchlist:
             st.info("Din bevakningslista är tom. Lägg till aktier via Bevakningslistan.")
@@ -762,13 +762,13 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
                 st.markdown("**Nya köpsignaler**")
                 for a in high:
                     score_val = a.get("score") or 0
-                    st.success(f"**{a['ticker']}** — {a['name']} | Score: {score_val:.0f} | " + " | ".join(a["changes"]))
+                    st.success(f"**{a['ticker']}** -- {a['name']} | Score: {score_val:.0f} | " + " | ".join(a["changes"]))
 
             if medium:
                 st.markdown("**Förändrade signaler**")
                 for a in medium:
                     score_val = a.get("score") or 0
-                    st.warning(f"**{a['ticker']}** — {a['name']} | Score: {score_val:.0f} | " + " | ".join(a["changes"]))
+                    st.warning(f"**{a['ticker']}** -- {a['name']} | Score: {score_val:.0f} | " + " | ".join(a["changes"]))
 
             # Full overview table
             st.markdown("---")
@@ -788,16 +788,16 @@ eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
                 st.info("Inga av dina bevakade aktier hittades i nuvarande scan.")
 
     # ══════════════════════════════════════════════════════════════════════
-    # TAB 5 — Insynsköp (Feature 7)
+    # TAB 5 -- Insynsköp (Feature 7)
     # ══════════════════════════════════════════════════════════════════════
     with tab_insider:
-        st.subheader("👔 Insynsköp – Signaler")
+        st.subheader("👔 Insynsköp - Signaler")
         st.caption("Aktier där insiders (VD, CFO, styrelse) nyligen köpt aktier eller har högt ägande.")
-        with st.expander("ℹ️ Vad är insynsköp och varför spelar det roll? — Förklaring för nybörjare", expanded=False):
+        with st.expander("ℹ️ Vad är insynsköp och varför spelar det roll? -- Förklaring för nybörjare", expanded=False):
             st.markdown("""
 ### 👔 Vad är ett insynsköp?
-**Insiders** är personer med tillgång till icke-offentlig information om ett bolag —
-t.ex. VD, CFO, styrelseledamöter och storägare (≥10% av aktierna).
+**Insiders** är personer med tillgång till icke-offentlig information om ett bolag --
+t.ex. VD, CFO, styrelseledamöter och storägare (>=10% av aktierna).
 
 När dessa personer **köper aktier i det egna bolaget** med egna pengar kallas det **insynsköp**.
 Det måste rapporteras till Finansinspektionen (FI) inom 3 dagar.
@@ -807,18 +807,18 @@ Insiders känner bolaget bättre än någon annan. Om VD:n köper aktier för eg
 är det ett starkt signalvärde att han/hon tror på bolagets framtid.
 
 **Forskning visar** att aktier med stora insynsköp tenderar att prestera bättre
-på 6–12 månaders sikt jämfört med börsen som helhet.
+på 6-12 månaders sikt jämfört med börsen som helhet.
 
 ### ⚠️ Tolka med försiktighet
 - **VD/CFO-köp** väger tyngre än passivt ägarskap
 - **Klusterköp** (3+ insiders köper samtidigt) är starkaste signalen
-- Insyns**sälj** är svagare signal — de säljer av många skäl (skatt, privatekonomin)
-- Kolla alltid bolaget i övrigt — insynsköp är ett av flera verktyg
+- Insyns**sälj** är svagare signal -- de säljer av många skäl (skatt, privatekonomin)
+- Kolla alltid bolaget i övrigt -- insynsköp är ett av flera verktyg
 
 ### 🩳 Hög blankningsandel (Short Squeeze)
 **Blankning** = någon lånar aktier och säljer dem, hoppas köpa tillbaka billigare.
 Hög blankningsandel (>10%) innebär att många satsar *mot* aktien.
-Om aktien sedan stiger tvingas blankarna köpa tillbaka → **short squeeze** → kurs rusar ännu mer.
+Om aktien sedan stiger tvingas blankarna köpa tillbaka -> **short squeeze** -> kurs rusar ännu mer.
 """)
 
         insider_df = _get_insider_alerts(df)
@@ -839,7 +839,7 @@ Om aktien sedan stiger tvingas blankarna köpa tillbaka → **short squeeze** �
                                   key="alerts_insider_table", caption="Klicka på en aktie för full analys.")
 
             # Link to Finansinspektionen
-            st.markdown("[Finansinspektionens Insynsregister](https://www.fi.se/sv/vara-register/insynsregistret/) — officiell källa för svenska insynsaffärer")
+            st.markdown("[Finansinspektionens Insynsregister](https://www.fi.se/sv/vara-register/insynsregistret/) -- officiell källa för svenska insynsaffärer")
 
         st.markdown("---")
         # Short squeeze opportunities

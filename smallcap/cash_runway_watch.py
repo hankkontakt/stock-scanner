@@ -1,5 +1,5 @@
 """
-cash_runway_watch.py – Övervakning av kassabana (Cash Runway).
+cash_runway_watch.py - Övervakning av kassabana (Cash Runway).
 =============================================================
 
 Identifierar bolag med negativt kassaflöde och beräknar exakt
@@ -52,7 +52,7 @@ def calc_runway_months(row: pd.Series) -> Optional[float]:
     burn_source = "OCF"
     
     if burn_rate >= 0:
-        # Positivt OCF – använd FCF istället om den är negativ
+        # Positivt OCF - använd FCF istället om den är negativ
         if fcf < 0:
             burn_rate = fcf
             burn_source = "FCF"
@@ -150,14 +150,14 @@ def analyze_cash_runway(
         print(f"\n  💰 Cash Runway Watch:")
         print(f"    🔴 Kritisk (< {CRITICAL_MONTHS}m): {n_critical} bolag")
         print(f"    🟡 Varning (< {WARNING_MONTHS}m): {n_warning} bolag")
-        print(f"    🟢 OK (≥ {WARNING_MONTHS}m): {n_ok} bolag")
+        print(f"    🟢 OK (>= {WARNING_MONTHS}m): {n_ok} bolag")
         
         # Visa de mest kritiska
         critical = result[result["runway_status"] == "🔴 KRITISK"].head(5)
         if not critical.empty:
             print(f"\n    Mest akuta emissionsrisker:")
             for _, r in critical.iterrows():
-                print(f"      {r['ticker']:12s} – {r['runway_months']:.0f}m kvar, "
+                print(f"      {r['ticker']:12s} - {r['runway_months']:.0f}m kvar, "
                       f"bränner {r['monthly_burn_msek']:.1f} MSEK/mån")
     
     return result
@@ -177,7 +177,7 @@ def build_runway_section(runway_df: pd.DataFrame) -> str:
         return "## 💰 Cash Runway\n\n_Alla rankade bolag har positivt kassaflöde._\n"
     
     lines = ["## 💰 Cash Runway Watch\n",
-             "Bolag med negativt kassaflöde – hur länge räcker kassan?\n",
+             "Bolag med negativt kassaflöde - hur länge räcker kassan?\n",
              "| Ticker | Kassabana | Status | Bränner/mån | Kassa | OCF |",
              "|--------|----------:|:------:|-----------:|-----:|----:|"]
     

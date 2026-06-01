@@ -1,4 +1,4 @@
-"""admin/config_tab.py – Konfiguration tab for admin page."""
+"""admin/config_tab.py - Konfiguration tab for admin page."""
 import json
 import os
 from pathlib import Path

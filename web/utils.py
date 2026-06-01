@@ -99,9 +99,9 @@ def _load_nth_latest_scored(n: int = 2) -> pd.DataFrame:
 def _active_data_dir() -> Path:
     """Returnerar datakatalogen för den inloggade användaren.
 
-    - Admin (username == 'admin') → DATA_DIR (roten, bakåtkompatibelt)
-    - Övriga användare → DATA_DIR / 'users' / {username}
-    - Ej inloggad / lokal körning → DATA_DIR (fallback)
+    - Admin (username == 'admin') -> DATA_DIR (roten, bakåtkompatibelt)
+    - Övriga användare -> DATA_DIR / 'users' / {username}
+    - Ej inloggad / lokal körning -> DATA_DIR (fallback)
     """
     username = st.session_state.get("username", "")
     if not username or username == "admin":
@@ -113,13 +113,13 @@ def _active_data_dir() -> Path:
 
 def load_portfolio(data_dir: Path | None = None) -> pd.DataFrame:
     """Laddar holdings.csv för den inloggade användaren.
-    Ingen cache – filen ändras när användaren lägger till tickers.
+    Ingen cache - filen ändras när användaren lägger till tickers.
     Bakåtkompatibel: lägger till kolumnerna 'konto', 'typ' och 'buy_date' om de saknas."""
     base = data_dir if data_dir is not None else _active_data_dir()
     try:
         holdings = pd.read_csv(base / "holdings.csv")
         holdings["ticker"] = holdings["ticker"].str.upper()
-        # Bakåtkompatibilitet – fyll i saknade kolumner
+        # Bakåtkompatibilitet - fyll i saknade kolumner
         if "konto" not in holdings.columns:
             holdings["konto"] = "Huvud"
         else:
@@ -142,7 +142,7 @@ def load_portfolio(data_dir: Path | None = None) -> pd.DataFrame:
 
 def load_watchlist(data_dir: Path | None = None) -> list:
     """Laddar watchlist.json för den inloggade användaren.
-    Ingen cache – filen ändras när användaren lägger till tickers."""
+    Ingen cache - filen ändras när användaren lägger till tickers."""
     base = data_dir if data_dir is not None else _active_data_dir()
     try:
         return json.loads((base / "watchlist.json").read_text(encoding="utf-8"))
@@ -155,7 +155,7 @@ def load_watchlist(data_dir: Path | None = None) -> list:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _get(df: pd.DataFrame, col: str, default=None) -> pd.Series:
-    # OBS: ingen @st.cache_data här – en felplacerad dekorator cachade tidigare
+    # OBS: ingen @st.cache_data här - en felplacerad dekorator cachade tidigare
     # denna kolumn-accessor, vilket gav fel index/innehåll vid återanvändning.
     if col in df.columns:
         return df[col]
@@ -169,14 +169,14 @@ def pct_fmt(v, plus=True) -> str:
         s = f"{v*100:+.1f}%" if plus else f"{v*100:.1f}%"
         return s
     except Exception:
-        return "—"
+        return "--"
 
 
 def num_fmt(v, decimals=1) -> str:
     try:
         return f"{float(v):.{decimals}f}"
     except Exception:
-        return "—"
+        return "--"
 
 
 
@@ -474,8 +474,8 @@ def conviction_meter_breakdown(row) -> str:
         return ""
     top = sorted(valid.items(), key=lambda x: x[1], reverse=True)[:2]
     bot = sorted(valid.items(), key=lambda x: x[1])[:2]
-    top_str = " · ".join(f"**{k}** ({v:.0f})" for k, v in top)
-    bot_str = " · ".join(f"**{k}** ({v:.0f})" for k, v in bot)
+    top_str = " * ".join(f"**{k}** ({v:.0f})" for k, v in top)
+    bot_str = " * ".join(f"**{k}** ({v:.0f})" for k, v in bot)
     return f"Styrkor: {top_str}   Svagheter: {bot_str}"
 
 
@@ -484,7 +484,7 @@ def _build_sector_cache() -> dict:
     """Bygger ett sektorcache från ALLA tillgängliga scan-filer.
     Nyare scan-filer prioriteras. Returnerar {ticker: sector}."""
     cache: dict = {}
-    scan_files = sorted(REPORT_DIR.glob("scored_universe_*.csv"))  # äldst → nyast
+    scan_files = sorted(REPORT_DIR.glob("scored_universe_*.csv"))  # äldst -> nyast
     for f in scan_files:
         try:
             tmp = pd.read_csv(f, usecols=lambda c: c in ["ticker", "sector"])
@@ -500,8 +500,8 @@ def holdings_pie(df: pd.DataFrame, score_df: pd.DataFrame = None, mvs: dict = No
     """Sektorpaj för innehav.
 
     Stödjer tre signaturer:
-    - holdings_pie(df)                         – räknar antal per sektor (gammalt)
-    - holdings_pie(holdings_df, score_df, mvs) – viktad på marknadsvärde, sektorer från score_df
+    - holdings_pie(df)                         - räknar antal per sektor (gammalt)
+    - holdings_pie(holdings_df, score_df, mvs) - viktad på marknadsvärde, sektorer från score_df
     """
     # Ny signatur: holdings_df + score_df + mvs
     if score_df is not None and mvs is not None and "ticker" in df.columns:
@@ -680,7 +680,7 @@ def portfolio_value_chart(holdings: pd.DataFrame, period: str = "1y",
     fig = go.Figure()
     show_legend = False
 
-    # Area fill — portföljvärde
+    # Area fill -- portföljvärde
     fig.add_trace(go.Scatter(
         x=portfolio_values.index,
         y=portfolio_values.values,
@@ -787,7 +787,7 @@ def calc_period_returns(holdings: pd.DataFrame) -> dict:
     def _ref_value_at(dt: pd.Timestamp) -> float:
         """
         Portföljvärde vid datum dt.
-        Om ett innehav köptes EFTER dt → använd cost_basis som referens
+        Om ett innehav köptes EFTER dt -> använd cost_basis som referens
         (vi hade inte positionen vid dt, men tar hänsyn till inköpspriset).
         """
         try:
@@ -810,7 +810,7 @@ def calc_period_returns(holdings: pd.DataFrame) -> dict:
                     except Exception:
                         pass
                 if bought_after:
-                    # Inte ägd vid dt — referens = vad vi betalade
+                    # Inte ägd vid dt -- referens = vad vi betalade
                     total += cost * s
                 else:
                     p = price_hist[t].iloc[idx]

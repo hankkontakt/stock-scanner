@@ -1,7 +1,7 @@
 """
 sectors.py
 ==========
-Sektorrelativ ranking – jämför varje aktie mot sin sektor
+Sektorrelativ ranking - jämför varje aktie mot sin sektor
 istället för globalt. Mer rättvis jämförelse mellan t.ex.
 techbolag (aldrig "billiga") och banker (alltid "billiga").
 
@@ -109,7 +109,7 @@ def get_sector_summary(df: pd.DataFrame) -> pd.DataFrame:
         if group_scores.notna().any():
             # Hittar positionen för max-score (hanterar NaN genom fillna)
             return group_tickers.iloc[group_scores.fillna(-1).argmax()]
-        return "—"
+        return "--"
 
     summary = df.groupby("sector").agg(
         antal        = ("ticker", "count"),

@@ -1,4 +1,4 @@
-"""web/pages/stock_search.py – Sida 15: Aktie-sök"""
+"""web/pages/stock_search.py - Sida 15: Aktie-sök"""
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -21,7 +21,7 @@ def _search_ticker_yfinance(query: str):
 
 
 def page_stock_search():
-    """🔍 Aktie-sök – sök på VILKEN aktie som helst.
+    """🔍 Aktie-sök - sök på VILKEN aktie som helst.
     Förbättrad: linjegraf, AI-chatt, yfinance news, add to watchlist/portfolio."""
     st.title("🔍 Aktie-sök")
     st.caption("Sök på vilken aktie som helst (även utanför ditt universum) och få prisgraf, AI-analys, nyheter.")
@@ -141,7 +141,7 @@ def page_stock_search():
                 st.error(f"Kunde inte lägga till: {e}")
 
     # Använd data_fetcher med cache + retry-logik istället för direkt yf-anrop.
-    # Tidigare: yf.Ticker(ticker).info → 429 om yfinance rate-limitar IP:n.
+    # Tidigare: yf.Ticker(ticker).info -> 429 om yfinance rate-limitar IP:n.
     # Nu: 30-dagars statisk cache + 7-dagars dynamisk cache + automatisk retry.
     try:
         from core import data_fetcher
@@ -153,7 +153,7 @@ def page_stock_search():
         if "429" in err or "rate limit" in err.lower() or "too many" in err.lower():
             st.error(
                 f"⏳ yfinance rate-limitar just nu för **{ticker}**. "
-                "Vänta några minuter och försök igen — eller använd en aktie "
+                "Vänta några minuter och försök igen -- eller använd en aktie "
                 "som redan finns i cachen (t.ex. från senaste veckoscan)."
             )
         else:
@@ -168,8 +168,8 @@ def page_stock_search():
         return
 
     price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose")
-    sector = info.get("sector", "—")
-    industry = info.get("industry", "—")
+    sector = info.get("sector", "--")
+    industry = info.get("industry", "--")
     pe = info.get("trailingPE")
     forward_pe = info.get("forwardPE")
     market_cap = info.get("marketCap")
@@ -187,14 +187,14 @@ def page_stock_search():
     profit_margin = info.get("profitMargins")
 
     kpi_row([
-        ("Pris", f"{price:.2f}" if price else "—", None,
+        ("Pris", f"{price:.2f}" if price else "--", None,
          "Senaste handelskurs för aktien. Uppdateras med ~15 min fördröjning via yfinance."),
-        ("Sektor", sector[:20] if sector else "—", None,
-         "Vilken bransch bolaget tillhör. Sektorns trend påverkar ofta enskilda aktier — köp i starka sektorer."),
-        ("P/E", f"{pe:.1f}" if pe else "—", None,
-         "Pris ÷ vinst per aktie. Lägre = billigare relativt vinst. Normalt 10–20 för stabila bolag. Högt P/E förutsätter stark framtida tillväxt."),
-        ("Marknadsvärde", f"{market_cap/1e9:.1f}B" if market_cap else "—", None,
-         "Totalt börsvärde = kurs × antal aktier. B = miljarder. Stort bolag (>10B) = mer stabilt. Litet bolag (<1B) = högre risk men potentiellt mer uppside."),
+        ("Sektor", sector[:20] if sector else "--", None,
+         "Vilken bransch bolaget tillhör. Sektorns trend påverkar ofta enskilda aktier -- köp i starka sektorer."),
+        ("P/E", f"{pe:.1f}" if pe else "--", None,
+         "Pris / vinst per aktie. Lägre = billigare relativt vinst. Normalt 10-20 för stabila bolag. Högt P/E förutsätter stark framtida tillväxt."),
+        ("Marknadsvärde", f"{market_cap/1e9:.1f}B" if market_cap else "--", None,
+         "Totalt börsvärde = kurs x antal aktier. B = miljarder. Stort bolag (>10B) = mer stabilt. Litet bolag (<1B) = högre risk men potentiellt mer uppside."),
     ])
 
     # Linjegraf (stilren, ingen candlestick)
@@ -228,20 +228,20 @@ def page_stock_search():
     with st.expander("📋 Detaljerad info", expanded=False):
         info_data = {
             "Bolag": name, "Ticker": ticker, "Sektor": sector,
-            "Industri": industry, "Pris": f"{price:.2f}" if price else "—",
-            "P/E (trailing)": f"{pe:.1f}" if pe else "—",
-            "P/E (forward)": f"{forward_pe:.1f}" if forward_pe else "—",
-            "Beta": f"{beta:.2f}" if beta else "—",
-            "ROE": f"{roe*100:.1f}%" if roe else "—",
-            "Vinstmarginal": f"{profit_margin*100:.1f}%" if profit_margin else "—",
-            "Utdelningsyield": f"{div_yield*100:.2f}%" if div_yield else "—",
-            "52v High": f"{high_52w:.2f}" if high_52w else "—",
-            "52v Low": f"{low_52w:.2f}" if low_52w else "—",
-            "Volym": f"{volume:,}" if volume else "—",
-            "Intäkter": f"{revenue/1e9:.1f}B" if revenue else "—",
-            "EBITDA": f"{ebitda/1e9:.1f}B" if ebitda else "—",
-            "Skuld": f"{debt/1e9:.1f}B" if debt else "—",
-            "Kassa": f"{cash/1e9:.1f}B" if cash else "—",
+            "Industri": industry, "Pris": f"{price:.2f}" if price else "--",
+            "P/E (trailing)": f"{pe:.1f}" if pe else "--",
+            "P/E (forward)": f"{forward_pe:.1f}" if forward_pe else "--",
+            "Beta": f"{beta:.2f}" if beta else "--",
+            "ROE": f"{roe*100:.1f}%" if roe else "--",
+            "Vinstmarginal": f"{profit_margin*100:.1f}%" if profit_margin else "--",
+            "Utdelningsyield": f"{div_yield*100:.2f}%" if div_yield else "--",
+            "52v High": f"{high_52w:.2f}" if high_52w else "--",
+            "52v Low": f"{low_52w:.2f}" if low_52w else "--",
+            "Volym": f"{volume:,}" if volume else "--",
+            "Intäkter": f"{revenue/1e9:.1f}B" if revenue else "--",
+            "EBITDA": f"{ebitda/1e9:.1f}B" if ebitda else "--",
+            "Skuld": f"{debt/1e9:.1f}B" if debt else "--",
+            "Kassa": f"{cash/1e9:.1f}B" if cash else "--",
         }
         st.dataframe(pd.DataFrame(info_data.items(), columns=["Egenskap", "Värde"]),
             use_container_width=True, hide_index=True)
@@ -254,7 +254,7 @@ def page_stock_search():
         if news:
             for n in news[:7]:
                 c = n.get("content", {})
-                title = c.get("title", "—")
+                title = c.get("title", "--")
                 pub = c.get("pubDate", "")[:10]
                 summary = c.get("summary", "")
                 st.markdown(f"- **{title}** ({pub})")

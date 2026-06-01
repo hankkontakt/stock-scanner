@@ -1,5 +1,5 @@
 """
-data_fetcher_batch.py – Batch/universe data fetching operations.
+data_fetcher_batch.py - Batch/universe data fetching operations.
 Single-ticker utilities remain in data_fetcher.py.
 """
 import asyncio
@@ -48,8 +48,8 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
     """
     total = len(tickers)
 
-    # Ladda blacklist – skippa kända trasiga tickers
-    # Absolut sökväg förankrad i repo-roten (tidigare relativ → bröts vid annan CWD)
+    # Ladda blacklist - skippa kända trasiga tickers
+    # Absolut sökväg förankrad i repo-roten (tidigare relativ -> bröts vid annan CWD)
     _bl_path = Path(__file__).resolve().parent.parent / "data" / "blacklist.json"
     try:
         _blacklist = set(json.loads(_bl_path.read_text()).keys()) if _bl_path.exists() else set()
@@ -57,12 +57,12 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
         _blacklist = set()
 
     if verbose:
-        print(f"  ⚙  {config.PARALLEL_WORKERS} parallella workers · {total} tickers")
+        print(f"  ⚙  {config.PARALLEL_WORKERS} parallella workers * {total} tickers")
 
     rows = []
     failed = []
-    rate_limited = []  # Tickers that got 429 – will retry in pass 2
-    delisted = []      # Tickers that got 404 – will be auto-blacklisted
+    rate_limited = []  # Tickers that got 429 - will retry in pass 2
+    delisted = []      # Tickers that got 404 - will be auto-blacklisted
     completed = 0
 
     # ── Pass 1: parallell hämtning med PARALLEL_WORKERS ────────────────────────
@@ -92,7 +92,7 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
     # ── Pass 2: retry rate-limited tickers med 1 worker + fördröjning ──────────
     if rate_limited:
         if verbose:
-            print(f"\n  ⏳ Pass 2: {len(rate_limited)} rate-limited tickers – väntar 45s för att ge Yahoo tid att återhämta sig...")
+            print(f"\n  ⏳ Pass 2: {len(rate_limited)} rate-limited tickers - väntar 45s för att ge Yahoo tid att återhämta sig...")
         time.sleep(45)
 
         pass2_completed = 0
@@ -196,7 +196,7 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
 def _parse_yahoo_chart_response(ticker: str, data: dict) -> dict | None:
     """
     Tolkar Yahoo Finance chart-API-svar (v8) till samma format som
-    extract_metrics() returnerar (enbart prisdata – ingen fundamental).
+    extract_metrics() returnerar (enbart prisdata - ingen fundamental).
     Returnerar None om svaret är ogiltigt.
     """
     try:
@@ -274,7 +274,7 @@ async def fetch_prices_async(
     """
     if not _AIOHTTP_AVAILABLE:
         if verbose:
-            print("  ℹ  aiohttp saknas – kör pip install aiohttp för async-läge")
+            print("  ℹ  aiohttp saknas - kör pip install aiohttp för async-läge")
         return []
 
     semaphore = asyncio.Semaphore(max_concurrent)
@@ -303,13 +303,13 @@ def fetch_sentiment_batch(tickers: list, verbose: bool = True) -> dict:
     """
     Fetch sentiment scores for all tickers using parallel Finnhub calls.
 
-    Gratis Finnhub: 60 calls/min → 50 calls/min med headroom.
+    Gratis Finnhub: 60 calls/min -> 50 calls/min med headroom.
     Med 3 parallella workers och tokens-per-interval-rate-limiter håller vi oss
     inom gränsen: requests sprids jämnt över 60-sekundersfönster.
     """
     if not config.FINNHUB_API_KEY:
         if verbose:
-            print("  ℹ Finnhub API key not set – skipping sentiment (alla får neutral score)")
+            print("  ℹ Finnhub API key not set - skipping sentiment (alla får neutral score)")
         return {}
 
     if verbose:
@@ -368,14 +368,14 @@ def search_stocks(query: str, max_results: int = 8) -> list:
 
 
 # ══════════════════════════════════════════════════════════════
-# PRICE-ONLY FETCH – snabb hämtning av ENDAST priser (ingen fundamental data)
+# PRICE-ONLY FETCH - snabb hämtning av ENDAST priser (ingen fundamental data)
 # Används för daglig re-scoring i daily_pipeline.py
 # ══════════════════════════════════════════════════════════════
 
 def fetch_prices_only(tickers: list, period: str = "6mo",
                       max_workers: int = 12, timeout: int = 30) -> dict:
     """
-    Hämta ENDAST priser för en lista med tickers – INGEN fundamental data.
+    Hämta ENDAST priser för en lista med tickers - INGEN fundamental data.
     Mycket snabbare än fetch_stock_info eftersom vi bara hämtar history, inte info.
 
     Args:
@@ -522,7 +522,7 @@ def update_scored_with_prices(scored_df: pd.DataFrame, price_data: dict) -> pd.D
 
 
 # ══════════════════════════════════════════════════════════════
-# BENCHMARK DATA (OMXS30 + SPY) – ersätter daily_scan.fetch_benchmark_performance()
+# BENCHMARK DATA (OMXS30 + SPY) - ersätter daily_scan.fetch_benchmark_performance()
 # ══════════════════════════════════════════════════════════════
 
 def fetch_benchmark_performance() -> dict:

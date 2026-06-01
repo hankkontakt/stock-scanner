@@ -1,4 +1,4 @@
-"""web/pages/smallcap.py – Sida 3: Småbolag"""
+"""web/pages/smallcap.py - Sida 3: Småbolag"""
 
 import pandas as pd
 import streamlit as st
@@ -71,10 +71,10 @@ def _apply_sc_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
 
 
 def page_smallcap(sc_df: pd.DataFrame, filters: dict):
-    st.title("🏦 Småbolag – svenska small/micro cap")
+    st.title("🏦 Småbolag - svenska small/micro cap")
 
     if sc_df.empty:
-        st.warning("Småbolagsdata håller på att laddas in. Systemet uppdateras automatiskt varje måndag — kom tillbaka då för de senaste analyserna.")
+        st.warning("Småbolagsdata håller på att laddas in. Systemet uppdateras automatiskt varje måndag -- kom tillbaka då för de senaste analyserna.")
         return
 
     if "sector" in sc_df.columns:
@@ -110,9 +110,9 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
         ("Bolag (filtrerat)", f"{len(filt)} / {len(sc_df)}", None,
          "Antal smallcap-bolag som uppfyller aktuella filter av totalt antal i smallcap-universumet."),
         ("★★★★★ bolag",       f"{n_five}",                   None,
-         "Bolag med 5 stjärnor — högsta betygskategorin. Indikerar stark kombination av fundamenta, momentum och värdering."),
+         "Bolag med 5 stjärnor -- högsta betygskategorin. Indikerar stark kombination av fundamenta, momentum och värdering."),
         ("Insider BUY",       f"{n_buy}",                    None,
-         "Bolag där insiders (styrelse/ledning) nyligen köpt aktier i det egna bolaget. Insiderköp är ett positivt signal — de känner bolaget bäst."),
+         "Bolag där insiders (styrelse/ledning) nyligen köpt aktier i det egna bolaget. Insiderköp är ett positivt signal -- de känner bolaget bäst."),
         ("Snittpoäng",        f"{avg_sc:.1f}",               None,
          "Genomsnittlig totalpoäng bland filtrerade smallcap-bolag."),
     ])
@@ -122,28 +122,28 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
     )
 
     with tab1:
-        with st.expander("ℹ️ Hur läser jag rankinglistan? — Förklaring för nybörjare", expanded=False):
+        with st.expander("ℹ️ Hur läser jag rankinglistan? -- Förklaring för nybörjare", expanded=False):
             st.markdown("""
-**Rankinglistan sorterar alla småbolag efter systemets totalpoäng (0–100).**
+**Rankinglistan sorterar alla småbolag efter systemets totalpoäng (0-100).**
 
 ### ⭐ Stjärnbetyg
-Systemet delar in bolagen i 1–5 stjärnor baserat på totalpoängen:
-- **★★★★★ (5 stjärnor):** Starka på nästan alla faktorer — fundamenta, momentum, värdering, insider
+Systemet delar in bolagen i 1-5 stjärnor baserat på totalpoängen:
+- **★★★★★ (5 stjärnor):** Starka på nästan alla faktorer -- fundamenta, momentum, värdering, insider
 - **★★★★☆ (4 stjärnor):** Mycket bra bolag med bara mindre svagheter
-- **★★★☆☆ (3 stjärnor):** OK bolag — varken bra eller dåliga
+- **★★★☆☆ (3 stjärnor):** OK bolag -- varken bra eller dåliga
 - **★★☆☆☆ (2 stjärnor):** Tydliga svagheter i analysen
 - **★☆☆☆☆ (1 stjärna):** Undvik eller analysera noggrant
 
 ### 📊 Kolumnförklaringar
 | Kolumn | Vad det betyder |
 |--------|----------------|
-| **Poäng** | Totalpoäng 0–100 (blå stapel) — ju högre desto bättre |
+| **Poäng** | Totalpoäng 0-100 (blå stapel) -- ju högre desto bättre |
 | **AI 30d-ret** | AI-modellens prediktion: hur mycket aktien förväntas röra sig kommande 30 dagar |
-| **AI rank** | AI-ranking (0–100) — kompletterande till klassisk poäng |
+| **AI rank** | AI-ranking (0-100) -- kompletterande till klassisk poäng |
 | **Insider** | BUY = insiders har nyligen köpt egna aktier (positivt signal) |
 | **Dag% / Vecka%** | Kursrörelse senaste dag/vecka |
 | **6m% / 12m%** | Avkastning senaste 6 resp. 12 månader |
-| **Piotroski** | Finansiell styrka 0–9 (se Faktortabell-fliken för förklaring) |
+| **Piotroski** | Finansiell styrka 0-9 (se Faktortabell-fliken för förklaring) |
 
 **Klicka på en aktie** i tabellen för att öppna en full analys!
 """)
@@ -208,7 +208,7 @@ Systemet delar in bolagen i 1–5 stjärnor baserat på totalpoängen:
 
             if sc_event and sc_event.selection and sc_event.selection.rows:
                 idx = sc_event.selection.rows[0]
-                # filt har reset index från _apply_sc_filters → iloc matchar rank_disp
+                # filt har reset index från _apply_sc_filters -> iloc matchar rank_disp
                 sc_detail_ticker = filt.iloc[idx]["ticker"]       # råticker, ingen flagg
                 sc_display_name  = rank_disp.iloc[idx]["Ticker"]  # med flagg, för titel
                 sc_row = sc_df[sc_df["ticker"] == sc_detail_ticker]
@@ -220,21 +220,21 @@ Systemet delar in bolagen i 1–5 stjärnor baserat på totalpoängen:
                         )
 
     with tab2:
-        with st.expander("ℹ️ Vad är nyckeltal? — Förklaring för nybörjare", expanded=False):
+        with st.expander("ℹ️ Vad är nyckeltal? -- Förklaring för nybörjare", expanded=False):
             st.markdown("""
 **Nyckeltal hjälper dig bedöma om ett bolag är billigt, lönsamt och finansiellt stabilt.**
 
 | Nyckeltal | Vad det mäter | Bra värde (tumregel) |
 |-----------|--------------|---------------------|
-| **EV/EBITDA** | Pris relativt rörelseresultat | < 10 = billigt · > 20 = dyrt |
-| **P/B** | Pris relativt bokfört värde | < 1,5 = billigt · > 3 = dyrt |
-| **Bruttomarg.** | Hur stor andel av intäkten som är vinst efter direkta kostnader | > 40% = stark · < 20% = svag |
+| **EV/EBITDA** | Pris relativt rörelseresultat | < 10 = billigt * > 20 = dyrt |
+| **P/B** | Pris relativt bokfört värde | < 1,5 = billigt * > 3 = dyrt |
+| **Bruttomarg.** | Hur stor andel av intäkten som är vinst efter direkta kostnader | > 40% = stark * < 20% = svag |
 | **Rörelsmarg.** | Vinst efter alla driftskostnader (mer komplett än bruttomarginal) | > 10% = bra |
 | **Oms.tillv.** | Hur snabbt omsättningen växer | > 10%/år = bra |
 | **Vinst.tillv.** | Hur snabbt vinsten växer | > 10%/år = bra |
-| **D/E** | Skulder i förhållande till eget kapital (skuldsättning) | < 1 = låg risk · > 2 = hög risk |
-| **CR (Current Ratio)** | Förmåga att betala kortfristiga skulder | > 1,5 = bra · < 1 = varning |
-| **FCF** | Fritt kassaflöde — faktiska pengar bolaget genererar | Positivt = bra |
+| **D/E** | Skulder i förhållande till eget kapital (skuldsättning) | < 1 = låg risk * > 2 = hög risk |
+| **CR (Current Ratio)** | Förmåga att betala kortfristiga skulder | > 1,5 = bra * < 1 = varning |
+| **FCF** | Fritt kassaflöde -- faktiska pengar bolaget genererar | Positivt = bra |
 | **Kassa** | Likvida medel bolaget har | Mer = bättre buffert |
 
 **Tumregel:** Bra bolag har hög lönsamhet (marginaler), låg skuldsättning (D/E) och positivt kassaflöde (FCF).
@@ -268,23 +268,23 @@ Systemet delar in bolagen i 1–5 stjärnor baserat på totalpoängen:
                                   key="sc_keynums_table", height=600)
 
     with tab3:
-        with st.expander("ℹ️ Vad är faktortabellen? — Förklaring för nybörjare", expanded=False):
+        with st.expander("ℹ️ Vad är faktortabellen? -- Förklaring för nybörjare", expanded=False):
             st.markdown("""
-**Systemet betygsätter varje bolag på 7 delfaktorer — se hur stark varje aspekt är.**
+**Systemet betygsätter varje bolag på 7 delfaktorer -- se hur stark varje aspekt är.**
 
 | Faktor | Vad bedöms | Högt = bra? |
 |--------|-----------|------------|
-| **Insider** | Insiderägande + senaste köp/sälj av styrelse/ledning | ✅ Ja — insiders som köper tror på bolaget |
-| **FCF** | Fritt kassaflöde — hur mycket pengar bolaget faktiskt tjänar | ✅ Ja — positivt kassaflöde = finansiellt friskt |
-| **Piotroski** | Finansiell hälsocheck (9 kriterier: lönsamhet, likviditet, effektivitet) | ✅ Ja — 7–9 = starkt bolag |
-| **Tillväxt** | Omsättnings- och vinsttillväxt | ✅ Ja — växande bolag är bättre på sikt |
-| **Balans** | Skuldsättning och kreditvärdighet | ✅ Ja — låg skuld = lägre risk |
-| **Värdering** | Är aktien billig eller dyr vs. bolagets verkliga värde? | ✅ Ja — billig = mer uppsida |
-| **Momentum** | Prismomentumet — rör sig aktien uppåt? | ✅ Ja — aktier i upptrend fortsätter ofta upp |
-| **Likviditet** | Hur lätt det är att köpa/sälja aktien utan att påverka kursen | ✅ Ja — hög likviditet = lättare att handla |
-| **Totalt** | Viktad summa av alla faktorer (0–100) | ✅ Ja — > 60 = starkt bolag |
+| **Insider** | Insiderägande + senaste köp/sälj av styrelse/ledning | ✅ Ja -- insiders som köper tror på bolaget |
+| **FCF** | Fritt kassaflöde -- hur mycket pengar bolaget faktiskt tjänar | ✅ Ja -- positivt kassaflöde = finansiellt friskt |
+| **Piotroski** | Finansiell hälsocheck (9 kriterier: lönsamhet, likviditet, effektivitet) | ✅ Ja -- 7-9 = starkt bolag |
+| **Tillväxt** | Omsättnings- och vinsttillväxt | ✅ Ja -- växande bolag är bättre på sikt |
+| **Balans** | Skuldsättning och kreditvärdighet | ✅ Ja -- låg skuld = lägre risk |
+| **Värdering** | Är aktien billig eller dyr vs. bolagets verkliga värde? | ✅ Ja -- billig = mer uppsida |
+| **Momentum** | Prismomentumet -- rör sig aktien uppåt? | ✅ Ja -- aktier i upptrend fortsätter ofta upp |
+| **Likviditet** | Hur lätt det är att köpa/sälja aktien utan att påverka kursen | ✅ Ja -- hög likviditet = lättare att handla |
+| **Totalt** | Viktad summa av alla faktorer (0-100) | ✅ Ja -- > 60 = starkt bolag |
 
-**Blå staplar:** Poäng 0–100. Längre stapel = bättre på den faktorn.
+**Blå staplar:** Poäng 0-100. Längre stapel = bättre på den faktorn.
 
 **Klicka på en aktie** för att se detaljerad analys och AI-kommentarer!
 """)
@@ -311,27 +311,27 @@ Systemet delar in bolagen i 1–5 stjärnor baserat på totalpoängen:
                                   column_config=col_cfg2 or None)
 
     with tab4:
-        with st.expander("ℹ️ Vad är insider-data? — Förklaring för nybörjare", expanded=False):
+        with st.expander("ℹ️ Vad är insider-data? -- Förklaring för nybörjare", expanded=False):
             st.markdown("""
 ### 👔 Vad är insiderhandel (laglig)?
-**Insiders** = VD, CFO, styrelseledamöter och storägare (≥10%) i bolaget.
+**Insiders** = VD, CFO, styrelseledamöter och storägare (>=10%) i bolaget.
 De måste rapportera alla köp och sälj av egna aktier till Finansinspektionen inom 3 dagar.
 
-Det är **helt lagligt** att handla i det egna bolagets aktier — det som är olagligt är att göra det
+Det är **helt lagligt** att handla i det egna bolagets aktier -- det som är olagligt är att göra det
 baserat på hemlig information som inte är offentlig.
 
 ### 📊 Kolumnförklaringar
 | Kolumn | Vad det betyder |
 |--------|----------------|
 | **Insiders äger%** | Andel av totalt aktiekapital som ägs av insiders. Högt (>10%) = insiders tror starkt på bolaget |
-| **Signal** | BUY = nettoköp senaste perioden · SELL = nettosälj |
+| **Signal** | BUY = nettoköp senaste perioden * SELL = nettosälj |
 | **Netto köp 6m** | Totalt köpvärde minus säljvärde senaste 6 månaderna (i SEK) |
 | **Antal köp** | Antal insidertransaktioner som var köp |
 | **Antal sälj** | Antal insidertransaktioner som var sälj |
 
 ### 🔍 Hur tolkar jag det?
-- **BUY-signal + högt ägarskap:** Insiders satsar egna pengar → stark positiv signal
-- **SELL-signal:** Inte nödvändigtvis dåligt — de kan sälja av skattemässiga skäl eller diversifiering
+- **BUY-signal + högt ägarskap:** Insiders satsar egna pengar -> stark positiv signal
+- **SELL-signal:** Inte nödvändigtvis dåligt -- de kan sälja av skattemässiga skäl eller diversifiering
 - **Klusterköp (flera insiders köper samtidigt):** Starkaste möjliga signal
 
 **Klicka på en aktie** för full analys!

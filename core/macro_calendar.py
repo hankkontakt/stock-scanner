@@ -1,5 +1,5 @@
 """
-Makrokalender — hårdkodade centralbanksbeslut och makrohändelser 2025–2026.
+Makrokalender -- hårdkodade centralbanksbeslut och makrohändelser 2025-2026.
 
 Källor:
   Fed FOMC:    https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm
@@ -109,19 +109,3 @@ def get_upcoming_macro_events(days_ahead: int = 30) -> list[dict]:
     return sorted(upcoming, key=lambda x: x["days_until"])
 
 
-def get_all_events_by_month(year: int | None = None) -> dict[str, list[dict]]:
-    """
-    Returnerar alla händelser grupperade per månad (för kalendervy).
-    year: filtrera på år (None = alla år)
-    """
-    result: dict[str, list[dict]] = {}
-    for ev in MACRO_EVENTS:
-        try:
-            d = datetime.date.fromisoformat(ev["date"])
-        except ValueError:
-            continue
-        if year is not None and d.year != year:
-            continue
-        key = d.strftime("%Y-%m")
-        result.setdefault(key, []).append({**ev, "day": d.day})
-    return result

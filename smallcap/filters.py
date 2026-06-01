@@ -1,14 +1,14 @@
 """
-filters.py – Hårda filter för svenska småbolag.
+filters.py - Hårda filter för svenska småbolag.
 
 Dessa filter körs INNAN scoring och eliminerar "giftiga" bolag:
-  1. Likviditetsgräns     – för illikvida aktier kan man inte sälja i stress
-  2. Marknadsvärde        – håll dig inom small/micro-cap-definitionen
-  3. Negativt eget kapital – teknisk insolvens
-  4. Balansräkning        – current ratio + extremt hög skuld
-  5. Kassabana            – < 12 mån kassa vid negativt kassaflöde = emissionsrisk
-  6. Piotroski-gräns      – för svaga fundamenta
-  7. Utspädningsfälla     – bolag som kontinuerligt späder ut ägarna
+  1. Likviditetsgräns     - för illikvida aktier kan man inte sälja i stress
+  2. Marknadsvärde        - håll dig inom small/micro-cap-definitionen
+  3. Negativt eget kapital - teknisk insolvens
+  4. Balansräkning        - current ratio + extremt hög skuld
+  5. Kassabana            - < 12 mån kassa vid negativt kassaflöde = emissionsrisk
+  6. Piotroski-gräns      - för svaga fundamenta
+  7. Utspädningsfälla     - bolag som kontinuerligt späder ut ägarna
 
 Varje filter returnerar en bool-mask (True = behåll).
 apply_all_filters() kör alla och loggar vad som filtreras bort.
@@ -30,7 +30,7 @@ def _cfg(key: str, default):
 # ── Trösklar (läses från config.py SMALLCAP_CONFIG vid start) ────────────────
 MIN_DAILY_TURNOVER_SEK  = _cfg("min_daily_turnover_sek",  500_000)
 MIN_MARKET_CAP_SEK      = _cfg("min_market_cap_sek",      30_000_000)
-MAX_MARKET_CAP_SEK      = _cfg("max_market_cap_sek",      25_000_000_000)  # 25 GSEK – exkl. Large Cap
+MAX_MARKET_CAP_SEK      = _cfg("max_market_cap_sek",      25_000_000_000)  # 25 GSEK - exkl. Large Cap
 MAX_DEBT_TO_EQUITY      = _cfg("max_debt_to_equity",      300)
 MIN_CURRENT_RATIO       = _cfg("min_current_ratio",       0.5)
 MAX_PIOTROSKI_SKIP      = _cfg("max_piotroski_skip",      2)
@@ -38,12 +38,12 @@ MAX_DILUTION_PCT        = _cfg("max_dilution_pct",        0.20)
 MIN_CASH_RUNWAY_MONTHS  = _cfg("min_cash_runway_months",  12)
 
 # SEK till USD approximation (yfinance returnerar USD market_cap för .ST)
-# Faktisk conversion-rate för filter-ändamål – bara ungefärlig
+# Faktisk conversion-rate för filter-ändamål - bara ungefärlig
 SEK_USD_APPROX = 0.094  # 1 SEK ≈ 0.094 USD
 
 
 def _daily_turnover(df: pd.DataFrame) -> pd.Series:
-    """Daglig omsättning i aktiets valuta (volym × stängningspris)."""
+    """Daglig omsättning i aktiets valuta (volym x stängningspris)."""
     vol   = df.get("avg_volume",    pd.Series(0, index=df.index)).fillna(0)
     price = df.get("current_price", pd.Series(0, index=df.index)).fillna(0)
     return (vol * price).fillna(0)
@@ -74,12 +74,12 @@ def filter_market_cap(df: pd.DataFrame, verbose: bool = True) -> pd.Series:
     mkcap_sek = mkcap / SEK_USD_APPROX
 
     mask = mkcap_sek.between(MIN_MARKET_CAP_SEK, MAX_MARKET_CAP_SEK)
-    # Om market_cap saknas – behåll (låt scoring hantera det)
+    # Om market_cap saknas - behåll (låt scoring hantera det)
     mask = mask | mkcap.isna() | mkcap.eq(0)
     if verbose and (~mask).any():
         n = (~mask).sum()
         bad = df.loc[~mask & mkcap.gt(MAX_MARKET_CAP_SEK * SEK_USD_APPROX), "ticker"].tolist()[:5]
-        print(f"  Marknadsvärde: tar bort {n} utanför 30 MSEK–25 GSEK"
+        print(f"  Marknadsvärde: tar bort {n} utanför 30 MSEK-25 GSEK"
               + (f" (för stora: {bad})" if bad else ""))
     return mask
 
@@ -87,9 +87,9 @@ def filter_market_cap(df: pd.DataFrame, verbose: bool = True) -> pd.Series:
 def filter_negative_equity(df: pd.DataFrame, verbose: bool = True) -> pd.Series:
     """
     Eliminera bolag med negativt bokfört eget kapital (teknisk insolvens).
-    book_value (per aktie) < 0 → negativt totalt eget kapital.
-    D/E-ratio täcker inte detta — den är meningslös när täljaren är negativ.
-    Saknas data → behåll (benefit of doubt).
+    book_value (per aktie) < 0 -> negativt totalt eget kapital.
+    D/E-ratio täcker inte detta -- den är meningslös när täljaren är negativ.
+    Saknas data -> behåll (benefit of doubt).
     """
     bv = df.get("book_value", pd.Series(np.nan, index=df.index))
     # Tillåt NaN (saknad data) men filtrera explicit negativa värden
@@ -144,7 +144,7 @@ def filter_cash_runway(df: pd.DataFrame,
     valid_burn = burning & (monthly_burn > 0)
     runway[valid_burn] = cash[valid_burn] / monthly_burn[valid_burn]
 
-    # Saknar kassadata men bränner pengar → behåll (benefit of doubt, data-lucka)
+    # Saknar kassadata men bränner pengar -> behåll (benefit of doubt, data-lucka)
     missing_cash = burning & (df.get("total_cash", pd.Series(np.nan,
                                index=df.index)).isna())
 
@@ -154,15 +154,15 @@ def filter_cash_runway(df: pd.DataFrame,
         n = (~mask).sum()
         bad = df.loc[~mask, "ticker"].tolist()[:5]
         print(f"  Kassabana: tar bort {n} med <{min_months}m runway ({bad})"
-              f" – emissionsrisk!")
+              f" - emissionsrisk!")
     return mask
 
 
 def filter_piotroski(df: pd.DataFrame, verbose: bool = True) -> pd.Series:
     """
-    Eliminera bolag med extremt låg Piotroski F-Score (≤ 2).
-    F-Score 0–2 = allvarliga redovisningsproblem.
-    Saknas data → behåll (ge benefit of doubt).
+    Eliminera bolag med extremt låg Piotroski F-Score (<= 2).
+    F-Score 0-2 = allvarliga redovisningsproblem.
+    Saknas data -> behåll (ge benefit of doubt).
     """
     if "piotroski_score" not in df.columns:
         return pd.Series(True, index=df.index)
@@ -172,7 +172,7 @@ def filter_piotroski(df: pd.DataFrame, verbose: bool = True) -> pd.Series:
     if verbose and (~mask).any():
         n = (~mask).sum()
         bad = df.loc[~mask, "ticker"].tolist()[:5]
-        print(f"  Piotroski: tar bort {n} med F-Score ≤ {MAX_PIOTROSKI_SKIP} ({bad})")
+        print(f"  Piotroski: tar bort {n} med F-Score <= {MAX_PIOTROSKI_SKIP} ({bad})")
     return mask
 
 
@@ -230,7 +230,7 @@ def apply_all_filters(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
 
     if verbose:
         pct = (n_removed / n_start * 100) if n_start > 0 else 0
-        print(f"  → Kvar efter filter: {n_kept} bolag "
+        print(f"  -> Kvar efter filter: {n_kept} bolag "
               f"({n_removed} filtrerade bort, {pct:.0f}%)")
 
     return result
@@ -280,7 +280,7 @@ def get_red_flags(df: pd.DataFrame) -> pd.DataFrame:
 
         flags.append({
             "ticker": ticker,
-            "flags":  " · ".join(ticker_flags) if ticker_flags else "—",
+            "flags":  " * ".join(ticker_flags) if ticker_flags else "--",
             "n_flags": len(ticker_flags),
         })
 

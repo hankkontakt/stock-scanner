@@ -1,4 +1,4 @@
-"""web/pages/ai_journal.py – AI Trade Journal: track AI recommendations & outcomes"""
+"""web/pages/ai_journal.py - AI Trade Journal: track AI recommendations & outcomes"""
 import json
 import streamlit as st
 import pandas as pd
@@ -20,7 +20,7 @@ def _save_journal(entries: list):
     JOURNAL_FILE.parent.mkdir(parents=True, exist_ok=True)
     content = json.dumps(entries, ensure_ascii=False, indent=2)
     JOURNAL_FILE.write_text(content, encoding="utf-8")
-    # Committa till GitHub — Streamlit Cloud har ephemeral filsystem
+    # Committa till GitHub -- Streamlit Cloud har ephemeral filsystem
     try:
         from web.pages.admin import _get_github_token, _github_commit_file
         token = _get_github_token()
@@ -129,8 +129,8 @@ def page_ai_journal(df: pd.DataFrame):
             col3.metric("Win rate (1m)", f"{win_rate:.0f}%")
             col4.metric("Avg avkastning (1m)", f"{avg_ret:+.1f}%")
         else:
-            col3.metric("Win rate (1m)", "—")
-            col4.metric("Avg avkastning (1m)", "—")
+            col3.metric("Win rate (1m)", "--")
+            col4.metric("Avg avkastning (1m)", "--")
 
         st.markdown("---")
 

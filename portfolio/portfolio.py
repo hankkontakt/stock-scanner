@@ -148,7 +148,7 @@ def _shrinkage_kelly(portfolio_value: float, num_positions: int = 10) -> dict:
     """
     Kelly-kriterium med shrinkage mot equal weight enligt Baker & McHale (2013).
     
-    Formel: w_opt = (1-φ) × w_kelly + φ × (1/N)
+    Formel: w_opt = (1-φ) x w_kelly + φ x (1/N)
     där:
       - w_kelly = Half-Kelly (standard)
       - 1/N     = equal weight
@@ -156,8 +156,8 @@ def _shrinkage_kelly(portfolio_value: float, num_positions: int = 10) -> dict:
     
     φ bestäms av estimeringsosäkerhet:
       - φ = 0.7 när using_defaults (för få trades för pålitlig estimation)
-      - φ = 0.5 när vi har ≥20 trades (viss tilltro till datan)
-      - φ minskar mot 0.2 när n_trades → 100+
+      - φ = 0.5 när vi har >=20 trades (viss tilltro till datan)
+      - φ minskar mot 0.2 när n_trades -> 100+
     
     Detta skyddar mot estimation error som annars leder till överbetting.
     """
@@ -181,13 +181,13 @@ def _shrinkage_kelly(portfolio_value: float, num_positions: int = 10) -> dict:
     
     # Shrinkage intensity φ baserat på antal trades
     if using_defaults or n_trades < 20:
-        phi = 0.7  # Hög osäkerhet → mest equal weight
+        phi = 0.7  # Hög osäkerhet -> mest equal weight
     elif n_trades < 50:
-        phi = 0.5  # Viss data → 50/50
+        phi = 0.5  # Viss data -> 50/50
     elif n_trades < 100:
-        phi = 0.3  # Mer data → mer Kelly
+        phi = 0.3  # Mer data -> mer Kelly
     else:
-        phi = 0.2  # Mycket data → mest Kelly
+        phi = 0.2  # Mycket data -> mest Kelly
     
     # Shrinkage: blanda Kelly och equal weight
     shrunk = (1 - phi) * hk + phi * ew
@@ -311,7 +311,7 @@ def get_buy_recommendations(
     analysis["kelly_note"] = (
         f"Shrinkage-Kelly: {ki['pct']:.0f}% av portföljvärdet = {ki['sek']:,.0f} kr"
         + phi_note
-        + (" (standardvärden – för få trades)" if ki.get("using_defaults") else
+        + (" (standardvärden - för få trades)" if ki.get("using_defaults") else
            f" ({ki['n_trades']} stängda trades)")
         + f" | Kelly raw: {ki['kelly_raw']:.0f}% | Equal weight: {ki['equal_weight']:.0f}%"
     )
@@ -338,11 +338,11 @@ def analyze_correlation(holdings: pd.DataFrame, period: str = "6mo") -> dict:
     Hög korrelation = koncentrerad risk (alla rör sig tillsammans).
 
     Returnerar:
-        correlation_matrix     – DataFrame med parvis korrelation
-        avg_pairwise_corr      – snitt-korrelation (0-1)
-        max_corr_pair          – (tickerA, tickerB, korrelation)
-        concentration_warning  – True om snitt > 0.7
-        diversification_score  – 0-100 (högre = bättre diversifierat)
+        correlation_matrix     - DataFrame med parvis korrelation
+        avg_pairwise_corr      - snitt-korrelation (0-1)
+        max_corr_pair          - (tickerA, tickerB, korrelation)
+        concentration_warning  - True om snitt > 0.7
+        diversification_score  - 0-100 (högre = bättre diversifierat)
     """
     import yfinance as yf
 
@@ -421,7 +421,7 @@ def build_correlation_section(corr_info: dict) -> str:
         pair = corr_info["max_corr_pair"]
         val  = corr_info["max_corr_value"]
         lines.append(f"### Mest korrelerade par")
-        lines.append(f"- `{pair[0]}` ↔ `{pair[1]}` – korrelation **{val:.2f}**")
+        lines.append(f"- `{pair[0]}` ↔ `{pair[1]}` - korrelation **{val:.2f}**")
         lines.append("")
 
     if corr_info.get("concentration_warning"):
@@ -430,10 +430,10 @@ def build_correlation_section(corr_info: dict) -> str:
         lines.append("Överväg att lägga till aktier från andra sektorer eller geografier.")
         lines.append("")
     elif div_score >= 70:
-        lines.append("✅ **Bra diversifiering** – dina innehav rör sig oberoende av varandra.")
+        lines.append("✅ **Bra diversifiering** - dina innehav rör sig oberoende av varandra.")
         lines.append("")
 
     # Tolkningsguide
-    lines.append("> *0.0-0.3 = oberoende · 0.3-0.6 = måttligt · 0.6-1.0 = starkt korrelerade*")
+    lines.append("> *0.0-0.3 = oberoende * 0.3-0.6 = måttligt * 0.6-1.0 = starkt korrelerade*")
 
     return "\n".join(lines)

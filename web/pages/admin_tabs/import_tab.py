@@ -1,4 +1,4 @@
-"""admin/import_tab.py – Avanza import tab for admin page."""
+"""admin/import_tab.py - Avanza import tab for admin page."""
 import os
 import tempfile
 from pathlib import Path

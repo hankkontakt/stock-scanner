@@ -1,4 +1,4 @@
-"""web/pages/sector_rotation.py – Sida 10: Sektorrotation"""
+"""web/pages/sector_rotation.py - Sida 10: Sektorrotation"""
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -10,14 +10,14 @@ from web.ui.components import clickable_stock_table
 
 
 def page_sector_rotation(df: pd.DataFrame):
-    """Sektorrotation – heatmap och momentum för alla sektorer."""
+    """Sektorrotation - heatmap och momentum för alla sektorer."""
     st.title("🏭 Sektorrotation")
     st.caption("Analysera sektorstyrka, rotation och momentum. Data från sektor-ETFer via yfinance.")
 
-    with st.expander("ℹ️ Vad är sektorrotation? — Förklaring för nybörjare", expanded=False):
+    with st.expander("ℹ️ Vad är sektorrotation? -- Förklaring för nybörjare", expanded=False):
         st.markdown("""
 ### 🏭 Vad är en sektor?
-Börsen är uppdelad i **sektorer** — grupper av bolag som gör liknande saker.
+Börsen är uppdelad i **sektorer** -- grupper av bolag som gör liknande saker.
 Exempel: **Technology** (Apple, Microsoft), **Healthcare** (läkemedel, sjukvård),
 **Energy** (olja, gas), **Consumer Defensive** (mat, hushållsprodukter).
 
@@ -40,10 +40,10 @@ Hur mycket en sektor-ETF stigit (positivt) eller fallit (negativt) de senaste 1 
 
 En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
 
-### 💡 Handelssignaler — Vad gör jag med det här?
+### 💡 Handelssignaler -- Vad gör jag med det här?
 - **Övervikta:** Köp/äg mer aktier i sektorer med stark trend
 - **Undervikta:** Minska eller undvik sektorer i nedtrend
-- **Neutral:** Håll normal vikt — varken öka eller minska
+- **Neutral:** Håll normal vikt -- varken öka eller minska
 """)
 
     # Använd sektor-data från scored_df om tillgänglig
@@ -93,7 +93,7 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
             ("🚀 STARK UPPTREND", strong_up, None,
              "Antal sektorer i stark teknisk upptrend baserat på ETF-momentum och glidande medelvärden. Fler = bredare bullish marknad."),
             ("💀 STARK NEDTREND", strong_down, None,
-             "Antal sektorer i stark nedtrend. Undvik att köpa aktier i sektorer med stark nedtrend — de drar ofta ned hela portföljsektorn."),
+             "Antal sektorer i stark nedtrend. Undvik att köpa aktier i sektorer med stark nedtrend -- de drar ofta ned hela portföljsektorn."),
             ("📊 Sektorrotation", f"{strong_up - strong_down:+d}", None,
              "Skillnad mellan sektorer i upptrend minus nedtrend. Positivt = fler sektorer stiger. Negativt = marknaden roterar nedåt. ±3 eller mer = tydlig signal."),
         ])
@@ -101,7 +101,7 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
     tab1, tab2, tab3, tab4 = st.tabs(["🔥 Heatmap", "📋 Momentum-tabell", "🏆 Topp/botten sektorer", "💡 Handelssignaler"])
 
     with tab1:
-        # Heatmap: sektor → signaler
+        # Heatmap: sektor -> signaler
         if trends:
             import math
             sectors_list, signals_list, mom3m_list, n_stocks_list = [], [], [], []
@@ -123,7 +123,7 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
             fig_heat.add_trace(go.Bar(
                 x=sectors_list, y=[s * 25 for s in signals_list],
                 marker_color=colors_h,
-                text=[f"{m:+.1f}%" if m else "—" for m in mom3m_list],
+                text=[f"{m:+.1f}%" if m else "--" for m in mom3m_list],
                 textposition="outside",
                 hovertemplate="<b>%{x}</b><br>Signalstyrka: %{y:.0f}%<br>3m-momentum: %{text}<br>Antal: %{customdata}<extra></extra>",
                 customdata=n_stocks_list,
@@ -139,7 +139,7 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
             st.plotly_chart(fig_heat, use_container_width=True)
 
             # Förklaring
-            st.caption("🟢 100 = STARK UPPTREND · 🟡 75 = UPPTREND · ⚪ 50 = NEUTRAL · 🟠 25 = NEDTREND · 🔴 0 = STARK NEDTREND")
+            st.caption("🟢 100 = STARK UPPTREND * 🟡 75 = UPPTREND * ⚪ 50 = NEUTRAL * 🟠 25 = NEDTREND * 🔴 0 = STARK NEDTREND")
         else:
             st.info("Hämtar sektor-ETF data... (kan ta några sekunder)")
 
@@ -147,8 +147,8 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
         if trends:
             rows = []
             for sec, data in sorted(trends.items(), key=lambda x: x[1].get("signal_score", 0), reverse=True):
-                sig = data.get("signal", "—")
-                etf = etf_map.get(sec, "—")
+                sig = data.get("signal", "--")
+                etf = etf_map.get(sec, "--")
                 mom3m = data.get("momentum_3m")
                 price = data.get("current_price")
                 mom1m = data.get("momentum_1m")
@@ -162,9 +162,9 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
                     "Sektor": sec,
                     "ETF": etf,
                     "Signal": f"{'🟢' if 'UPPTREND' in sig else '🔴' if 'NEDTREND' in sig else '⚪'} {sig}",
-                    "1m": f"{mom1m:+.1f}%" if mom1m else "—",
-                    "3m": f"{mom3m:+.1f}%" if mom3m else "—",
-                    "Pris": f"{price:.2f}" if price else "—",
+                    "1m": f"{mom1m:+.1f}%" if mom1m else "--",
+                    "3m": f"{mom3m:+.1f}%" if mom3m else "--",
+                    "Pris": f"{price:.2f}" if price else "--",
                     "Trend": ma_txt,
                 })
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=400)
@@ -179,18 +179,18 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
                 top_secs = sorted(trends.items(), key=lambda x: x[1].get("momentum_3m", 0), reverse=True)[:5]
                 for sec, data in top_secs:
                     mom = data.get("momentum_3m", 0)
-                    st.markdown(f"**{sec}** — {mom:+.1f}%" if mom else f"**{sec}** — —")
+                    st.markdown(f"**{sec}** -- {mom:+.1f}%" if mom else f"**{sec}** -- --")
             with col_b:
                 st.subheader("📉 Svagast sektorer")
                 bot_secs = sorted(trends.items(), key=lambda x: x[1].get("momentum_3m", 0))[:5]
                 for sec, data in bot_secs:
                     mom = data.get("momentum_3m", 0)
-                    st.markdown(f"**{sec}** — {mom:+.1f}%" if mom else f"**{sec}** — —")
+                    st.markdown(f"**{sec}** -- {mom:+.1f}%" if mom else f"**{sec}** -- --")
         else:
             st.info("Hämtar data...")
 
     with tab4:
-        st.subheader("💡 Sektorrotation – Handelssignaler")
+        st.subheader("💡 Sektorrotation - Handelssignaler")
         st.caption("Baserat på sektors ETF-momentum och styrkerankning.")
 
         if not trends:
@@ -206,7 +206,7 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
                 sig_str = data.get("signal", "NEUTRAL")
                 sig_score = data.get("signal_score", 2)
                 mom3m = data.get("momentum_3m", 0) or 0
-                etf = etf_map.get(sec, "—")
+                etf = etf_map.get(sec, "--")
 
                 if sig_score >= 3 and mom3m > 3:
                     buy_sectors.append({"Sektor": sec, "ETF": etf, "Signal": "ÖVERVIKTA",
@@ -271,11 +271,11 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
             st.markdown("---")
             rotation_score = len(buy_sectors) - len(avoid_sectors)
             if rotation_score >= 3:
-                st.success(f"Bred bull-marknad — {len(buy_sectors)} sektorer i upptrend, {len(avoid_sectors)} i nedtrend")
+                st.success(f"Bred bull-marknad -- {len(buy_sectors)} sektorer i upptrend, {len(avoid_sectors)} i nedtrend")
             elif rotation_score <= -3:
-                st.error(f"Bred bear-marknad — {len(avoid_sectors)} sektorer i nedtrend")
+                st.error(f"Bred bear-marknad -- {len(avoid_sectors)} sektorer i nedtrend")
             else:
-                st.info(f"Blandad marknad — {len(buy_sectors)} upp, {len(avoid_sectors)} ned, {len(neutral_sectors)} neutrala")
+                st.info(f"Blandad marknad -- {len(buy_sectors)} upp, {len(avoid_sectors)} ned, {len(neutral_sectors)} neutrala")
 
     # AI-knapp
     if trends:

@@ -1,5 +1,5 @@
 """
-paper_trading.py – Paper Trading v2
+paper_trading.py - Paper Trading v2
 ====================================
 Simulerar köp baserat på varje veckas topp-rekommendationer.
 Spårar hur systemets faktiska rekommendationer presterar live.
@@ -13,14 +13,14 @@ NYTT i v2:
 - AI-stop-loss (dynamiska nivåer baserat på ATR)
 
 Sparar till:
-  data/paper_trades.json     – alla simulerade positioner
-  data/paper_portfolio.json  – ackumulerat P&L per vecka
+  data/paper_trades.json     - alla simulerade positioner
+  data/paper_portfolio.json  - ackumulerat P&L per vecka
 
 Kör manuellt:
-  python portfolio/paper_trading.py status           – se portfolio och P&L
-  python portfolio/paper_trading.py update           – uppdatera priser + kolla stop-loss/take-profit
-  python portfolio/paper_trading.py report           – detaljerad rapport
-  python portfolio/paper_trading.py close_all        – stäng alla öppna positioner
+  python portfolio/paper_trading.py status           - se portfolio och P&L
+  python portfolio/paper_trading.py update           - uppdatera priser + kolla stop-loss/take-profit
+  python portfolio/paper_trading.py report           - detaljerad rapport
+  python portfolio/paper_trading.py close_all        - stäng alla öppna positioner
 """
 
 import json
@@ -34,7 +34,7 @@ import numpy as np
 import yfinance as yf
 
 # Absoluta sökvägar förankrade i repo-roten. Tidigare var dessa relativa
-# (Path("data/...")) vilket bröts om processen kördes från en annan CWD —
+# (Path("data/...")) vilket bröts om processen kördes från en annan CWD --
 # pipelinen skrev då till en annan fil än den Streamlit-appen läste.
 _ROOT          = Path(__file__).resolve().parent.parent
 TRADES_FILE    = _ROOT / "data" / "paper_trades.json"
@@ -50,13 +50,13 @@ PARTIAL_SELL_FRAC   = 0.50    # Andel att sälja vid delvinst
 TRAILING_ACTIVATE   = 8.0     # Aktivera trailing när vinsten nått +8%
 TRAILING_DISTANCE   = 8.0     # Trail:a stop:et 8% under högsta setts
 DCA_TRIGGER         = -8.0    # Köp mer om priset fallit -8% från inköp
-DCA_MULTIPLIER      = 1.5     # Köp 1.5× mer vid DCA
+DCA_MULTIPLIER      = 1.5     # Köp 1.5x mer vid DCA
 MAX_DCA_PER_TICKER  = 2       # Max antal DCA-köp per ticker
 CLOSE_AFTER_WEEKS   = 8       # Stäng position efter N veckor oavsett
 
 # ── Transaktionskostnader (slippage + courtage) ────────────────────────────
 # Modellerar realistiska friktionskostnader för att undvika överoptimism.
-# Typiska svenska mäklararvoden: 0.05–0.15% courtage + 0.05% bid-ask-spread.
+# Typiska svenska mäklararvoden: 0.05-0.15% courtage + 0.05% bid-ask-spread.
 COMMISSION_PCT  = 0.0010   # 0.10% courtage per affär (köp + sälj = 0.20% round-trip)
 SLIPPAGE_PCT    = 0.0005   # 0.05% prisslippage per order (bid-ask-spread)
 
@@ -124,15 +124,15 @@ def _ticker_to_num(ticker: str) -> float:
     h = 0
     for c in ticker:
         h = (h * 31 + ord(c)) & 0xFFFFFFFF
-    return (h % 1000) / 1000.0  # 0.0–1.0
+    return (h % 1000) / 1000.0  # 0.0-1.0
 
 
 def _calculate_ai_stop(ticker: str, buy_price: float, current_price: float) -> float:
     """Beräkna dynamisk stop-loss-nivå baserat på ATR eller volatilitet.
     
     Prioritering:
-    1. ATR-based: stop = current_price - (ATR × 2)
-    2. Fallback: stop = buy_price × 0.88 (12% under inköp)
+    1. ATR-based: stop = current_price - (ATR x 2)
+    2. Fallback: stop = buy_price x 0.88 (12% under inköp)
     """
     atr = _calculate_atr(ticker)
     if atr and atr > 0:
@@ -203,7 +203,7 @@ def _get_kelly_fraction(min_trades: int = 10) -> float:
     Full-Kelly: f* = (p * b - q) / b  där p = win_rate, q = 1-p, b = win_loss_ratio
     Half-Kelly: 0.5 * f*
 
-    Om för få trades → returnerar 1.0 (equal weight default).
+    Om för få trades -> returnerar 1.0 (equal weight default).
     """
     # Anropa direkt eftersom vi är i samma modul
     inputs = get_kelly_inputs(min_trades=min_trades)
@@ -354,7 +354,7 @@ def record_weekly_picks(
             "original_shares": shares,
             "capital":       round(capital_per_stock, 2),
             "score":         round(float(row.get(score_col, 0)), 1),
-            "entry_signal":  str(row.get("entry_signal", "—")),
+            "entry_signal":  str(row.get("entry_signal", "--")),
 
             # Risk management
             "stop_loss":        stop_loss_price,
@@ -448,7 +448,7 @@ def _check_risk_management(trade: dict, current_price: float, today: date) -> di
         actions["exit_reason"] = f"stop_loss_{STOP_LOSS_PCT:.0f}%"
         return actions
 
-    # 2. AI-stop-loss (dynamiskt – om priset är under den beräknade AI-nivån)
+    # 2. AI-stop-loss (dynamiskt - om priset är under den beräknade AI-nivån)
     ai_stop = _calculate_ai_stop(trade["ticker"], buy_price, current_price)
     trade["ai_stop"] = round(ai_stop, 4)
     if current_price <= ai_stop:
@@ -456,7 +456,7 @@ def _check_risk_management(trade: dict, current_price: float, today: date) -> di
         actions["exit_reason"] = "ai_stop_loss"
         return actions
 
-    # 3. Take-profit (full) – om vi redan inte sålt delvis
+    # 3. Take-profit (full) - om vi redan inte sålt delvis
     partial_sold = trade.get("partial_sold", False)
     if not partial_sold and trade.get("take_profit") and current_price >= trade["take_profit"]:
         actions["sell_all"] = True
@@ -484,7 +484,7 @@ def _check_risk_management(trade: dict, current_price: float, today: date) -> di
             actions["exit_reason"] = f"trailing_stop_{TRAILING_DISTANCE:.0f}%"
             return actions
 
-    # 6. DCA – köp mer om priset fallit och score fortfarande är hög
+    # 6. DCA - köp mer om priset fallit och score fortfarande är hög
     if pnl_pct <= DCA_TRIGGER and trade["dca_count"] < MAX_DCA_PER_TICKER:
         actions["dca"] = True
 
@@ -494,7 +494,7 @@ def _check_risk_management(trade: dict, current_price: float, today: date) -> di
 def _execute_dca(trade: dict, current_price: float) -> dict:
     """Utför DCA-köp och returnerar uppdaterad trade."""
     dca_count = trade["dca_count"] + 1
-    # Köpbelopp = ursprungligt kapital × DCA_MULTIPLIER för varje DCA
+    # Köpbelopp = ursprungligt kapital x DCA_MULTIPLIER för varje DCA
     dca_amount = trade["capital"] * DCA_MULTIPLIER
     dca_shares = dca_amount / current_price
 
@@ -585,7 +585,7 @@ def update_prices(close_after_weeks: int = CLOSE_AFTER_WEEKS,
             trade["stop_loss"] = round(trade["buy_price"] * (1 + STOP_LOSS_PCT / 100), 4)
 
             if verbose:
-                print(f"     🔶 Partiell försäljning: {trade['ticker']} – "
+                print(f"     🔶 Partiell försäljning: {trade['ticker']} - "
                       f"sålde {sell_shares:.2f} st @ {current_price:.2f} "
                       f"(P&L {partial_pnl:+.2f})")
 
@@ -620,7 +620,7 @@ def update_prices(close_after_weeks: int = CLOSE_AFTER_WEEKS,
         if n_closed:
             for c in closed[:5]:
                 reason = c.get("exit_reason", "?")
-                print(f"     🔴 {c['ticker']} – {c['pnl']:+.2f} ({c['pnl_pct']:+.1f}%) | {reason}")
+                print(f"     🔴 {c['ticker']} - {c['pnl']:+.2f} ({c['pnl_pct']:+.1f}%) | {reason}")
             if n_closed > 5:
                 print(f"     ... och {n_closed-5} till")
 
@@ -643,7 +643,7 @@ def calc_statistics() -> dict:
 
     rets = [t["pnl_pct"] for t in closed]
 
-    # Per vecka – vägd genomsnittlig avkastning
+    # Per vecka - vägd genomsnittlig avkastning
     weeks = {}
     for t in closed:
         w = t["week"]
@@ -694,7 +694,7 @@ def print_status(verbose: bool = True):
     closed_trades = [t for t in trades if t["status"] == "CLOSED"]
 
     print(f"\n{'═'*65}")
-    print("📄 PAPER TRADING v2 – STATUS")
+    print("📄 PAPER TRADING v2 - STATUS")
     print(f"{'═'*65}")
     print(f"  Öppna positioner:   {len(open_trades)}")
     print(f"  Stängda positioner: {len(closed_trades)}")
@@ -763,24 +763,24 @@ def build_paper_trading_section(top_n: int = 5) -> str:
     open_trades = [t for t in trades if t["status"] == "OPEN"]
     closed_trades = [t for t in trades if t["status"] == "CLOSED"]
 
-    lines = ["\n## 📄 Paper trading – Track record (v2)\n"]
+    lines = ["\n## 📄 Paper trading - Track record (v2)\n"]
 
     # Statistik
     if "n_trades" in stats:
-        lines.append(f"**{stats['n_weeks']} veckor** · "
-                     f"Snitt: **{stats['avg_return_pct']:+.2f}%/trade** · "
-                     f"Median: **{stats['median_return_pct']:+.2f}%** · "
-                     f"Win rate: **{stats['win_rate_pct']:.0f}%** · "
-                     f"Sharpe: **{stats.get('sharpe', '—')}**\n")
+        lines.append(f"**{stats['n_weeks']} veckor** * "
+                     f"Snitt: **{stats['avg_return_pct']:+.2f}%/trade** * "
+                     f"Median: **{stats['median_return_pct']:+.2f}%** * "
+                     f"Win rate: **{stats['win_rate_pct']:.0f}%** * "
+                     f"Sharpe: **{stats.get('sharpe', '--')}**\n")
 
         if stats.get("exit_reasons"):
             parts = []
             for reason, count in sorted(stats["exit_reasons"].items(), key=lambda x: -x[1]):
                 icon = "✅" if "profit" in reason else "🚫" if "stop" in reason or "loss" in reason else "🔶"
                 parts.append(f"{icon} {reason.replace('_', ' ')}: {count}")
-            lines.append("  " + " · ".join(parts) + "\n")
+            lines.append("  " + " * ".join(parts) + "\n")
     else:
-        lines.append("_Inga stängda positioner ännu – resultaten visas efter 4 veckor_\n")
+        lines.append("_Inga stängda positioner ännu - resultaten visas efter 4 veckor_\n")
 
     # Senaste stängda positioner
     if closed_trades:
@@ -790,12 +790,12 @@ def build_paper_trading_section(top_n: int = 5) -> str:
         lines.append("|-------|--------|-----|------|-------|------|")
         for t in recent:
             sign = "+" if t.get("pnl_pct", 0) >= 0 else ""
-            reason = t.get("exit_reason", "—")
+            reason = t.get("exit_reason", "--")
             if reason:
                 reason = reason.replace("_", " ")[:20]
             lines.append(
                 f"| {t['week']} | `{t['ticker']}` | "
-                f"{t['buy_price']:.2f} | {t.get('sell_price', '—'):.2f} | "
+                f"{t['buy_price']:.2f} | {t.get('sell_price', '--'):.2f} | "
                 f"**{sign}{t.get('pnl_pct', 0):.1f}%** | {reason} |"
             )
         lines.append("")
@@ -811,7 +811,7 @@ def build_paper_trading_section(top_n: int = 5) -> str:
             tp = t.get("take_profit", 0)
             lines.append(
                 f"| {t['week']} | `{t['ticker']}` | "
-                f"{t['buy_price']:.2f} | {t.get('current_price', '—'):.2f} | "
+                f"{t['buy_price']:.2f} | {t.get('current_price', '--'):.2f} | "
                 f"**{sign}{t.get('pnl_pct', 0):.1f}%** | "
                 f"{sl:.2f} | {tp:.2f} |"
             )
@@ -853,7 +853,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Paper Trading v2 – simulera systemets rekommendationer med riskhantering"
+        description="Paper Trading v2 - simulera systemets rekommendationer med riskhantering"
     )
     sub = parser.add_subparsers(dest="cmd")
 

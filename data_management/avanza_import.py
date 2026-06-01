@@ -5,14 +5,14 @@ Importerar dina innehav direkt från Avanza-exportfilen.
 
 Hur du exporterar från Avanza:
   1. Logga in på Avanza
-  2. Gå till: Konto → Depå/ISK → fliken "Innehav"
+  2. Gå till: Konto -> Depå/ISK -> fliken "Innehav"
   3. Klicka "Exportera" (längst ner till höger)
   4. Spara CSV-filen
   5. Kör: python avanza_import.py avanza_export.csv
 
 Vad scriptet gör:
   - Läser Avanzas CSV (hanterar semikolon-separering och svenska siffror)
-  - Mappar svenska namn → Yahoo Finance-tickers automatiskt
+  - Mappar svenska namn -> Yahoo Finance-tickers automatiskt
   - Okända bolag visas för manuell mappning och sparas till ticker_map.json
   - Uppdaterar holdings.csv direkt
 
@@ -381,9 +381,9 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
         on_bad_lines="skip",  # hoppa över korrupta rader
     )
 
-    # ── Normalisera kolumnnamn (unik mappning – en output per input) ──────────
+    # ── Normalisera kolumnnamn (unik mappning - en output per input) ──────────
     # Bugfix: om två kolumner mappas till samma namn (t.ex. "Kurs" och
-    # "Förändring kurs" → båda "current_price") returnerar df["current_price"]
+    # "Förändring kurs" -> båda "current_price") returnerar df["current_price"]
     # en DataFrame istället för en Series, vilket orsakar "has no attribute 'str'".
     # Lösning: spåra vilka output-namn som redan är använda och skippa dubletter.
     col_map: dict[str, str] = {}
@@ -406,7 +406,7 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
         elif any(kw in c for kw in ("köpkurs", "genomsnittlig", "purchase", "anskaffningskurs")) \
                 or c == "gav" or c.startswith("gav "):
             target = "cost_basis"
-        # Aktuell kurs — matchar "kurs" men INTE köp/anskaff-varianter
+        # Aktuell kurs -- matchar "kurs" men INTE köp/anskaff-varianter
         elif ("kurs" in c
               and "köp" not in c
               and "anskaff" not in c
@@ -443,7 +443,7 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
         # Behåll bara den första av de duplicerade kolumnerna
         df = df.loc[:, ~df.columns.duplicated()]
 
-    # ── Konvertera siffror (svenska format: "1 234,56" → 1234.56) ────────────
+    # ── Konvertera siffror (svenska format: "1 234,56" -> 1234.56) ────────────
     def parse_swedish_number(s) -> float | None:
         if pd.isna(s):
             return None
@@ -470,9 +470,9 @@ def parse_avanza_csv(filepath: str) -> pd.DataFrame:
     return df
 
 
-# ── Avanza "positioner"-format (Min ekonomi → Analys → Exportera data) ─────────
+# ── Avanza "positioner"-format (Min ekonomi -> Analys -> Exportera data) ─────────
 
-# Marknad-suffix: Avanzas marknadsnamn → Yahoo Finance-suffix
+# Marknad-suffix: Avanzas marknadsnamn -> Yahoo Finance-suffix
 _MARKET_SUFFIX: dict[str, str | None] = {
     "XSTO": ".ST",   # Nasdaq Stockholm
     "FNSE": ".ST",   # First North Sweden
@@ -494,14 +494,14 @@ _MARKET_SUFFIX: dict[str, str | None] = {
 def kortnamn_to_ticker(kortnamn: str, marknad: str) -> str | None:
     """
     Konverterar Avanzas kortnamn + marknad till Yahoo Finance-ticker.
-    Exempel: "INVE B" + "XSTO" → "INVE-B.ST"
-             "NCAB"  + "XSTO" → "NCAB.ST"
-             "AAPL"  + "XNAS" → "AAPL"
+    Exempel: "INVE B" + "XSTO" -> "INVE-B.ST"
+             "NCAB"  + "XSTO" -> "NCAB.ST"
+             "AAPL"  + "XNAS" -> "AAPL"
     Returnerar None för fonder (FUND) eller okänd marknad.
     """
     suffix = _MARKET_SUFFIX.get((marknad or "").upper().strip())
     if suffix is None and (marknad or "").upper() not in _MARKET_SUFFIX:
-        # Okänd marknad – försök utan suffix
+        # Okänd marknad - försök utan suffix
         suffix = ""
     if suffix is None:
         return None  # fond
@@ -526,8 +526,8 @@ def parse_avanza_positioner_csv(raw_bytes_or_path) -> dict[str, pd.DataFrame]:
     """
     Parsar det nya Avanza 'positioner'-formatet.
 
-    Källa: Min ekonomi → Analys → Exportera data →
-           "Mitt innehav fördelat per konto – Ladda ner innehav per konto som .csv"
+    Källa: Min ekonomi -> Analys -> Exportera data ->
+           "Mitt innehav fördelat per konto - Ladda ner innehav per konto som .csv"
 
     CSV-kolumner:
         Kontonummer;Namn;Kortnamn;Volym;Marknadsvärde;GAV (SEK);GAV;Valuta;Land;ISIN;Marknad;Typ
@@ -709,7 +709,7 @@ def import_from_avanza(
     # Ladda anpassade mappningar
     custom_map = load_custom_map()
 
-    # Mappa namn → tickers
+    # Mappa namn -> tickers
     results   = []
     unknown   = []
 
@@ -731,14 +731,14 @@ def import_from_avanza(
                 "cost_basis": round(float(cost), 2) if cost else None,
                 "mapped":     True,
             })
-            print(f"   ✓ {name:<35} → {ticker}")
+            print(f"   ✓ {name:<35} -> {ticker}")
         else:
             unknown.append({
                 "name":       name,
                 "shares":     shares,
                 "cost_basis": cost,
             })
-            print(f"   ? {name:<35} → EJ HITTAD")
+            print(f"   ? {name:<35} -> EJ HITTAD")
 
     # Hantera okända bolag
     if unknown:
@@ -757,7 +757,7 @@ def import_from_avanza(
                         if info.last_price:
                             print(f"   ✓ {ticker} verifierad (pris: {info.last_price:.2f})")
                         else:
-                            print(f"   ⚠ Kunde inte verifiera {ticker} – läggs till ändå")
+                            print(f"   ⚠ Kunde inte verifiera {ticker} - läggs till ändå")
                     except Exception:
                         pass
 
@@ -765,7 +765,7 @@ def import_from_avanza(
                     norm = normalize_name(item["name"])
                     custom_map[norm] = ticker
                     save_custom_map(custom_map)
-                    print(f"   💾 Mappning sparad: '{item['name']}' → {ticker}")
+                    print(f"   💾 Mappning sparad: '{item['name']}' -> {ticker}")
 
                     results.append({
                         "ticker":     ticker,
@@ -795,7 +795,7 @@ def import_from_avanza(
         holdings_df.to_csv(HOLDINGS_FILE, index=False)
         print(f"✅ holdings.csv uppdaterad med {len(holdings_df)} positioner")
 
-        # Om positions.py används – visa info
+        # Om positions.py används - visa info
         print(f"\n💡 Tips: Registrera dina ursprungliga köp i transaktionsloggen för full P&L:")
         print(f"   python positions.py add-buy TICKER ANTAL KÖPKURS")
 
@@ -813,7 +813,7 @@ def show_mapping_status():
 
     print(f"\n📋 Sparade mappningar ({len(custom)} st):")
     for name, ticker in sorted(custom.items()):
-        print(f"   '{name}' → {ticker}")
+        print(f"   '{name}' -> {ticker}")
 
 
 def add_manual_mapping(avanza_name: str, ticker: str):
@@ -822,7 +822,7 @@ def add_manual_mapping(avanza_name: str, ticker: str):
     norm   = normalize_name(avanza_name)
     custom[norm] = ticker.upper()
     save_custom_map(custom)
-    print(f"✓ Mappning tillagd: '{avanza_name}' → {ticker.upper()}")
+    print(f"✓ Mappning tillagd: '{avanza_name}' -> {ticker.upper()}")
 
 
 # ── MAIN ────────────────────────────────────────────────────────────────────────

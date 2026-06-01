@@ -1,4 +1,4 @@
-"""web/pages/weekly_scan.py – Sida 2: Veckoscanner"""
+"""web/pages/weekly_scan.py - Sida 2: Veckoscanner"""
 
 import glob as _glob
 from datetime import datetime
@@ -146,25 +146,25 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
 
     col_cfg = {
         "Rank": st.column_config.NumberColumn("Rank", help="Position i rankinglistan. Rank 1 = bäst poäng i det filtrerade urvalet.", format="%d"),
-        "Ticker": st.column_config.TextColumn("Ticker", help="Börsticker. 💧 = illikvid (uppskattad dagsomsättning < $50k/dag — kan vara svår att handla utan hög spread)."),
+        "Ticker": st.column_config.TextColumn("Ticker", help="Börsticker. 💧 = illikvid (uppskattad dagsomsättning < $50k/dag -- kan vara svår att handla utan hög spread)."),
         "Bolag": st.column_config.TextColumn("Bolag", help="Bolagets fullständiga namn."),
-        "Status": st.column_config.TextColumn("Status", help="💼 = du äger aktien · ⭐ = du bevakar den"),
-        "Sektor": st.column_config.TextColumn("Sektor", help="Vilken bransch bolaget tillhör. Sektorrotation är viktigt — starka sektorer presterar ofta bättre."),
-        "Entry": st.column_config.TextColumn("Entry", help="Köpsignal baserad på momentum och volym. STARK = tydlig uppåtrörelse med hög konfidensgrad. OK = måttlig signal. —= ingen signal just nu."),
+        "Status": st.column_config.TextColumn("Status", help="💼 = du äger aktien * ⭐ = du bevakar den"),
+        "Sektor": st.column_config.TextColumn("Sektor", help="Vilken bransch bolaget tillhör. Sektorrotation är viktigt -- starka sektorer presterar ofta bättre."),
+        "Entry": st.column_config.TextColumn("Entry", help="Köpsignal baserad på momentum och volym. STARK = tydlig uppåtrörelse med hög konfidensgrad. OK = måttlig signal. --= ingen signal just nu."),
         "Konf.": st.column_config.TextColumn("Konf.", help="Konfidensnivå för entry-signalen. HÖG = starka indikatorer samstämmer. MEDEL = blandat. LÅG = svag signal."),
         "Trend": st.column_config.TextColumn("Trend", help="Teknisk trend baserad på MA50/MA200. UPPTREND = aktien är i positiv trend och över sina glidande medelvärden."),
-        "Δ": st.column_config.TextColumn("Δ", help="Förändring sedan förra scanningen — t.ex. 'NYI TOPP20' eller rörelsepil. Visar rörlighet i rankinglistan."),
-        "Piotroski": st.column_config.NumberColumn("Piotroski", format="%.0f/9", help="Piotroski F-Score: 0–9 poäng baserade på 9 nyckeltal för lönsamhet, hävstång och effektivitet. 7–9 = stark fundamenta. 0–2 = svag."),
+        "Δ": st.column_config.TextColumn("Δ", help="Förändring sedan förra scanningen -- t.ex. 'NYI TOPP20' eller rörelsepil. Visar rörlighet i rankinglistan."),
+        "Piotroski": st.column_config.NumberColumn("Piotroski", format="%.0f/9", help="Piotroski F-Score: 0-9 poäng baserade på 9 nyckeltal för lönsamhet, hävstång och effektivitet. 7-9 = stark fundamenta. 0-2 = svag."),
     }
     if "Score (klassisk)" in display.columns:
         col_cfg["Score (klassisk)"] = st.column_config.ProgressColumn(
             "Score (klassisk)", min_value=0, max_value=100, format="%.0f",
-            help="Totalt poäng 0–100 baserat på värdering, kvalitet, momentum, tillväxt, risk och storlek. 70+ = stark. 50–69 = neutral. <50 = svag.",
+            help="Totalt poäng 0-100 baserat på värdering, kvalitet, momentum, tillväxt, risk och storlek. 70+ = stark. 50-69 = neutral. <50 = svag.",
         )
     if "AI rank" in display.columns:
         col_cfg["AI rank"] = st.column_config.ProgressColumn(
             "AI rank", min_value=0, max_value=100, format="%.0f",
-            help="ML-modellens rangordning 0–100. Kombinerar klassisk score med maskininlärd prediktion av framtida avkastning.",
+            help="ML-modellens rangordning 0-100. Kombinerar klassisk score med maskininlärd prediktion av framtida avkastning.",
         )
     if "AI 30d-ret" in display.columns:
         col_cfg["AI 30d-ret"] = st.column_config.NumberColumn(
@@ -184,7 +184,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         selection_mode="single-row",
         key=table_key,
     )
-    st.caption(f"Visar {len(display)} bolag — klicka på en rad för detaljer")
+    st.caption(f"Visar {len(display)} bolag -- klicka på en rad för detaljer")
 
     # CSV-export av filtrerade resultat
     csv_data = display.to_csv(index=False).encode("utf-8")
@@ -198,7 +198,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
 
     if event and event.selection and event.selection.rows:
         idx = event.selection.rows[0]
-        # Använd råtickern från show (utan flagg-emoji) för lookup –
+        # Använd råtickern från show (utan flagg-emoji) för lookup -
         # display["Ticker"] har "🇸🇪 VOLV-B.ST" som inte matchar df["ticker"].
         sel_ticker     = show.iloc[idx]["ticker"]
         sel_display    = display.iloc[idx]["Ticker"]   # med flagg, bara för UI-titel
@@ -287,7 +287,7 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
     st.title("🔍 Veckoscanner")
 
     if df.empty:
-        st.warning("Aktiedata håller på att laddas in. Systemet uppdateras automatiskt varje vecka — prova igen om en stund.")
+        st.warning("Aktiedata håller på att laddas in. Systemet uppdateras automatiskt varje vecka -- prova igen om en stund.")
         return
 
     if "sector" in df.columns:
@@ -305,7 +305,7 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
             key="weekly_rank_mode",
             help=(
                 "**Klassisk score** rankar på fundamenta + värdering + momentum (bred, stabil).\n\n"
-                "**AI prediction** (XGBoost) rankar på tekniska mönster i prishistorik — "
+                "**AI prediction** (XGBoost) rankar på tekniska mönster i prishistorik -- "
                 "förutspår 30-dagars avkastning. Modellen kan prioritera aktier annorlunda "
                 "än klassisk score: t.ex. en aktie med stark teknisk momentum men svag "
                 "fundamental kan hamna högt i AI-ranken och tvärtom. "
@@ -398,7 +398,7 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
         else:
             with st.expander("ℹ️ Guide: Vad är fundamental analys? Klicka för förklaring", expanded=False):
                 st.markdown("""
-Fundamental analys handlar om att bedöma **bolagets faktiska ekonomiska hälsa** — inte bara hur kursen rör sig.
+Fundamental analys handlar om att bedöma **bolagets faktiska ekonomiska hälsa** -- inte bara hur kursen rör sig.
 Du tittar på vinster, skulder, tillväxt och lönsamhet för att avgöra om ett bolag är värt sitt pris.
 
 | Nyckeltal | Förklaring | Vad är bra? |
@@ -412,7 +412,7 @@ Du tittar på vinster, skulder, tillväxt och lönsamhet för att avgöra om ett
 | **Omsättningstillväxt** | Hur mycket bolagets försäljning vuxit senaste år | >10% = god tillväxt; >20% = snabbväxande |
 | **D/E (Skuldsättning)** | Total skuld i förhållande till eget kapital | Under 1.0 = låg skuldsättning; >2.0 = hög risk |
 | **Current Ratio** | Om bolaget kan betala sina kortfristiga skulder | >1.5 = tryggt; <1.0 = likviditetsproblem |
-| **Piotroski F-score** | Sammanfattar 9 finansiella styrkekriterier (0–9) | 7–9 = stark; 0–2 = svag finansiell hälsa |
+| **Piotroski F-score** | Sammanfattar 9 finansiella styrkekriterier (0-9) | 7-9 = stark; 0-2 = svag finansiell hälsa |
 
 **Klicka på en rad** för att se full analys av aktien.
 """)
@@ -448,7 +448,7 @@ Du tittar på vinster, skulder, tillväxt och lönsamhet för att avgöra om ett
         if filt_df.empty:
             st.info("Inga data.")
         else:
-            with st.expander("ℹ️ Guide: Tekniska indikatorer – vad kollar man på? Klicka för förklaring", expanded=False):
+            with st.expander("ℹ️ Guide: Tekniska indikatorer - vad kollar man på? Klicka för förklaring", expanded=False):
                 st.markdown("""
 Tekniska indikatorer hjälper dig förstå **hur aktien rör sig** och om det är ett bra tillfälle att köpa/sälja.
 
@@ -456,8 +456,8 @@ Tekniska indikatorer hjälper dig förstå **hur aktien rör sig** och om det ä
 |---|---|---|
 | **vs MA50** | Hur mycket aktiekursen avviker från 50-dagars medelvärde | Positivt värde = kursen är *över* snittet (styrka) |
 | **vs MA200** | Hur mycket kursen avviker från 200-dagars medelvärde | Positivt = långsiktig upptrend; Negativt = nedtrend |
-| **RSI** | Relativ styrkeindikator (0–100) | 30–70 = normalt; <30 = kan vara köpläge; >70 = var försiktig |
-| **BB pos** | Bollinger-position – var kursen befinner sig i sina prissvängningar | Nära 0 = vid nedre bandet (billig relativt swinget); Nära 1 = övre bandet |
+| **RSI** | Relativ styrkeindikator (0-100) | 30-70 = normalt; <30 = kan vara köpläge; >70 = var försiktig |
+| **BB pos** | Bollinger-position - var kursen befinner sig i sina prissvängningar | Nära 0 = vid nedre bandet (billig relativt swinget); Nära 1 = övre bandet |
 | **MACD>signal** | Om MACD-linjen är över signallinjen | Sant (✓) = positivt momentum (köpsignal) |
 | **1m / 3m / 6m / 12m** | Avkastning senaste 1, 3, 6 och 12 månader | Positiva värden = kursen har stigit; Flera gröna perioder = stark trend |
 | **Volatilitet** | Hur mycket aktien svänger i pris | Hög = rörligare aktie; bra om du vill ha snabba rörelser, riskigt för stabilt sparande |
@@ -532,7 +532,7 @@ Tekniska indikatorer hjälper dig förstå **hur aktien rör sig** och om det ä
                                   column_config=col_cfg or None)
 
             st.markdown("---")
-            st.subheader("🕸️ Score-radar – enskilt bolag")
+            st.subheader("🕸️ Score-radar - enskilt bolag")
             if not filt_df.empty and sc_cols:
                 tickers_list = filt_df["ticker"].tolist()
                 chosen = st.selectbox("Välj bolag", tickers_list, key="radar_ticker")

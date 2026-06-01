@@ -1,7 +1,7 @@
 """
 fx_impact.py
 ============
-FX Impact Module – analyserar valutarisken för icke-USD-innehav.
+FX Impact Module - analyserar valutarisken för icke-USD-innehav.
 
 Beräknar hur mycket portföljen påverkas av en 1%, 5% respektive 10%
 förändring i USD-växelkursen mot respektive lokalvaluta.
@@ -143,7 +143,7 @@ def build_fx_section(holdings: Optional[list[dict]] = None) -> str:
     impacts = calculate_fx_impact(market_values, fx_rates)
 
     if not impacts:
-        return "### 💱 FX-exponering\n\nIngen valutariskt exponerad portfölj – endast USD-innehav.\n"
+        return "### 💱 FX-exponering\n\nIngen valutariskt exponerad portfölj - endast USD-innehav.\n"
 
     total_exposure = sum(r["exposure_usd"] for r in impacts)
     total_risk_1pct = sum(r["impact_1pct"] for r in impacts)

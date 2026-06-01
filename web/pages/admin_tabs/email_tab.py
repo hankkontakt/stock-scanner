@@ -1,4 +1,4 @@
-"""admin/email_tab.py – E-post tab for admin page."""
+"""admin/email_tab.py - E-post tab for admin page."""
 from datetime import date, datetime
 from pathlib import Path
 

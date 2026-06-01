@@ -1,4 +1,4 @@
-"""admin/health.py – Universe Health tab for admin page."""
+"""admin/health.py - Universe Health tab for admin page."""
 from datetime import date
 
 import pandas as pd
@@ -9,7 +9,7 @@ from web.utils import DATA_DIR, REPORT_DIR, load_watchlist
 
 
 def render():
-    st.subheader("Universe Health – underhall av aktieuniversum")
+    st.subheader("Universe Health - underhall av aktieuniversum")
     st.caption("Upptack avnoterade/ogiltiga tickers, hantera svartlista och hitta nya aktier med AI.")
 
     try:

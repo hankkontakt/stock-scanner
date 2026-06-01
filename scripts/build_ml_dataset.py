@@ -1,5 +1,5 @@
 """
-build_ml_dataset.py — Bygger träningsdataset för ml_predictor.
+build_ml_dataset.py -- Bygger träningsdataset för ml_predictor.
 
 För varje ticker i valt universum:
   1. Hämtar N års prishistorik via yfinance
@@ -46,7 +46,7 @@ def _get_universe(name: str) -> list:
 
 
 def _build_sector_map() -> dict:
-    """Bygg ticker→sektor-karta från senaste scored_universe-rapporten.
+    """Bygg ticker->sektor-karta från senaste scored_universe-rapporten.
 
     Undviker extra yfinance-anrop genom att återanvända sektor-etiketterna som
     redan finns i scan-datan. Används för att träna per-sektor ML-modeller.
@@ -160,13 +160,13 @@ def build_dataset(universe: str, years: int, max_tickers: int | None = None,
         time.sleep(0.15)
 
     if not all_rows:
-        raise RuntimeError(f"Inga rader byggda — alla {len(tickers)} tickers misslyckades.")
+        raise RuntimeError(f"Inga rader byggda -- alla {len(tickers)} tickers misslyckades.")
 
     df = pd.DataFrame(all_rows)
     out_path = out_path or (ROOT / "data" / "ml" / f"{universe}_training.parquet")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_parquet(out_path, index=False)
-    logger.info(f"✅ Sparade {len(df)} rader från {n_ok}/{len(tickers)} tickers → {out_path}")
+    logger.info(f"✅ Sparade {len(df)} rader från {n_ok}/{len(tickers)} tickers -> {out_path}")
     return out_path
 
 

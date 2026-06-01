@@ -1,4 +1,4 @@
-"""Tester för core/filters.py — fokus på strike-idempotens."""
+"""Tester för core/filters.py -- fokus på strike-idempotens."""
 import json
 from pathlib import Path
 
@@ -25,7 +25,7 @@ def test_strike_idempotent_same_day(tmp_path, monkeypatch):
     state1 = json.loads(strike_file.read_text())
     assert state1["FAILED.ST"]["count"] == 1
 
-    # Samma dag, samma fail → ska FORTFARANDE vara 1, inte 2
+    # Samma dag, samma fail -> ska FORTFARANDE vara 1, inte 2
     f.update_ticker_health(
         attempted_tickers=["FAILED.ST"],
         survived_tickers=[],
