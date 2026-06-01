@@ -16,6 +16,7 @@ from web.utils import (
     portfolio_value_chart, calc_period_returns, save_portfolio_snapshot,
 )
 from core import ai_analysis
+from web.ui.components import page_header, empty_state
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _fetch_live_price_cached(ticker: str) -> float | None:
@@ -1992,3 +1993,57 @@ def page_portfolio(df: pd.DataFrame = None, holdings: pd.DataFrame = None,
             )
         st.dataframe(wl_df, use_container_width=True, hide_index=True,
                      column_config=col_cfg)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SPLITTRADE SIDOR — Portfölj delas i 4 fokuserade vyer (UX-plan §5)
+# Varje sida återanvänder de befintliga flik-funktionerna men på egen yta så att
+# ingen enskild sida proppas full. page_portfolio() behålls bakåtkompatibelt.
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _pf_context(df, sc_df):
+    """Ladda holdings + score_data (delad uppstart för de splittrade sidorna)."""
+    holdings = load_portfolio()
+    score_data = _build_score_data(holdings, df, sc_df)
+    return holdings, score_data
+
+
+def page_portfolio_holdings(df=None, holdings=None, watchlist=None, sc_df=None):
+    """Innehav — positioner, värde, P&L, sektorfördelning."""
+    page_header("Innehav", "holdings", "Dina positioner, värde och utveckling")
+    _show_scan_pending_notifications()
+    holdings, score_data = _pf_context(df, sc_df)
+    if holdings.empty:
+        empty_state("Ingen portfölj ännu — gå till Hantera innehav för att lägga till.",
+                    icon="portfolio")
+        return
+    holdings_view, _ = _konto_filter_section(holdings)
+    _tab_overview(holdings_view, score_data, df)
+
+
+def page_portfolio_analysis(df=None, holdings=None, watchlist=None, sc_df=None):
+    """Analys — risk, projektion, diversifiering."""
+    page_header("Portföljanalys", "analysis", "Risk, projektion och diversifiering")
+    holdings, score_data = _pf_context(df, sc_df)
+    if holdings.empty:
+        empty_state("Ingen portfölj att analysera ännu.", icon="portfolio")
+        return
+    holdings_view, _ = _konto_filter_section(holdings)
+    _tab_analys(holdings_view, score_data, df)
+
+
+def page_portfolio_rebalance(df=None, holdings=None, watchlist=None, sc_df=None):
+    """Rebalansering — korrelationsmatris + Black-Litterman optimala vikter."""
+    page_header("Rebalansering", "rebalance", "Korrelation och föreslagna portföljvikter")
+    holdings, _ = _pf_context(df, sc_df)
+    if holdings.empty:
+        empty_state("Ingen portfölj att rebalansera ännu.", icon="portfolio")
+        return
+    _tab_rebalans(holdings, df)
+
+
+def page_portfolio_manage(df=None, holdings=None, watchlist=None, sc_df=None):
+    """Hantera innehav — lägg till, redigera, importera från Avanza."""
+    page_header("Hantera innehav", "manage", "Lägg till, redigera eller importera positioner")
+    _manage_portfolio_section(load_portfolio())
+    _show_scan_pending_notifications()
