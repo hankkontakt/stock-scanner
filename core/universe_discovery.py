@@ -165,7 +165,6 @@ def _source_finviz(force: bool = False) -> list:
                 "Performance": "Month +10%",
                 "Average Volume": "Over 500K",
                 "Price": "Over $5",
-                "Country": "USA",
             },
             "Finviz momentum: +10% senaste månaden, hög volym",
             0.70,
@@ -177,7 +176,6 @@ def _source_finviz(force: bool = False) -> list:
                 "Price/Book": "Under 2",
                 "EPS growththis year": "Over 10%",
                 "Average Volume": "Over 200K",
-                "Country": "USA",
             },
             "Finviz value: P/E < 15, P/B < 2, EPS-tillväxt > 10%",
             0.65,
@@ -189,7 +187,6 @@ def _source_finviz(force: bool = False) -> list:
                 "EPS growthnext year": "Over 20%",
                 "Sales growthpast 5 years": "Over 10%",
                 "Average Volume": "Over 200K",
-                "Country": "USA",
             },
             "Finviz growth: EPS +25% i år, +20% nästa år",
             0.65,
@@ -200,7 +197,6 @@ def _source_finviz(force: bool = False) -> list:
                 "52-Week High/Low": "New High",
                 "Average Volume": "Over 500K",
                 "Price": "Over $10",
-                "Country": "USA",
             },
             "Finviz: ny 52-veckors höjdpunkt med hög volym",
             0.60,
@@ -332,6 +328,28 @@ def _source_index_additions(force: bool = False) -> list:
         time.sleep(1)
     except Exception as e:
         logger.debug(f"  Wikipedia OMXS30 misslyckades: {e}")
+
+    # ── MSCI World Index constituents (via Wikipedia) ────────────────────
+    try:
+        tables = pd.read_html("https://en.wikipedia.org/wiki/MSCI_World")
+        for t_df in tables:
+            cols_lower = [str(c).lower() for c in t_df.columns]
+            if "ticker" in cols_lower or "symbol" in cols_lower:
+                tc = next(c for c in t_df.columns if str(c).lower() in ("ticker", "symbol"))
+                for t in t_df[tc].dropna().str.upper().unique()[:60]:
+                    t = t.strip()
+                    if len(t) >= 1 and t not in _EXCLUSION_SET and t not in _FALSE_POSITIVE_WORDS:
+                        candidates.append(_make_candidate(
+                            t, "index_msci_world",
+                            "Ingar i MSCI World (brett globalt index)",
+                            confidence=0.55,
+                            region=_ticker_region(t),
+                            metadata={"index": "MSCI World"},
+                        ))
+                break
+        time.sleep(1)
+    except Exception as e:
+        logger.debug(f"  MSCI World misslyckades: {e}")
 
     _write_cache("index", candidates)
     logger.info(f"  Index-tillägg: {len(candidates)} kandidater")
@@ -772,6 +790,7 @@ def run_discovery(
     validate: bool = True,
     existing_universe: Optional[set] = None,
     ai_provider: str = "auto",
+    run_ai_review: bool = True,
     verbose: bool = True,
 ) -> list:
     """
@@ -784,6 +803,7 @@ def run_discovery(
         validate:          Kör yfinance-validering på kandidaterna.
         existing_universe: Set av kända tickers att filtrera bort.
         ai_provider:       AI-provider för AI-källan ("auto", "deepseek", "gemini").
+        run_ai_review:     Kör AI-granskning (Layer 5) på HIGH/MEDIUM-kandidater.
         verbose:           Logga framsteg.
 
     Returns:
@@ -843,6 +863,7 @@ def run_discovery(
             universe_type="universe",
             run_quality_gate=True,
             run_mscore=False,   # Sätt True för djupare kontroll (långsammare)
+            run_ai_review=run_ai_review,
             verbose=verbose,
         )
         all_candidates = [c for c in all_candidates if c.get("valid", False)]

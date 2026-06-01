@@ -358,6 +358,17 @@ def update_ticker_health(
             }
             del strikes[ticker]
 
+            # Notifiera rotation-motorn genom att logga en rotation entry
+            try:
+                from core.rotation_engine import _log_rotation
+                _log_rotation(
+                    removed=ticker,
+                    added=None,
+                    reason=f"3 strikes (auto-blacklist): {diagnosis}",
+                )
+            except Exception:
+                pass
+
     # Rensa strikes för tickers som nu klarar sig
     for ticker in survived_tickers:
         if ticker in strikes:

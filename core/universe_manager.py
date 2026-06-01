@@ -524,6 +524,7 @@ def run_full_maintenance(
         validate=True,
         existing_universe=existing_universe,
         ai_provider=ai_provider,
+        run_ai_review=True,
         verbose=verbose,
     )
     logger.info(f"  {len(candidates)} validerade kandidater funna")

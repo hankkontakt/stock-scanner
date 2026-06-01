@@ -1125,6 +1125,29 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         except Exception as e:
             logger.warning(f"  ⚠ Klassisk paper trading hoppades över: {e}")
 
+    # ═══════════════════════════════════════════════════════════════════════
+    # 1f. UNIVERSE ROTATION (weekly-mode, efter scoring och paper trading)
+    # ═══════════════════════════════════════════════════════════════════════
+    if mode == "weekly" and not scored.empty:
+        try:
+            from core.rotation_engine import run_rotation
+            rotation_result = run_rotation(
+                max_replacements=5,
+                auto_execute=False,
+                use_ai=True,
+                dry_run=True,
+                scored=scored,
+                provider="auto",
+            )
+            n_triggers = len(rotation_result.get("triggers", []))
+            n_executed = len(rotation_result.get("executed", []))
+            if n_triggers:
+                logger.info(f"  🔄 Rotation: {n_triggers} utlösare hittades, {n_executed} exekverade")
+            else:
+                logger.info("  🔄 Rotation: inga utlösare hittades")
+        except Exception as e:
+            logger.warning(f"  ⚠ Rotation hoppades över: {e}")
+
     # Portfölj & watchlist
     holdings = _load_portfolio()
     watchlist_raw = _load_watchlist()

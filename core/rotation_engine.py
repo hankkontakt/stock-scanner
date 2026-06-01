@@ -83,6 +83,7 @@ def _log_rotation(removed: str, added: Optional[str], reason: str,
 def detect_removal_triggers(
     scored: Optional[pd.DataFrame] = None,
     min_score: float = REMOVAL_SCORE_THRESHOLD,
+    consecutive_weeks: int = 3,
 ) -> list[dict]:
     """
     Returnerar tickers som bör tas bort med anledning och score.

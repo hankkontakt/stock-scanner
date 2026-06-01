@@ -1391,6 +1391,30 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
         height=0,
     )
 
+    # ── Portfolj-inline-varning: innehav med lag score ────────────────────
+    df_latest = df
+    if df_latest is not None and not df_latest.empty and "ticker" in df_latest.columns:
+        try:
+            _pending_cands_for_rotation = None
+            _portfolio_scored = df_latest[df_latest["ticker"].isin(
+                holdings_view["Ticker"].str.upper() if "Ticker" in holdings_view.columns else []
+            )]
+            _weak_holdings = _portfolio_scored[
+                _portfolio_scored.get("score_total", pd.Series(0)) < 25
+            ] if "score_total" in _portfolio_scored.columns else pd.DataFrame()
+            if not _weak_holdings.empty:
+                st.warning(
+                    "⚠️ **Kvalitetsvarningar** — foljande innehav har score_total < 25: "
+                    + ", ".join(
+                        f"**{row['ticker']}** ({row.get('score_total', 0):.0f})"
+                        for _, row in _weak_holdings.iterrows()
+                    )
+                    + ". Overvaga rotation till hogre rankade alternativ.",
+                    icon="⚠️",
+                )
+        except Exception:
+            pass
+
     rows = _build_rows(holdings_view, score_data)
     stock_rows_ov = [r for r in rows if not r.get("_is_fund")]
     fund_rows_ov  = [r for r in rows if r.get("_is_fund")]
