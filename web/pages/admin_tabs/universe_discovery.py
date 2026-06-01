@@ -37,6 +37,58 @@ def render():
     c2.metric("Tillagda (auto)", len(approved))
     c3.metric("Borttagna (auto)", len(removed))
     c4.metric("Avvisade", len(rejected))
+    # ── Rotation Preview ──────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 🔄 Rotation Preview")
+    with st.expander("Visa senaste rotation-status och kör rotation nu", expanded=False):
+        try:
+            from core.rotation_engine import load_rotation_log
+            rot_log = load_rotation_log()
+            if rot_log:
+                recent = rot_log[-10:]
+                st.caption(f"Senaste {len(recent)} rotationerna (av {len(rot_log)} totalt):")
+                rrows = []
+                for r in reversed(recent):
+                    rrows.append({
+                        "Datum": r.get("date", ""),
+                        "Borttagen": r.get("removed", ""),
+                        "Tillagd": r.get("added", "") or "—",
+                        "Anledning": r.get("reason", "")[:60],
+                        "Score delta": f"{r.get('score_removed', 0):.0f}->{r.get('score_added', 0):.0f}",
+                    })
+                st.dataframe(rrows, use_container_width=True, hide_index=True)
+            else:
+                st.info("Inga rotationer loggade anu.")
+
+            col_r1, col_r2 = st.columns([2, 1])
+            with col_r1:
+                rot_dry_run = st.checkbox("Dry run (simulera)", value=True, key="rot_dry_run")
+            with col_r2:
+                if st.button("Kör rotation nu", key="btn_run_rotation"):
+                    with st.spinner("Kör rotation..."):
+                        try:
+                            from core.rotation_engine import run_rotation
+                            result = run_rotation(
+                                max_replacements=5,
+                                auto_execute=not rot_dry_run,
+                                use_ai=True,
+                                dry_run=rot_dry_run,
+                            )
+                            n_t = len(result.get("triggers", []))
+                            n_e = len(result.get("executed", []))
+                            if rot_dry_run:
+                                st.info(f"{n_t} utlösare hittades (dry run - inget ändrat)")
+                                if n_t:
+                                    for t in result["triggers"][:5]:
+                                        st.write(f"- {t['ticker']}: {t['reason']}")
+                            else:
+                                st.success(f"{n_e} rotationer exekverade, {n_t} utlösare totalt")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Rotation misslyckades: {e}")
+        except Exception as e:
+            st.error(f"Kunde inte ladda rotationslogg: {e}")
+
 
     # ── Kör discovery manuellt ────────────────────────────────────────────
     st.markdown("---")

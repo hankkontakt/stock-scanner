@@ -361,7 +361,18 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
 
         # Admin - bara synlig för admin-användaren
         if st.session_state.get("username", "admin") == "admin":
-            if st.button("Admin", key="nav_admin", use_container_width=True):
+            # Badge för pending HIGH-tier kandidater
+            _pending_badge = ""
+            try:
+                from core.universe_manager import get_pending_candidates
+                _pending = get_pending_candidates()
+                _high = [c for c in _pending if c.get("quality_tier") == "HIGH"]
+                if _high:
+                    _pending_badge = f" 🔍 {len(_high)} nya"
+            except Exception:
+                pass
+
+            if st.button(f"🔧 Admin{_pending_badge}", key="nav_admin", use_container_width=True):
                 _navigate_to("🔧 Admin")
 
         page = st.session_state["nav_page"]
