@@ -39,33 +39,7 @@ NEVER_REMOVE = {
 }
 
 # Kategori-mappning baserat på ticker-suffix
-_SUFFIX_CATEGORY = {
-    ".ST":  "OMX_SE",
-    ".CO":  "NORDIC",
-    ".OL":  "NORDIC",
-    ".HE":  "NORDIC",
-    ".L":   "UK",
-    ".DE":  "GERMANY",
-    ".PA":  "EUROPE",
-    ".AS":  "EUROPE",
-    ".MI":  "EUROPE",
-    ".MC":  "EUROPE",
-    ".VI":  "EUROPE",
-    ".WA":  "EUROPE",
-    ".LS":  "EUROPE",
-    ".SW":  "EUROPE",
-    ".TO":  "CANADA",
-    ".AX":  "ASIA_PACIFIC",
-    ".T":   "ASIA_PACIFIC",
-    ".HK":  "ASIA_PACIFIC",
-    ".TW":  "ASIA_PACIFIC",
-    ".KS":  "ASIA_PACIFIC",
-    ".NS":  "ASIA_PACIFIC",
-    ".BO":  "ASIA_PACIFIC",
-    ".SI":  "ASIA_PACIFIC",
-    ".SA":  "BRAZIL",
-    ".MX":  "BRAZIL",
-}
+from core.suffix_map import SUFFIX_CATEGORY as _SUFFIX_CATEGORY
 
 
 # ── Hjälpfunktioner ─────────────────────────────────────────────────────────
@@ -244,10 +218,22 @@ def remove_ticker_from_universe(
             lst = val["tickers"]
             if ticker in [t.upper() for t in lst]:
                 if dry_run:
-                    logger.info(f"  [DRY RUN] Skulle ta bort {ticker} från {cat}")
+                    logger.info(f"  [DRY RUN] Skulle ta bort {ticker} fran {cat}")
                 else:
                     val["tickers"] = [t for t in lst if t.upper() != ticker]
                     found = True
+                break
+        # Hantera aven smallcap-marknadsstruktur (val["markets"])
+        if isinstance(val, dict) and "markets" in val:
+            for mkt_name, mkt_tickers in val["markets"].items():
+                if isinstance(mkt_tickers, list) and ticker in [t.upper() for t in mkt_tickers]:
+                    if dry_run:
+                        logger.info(f"  [DRY RUN] Skulle ta bort {ticker} fran {cat}.markets.{mkt_name}")
+                    else:
+                        val["markets"][mkt_name] = [t for t in mkt_tickers if t.upper() != ticker]
+                        found = True
+                    break
+            if found:
                 break
 
     if not found:

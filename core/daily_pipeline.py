@@ -1130,19 +1130,20 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     # ═══════════════════════════════════════════════════════════════════════
     if mode == "weekly" and not scored.empty:
         try:
+            _rot_dry_run = os.getenv("ROTATION_DRY_RUN", "true").lower() not in ("false", "0", "no")
             from core.rotation_engine import run_rotation
             rotation_result = run_rotation(
                 max_replacements=5,
-                auto_execute=False,
+                auto_execute=not _rot_dry_run,
                 use_ai=True,
-                dry_run=True,
+                dry_run=_rot_dry_run,
                 scored=scored,
                 provider="auto",
             )
             n_triggers = len(rotation_result.get("triggers", []))
             n_executed = len(rotation_result.get("executed", []))
             if n_triggers:
-                logger.info(f"  🔄 Rotation: {n_triggers} utlösare hittades, {n_executed} exekverade")
+                logger.info(f"  🔄 Rotation: {n_triggers} utlösare hittades, {n_executed} exekverade (dry_run={_rot_dry_run})")
             else:
                 logger.info("  🔄 Rotation: inga utlösare hittades")
         except Exception as e:

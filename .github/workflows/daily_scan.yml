@@ -123,6 +123,9 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
           TARGET_TICKERS:   ${{ steps.mode.outputs.tickers }}
+          # Rotation: set ROTATION_DRY_RUN=false to auto-execute rotation
+          # Default "true" for safety -- rotation previews without executing
+          ROTATION_DRY_RUN: ${{ secrets.ROTATION_DRY_RUN || 'true' }}
         run: |
           echo "▶️ Kör pipeline i läge: ${{ steps.mode.outputs.mode }}"
           python -c "from core.daily_pipeline import run_pipeline; run_pipeline('${{ steps.mode.outputs.mode }}')"

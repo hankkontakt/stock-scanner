@@ -62,6 +62,47 @@ from web.pages.stock_search    import page_stock_search
 from web.pages.watchlist_detail import page_watchlist_detail
 from web.pages.ai_journal       import page_ai_journal
 from web.pages.universe_explorer import page_universe_explorer
+import traceback
+
+# ── P
+
+def _safe_render(page_name: str, fn, *args, **kwargs):
+    """Rensa en sida med felisolering. Om sidan kraschar visas felmeddelandet
+    och resten av appen fungerar."""
+    try:
+        fn(*args, **kwargs)
+    except Exception as e:
+        st.error(f"Sidan {page_name} kunde inte laddas: {e}")
+        st.caption("Ovriga delar av appen fungerar som vanligt.")
+        with st.expander("Visa tekniska detaljer", expanded=False):
+            st.code(traceback.format_exc())
+
+
+def _validate_api_keys():
+    """Visar varningsbanners for saknade API-nycklar utan att blockera appen."""
+    import os
+    missing = []
+    provider = os.getenv("AI_PROVIDER", "auto") or "auto"
+    if provider in ("auto", "deepseek"):
+        if not os.getenv("DEEPSEEK_API_KEY"):
+            missing.append("DEEPSEEK_API_KEY")
+    if provider in ("auto", "gemini"):
+        if not os.getenv("GEMINI_API_KEY"):
+            missing.append("GEMINI_API_KEY")
+    if not os.getenv("FINNHUB_API_KEY"):
+        missing.append("FINNHUB_API_KEY (sentimentdata)")
+    if missing:
+        st.warning(
+            "Foljande API-nycklar saknas: "
+            + ", ".join(f"**{k}**" for k in missing)
+            + ". Funktioner som kravver dessa kommer att misslyckas eller anvanda fallback."
+        )
+    # Check for old env var names that won't be picked up
+    if os.getenv("GEMINI_API_KEY") and os.getenv("GEMINI_API_KEY").startswith("sk-or-"):
+        st.warning(
+            "GEMINI_API_KEY ser ut att vara en OpenRouter-nyckel (börjar med sk-or-). "
+            "Gemini API-nycklar börjar med AIza. Kontrollera din konfiguration."
+        )
 
 # ── Page-konfiguration ────────────────────────────────────────────────────────
 st.set_page_config(
@@ -1064,69 +1105,69 @@ def main():
                 secs = sorted(df["sector"].dropna().unique().tolist())
                 if not filters.get("sector"):
                     filters["sector"] = []  # visa alla
-            page_weekly_scan(df, filters, holdings, watchlist)
+            _safe_render("Veckoscanner", page_weekly_scan, df, filters, holdings, watchlist)
 
         elif page == "🏦 Småbolag":
             if not sc_df.empty and "sector" in sc_df.columns:
                 secs = sorted(sc_df["sector"].dropna().unique().tolist())
-            page_smallcap(sc_df, filters)
+            _safe_render("Smabolag", page_smallcap, sc_df, filters)
 
         elif page == "🔍 Aktie-sök":
-            page_stock_search()
+            _safe_render("Aktie-sok", page_stock_search)
 
         elif page == "⭐ Bevakningar":
-            page_watchlist_detail(df, watchlist)
+            _safe_render("Bevakningar", page_watchlist_detail, df, watchlist)
 
         elif page == "🌍 Globala marknader":
-            page_global_markets()
+            _safe_render("Globala marknader", page_global_markets)
 
         elif page == "💼 Portfölj":
-            page_portfolio_holdings(df, holdings, watchlist, sc_df=sc_df)
+            _safe_render("Portfolj", page_portfolio_holdings, df, holdings, watchlist, sc_df=sc_df)
 
         elif page == "💼 Portföljanalys":
-            page_portfolio_analysis(df, holdings, watchlist, sc_df=sc_df)
+            _safe_render("Portfoljanalys", page_portfolio_analysis, df, holdings, watchlist, sc_df=sc_df)
 
         elif page == "💼 Rebalansering":
-            page_portfolio_rebalance(df, holdings, watchlist, sc_df=sc_df)
+            _safe_render("Rebalansering", page_portfolio_rebalance, df, holdings, watchlist, sc_df=sc_df)
 
         elif page == "💼 Hantera innehav":
-            page_portfolio_manage(df, holdings, watchlist, sc_df=sc_df)
+            _safe_render("Hantera innehav", page_portfolio_manage, df, holdings, watchlist, sc_df=sc_df)
 
         elif page == "📄 Paper Trading":
-            page_paper_trading()
+            _safe_render("Paper Trading", page_paper_trading)
 
         elif page == "🤖 AI Paper Trading":
-            page_ml_paper_trading()
+            _safe_render("AI Paper Trading", page_ml_paper_trading)
 
         elif page == "🏭 Sektorrotation":
-            page_sector_rotation(df)
+            _safe_render("Sektorrotation", page_sector_rotation, df)
 
         elif page == "🚨 Larm & Notiser":
-            page_alerts_notices(df)
+            _safe_render("Larm & Notiser", page_alerts_notices, df)
 
         elif page == "📈 Backtesting":
-            page_backtesting()
+            _safe_render("Backtesting", page_backtesting)
 
         elif page == "📈 Teknisk analys":
             if not df.empty and "sector" in df.columns:
                 secs = sorted(df["sector"].dropna().unique().tolist())
-            page_technical(df, filters)
+            _safe_render("Teknisk analys", page_technical, df, filters)
 
         elif page == "🤖 AI":
-            page_ai(df, sc_df, holdings)
+            _safe_render("AI", page_ai, df, sc_df, holdings)
 
         elif page == "📓 AI Journal":
-            page_ai_journal(df)
+            _safe_render("AI Journal", page_ai_journal, df)
 
         elif page == "⚙️ Inställningar":
             from web.pages.settings_page import page_settings
-            page_settings()
+            _safe_render("Installningar", page_settings)
 
         elif page == "🔭 Universe Explorer":
-            page_universe_explorer(df)
+            _safe_render("Universe Explorer", page_universe_explorer, df)
 
         elif page == "🔧 Admin":
-            page_admin()
+            _safe_render("Admin", page_admin)
 
 
 if __name__ == "__main__":
