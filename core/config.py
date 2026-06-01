@@ -75,9 +75,9 @@ UNIVERSE = list(dict.fromkeys(
 _SMALLCAP_DATA = _UNIVERSE_DATA.get("SMALLCAP", {})
 SMALLCAP_MARKETS = _SMALLCAP_DATA.get("markets", {})
 SMALLCAP_TICKERS = (
-    SMALLCAP_MARKETS.get("FIRST_NORTH", []) +
-    SMALLCAP_MARKETS.get("SMALL_CAP", []) +
-    SMALLCAP_MARKETS.get("SPOTLIGHT", [])
+    [t for t in SMALLCAP_MARKETS.get("FIRST_NORTH", []) if t not in _BLACKLISTED] +
+    [t for t in SMALLCAP_MARKETS.get("SMALL_CAP", []) if t not in _BLACKLISTED] +
+    [t for t in SMALLCAP_MARKETS.get("SPOTLIGHT", []) if t not in _BLACKLISTED]
 )
 
 
