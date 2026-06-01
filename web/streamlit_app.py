@@ -32,10 +32,21 @@ from web.utils import (
 from web.pages.overview        import page_overview
 from web.pages.weekly_scan     import page_weekly_scan
 from web.pages.smallcap        import page_smallcap
-from web.pages.portfolio       import (
-    page_portfolio, page_portfolio_holdings, page_portfolio_analysis,
-    page_portfolio_rebalance, page_portfolio_manage,
-)
+try:
+    from web.pages.portfolio   import (
+        page_portfolio, page_portfolio_holdings, page_portfolio_analysis,
+        page_portfolio_rebalance, page_portfolio_manage,
+    )
+except Exception as _pf_err:
+    # Defensiv: en enskild sidas import-fel får aldrig krascha HELA appen.
+    # Visar tydligt fel på portföljsidorna istället, resten av appen fungerar.
+    import streamlit as _st_pf
+    _PF_IMPORT_ERR = _pf_err
+    def _pf_stub(*_a, **_k):
+        _st_pf.error(f"Portföljsidan kunde inte laddas: {_PF_IMPORT_ERR}")
+        _st_pf.caption("Övriga delar av appen fungerar. Kontakta admin / kolla loggar.")
+    page_portfolio = page_portfolio_holdings = page_portfolio_analysis = \
+        page_portfolio_rebalance = page_portfolio_manage = _pf_stub
 from web.pages.technical       import page_technical
 from web.pages.ai_page         import page_ai
 from web.pages.admin           import _search_ticker_yfinance
