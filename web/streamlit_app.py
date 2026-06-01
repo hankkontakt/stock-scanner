@@ -196,6 +196,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ── Nytt designsystem (web/ui) — kort, metrics, taggar, typografi ─────────────
+# Läggs ovanpå blocket ovan; ersätter det helt vid den kommande nav-omskrivningen.
+try:
+    from web.ui.css import inject_global_css
+    inject_global_css()
+except Exception:
+    pass
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SIDEBAR
