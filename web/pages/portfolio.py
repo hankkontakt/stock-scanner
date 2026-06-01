@@ -1,4 +1,5 @@
 """web/pages/portfolio.py – Sida 4: Portfölj"""
+from __future__ import annotations  # gör alla annoteringar till strängar (Py-version-säkert)
 
 import datetime
 import json
@@ -18,8 +19,8 @@ from web.utils import (
 from core import ai_analysis
 from web.ui.components import page_header, empty_state
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def _fetch_live_price_cached(ticker: str) -> float | None:
+@st.cache_data(ttl=3600)
+def _fetch_live_price_cached(ticker):
     """Hämtar live-pris via yfinance fast_info (lätt anrop, cachat 1 timme).
     Används som fallback när scandata saknas eller är gammal (>24h)."""
     try:
