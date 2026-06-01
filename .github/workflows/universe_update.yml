@@ -2,7 +2,7 @@ name: 🔍 Universe Discovery (Veckovis)
 
 on:
   schedule:
-    # Söndag 11:00 UTC (efter veckoscannen lördag)
+    # Söndag 13:00 sommar / 12:00 vinter (11:00 UTC) — efter veckoscannen lördag
     - cron: "0 11 * * 0"
   workflow_dispatch:
     inputs:
