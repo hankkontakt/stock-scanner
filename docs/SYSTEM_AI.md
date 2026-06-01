@@ -1336,6 +1336,14 @@ Detta avsnitt listar de 50 mest betydande förändringarna (nya funktioner, bugg
 
 > **Från och med 2026-06-01 uppdateras SYSTEM_AI.md automatiskt av AI-verktyg efter varje ändring.** Underhåll enligt §0 Underhållsprotokoll.
 
+### 2026-06-01 — predicted_return sparas vid köptillfället + StreamlitInvalidHeightError-fix
+**Vad:** Ny kolumn `predicted_return_at_buy` i `holdings.csv` sparar ML-modellens prediktion automatiskt vid köptillfället (slås upp från senaste scandata). Ny UI-kolumn "Pred@buy" jämte "Pred 30d" i portföljtabellen. Båda `data_table()` och `clickable_stock_table()` i `web/ui/components.py` har nu try/except för height så att Streamlit Cloud inte kraschar med `StreamlitInvalidHeightError` (vissa tabeller med få rader får height < vert lägre än Streamlit 1.44 minsta gräns).
+**Varför:** Användare vill se "vad ML trodde då" vs "vad som hände". Streamlit Cloud kör annan Streamlit-version än lokal miljö med strängare height-validering.
+
+### 2026-06-01 — Nasdaq-aktier på "Köp nu" utan score (root cause fix)
+**Vad:** `update_scored_with_prices()` i `core/data_fetcher_batch.py` skriver ENDAST över pris/momentum-kolumner (`PRICE_ONLY_COLS`), inte fundamentaldata. Overview-sidan filtrerar bort NaN-score i "Köp nu"-listan med `dropna()`.
+**Varför:** yfinance returnerar ibland korrupta fundamentalvärden (negativt P/E) vid daily price-fetch, vilket skrev över veckoscannerns korrekta data och gav `score_total = NaN`. Entry-signalen "STARK" fanns kvar från veckoscannen = aktier utan score synts i "Köp nu".
+
 ### 2026-06-01 — Borttagning av död kod (5 filer, 11 funktioner)
 **Vad:** Helt oanvända filer borttagna: `backtesting/factor_optimizer.py`, `portfolio/hierarchical_risk_parity.py`, `data_management/delta_tracker.py`, `scripts/convert_snapshots.py`, `scripts/write_readme.py`. Döda funktioner borttagna från 8 filer (se §16 för full lista). Sex `except: return None` korrigerade till `except Exception: return None`.
 **Varför:** Rensa upp codebase, eliminera förvirring, förhindra att döda grenar föreslås som lösningar. Bare `except:` utgjorde risk för att fånga SystemExit/KeyboardInterrupt.
