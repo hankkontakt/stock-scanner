@@ -503,9 +503,20 @@ def update_scored_with_prices(scored_df: pd.DataFrame, price_data: dict) -> pd.D
         if ticker not in df.index:
             continue
 
-        # Uppdatera prisberoende kolumner
+        # Only update price/momentum columns, NOT fundamental ones.
+        # yfinance daily fetches can return corrupted fundamentals
+        # (negative P/E, P/B etc.) that overwrite correct weekly scan data.
+        PRICE_ONLY_COLS = {
+            "currentPrice", "previousClose", "regularMarketPreviousClose",
+            "open", "dayHigh", "dayLow", "volume", "averageVolume",
+            "return_1m", "return_3m", "return_6m", "return_12m",
+            "return_1d", "pct_from_52w_high", "price_vs_ma50", "price_vs_ma200",
+            "rsi_14", "volatility", "beta", "macd_above_signal", "bb_position",
+            "volume_ratio", "ma50", "ma200", "dist_from_52w_high", "dist_from_52w_low",
+            "momentum_3_vs_12",
+        }
         for col, val in prices.items():
-            if col in df.columns:
+            if col in df.columns and col in PRICE_ONLY_COLS:
                 df.at[ticker, col] = val
 
     # Återställ index

@@ -425,6 +425,8 @@ def _build_rows(holdings_view: pd.DataFrame, score_data: dict) -> list:
             "P&L %":     f"{pnl_pct:+.1f}%" if pnl_pct is not None else "--",
             "Marknadsvärde": f"{mv:,.0f}" if mv else "--",
             "Score":     sc.get("score_total") if not is_fund_acc else None,
+            "Pred 30d":  sc.get("predicted_return") if not is_fund_acc else None,
+            "ML rank":   sc.get("ml_rank") if not is_fund_acc else None,
             "Entry":     sc.get("entry_signal", "--") if not is_fund_acc else "Fond",
             "Trend":     sc.get("trend_signal", "--") if not is_fund_acc else "--",
             "Piotroski": sc.get("piotroski_f") if not is_fund_acc else None,
@@ -1442,6 +1444,8 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
                 "Inköpspris": f"{float(r['Inköpspris']):.2f}" if r.get("Inköpspris") else "--",
                 "Värde":      f"{r['_market_value']:,.0f} kr" if r.get("_market_value") else "--",
                 "P&L %":      f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), float) else "--",
+                "Pred 30d":   pred_str,
+                "ML rank":    mlr_str,
                 "Konto":      r.get("Konto", ""),
             } for r in stock_rows_ov]
             clickable_stock_table(pd.DataFrame(stocks_detail), ticker_col="Ticker", context_df=df,
@@ -1526,10 +1530,16 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
     display_rows_funds  = []
     for r in rows:
         pnl_str = f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), (int, float)) else "--"
+        pred = r.get("Pred 30d")
+        pred_str = f"{pred*100:+.1f}%" if isinstance(pred, (int, float)) else "--"
+        mlr = r.get("ML rank")
+        mlr_str = f"{mlr:.0f}" if isinstance(mlr, (int, float)) else "--"
         entry = {
             "Ticker":  r.get("Ticker", ""),
             "Bolag":   (r.get("Bolag") or "")[:25],
             "P&L %":   pnl_str,
+            "Pred 30d": pred_str,
+            "ML rank": mlr_str,
             "Värde":   f"{r.get('_market_value', 0):,.0f} kr" if r.get("_market_value") else "--",
             "Konto":   r.get("Konto", ""),
             "_pnl":    r.get("_pnl_pct") or 0,
