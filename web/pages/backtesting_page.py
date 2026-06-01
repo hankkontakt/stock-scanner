@@ -218,7 +218,10 @@ men garanterar ingenting om framtiden.
         with tab2:
             pd_data = pd.DataFrame(result.get("period_details", []))
             if not pd_data.empty:
-                st.dataframe(pd_data, use_container_width=True, hide_index=True, height=450)
+                try:
+                    st.dataframe(pd_data, use_container_width=True, hide_index=True, height=450)
+                except Exception:
+                    st.dataframe(pd_data, use_container_width=True, hide_index=True)
                 st.caption("**portfolio_ret** = modellens månadsavkastning, **benchmark_ret** = benchmarkens, **alpha** = skillnaden")
 
         with tab3:

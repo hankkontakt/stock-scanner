@@ -1,0 +1,107 @@
+name: 🔍 Universe Discovery (Veckovis)
+
+on:
+  schedule:
+    # Söndag 11:00 UTC (efter veckoscannen lördag)
+    - cron: "0 11 * * 0"
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: 'Kommaseparerade källor (finviz,index,news,ai,etf) — lämna tomt för alla'
+        required: false
+        default: ''
+      auto_add_threshold:
+        description: 'Confidence-threshold för auto-add (0.0-1.0, default 0.85)'
+        required: false
+        default: '0.85'
+      dry_run:
+        description: 'Dry run (simulera utan att skriva) — true/false'
+        required: false
+        default: 'false'
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      PYTHONPATH: .
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
+      AI_PROVIDER:      ${{ secrets.AI_PROVIDER }}
+      FINNHUB_API_KEY:  ${{ secrets.FINNHUB_API_KEY }}
+      GITHUB_TOKEN:     ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: 📥 Hämta kod
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🐍 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 📦 Installera beroenden
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          # Mjuka beroenden — installeras om möjligt, annars graciös fallback
+          pip install finvizfinance || echo "finvizfinance ej tillgängligt — hoppar Finviz-källan"
+          pip install reticker || echo "reticker ej tillgängligt — använder regex-fallback"
+          pip install vaderSentiment || echo "vaderSentiment ej tillgängligt — begränsat sentiment"
+          # transformers/FinBERT installeras EJ i CI (för stor ~500MB) — VADER används som fallback
+
+      - name: 🔍 Kör Universe Discovery
+        run: |
+          python - << 'EOF'
+          import os, sys, logging
+          logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+          sources_raw = os.getenv("DISC_SOURCES", "").strip()
+          sources     = [s.strip() for s in sources_raw.split(",") if s.strip()] or None
+          threshold   = float(os.getenv("DISC_THRESHOLD", "0.85"))
+          dry_run     = os.getenv("DISC_DRY_RUN", "false").lower() == "true"
+
+          from core.universe_manager import run_full_maintenance
+          result = run_full_maintenance(
+              sources=sources,
+              auto_add_threshold=threshold,
+              auto_remove=False,      # Aldrig auto-ta bort — kräver manuell granskning
+              dry_run=dry_run,
+              commit=False,           # Vi committar nedan med git direkt
+              verbose=True,
+          )
+
+          print(f"\n=== RESULTAT ===")
+          print(f"Kandidater funna:  {result['candidates_found']}")
+          print(f"Nya pending:       {result['candidates_new']}")
+          print(f"Auto-tillagda:     {len(result['auto_added'])}")
+          print(f"Borttagningskand.: {len(result['removal_candidates'])}")
+          if result['auto_added']:
+              print(f"Tillagda: {', '.join(result['auto_added'])}")
+          if result['removal_candidates'][:5]:
+              print("Top borttagningskandidater:")
+              for r in result['removal_candidates'][:5]:
+                  print(f"  {r['ticker']:12s} score={r['score']:.1f}  {r['reason'][:60]}")
+          EOF
+        env:
+          DISC_SOURCES:   ${{ github.event.inputs.sources }}
+          DISC_THRESHOLD: ${{ github.event.inputs.auto_add_threshold }}
+          DISC_DRY_RUN:   ${{ github.event.inputs.dry_run }}
+
+      - name: 📝 Committa ändringar
+        run: |
+          git config user.name  "MarketScan Bot"
+          git config user.email "bot@marketscan.local"
+          git add data/universe.json data/discovery_candidates.json data/blacklist.json data/rotation_log.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "Inga ändringar att committa"
+          else
+            git commit -m "Universe Discovery: uppdaterade kandidater och universe $(date +%Y-%m-%d)"
+            git pull --rebase --autostash
+            git push
+          fi

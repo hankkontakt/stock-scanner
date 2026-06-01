@@ -58,6 +58,14 @@ def render(load_scan_log_fn):
     _render_github_sync_status()
 
     st.markdown("---")
+    st.markdown("**⚙️ GitHub Actions**")
+    _render_actions_status()
+
+    st.markdown("---")
+    st.markdown("**📊 Fetch-fellogg**")
+    _render_fetch_errors()
+
+    st.markdown("---")
     st.markdown("**👥 Aktivitet**")
     activity = _load_activity_log()
     if activity:
@@ -126,3 +134,94 @@ def _render_github_sync_status():
         })
 
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
+def _render_actions_status():
+    """Visar senaste GitHub Actions-körningar och länk till Actions-sidan."""
+    owner = "hankkontakt"
+    repo  = "stock-scanner"
+    token = _get_github_token()
+
+    st.markdown(
+        f"[Öppna GitHub Actions ↗](https://github.com/{owner}/{repo}/actions)",
+        unsafe_allow_html=False,
+    )
+
+    if not token:
+        st.caption("Ingen GitHub-token — kan inte hämta körningshistorik.")
+        return
+
+    try:
+        import requests as _req
+        r = _req.get(
+            f"https://api.github.com/repos/{owner}/{repo}/actions/runs",
+            params={"per_page": 8},
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
+            timeout=6,
+        )
+        if r.status_code != 200:
+            st.caption(f"Kunde inte hämta Actions-data (HTTP {r.status_code}).")
+            return
+        runs = r.json().get("workflow_runs", [])
+        if not runs:
+            st.caption("Inga körningar hittades.")
+            return
+        rows_a = []
+        for run in runs:
+            status_icon = {
+                "success":    "✅",
+                "failure":    "❌",
+                "cancelled":  "⛔",
+                "in_progress":"⏳",
+                "queued":     "🕐",
+            }.get(run.get("conclusion") or run.get("status"), "❓")
+            rows_a.append({
+                "Status": status_icon + " " + (run.get("conclusion") or run.get("status") or "?"),
+                "Workflow": run.get("name", ""),
+                "Branch": run.get("head_branch", ""),
+                "Startat": (run.get("created_at") or "")[:16].replace("T", " "),
+                "Länk": run.get("html_url", ""),
+            })
+        df_runs = pd.DataFrame(rows_a)
+        st.dataframe(
+            df_runs.drop(columns=["Länk"]),
+            use_container_width=True,
+            hide_index=True,
+        )
+    except Exception as e:
+        st.caption(f"Fel vid hämtning av Actions: {e}")
+
+
+def _render_fetch_errors():
+    """Visar fetch_errors.json — tickers som misslyckades i senaste skannen."""
+    errors_path = DATA_DIR / "fetch_errors.json"
+    if not errors_path.exists():
+        st.caption("Ingen fellogg ännu (skapas efter första skannen).")
+        return
+    try:
+        history = json.loads(errors_path.read_text(encoding="utf-8"))
+        if not history:
+            st.caption("Fellogg är tom.")
+            return
+        last = history[-1]
+        ts   = last.get("timestamp", "?")
+        n_ok = last.get("n_ok", 0)
+        n_fail = last.get("n_failed", 0)
+        n_del  = last.get("n_delisted", 0)
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Hämtade OK", n_ok)
+        col2.metric("Misslyckades", n_fail, delta=None)
+        col3.metric("Delistade", n_del)
+        st.caption(f"Senaste scan: {ts}")
+
+        failed = last.get("failed_tickers", [])
+        if failed:
+            with st.expander(f"Visa {len(failed)} misslyckade tickers"):
+                st.dataframe(pd.DataFrame(failed), use_container_width=True, hide_index=True)
+
+        delisted = last.get("delisted_tickers", [])
+        if delisted:
+            with st.expander(f"Visa {len(delisted)} delistade tickers"):
+                st.write(", ".join(delisted))
+    except Exception as e:
+        st.caption(f"Kunde inte läsa fellogg: {e}")

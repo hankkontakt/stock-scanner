@@ -1274,6 +1274,30 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         if opportunities:
             report_lines.append(_opportunity_section(opportunities))
 
+        # ── Kalender ─────────────────────────────────────────────────────
+        try:
+            from core.earnings_calendar import upcoming_in_portfolio, upcoming_in_top
+            from core.macro_calendar import get_upcoming_macro_events
+            holdings_df = pd.DataFrame(enriched) if enriched else pd.DataFrame()
+            cal_earn = upcoming_in_portfolio(holdings_df, scored, days_ahead=7) if not holdings_df.empty else pd.DataFrame()
+            if cal_earn.empty:
+                cal_earn = upcoming_in_top(scored, top_n=50, days_ahead=7)
+            cal_macro = get_upcoming_macro_events(days_ahead=7)
+            if not cal_earn.empty or cal_macro:
+                report_lines.append(_section_header("📅 Kommande rapporter & makro (7 dagar)"))
+                for _, row in cal_earn.head(5).iterrows():
+                    ticker_c = row.get("ticker", "")
+                    edate_c  = row.get("earnings_date", "?")
+                    days_c   = row.get("days_until", "?")
+                    report_lines.append(f"- 📊 **{ticker_c}** rapporterar {edate_c} (om {days_c} d)")
+                for ev in cal_macro[:3]:
+                    report_lines.append(
+                        f"- {ev.get('flag','')} **{ev.get('event','')}** — {ev.get('date','')} (om {ev.get('days_until','')} d)"
+                    )
+                report_lines.append("")
+        except Exception as _cal_err:
+            logger.debug(f"  Kalenderdata kunde inte hämtas: {_cal_err}")
+
         # ── Nyheter ──────────────────────────────────────────────────────
         report_lines.append(_section_header("📰 Nyheter"))
         report_lines.append("*(Nyheter hämtas via nyhetslarm - se separat mail)*")
@@ -1691,6 +1715,37 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             _send_stark_alerts(scored, date_str)
         except Exception as e:
             logger.warning(f"  ⚠ STARK-larm misslyckades: {e}")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # 5c. KALENDER-PÅMINNELSE (enbart morning, måndagar eller 1:a dag i månaden)
+    # ═══════════════════════════════════════════════════════════════════════
+    if mode == "morning":
+        try:
+            from core.earnings_calendar import upcoming_in_portfolio, upcoming_in_top
+            from core.macro_calendar import get_upcoming_macro_events
+            from core.alerts import send_calendar_reminder
+            _now = datetime.now()
+            # Skicka kalender-mail på måndagar och 1:a varje månad
+            if _now.weekday() == 0 or _now.day == 1:
+                _holdings_df = pd.DataFrame(enriched) if enriched else pd.DataFrame()
+                _cal_earn = (
+                    upcoming_in_portfolio(_holdings_df, scored, days_ahead=14)
+                    if not _holdings_df.empty
+                    else pd.DataFrame()
+                )
+                if _cal_earn.empty:
+                    _cal_earn = upcoming_in_top(scored, top_n=50, days_ahead=14)
+                _cal_macro = get_upcoming_macro_events(days_ahead=14)
+                if not _cal_earn.empty or _cal_macro:
+                    _sent = send_calendar_reminder(
+                        earnings_events=_cal_earn if not _cal_earn.empty else None,
+                        macro_events=_cal_macro or None,
+                        days_ahead=14,
+                    )
+                    if _sent:
+                        logger.info("  📅 Kalender-påminnelse skickad")
+        except Exception as _cal_e:
+            logger.warning(f"  ⚠ Kalender-påminnelse misslyckades: {_cal_e}")
 
     # ═══════════════════════════════════════════════════════════════════════
     # 6. KLART

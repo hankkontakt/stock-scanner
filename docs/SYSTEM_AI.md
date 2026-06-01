@@ -123,6 +123,12 @@ stock-scanner/
 │   ├── fx_impact.py            # FX impact analysis (7KB)
 │   ├── interest_rate.py        # Yield curve tracking (10KB)
 │   ├── universe_health.py      # AI-driven universe maintenance (15KB)
+│   ├── universe_discovery.py  # Multi-source stock discovery engine (8 sources, quality gate)
+│   ├── universe_manager.py    # Automated add/remove + candidate tracking
+│   ├── discovery_quality_gate.py  # 4-lagers kvalitetsfilter: hard excl, quality score, M-score, dilution
+│   ├── news_sentiment.py      # FinBERT/VADER sentiment, Nordic RSS, earnings surprise, analyst upgrades
+│   ├── ai_stock_reviewer.py   # Layer 5: Gemini/DeepSeek slutgiltigt ADD/SKIP/INVESTIGATE per kandidat
+│   ├── rotation_engine.py     # Automatisk universe rotation: detektera bortfall → ranka → AI-val → commit
 │   ├── earnings_calendar.py    # Earnings tracking (6KB)
 │   ├── dividend_calendar.py    # Dividend tracking (4KB)
 │   ├── macro_calendar.py       # Hårdkodad makrokalender 2025-2026 (11KB)
@@ -960,22 +966,169 @@ All ideas discovered during system analysis. Add to this section as you find mor
 | Idea | Summary | Impact | Files to change |
 |---|---|---|---|
 | ~~Score decay warning~~ | DONE ✅ — färskhetsbanner i sidebar + admin (>48h/>72h) | Low | `web/streamlit_app.py` |
-| **Better pipeline error messages** | Log WHICH tickers failed and why | Medium | `core/data_fetcher.py` |
+| ~~Better pipeline error messages~~ | DONE ✅ — `failed_detail` dict loggas till `data/fetch_errors.json` (ticker, status, pass) efter varje scan; visas i admin-övikt | Medium | `core/data_fetcher_batch.py`, `web/pages/admin_tabs/overview.py` |
 | ~~Per-ticker factor breakdown~~ | DONE ✅ — `_score_breakdown()` på aktie­detalj + i mail (`format_factor_attribution_md`) | High | `web/stock_detail.py` |
-| **CI log link in dashboard** | Link to GitHub Actions run from admin | Low | `core/daily_pipeline.py` |
+| ~~CI log link in dashboard~~ | DONE ✅ — `_render_actions_status()` i admin/overview visar senaste 8 Actions-körningar + länk till Actions-sidan | Low | `web/pages/admin_tabs/overview.py` |
 
 ### 17.2 Medium-term (week)
 
 | Idea | Summary | Impact | Prerequisite |
 |---|---|---|---|
-| **Unified data quality dashboard** | Show missing data per ticker, per factor, over time | High | — |
+| ~~Unified data quality dashboard~~ | DONE ✅ — ny admin-flik "Datakvalitet" (`web/pages/admin_tabs/data_quality.py`) visar täckning per faktor/kolumn, drilldown på saknade tickers, data_quality-score-histogram | High | — |
 | ~~Score change alerts~~ | DONE ✅ — `send_score_drift_alerts()` mailar vid \|Δscore\|≥10 på bevakade | High | `core/pipeline_alerts.py` |
-| **Calendar-based event reminders** | Earnings + macro, auto-email N days ahead | High | — |
+| ~~Calendar-based event reminders~~ | DONE ✅ — `send_calendar_reminder()` i `core/alerts.py`; kallas från `daily_pipeline.py` morning-mode på måndagar/1:a i månaden; visar rapportdatum för innehav + bevakade + makrohändelser de närmaste 14 dagarna | High | `core/alerts.py`, `core/daily_pipeline.py` |
 ---
 
 ## 18. Andringslogg (uppdateras av varje AI vid varje andring)
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
+
+### 2026-06-01 — Feat: AI Layer 5 + Automatisk Rotation + Universe Explorer UI + Height-fix
+
+**StreamlitInvalidHeightError fix (kvarstående 4 filer):**
+- `web/pages/backtesting_page.py:221` — height=450 omsluten av try/except
+- `web/pages/sector_rotation.py:170` — height=400 omsluten av try/except
+- `web/pages/global_markets.py:59` — height=220 omsluten av try/except
+- `web/pages/global_markets.py:90` — height=280 omsluten av try/except
+
+**`core/ai_stock_reviewer.py`** — Layer 5: AI Final Verdict:
+- `review_candidate()`: Strukturerat Gemini/DeepSeek-prompt (~1500 tokens) → JSON verdict ADD/SKIP/INVESTIGATE
+- `batch_review_candidates()`: Kör på alla HIGH/MEDIUM-kandidater efter quality gate
+- Kostnadsskydd: max 25 AI-anrop/dag (konfigurerbart via `MAX_AI_CALLS_PER_RUN`)
+- Gemini 2.5 Flash free tier: 250 req/dag → kostnad $0.00 för normal användning
+- ADD + conf ≥ 0.75 → +0.08 confidence boost; SKIP → -0.20 confidence
+- Integrerat i `universe_discovery.py:validate_candidates()` via `run_ai_review=True`
+
+**`core/rotation_engine.py`** — Automatisk universe rotation:
+- `detect_removal_triggers()`: Hittar tickers att ta bort (strikes ≥3, score <22, delisting)
+- `rank_replacements()`: Rankar ersättare från scored_universe (score >55, ej i universum)
+  - Sektorbalans-boost: +5 poäng om bortagen sektorn är underrepresenterad
+  - Sorterar: eff_score DESC + entry_signal (STARK=1 > OK=2 > VÄNTA=3)
+- `ai_select_replacement()`: AI väljer bäst bland top-5 med hänsyn till portföljbalans
+- `run_rotation()`: Orchestrerar hela flödet; `max_replacements` konfigurerbar (default 10)
+- Loggar allt i `data/rotation_log.json` (senaste 200 rotationer)
+
+**`web/pages/universe_explorer.py`** — Publik sida (ej bara admin):
+- 3 tabbar: "Nya kandidater" (pending med quality tier + AI-verdict), "Nyligen tillagda", "Rotationslogg"
+- Kandidater visar: tier-badge 🟢/🟡/🔴, quality score, confidence, fraud-flaggor, AI-reasoning
+- Rotationslogg visar: borttagen → ersatt, score-delta (Δ), AI-guiderad/inte
+- Tillgänglig via ny nav-knapp "Universe Explorer" under MARKNAD i sidebar
+
+**`web/streamlit_app.py`** — ny sida tillagd:
+- Import av `page_universe_explorer`
+- Navigation-entry "🔭 Universe Explorer" under MARKNAD-sektionen
+- URL-nyckel "universe" i `_known_pages`
+
+### 2026-06-01 — Feat: 4-lagers Quality Gate + FinBERT/VADER sentiment + 3 nya discovery-källor
+
+**Ny `core/discovery_quality_gate.py`** (35 tester, 134 totalt):
+- **Layer 1 `hard_exclude()`**: Absoluta minimum — penny stocks (<$2), market cap (<$100M), låg volym, felaktigt quoteType, extremt P/E (>500), extremt D/E (>800%), negativt eget kapital (utom banker), noll-intäkter. Separata trösklar för `universe_type="universe"` vs `"smallcap"`.
+- **Layer 2 `compute_quality_score()`**: Sektor-aware kvalitetspoäng (0–100) baserat på ROE, profit_margin, gross_margin, revenue_growth, FCF, D/E, analyst coverage, recommendation_mean. Tech/healthcare/finansiell/utility-sektor har specifika regler. Returnerar flaggor (förklarande text).
+- **Layer 3 `compute_beneish_mscore()`**: Beneish M-Score (8 variabler: DSRI, GMI, AQI, SGI, DEPI, SGAI, TATA, LVGI). M > -1.00 → exkluderas. M > -1.78 → fraud_flag + conf -0.20. Samma modell som identifierade Enron, Wirecard.
+- **Layer 4 `check_dilution()`**: Aktie-utspädning via `sharesPercentSharesOut`. >30% → exkluderas. >15% → soft flag. Separata trösklar per universe_type.
+- **`evaluate_candidate()`**: Kombinerar alla lager, returnerar `quality_tier` (HIGH/MEDIUM/SPECULATIVE) + `confidence_delta`.
+
+**Ny `core/news_sentiment.py`**:
+- `score_news_sentiment()`: FinBERT (ProsusAI/finbert) → VADER → enkelt lexikon-fallback. `news_signal = article_count × avg_sentiment`, boost +0.05/+0.10/+0.15 beroende på signal-styrka.
+- `fetch_nordic_rss()`: Nasdaq Nordic officiell RSS (https://subscribe.news.eu.nasdaq.com/rss) + Cision + Realtid/DI. Bolagsnamn → ticker via yfinance-search.
+- `fetch_earnings_surprise()`: Finnhub earnings calendar. EPS-surprise > 5% + ej i universum = PEAD-kandidat.
+- `fetch_analyst_upgrades()`: Finnhub recommendation-historik. Buy-ratio > 60% + förbättring vs förra månaden = kandidat.
+- `reticker` som mjuk dep för bättre ticker-extrahering, `vaderSentiment` som fallback.
+
+**Uppdaterat `validate_candidates()` i `universe_discovery.py`**:
+- Kör `evaluate_candidate()` per ticker, applicerar `confidence_delta`.
+- Exkluderar om hard_exclude, M-score > -1.00, eller dilution > 30%.
+- Loggar HIGH/MEDIUM/SPEC-fördelning.
+
+**Uppdaterat `run_discovery()` i `universe_discovery.py`**:
+- 8 sources nu: finviz, index, news, ai, etf, **nordic_rss**, **earnings_surprise**, **analyst_upgrades**.
+- Multi-source boost: +5% confidence per extra källa som hittat samma ticker (max +20%).
+
+**Uppdaterat auto-add i `universe_manager.py`**:
+- Kräver nu `quality_tier == "HIGH"` + confidence ≥ threshold + inga fraud_flags.
+- SPECULATIVE tier kan aldrig auto-läggas till.
+
+**Admin-UI `universe_discovery.py`**:
+- Tier-badge (🟢 HIGH / 🟡 MEDIUM / 🔴 SPEC) per kandidat.
+- Quality score synligt.
+- Fraud-flaggor visas röda under kandidatens titel.
+- Filtrerbart per tier.
+- Sorteras: HIGH tier + högst confidence först.
+
+### 2026-06-01 — Feat: Automatiskt Universe Discovery & Management System
+
+**Tre nya core-moduler + admin-flik + GitHub Actions-workflow:**
+
+**`core/universe_discovery.py`** — Multi-källs discovery-motor (5 oberoende källor):
+- **Finviz** (finvizfinance, ingen API-nyckel): momentum (+10%/mån), value (P/E<15, P/B<2), growth (EPS>25%), new-highs
+- **Wikipedia index-tillägg**: S&P 500 ändrings-tabell, Nasdaq 100 constituents, OMXS30
+- **Nyhets-ticker-extrahering**: RSS-flöden (Reuters, MarketWatch, Placera, DI m.fl.) + regex-extrahering; tickers omnämnda ≥2 gånger = kandidat
+- **AI-baserad discovery**: 3 separata DeepSeek/Gemini-prompts (US growth, Nordic/European, Global value) med strukturerat JSON-svar
+- **Sektor-ETF holdings**: XLK, XLV, XLE, XLF, XLI via Wikipedia-tabeller
+- Alla sources cachas (2–24h), fallback om källa ej svarar
+- `validate_candidates()`: kontrollerar pris, volym, quoteType via yfinance med ThreadPoolExecutor
+
+**`core/universe_manager.py`** — Kandidat-pipeline och universe-skötsel:
+- `run_full_maintenance()`: orchestrerar hela flödet (discovery → validering → pending → auto-add → borttagningsanalys)
+- `add_ticker_to_universe()`: lägger till i rätt kategori (auto-detekterat från börs-suffix), atomärt
+- `remove_ticker_from_universe()`: tar bort + blacklistar, skyddar NEVER_REMOVE-set
+- `get_removal_candidates()`: hittar tickers med score < 20, låg market cap, eller ≥2 strikes
+- `approve_candidate()` / `reject_candidate()`: manuell godkännning/avvisning
+- `data/discovery_candidates.json`: spårar alla kandidater + beslut (pending/approved/rejected/auto_added)
+
+**`web/pages/admin_tabs/universe_discovery.py`** — Admin-flik "Ticker-discovery":
+- Pending-kandidater med ✅/❌-knappar (godkänn / avvisa), filtrerbar per källa/region
+- Borttagningskandidater (låg score/likviditet) med detaljtabell
+- Kör discovery manuellt med source-selector, dry-run-toggle, auto-add-threshold
+- Käll-statistik (antal kandidater per källa)
+- Rensa gamla pending (>30 dagar)
+
+**`.github/workflows/universe_update.yml`** — Veckovis automation:
+- Kör varje söndag kl 11:00 UTC (dagen efter veckoscannen)
+- `workflow_dispatch` med sources/threshold/dry_run-parametrar
+- Installerar finvizfinance (graceful fallback om det misslyckas)
+- Committar `universe.json`, `discovery_candidates.json`, `blacklist.json`
+
+**Designprinciper:**
+- Auto-add threshold default 0.85 (bara mycket säkra förslag auto-läggas)
+- Auto-remove ALDRIG automatiskt — kräver alltid manuell granskning
+- NEVER_REMOVE-set skyddar kärnaktier (AAPL, MSFT, VOLVO-B.ST, etc.)
+- finvizfinance är mjuk dependency (systemet fungerar utan den)
+- Alla sources har oberoende cache-filer (data/cache/discovery_*.json)
+
+### 2026-06-01 — Feat: Better pipeline error messages, CI log, data quality dashboard, calendar reminders
+
+**1. Detaljerad fetch-fellogg** (`core/data_fetcher_batch.py`):
+- `failed_detail` dict spårar `{status, pass}` per misslyckat ticker under fetch
+- Skrivs till `data/fetch_errors.json` (senaste 10 körningar) efter varje `fetch_universe_data()`-anrop
+- Adminsidan visar feloggen i "Översikt"-tabben via `_render_fetch_errors()`
+
+**2. GitHub Actions-länk i admin** (`web/pages/admin_tabs/overview.py`):
+- `_render_actions_status()`: hämtar senaste 8 workflow-körningar via GitHub API + länk till Actions-sidan
+- Visas direkt under GitHub sync-status i "Översikt"-tabben
+
+**3. Datakvalitets-dashboard** (`web/pages/admin_tabs/data_quality.py` + `admin_page.py`):
+- Ny admin-flik "Datakvalitet" (index 6, efter "Universe Health")
+- Visar: faktoröversikt (täckning %, kolumner som saknas), kolumntäckning per faktor, drilldown på tickers utan data, `data_quality`-score-histogram
+- Läser senaste `scored_universe_*.parquet` direkt
+
+**4. Kalender-påminnelser** (`core/alerts.py` + `core/daily_pipeline.py`):
+- `send_calendar_reminder(earnings_events, macro_events, days_ahead)` i `core/alerts.py`
+- Bygger HTML-mail med rapportdatum (per innehav/bevakad) + makrohändelser
+- Kallas från `run_pipeline("morning")` på måndagar och 1:a varje månad (närmaste 14 dagar)
+- Kalender-sektion läggs även in i morgonrapporten (inline, 7 dagar)
+
+### 2026-06-01 — Fix: StreamlitInvalidHeightError i clickable_stock_table (Streamlit Cloud 1.44+)
+
+Rotorsak: Streamlit Cloud 1.44+ kräver explicit positiv integer-höjd för interaktiva dataframes
+(`on_select="rerun"`). Tidigare try/except-guard fångade primärfelet men fallback-blocket använde
+fortfarande `on_select="rerun"` + `height=None` → samma krasch, ej fångad.
+
+- ✅ `web/ui/components.py:clickable_stock_table()` — `safe_height` beräknas nu alltid som konkret
+  integer `max(400, rows*35+38)` istället för `None`. Fallback-blocket använder inte längre
+  `on_select` → static tabell, kan aldrig krascha på höjdvalidering.
+- ✅ `web/pages/portfolio.py:1486` — fondtabellen (`funds_detail`) omsluten av try/except som
+  defensiv guard mot framtida Streamlit-versioner.
 
 ### 2026-06-01 — SYSTEM_AI.md: kompletterad med saknade filer och korrigeringar
 

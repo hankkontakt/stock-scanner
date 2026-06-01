@@ -61,6 +61,7 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
 
     rows = []
     failed = []
+    failed_detail: dict = {}  # ticker → {status, pass} for persistent error log
     rate_limited = []  # Tickers that got 429 - will retry in pass 2
     delisted = []      # Tickers that got 404 - will be auto-blacklisted
     completed = 0
@@ -88,6 +89,7 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
                 delisted.append(ticker)
             else:
                 failed.append(ticker)
+                failed_detail[ticker] = {"status": status, "pass": 1}
 
     # ── Pass 2: retry rate-limited tickers med 1 worker + fördröjning ──────────
     if rate_limited:
@@ -122,6 +124,7 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
                     delisted.append(ticker)
                 else:
                     still_failed.append(ticker)
+                    failed_detail[ticker] = {"status": status, "pass": 2}
 
         if verbose and still_failed:
             print(f"  ⚠ Pass 2: {len(still_failed)} tickers fortfarande misslyckade: "
@@ -171,6 +174,36 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
             if n > 15:
                 print(f"  💡 Tips: Kör filters.clear_blacklist() om välkända aktier är med i listan")
         print(f"  ✓ {len(df)}/{total} aktier hämtade")
+
+    # ── Spara detaljerat fellog till data/fetch_errors.json ───────────────
+    try:
+        from datetime import datetime as _dt
+        _errors_path = _bl_path.parent / "fetch_errors.json"
+        _error_entry = {
+            "timestamp": _dt.utcnow().isoformat(timespec="seconds") + "Z",
+            "total": total,
+            "n_ok": len(df),
+            "n_failed": len(failed),
+            "n_delisted": len(delisted),
+            "n_rate_limited": len(rate_limited) - len([t for t in rate_limited if t not in failed_detail]),
+            "failed_tickers": [
+                {"ticker": t, **v} for t, v in failed_detail.items()
+            ],
+            "delisted_tickers": delisted,
+        }
+        # Behåll senaste 10 körningar
+        history: list = []
+        if _errors_path.exists():
+            try:
+                history = json.loads(_errors_path.read_text(encoding="utf-8"))
+            except Exception:
+                history = []
+        history.append(_error_entry)
+        history = history[-10:]
+        _errors_path.write_text(json.dumps(history, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as _e:
+        if verbose:
+            print(f"  ⚠ Kunde inte skriva fetch_errors.json: {_e}")
 
     return df
 
