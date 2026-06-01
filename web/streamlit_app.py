@@ -200,9 +200,11 @@ st.markdown("""
 # Läggs ovanpå blocket ovan; ersätter det helt vid den kommande nav-omskrivningen.
 try:
     from web.ui.css import inject_global_css
+    from web.ui.icons import ic
     inject_global_css()
 except Exception:
-    pass
+    def ic(_k):  # fallback om web.ui saknas
+        return ""
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -289,50 +291,49 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             st.query_params["p"] = qp_key
             st.rerun()
 
-        # Översikt & Guide – alltid synliga
-        if st.button("Översikt", key="nav_overview", use_container_width=True):
-            _navigate_to("📊 Översikt")
-        if st.button("Guide & Hjälp", key="nav_guide", use_container_width=True):
-            _navigate_to("📚 Guide & Hjälp")
+        def _nav_button(nav_key: str, display: str, icon_key: str):
+            """Nav-knapp med Material-ikon (ersätter emoji)."""
+            if st.button(display, key=f"sb_{nav_key}", use_container_width=True,
+                         icon=ic(icon_key) or None):
+                _navigate_to(nav_key)
 
-        # MARKNAD / PORTFÖLJ / ANALYS – enkla knappar (inga radio/on_change) för att
-        # undvika att st.rerun() från andra widgets ändrar nav_page.
-        _MARKNAD_PAGES = [
-            ("🔍 Veckoscanner",    "Veckoscanner"),
-            ("🏦 Småbolag",        "Småbolag"),
-            ("🔍 Aktie-sök",       "Aktie-sök"),
-            ("⭐ Bevakningar",     "Bevakningar"),
-            ("🌍 Globala marknader","Globala marknader"),
-            ("🏭 Sektorrotation",  "Sektorrotation"),
-            ("📈 Backtesting",     "Backtesting"),
+        # Översikt – alltid synlig överst
+        _nav_button("📊 Översikt", "Översikt", "home")
+
+        # Sektioner enligt informationsarkitekturen (routing-nycklar oförändrade).
+        # (nav_key, display, icon_key)
+        _SECTIONS = [
+            ("MARKNAD", True, [
+                ("🔍 Veckoscanner",     "Veckoscanner",      "scanner"),
+                ("🏦 Småbolag",         "Småbolag",          "smallcap"),
+                ("🌍 Globala marknader","Globala marknader", "globe"),
+                ("🏭 Sektorrotation",   "Sektorrotation",    "sector"),
+            ]),
+            ("AKTIE", True, [
+                ("🔍 Aktie-sök",        "Aktiesök",          "search"),
+                ("📈 Teknisk analys",   "Teknisk analys",    "technical"),
+                ("⭐ Bevakningar",      "Bevakningar",       "watch"),
+            ]),
+            ("PORTFÖLJ", True, [
+                ("💼 Portfölj",         "Portfölj",          "portfolio"),
+                ("📄 Paper Trading",    "Paper Trading",     "paper"),
+                ("🤖 AI Paper Trading", "AI Paper Trading",  "simulation"),
+                ("📈 Backtesting",      "Backtesting",       "backtest"),
+            ]),
+            ("AI & LARM", False, [
+                ("🚨 Larm & Notiser",   "Larm & Notiser",    "alerts"),
+                ("🤖 AI",               "AI-analys",         "ai"),
+                ("📓 AI Journal",       "AI Journal",        "journal"),
+            ]),
+            ("KONTO", False, [
+                ("⚙️ Inställningar",    "Inställningar",      "settings"),
+                ("📚 Guide & Hjälp",    "Guide & Hjälp",     "guide"),
+            ]),
         ]
-        _PORTFÖLJ_PAGES = [
-            ("💼 Portfölj",        "Portfölj"),
-            ("📄 Paper Trading",   "Paper Trading"),
-            ("🤖 AI Paper Trading","AI Paper Trading"),
-            ("🚨 Larm & Notiser",  "Larm & Notiser"),
-            ("⚙️ Inställningar",   "Inställningar"),
-        ]
-        _ANALYS_PAGES = [
-            ("📈 Teknisk analys",  "Teknisk analys"),
-            ("🤖 AI",              "AI-analys"),
-            ("📓 AI Journal",      "AI Journal"),
-        ]
-
-        with st.expander("MARKNAD", expanded=True):
-            for nav_key, display in _MARKNAD_PAGES:
-                if st.button(display, key=f"sb_{nav_key}", use_container_width=True):
-                    _navigate_to(nav_key)
-
-        with st.expander("PORTFÖLJ", expanded=True):
-            for nav_key, display in _PORTFÖLJ_PAGES:
-                if st.button(display, key=f"sb_{nav_key}", use_container_width=True):
-                    _navigate_to(nav_key)
-
-        with st.expander("ANALYS", expanded=False):
-            for nav_key, display in _ANALYS_PAGES:
-                if st.button(display, key=f"sb_{nav_key}", use_container_width=True):
-                    _navigate_to(nav_key)
+        for sec_name, sec_open, pages in _SECTIONS:
+            with st.expander(sec_name, expanded=sec_open):
+                for nav_key, display, icon_key in pages:
+                    _nav_button(nav_key, display, icon_key)
 
         # Admin – bara synlig för admin-användaren
         if st.session_state.get("username", "admin") == "admin":
@@ -439,12 +440,17 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                     else:
                         filters["t_countries"] = []
 
-        # ── AI-inställningar (alltid) ────────────────────────────────────────
-        with st.expander("🤖 AI-inställningar", expanded=False):
-            ai_provider = st.selectbox("Tjänst", ["auto","deepseek","gemini"], format_func=lambda k: {"auto": f"Auto ({config.AI_PROVIDER})","deepseek":"DeepSeek","gemini":"Gemini"}.get(k,k), key="sidebar_ai_provider")
+        # ── AI-tjänst (provider) ─────────────────────────────────────────────
+        # AI-DJUP väljs inte längre globalt här — det väljs vid varje AI-åtgärd
+        # (se web/ui/ai_action.py). Bara providern är global.
+        with st.expander("AI-tjänst", expanded=False):
+            ai_provider = st.selectbox(
+                "Tjänst", ["auto", "deepseek", "gemini"],
+                format_func=lambda k: {"auto": f"Auto ({config.AI_PROVIDER})",
+                                       "deepseek": "DeepSeek", "gemini": "Gemini"}.get(k, k),
+                key="sidebar_ai_provider",
+            )
             st.session_state["selected_provider"] = ai_provider
-            ai_depth = st.selectbox("Djup", ["Snabb","Normal","Djup","Extra djup"], index=1, key="sidebar_ai_depth")
-            st.session_state["selected_depth"] = ai_depth
 
         # ── Statusfot med exakt klockslag ────────────────────────────────────
         st.markdown("---")
