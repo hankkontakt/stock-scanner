@@ -877,3 +877,41 @@ def save_portfolio_snapshot(total_value: float, invested: float) -> None:
     snaps = snaps[-365:]
     snap_path.parent.mkdir(parents=True, exist_ok=True)
     snap_path.write_text(json.dumps(snaps, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+# ── Landfilter (anvands av weekly_scan, smallcap, technical) ──────────────────
+# Centraliserad for att undvika duplicering. Anvander suffix fran suffix_map.
+
+def apply_country_filter(df: pd.DataFrame, selected_countries: list[str]) -> pd.DataFrame:
+    """
+    Filtrera en DataFrame baserat pa valda lander (med emoji-prefix).
+    Overensstammer med filter-formatet fran sidebar: "🇸🇪 Sverige" etc.
+
+    Args:
+        df: DataFrame med ticker-kolumn.
+        selected_countries: Lista av land-namn med emoji (tom lista = visa alla).
+
+    Returns:
+        Filtrerad DataFrame.
+    """
+    if df.empty or "ticker" not in df.columns or not selected_countries:
+        return df
+
+    from core.suffix_map import COUNTRY_SUFFIXES
+    all_non_us = set(COUNTRY_SUFFIXES.values())
+    us_selected = any(c.startswith("🇺🇸") for c in selected_countries)
+
+    selected_suffixes = set()
+    for c in selected_countries:
+        if c in COUNTRY_SUFFIXES:
+            selected_suffixes.add(COUNTRY_SUFFIXES[c])
+
+    def _match(ticker: str) -> bool:
+        t = str(ticker)
+        if any(t.endswith(s) for s in selected_suffixes):
+            return True
+        if us_selected and not any(t.endswith(s) for s in all_non_us):
+            return True
+        return False
+
+    return df[df["ticker"].apply(_match)].reset_index(drop=True)
