@@ -115,11 +115,6 @@ def _safe_val(val, fmt: str = "num", default: str = "—"):
     return str(val)
 
 
-def _get_depth() -> str:
-    """Hämta valt AI-djup från sidebar/session state."""
-    return st.session_state.get("selected_depth", "Normal")
-
-
 def _provider_selector(key: str = "provider_default") -> str:
     """Visa en provider-väljare i UI och returnera vald provider."""
     options = {
@@ -874,6 +869,10 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame, company_na
 
     force_refresh = st.checkbox("Hoppa över cache", key=f"ai_refresh_{ticker}")
 
+    # AI-djup väljs HÄR vid användningsstället (ej längre globalt i sidofältet)
+    from web.ui.ai_action import depth_selector
+    panel_depth = depth_selector(f"detail_{ticker}", default="Normal")
+
     # Analysera-knapp
     analyze_col1, analyze_col2 = st.columns([3, 1])
     with analyze_col1:
@@ -942,7 +941,7 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame, company_na
                 if news_lines:
                     full_context += "\n\nFärska nyheter:\n" + "\n".join(news_lines)
 
-                depth = _get_depth()
+                depth = panel_depth
 
                 # Bestäm fråga baserat på preset
                 if is_custom:
@@ -994,7 +993,7 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame, company_na
                         _logger = __import__("logging").getLogger(__name__)
                         _logger.warning("Kunde inte hämta rånyheter för %s", ticker)
 
-                depth = _get_depth()
+                depth = panel_depth
                 result = ai_analysis.analyze_news(
                     ticker, news_items=news_items,
                     force_refresh=force_refresh, provider=provider,
