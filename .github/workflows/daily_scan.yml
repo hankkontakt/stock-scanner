@@ -2,16 +2,17 @@ name: 📊 MarketScan Pipeline (Daily)
 
 on:
   schedule:
-    # Morgon 09:00 CET = 07:00 UTC (vinter) / 08:00 UTC (sommar)
-    - cron: "0 7 * * 1-5"
-    # Kväll 17:30 CET = 16:30 UTC (vinter) / 15:30 UTC (sommar)
+    # Morgon: cron 0 6 = 08:00 sommar (CEST) / 07:00 vinter (CET)
+    - cron: "0 6 * * 1-5"
+    # Kväll: cron 30 15 = 17:30 sommar / 16:30 vinter
     - cron: "30 15 * * 1-5"
-    # Veckoscan lördag 10:00 CET
-    - cron: "0 9 * * 6"
-    # Småbolag måndag 09:15 CET
-    - cron: "15 8 * * 1"
-    - cron: "10 12 * * 1-5"  # Portfolio price refresh 14:10 CET
-    # Refresh missing data 08:00 + 15:00 UTC (10:00 + 17:00 CET) vardagar
+    # Veckoscan lördag: cron 0 8 = 10:00 sommar / 09:00 vinter
+    - cron: "0 8 * * 6"
+    # Småbolag måndag: cron 15 7 = 09:15 sommar / 08:15 vinter
+    - cron: "15 7 * * 1"
+    # Portfolio price refresh: cron 10 11 = 13:10 sommar / 12:10 vinter
+    - cron: "10 11 * * 1-5"
+    # Refresh missing data: 10:00 + 17:00 sommar (CEST) / 09:00 + 16:00 vinter (CET)
     - cron: "0 8,15 * * 1-5"
 
   workflow_dispatch:
