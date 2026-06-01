@@ -146,8 +146,12 @@ def data_table(df: pd.DataFrame, *, column_help: dict | None = None,
         if h:
             col_cfg[col] = st.column_config.Column(help=h)
     safe_height = None if height is None else max(height, 200)
-    st.dataframe(df, use_container_width=True, hide_index=hide_index,
-                 height=safe_height, column_config=col_cfg or None)
+    try:
+        st.dataframe(df, use_container_width=True, hide_index=hide_index,
+                     height=safe_height, column_config=col_cfg or None)
+    except Exception:
+        st.dataframe(df, use_container_width=True, hide_index=hide_index,
+                     height=None, column_config=col_cfg or None)
 
 
 # ── Klickbar aktietabell (öppnar detaljvy vid klick) ─────────────────────────
@@ -190,11 +194,18 @@ def clickable_stock_table(df: pd.DataFrame, *, ticker_col: str = "ticker",
         col_cfg.update(column_config)
 
     safe_height = None if height is None else max(height, 200)
-    event = st.dataframe(
-        df, use_container_width=True, hide_index=True, height=safe_height,
-        column_config=col_cfg or None,
-        on_select="rerun", selection_mode="single-row", key=key,
-    )
+    try:
+        event = st.dataframe(
+            df, use_container_width=True, hide_index=True, height=safe_height,
+            column_config=col_cfg or None,
+            on_select="rerun", selection_mode="single-row", key=key,
+        )
+    except Exception:
+        event = st.dataframe(
+            df, use_container_width=True, hide_index=True, height=None,
+            column_config=col_cfg or None,
+            on_select="rerun", selection_mode="single-row", key=key,
+        )
 
     if event and getattr(event, "selection", None) and event.selection.get("rows"):
         idx = event.selection["rows"][0]
