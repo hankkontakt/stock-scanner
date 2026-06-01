@@ -135,6 +135,10 @@ def load_portfolio(data_dir: Path | None = None) -> pd.DataFrame:
             holdings["buy_date"] = ""
         else:
             holdings["buy_date"] = holdings["buy_date"].fillna("")
+        # predicted_return_at_buy: ML-modellens prediktion vid köptillfället
+        # Används för att jämföra "vad ML trodde" vs faktisk avkastning
+        if "predicted_return_at_buy" not in holdings.columns:
+            holdings["predicted_return_at_buy"] = None
         return holdings
     except Exception:
         return pd.DataFrame(columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date"])

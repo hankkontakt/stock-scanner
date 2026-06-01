@@ -289,10 +289,11 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
                     typ: str = "",
                     buy_date: str = "",
                     market_value: float = None,
-                    isin: str = "") -> pd.DataFrame:
+                    isin: str = "",
+                    predicted_return_at_buy: float = None) -> pd.DataFrame:
     """Lägg till eller uppdatera ett innehav i portföljen."""
     h = holdings.copy() if not holdings.empty else pd.DataFrame(
-        columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date", "market_value", "isin"]
+        columns=["ticker", "shares", "cost_basis", "konto", "typ", "buy_date", "market_value", "isin", "predicted_return_at_buy"]
     )
     for col, default in [("konto", "Huvud"), ("typ", ""), ("buy_date", ""),
                          ("market_value", None), ("isin", "")]:
@@ -312,11 +313,30 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
             h.loc[mask, "buy_date"] = buy_date
         if isin:
             h.loc[mask, "isin"] = isin
+        # Behåll predicted_return_at_buy om det redan finns, skriv bara över vid explicit värde
+        if predicted_return_at_buy is not None:
+            h.loc[mask, "predicted_return_at_buy"] = predicted_return_at_buy
     else:
+        # Försök slå upp predicted_return fran senaste scandata om det inte skickats med
+        pred = predicted_return_at_buy
+        if pred is None:
+            try:
+                from web.utils import REPORT_DIR as _RDIR, load_scan_reports
+                _reports = load_scan_reports(limit=1)
+                if _reports:
+                    _latest = list(_reports.values())[0]
+                    if ticker in _latest.index or ticker in _latest.get("ticker", pd.Series()).values:
+                        _row = _latest.loc[ticker] if ticker in _latest.index else _latest[_latest["ticker"] == ticker].iloc[0]
+                        pred = _row.get("predicted_return")
+                    if pred is not None:
+                        pred = float(pred)
+            except Exception:
+                pass
         h = pd.concat([h, pd.DataFrame([{
             "ticker": ticker, "shares": shares,
             "cost_basis": cost_basis, "konto": konto, "typ": typ,
             "buy_date": buy_date, "market_value": market_value, "isin": isin,
+            "predicted_return_at_buy": pred,
         }])], ignore_index=True)
     # Auto-lägg till i scan-universum om det är en ny ticker
     if is_new:
@@ -427,6 +447,7 @@ def _build_rows(holdings_view: pd.DataFrame, score_data: dict) -> list:
             "Score":     sc.get("score_total") if not is_fund_acc else None,
             "Pred 30d":  sc.get("predicted_return") if not is_fund_acc else None,
             "ML rank":   sc.get("ml_rank") if not is_fund_acc else None,
+            "Pred@buy":  h.get("predicted_return_at_buy") if not is_fund_acc else None,
             "Entry":     sc.get("entry_signal", "--") if not is_fund_acc else "Fond",
             "Trend":     sc.get("trend_signal", "--") if not is_fund_acc else "--",
             "Piotroski": sc.get("piotroski_f") if not is_fund_acc else None,
@@ -1444,8 +1465,9 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
                 "Inköpspris": f"{float(r['Inköpspris']):.2f}" if r.get("Inköpspris") else "--",
                 "Värde":      f"{r['_market_value']:,.0f} kr" if r.get("_market_value") else "--",
                 "P&L %":      f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), float) else "--",
-                "Pred 30d":   (lambda pr: f"{pr*100:+.1f}%" if isinstance(pr, (int, float)) else "--")(r.get("Pred 30d")),
-                "ML rank":    (lambda mr: f"{mr:.0f}" if isinstance(mr, (int, float)) else "--")(r.get("ML rank")),
+                "Pred@buy":   (lambda p: f"{p*100:+.1f}%" if isinstance(p, (int, float)) else "--")(r.get("Pred@buy")),
+                "Pred 30d":   (lambda p: f"{p*100:+.1f}%" if isinstance(p, (int, float)) else "--")(r.get("Pred 30d")),
+                "ML rank":    (lambda m: f"{m:.0f}" if isinstance(m, (int, float)) else "--")(r.get("ML rank")),
                 "Konto":      r.get("Konto", ""),
             } for r in stock_rows_ov]
             clickable_stock_table(pd.DataFrame(stocks_detail), ticker_col="Ticker", context_df=df,
@@ -1534,10 +1556,13 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
         pred_str = f"{pred*100:+.1f}%" if isinstance(pred, (int, float)) else "--"
         mlr = r.get("ML rank")
         mlr_str = f"{mlr:.0f}" if isinstance(mlr, (int, float)) else "--"
+        pab = r.get("Pred@buy")
+        pab_str = f"{pab*100:+.1f}%" if isinstance(pab, (int, float)) else "--"
         entry = {
             "Ticker":  r.get("Ticker", ""),
             "Bolag":   (r.get("Bolag") or "")[:25],
             "P&L %":   pnl_str,
+            "Pred@buy": pab_str,
             "Pred 30d": pred_str,
             "ML rank": mlr_str,
             "Värde":   f"{r.get('_market_value', 0):,.0f} kr" if r.get("_market_value") else "--",
