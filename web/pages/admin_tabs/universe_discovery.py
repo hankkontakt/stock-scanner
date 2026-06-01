@@ -170,14 +170,46 @@ def render():
         if tier_filter != "Alla":
             filtered = [c for c in filtered if c.get("quality_tier", "MEDIUM") == tier_filter]
 
-        # Sortera: HIGH tier + högst confidence först
+        # Sortera: HIGH tier + hogst confidence forst
         tier_order = {"HIGH": 0, "MEDIUM": 1, "SPECULATIVE": 2}
         filtered = sorted(
             filtered,
             key=lambda x: (tier_order.get(x.get("quality_tier", "MEDIUM"), 1), -x.get("confidence", 0)),
         )
 
-        for c in filtered[:50]:
+        # ── Bulk actions ───────────────────────────────────────────────────
+        st.markdown("#### Bulk-åtgärder")
+        col_ba1, col_ba2, col_ba3 = st.columns([1, 1, 4])
+        with col_ba1:
+            select_all = st.checkbox("Välj alla", key="disc_select_all", value=False)
+        with col_ba2:
+            if st.button("✅ Godkänn valda", key="btn_bulk_approve", type="primary"):
+                approved_ticks = []
+                for c in filtered[:50]:
+                    if st.session_state.get(f"disc_sel_{c['ticker']}", False):
+                        if approve_candidate(c["ticker"]):
+                            approved_ticks.append(c["ticker"])
+                if approved_ticks:
+                    st.success(f"{len(approved_ticks)} tillagda: {', '.join(approved_ticks)}")
+                    st.rerun()
+                else:
+                    st.warning("Inga valda kandidater.")
+        with col_ba3:
+            if st.button("❌ Avvisa valda", key="btn_bulk_reject"):
+                rejected_ticks = []
+                for c in filtered[:50]:
+                    if st.session_state.get(f"disc_sel_{c['ticker']}", False):
+                        if reject_candidate(c["ticker"]):
+                            rejected_ticks.append(c["ticker"])
+                if rejected_ticks:
+                    st.info(f"{len(rejected_ticks)} avvisade: {', '.join(rejected_ticks)}")
+                    st.rerun()
+                else:
+                    st.warning("Inga valda kandidater.")
+
+        # ── Kandidatlista med checkboxar ────────────────────────────────────
+        shown = filtered[:50]
+        for c in shown:
             ticker   = c["ticker"]
             source   = c.get("source", "?")
             reason   = c.get("reason", "")
@@ -207,7 +239,10 @@ def render():
             )
 
             with st.container(border=True):
-                col_l, col_b1, col_b2 = st.columns([6, 1, 1])
+                col_cb, col_l = st.columns([1, 11])
+                with col_cb:
+                    st.checkbox("", key=f"disc_sel_{ticker}",
+                                value=select_all)
                 with col_l:
                     st.markdown(label, unsafe_allow_html=True)
                     detail = []
@@ -223,18 +258,6 @@ def render():
                     if fraud:
                         for f_flag in fraud[:2]:
                             st.caption(f"⚠ {f_flag}")
-                with col_b1:
-                    if st.button("✅ Lägg till", key=f"approve_{ticker}"):
-                        if approve_candidate(ticker):
-                            st.success(f"{ticker} tillagd!")
-                            st.rerun()
-                        else:
-                            st.error(f"Kunde inte lägga till {ticker}")
-                with col_b2:
-                    if st.button("❌ Avvisa", key=f"reject_{ticker}"):
-                        if reject_candidate(ticker):
-                            st.info(f"{ticker} avvisad")
-                            st.rerun()
 
         if len(filtered) > 50:
             st.caption(f"Visar 50 av {len(filtered)} — filtrera för att se fler")
