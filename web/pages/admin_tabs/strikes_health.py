@@ -1,9 +1,10 @@
-"""admin_tabs/strikes_health.py — Strike-lista och ticker-halsa med bulk-borttagning.
+"""admin_tabs/strikes_health.py — Strike-lista, fetch-fel och ticker-halsa med bulk-borttagning.
 
 Visar:
   - Strike-lista (ticker + antal strikes + datum)
   - Blacklist (redan borttagna)
-  - Mjlighet att ta bort tickers fran universe eller blacklist med bulk-selection
+  - Ta bort fran universe med bulk-selection
+  - Fetch-fel fran senaste pipeline-korningen (rate-limit vs genuint fel)
 """
 import json
 from pathlib import Path
@@ -71,17 +72,19 @@ def render():
     st.subheader("Strikes & Ticker-halsa")
     st.caption(
         "Tickers som misslyckats att hamta data flera ganger "
-        "(3 strikes = auto-blacklist). Har kan du aven ta bort tickers manuellt."
+        "(3 strikes = auto-blacklist). Har kan du aven se fetch-fel "
+        "och skilja pa rate-limited (yfinance-problem) vs genuina fel."
     )
 
     strikes = _load_json("strike_list.json")
     blacklist = _load_json("blacklist.json")
     universe_data = load_universe_json()
 
-    tab_strikes, tab_blacklist, tab_universe = st.tabs([
+    tab_strikes, tab_blacklist, tab_universe, tab_fetch = st.tabs([
         "Strikes (pagar)",
         "Blacklist (borttagna)",
         "Ta bort fran universe",
+        "Fetch-fel (senaste korning)",
     ])
 
     # ── STRIKES ──────────────────────────────────────────────────────────────
@@ -134,7 +137,7 @@ def render():
                     for t in blacklisted_now:
                         remove_ticker_from_universe_json(t, universe_data)
                     save_universe_json(universe_data)
-                st.success(f"Rensade strikes for {len(selected_for_strike)} tickers. Blacklistade {len(blacklisted_now)}.")
+                st.success(f"Rensade strikes for {len(selected_for_strike)} tickers.")
                 st.rerun()
 
             if blacklist_from_strikes and selected_for_strike:
@@ -147,7 +150,7 @@ def render():
                 for t in selected_for_strike:
                     remove_ticker_from_universe_json(t, universe_data)
                 save_universe_json(universe_data)
-                st.success(f"Blacklistade {len(selected_for_strike)} tickers och tog bort ur universe.")
+                st.success(f"Blacklistade {len(selected_for_strike)} tickers.")
                 st.rerun()
 
     # ── BLACKLIST ─────────────────────────────────────────────────────────────
@@ -246,7 +249,7 @@ def render():
 
         st.markdown("---")
         st.markdown("#### Blacklista ticker manuellt")
-        manual_ticker = st.text_input("Ticker att blacklista:", key="manual_blacklist_ticker").upper().strip()
+        manual_ticker = st.text_input("Ticker att blacklista:", key="manual_blacklist_ticker", value="").upper().strip()
         manual_reason = st.text_input("Anledning (valfritt):", key="manual_blacklist_reason")
         if st.button("Blacklista", key="btn_manual_blacklist") and manual_ticker:
             bl = _load_json("blacklist.json")
@@ -259,3 +262,130 @@ def render():
                 st.rerun()
             else:
                 st.warning(f"{manual_ticker} finns redan i blacklist.")
+
+    # ── FETCH-FEL ──────────────────────────────────────────────────────────
+    with tab_fetch:
+        st.caption(
+            "Visar detaljerade felkoder fran den senaste pipeline-korningen. "
+            "Gor det mojligt att se om felet beror pa yfinance (rate-limit/timeout) "
+            "eller pa att tickern ar delisted/ogiltig."
+        )
+        _fe_path = DATA_DIR / "fetch_errors.json"
+        if not _fe_path.exists():
+            st.info("Ingen fetch_errors.json finns annu - kor en pipeline forst.")
+        else:
+            try:
+                fe_data = json.loads(_fe_path.read_text(encoding="utf-8"))
+                if not fe_data:
+                    st.info("Tom fetch-logg.")
+                else:
+                    latest = fe_data[-1]
+                    st.metric("Totalt tickers", latest.get("total", "?"))
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("OK", latest.get("n_ok", "?"))
+                    c2.metric("Misslyckade", latest.get("n_failed", "?"))
+                    c3.metric("Delisted", latest.get("n_delisted", "?"))
+                    c4.metric("Rate-limited", latest.get("n_rate_limited", "?"))
+
+                    # Alla failed tickers med status
+                    failed_tickers = latest.get("failed_tickers", [])
+                    rate_limited = latest.get("rate_limited_tickers", [])
+                    delisted = latest.get("delisted_tickers", [])
+
+                    if failed_tickers or rate_limited or delisted:
+                        st.markdown("#### Alla tickers med fel")
+                        all_errs = []
+
+                        # Genuin fail
+                        for fd in failed_tickers:
+                            t = fd.get("ticker", "?")
+                            sts = fd.get("status", "?")
+                            p = fd.get("pass", "?")
+                            is_rate = "yes" if t in rate_limited else "no"
+                            rec = "Behall (tillfalligt yahoo-fel)" if is_rate == "yes" or sts in ("RATE_LIMITED", "TIMEOUT") else "Overvag blacklist"
+                            all_errs.append({
+                                "Ticker": t,
+                                "Status": sts,
+                                "Pass": p,
+                                "Rate-limited?": is_rate,
+                                "Rekommendation": rec,
+                            })
+
+                        # Rate-limited som inte finns i failed_detail
+                        for t in rate_limited:
+                            if t not in [f.get("ticker") for f in failed_tickers]:
+                                all_errs.append({
+                                    "Ticker": t,
+                                    "Status": "RATE_LIMITED",
+                                    "Pass": "2",
+                                    "Rate-limited?": "yes",
+                                    "Rekommendation": "Behall (tillfalligt yahoo-fel)",
+                                })
+
+                        # Delisted
+                        for t in delisted:
+                            if t not in [f.get("ticker") for f in failed_tickers]:
+                                all_errs.append({
+                                    "Ticker": t,
+                                    "Status": "DELISTED",
+                                    "Pass": "1",
+                                    "Rate-limited?": "no",
+                                    "Rekommendation": "Auto-blacklistad (delisted)",
+                                })
+
+                        if all_errs:
+                            st.dataframe(
+                                pd.DataFrame(all_errs).sort_values("Status"),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+
+                            st.markdown("#### Bulk-atgarder baserat pa fetch-fel")
+                            col_f1, col_f2 = st.columns(2)
+                            with col_f1:
+                                suggest_blacklist = [
+                                    r["Ticker"] for r in all_errs
+                                    if r.get("Rate-limited?") != "yes" and r.get("Status") not in ("DELISTED", "")
+                                ]
+                                if suggest_blacklist:
+                                    if st.button(f"Blacklista {len(suggest_blacklist)} genuint misslyckade", key="btn_bl_fetch"):
+                                        bl = _load_json("blacklist.json")
+                                        ud = load_universe_json()
+                                        for t in suggest_blacklist:
+                                            if t not in bl:
+                                                bl[t] = {"reason": "Genuint fetch-fel (ej rate-limit)", "date": "?"}
+                                            remove_ticker_from_universe_json(t, ud)
+                                        _save_json("blacklist.json", bl)
+                                        save_universe_json(ud)
+                                        st.success(f"Blacklistade {len(suggest_blacklist)} tickers.")
+                                        st.rerun()
+                            with col_f2:
+                                suggest_restore = [
+                                    r["Ticker"] for r in all_errs
+                                    if r.get("Rate-limited?") == "yes"
+                                ]
+                                if suggest_restore:
+                                    if st.button(f"Rensa strikes for {len(suggest_restore)} rate-limited", key="btn_restore_fetch"):
+                                        strikes_data = _load_json("strike_list.json")
+                                        for t in suggest_restore:
+                                            strikes_data.pop(t, None)
+                                        _save_json("strike_list.json", strikes_data)
+                                        st.success(f"Rensade strikes for {len(suggest_restore)} tickers.")
+                                        st.rerun()
+
+                    if len(fe_data) > 1:
+                        st.markdown("#### Historik (senaste 10 korningar)")
+                        hist_rows = []
+                        for entry in fe_data[-10:]:
+                            ts = entry.get("timestamp", "?")[:16]
+                            hist_rows.append({
+                                "Tid": ts,
+                                "Totalt": entry.get("total", 0),
+                                "OK": entry.get("n_ok", 0),
+                                "Misslyckade": entry.get("n_failed", 0),
+                                "Rate-limited": entry.get("n_rate_limited", 0),
+                                "Delisted": entry.get("n_delisted", 0),
+                            })
+                        st.dataframe(pd.DataFrame(hist_rows), use_container_width=True, hide_index=True)
+            except Exception as e:
+                st.error(f"Kunde inte lasa fetch_errors.json: {e}")
