@@ -983,7 +983,24 @@ All ideas discovered during system analysis. Add to this section as you find mor
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
-### 2026-06-01 — Batch: 8 HIGH-prio-fixar, felisolering, suffix-map, rotation-exec, canary-tester
+### 2026-06-01 — Småbolag blacklist + ny admin-flik Strikes & Blacklist + cron-tider fixade
+
+**SMALLCAP_TICKERS filtrerar mot blacklist:**
+- `core/config.py:77-81` — SMALLCAP_TICKERS exkluderar nu tickers som finns i blacklist (delistade).
+
+**Ny admin-flik "Strikes & Blacklist" (`web/pages/admin_tabs/strikes_health.py`):**
+- Flik 1 "Strikes (pagar)": visar tickers med strike-count, checkbox for bulk-val, "Rensa strikes for valda" och "Blacklista valda (ta bort ur universe)".
+- Flik 2 "Blacklist (borttagna)": visar alla blacklistade, checkbox for bulk-val, "Ta bort ur blacklist for valda (aterstall)".
+- Flik 3 "Ta bort fran universe": sökfalt, checkbox for bulk-val, bulk-remove + manuell blacklistning.
+- Integrerad i `web/pages/admin_page.py` som tab index 7, övriga tabs flyttas ett steg.
+
+**Alla cron-tider korrigerade (sommartid CEST = UTC+2):**
+-`daily_scan.yml`: Morgon 07:10 UTC = 09:10 CEST (5-10 min efter börsöppning)
+-`daily_scan.yml`: Kväll 17:30 CEST = 15:30 UTC
+-`daily_scan.yml`: Veckoscan lördag 09:00 CEST = 07:00 UTC
+-`smallcap_scan.yml`: Tisdag 08:30 CEST = 06:30 UTC (separat extra pass)
+-`news_alerts.yml`: 09:00-22:00 CEST = 07:00-20:00 UTC var 30:e min
+-`universe_update.yml`: Söndag 13:00 CEST = 11:00 UTC
 
 **P1-P8 fixar (se commit b12f8bf):**
 - Rotation-motorn kopplad: weekly-mode anropar run_rotation(), admin-UI har rotation-preview + Kor rotation nu, ticker-health notifierar rotation vid 3 strikes
