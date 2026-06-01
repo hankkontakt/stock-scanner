@@ -299,6 +299,8 @@ def _get_score_deltas(today_df: pd.DataFrame, yesterday_df: pd.DataFrame,
         }),
         on="ticker", how="inner",
     )
+    if merged.empty:
+        return {}
     if "score_total" in merged.columns and "score_yesterday" in merged.columns:
         merged["score_delta"] = (merged["score_total"] - merged["score_yesterday"]).round(1)
     else:
@@ -937,7 +939,9 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
 
     # Scored universe
     if mode in ("morning", "evening"):
-        scored = _load_latest_scored("scored_universe_*.csv")
+        scored = _load_latest_scored("scored_universe_*.parquet")
+        if scored.empty:
+            scored = _load_latest_scored("scored_universe_*.csv")
         _ml_universe = "universe"
     elif mode == "weekly":
         # ── Full universe scan ────────────────────────────────────────────────
