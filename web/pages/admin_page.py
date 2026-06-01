@@ -62,6 +62,7 @@ def page_admin():
     from web.pages.admin_tabs.debug_tab import render as _debug
     from web.pages.admin_tabs.data_quality import render as _data_quality
     from web.pages.admin_tabs.universe_discovery import render as _universe_discovery
+    from web.pages.admin_tabs.strikes_health import render as _strikes_health
 
     tabs = st.tabs([
         "Oversikt",
@@ -71,6 +72,7 @@ def page_admin():
         "Avanza-import",
         "Universe Health",
         "Ticker-discovery",
+        "Strikes & Blacklist",
         "Datakvalitet",
         "E-post",
         "Anvandare",
@@ -96,6 +98,8 @@ def page_admin():
     with tabs[6]:
         _universe_discovery()
     with tabs[7]:
+        _strikes_health()
+    with tabs[8]:
         _data_quality()
     with tabs[8]:
         _email()
