@@ -983,6 +983,36 @@ All ideas discovered during system analysis. Add to this section as you find mor
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-01 — Batch: 8 HIGH-prio-fixar, felisolering, suffix-map, rotation-exec, canary-tester
+
+**P1-P8 fixar (se commit b12f8bf):**
+- Rotation-motorn kopplad: weekly-mode anropar run_rotation(), admin-UI har rotation-preview + Kor rotation nu, ticker-health notifierar rotation vid 3 strikes
+- AI-granskning (Layer 5) aktiverad: `run_ai_review=True` i discovery-flodet
+- Finviz soker globalt: borttaget "Country": "USA" i alla 4 screens
+- Score-trend i rotation: `detect_removal_triggers()` laser historiska snapshots for score < 22 i 3 veckor
+- Portfolio-inline-varning: `st.warning()` for innehav med score < 25
+- Sidebar-badge: "N" pa Admin-knappen nar HIGH-tier pending-kandidater finns
+- MSCI World som discovery-kalla: Wikipedia-tabell i `_source_index_additions()`
+- Finviz Insider Buying + Analyst Upgrade: 2 nya screens i `_source_finviz()`
+
+**Fortsatta forbattringar (commit fe2a770):**
+- Sid-fel-isolering: `_safe_render()` wrapper i `web/streamlit_app.py` — varje sida renderas i egen try/except. En kraschad sida tar inte langre ner hela appen
+- Rotation via env: `ROTATION_DRY_RUN` env-var styr om rotation exekveras (default true for safety). `daily_scan.yml` laser denna
+- Central `core/suffix_map.py`: single-source-of-truth for ticker-suffix-till-kategori/land. Ersatter 5 tidigare oberoende kopior i `country_flags.py`, `universe_manager.py`, `universe_discovery.py`, `weekly_scan.py`, `smallcap.py`, `technical.py`
+- Smallcap-removal: `remove_ticker_from_universe()` hanterar nu `val["markets"]`-struktur for smabolag
+- AI-cache prompt-versionering: `_PROMPT_VERSION = "v1"` i `_make_cache_key()` i `ai_analysis.py`. Okas nar system prompts andras
+- API-nyckelvalidering: `_validate_api_keys()` visar `st.warning()`-banners i Streamlit for saknade nycklar vid start
+- config.py städning: borttagen `FLASK_PORT = 5000` + dubblett `MIN_DATA_QUALITY`
+
+**HIGH-severity buggfixar (resterande fran exploration):**
+- `_get_score_deltas()`: guard for tom merge (nlargest pa tom DataFrame gav ValueError)
+- Morning/evening andrat fran `scored_universe_*.csv` till `*.parquet` (snabbare)
+- CI-tackning: `--cov=core --cov-fail-under=20 --cov-report=term-missing` i `tests.yml`
+- Canary-tester for 3 tidigare otestade moduler: `test_daily_pipeline.py` (9 tester), `test_rotation_engine.py` (5 tester), `test_universe_manager.py` (9 tester)
+- Totalt 155 tester (+21 nya), core-cover 22.1%
+
+Bulk-approve i Universe Discovery: checkboxar + "Valj alla" + "Godkann valda"/"Avvisa valda" knappar.
+
 ### 2026-06-01 — Feat: AI Layer 5 + Automatisk Rotation + Universe Explorer UI + Height-fix
 
 **StreamlitInvalidHeightError fix (kvarstående 4 filer):**
