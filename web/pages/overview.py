@@ -84,6 +84,8 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                         if frames else pd.DataFrame())
             if not combined.empty:
                 score_c = "score_total" if "score_total" in combined.columns else combined.columns[0]
+                # Exkludera rader med NaN-score (corrupted fundamental data fran daily price update)
+                combined = combined.dropna(subset=[score_c])
                 buy = combined[combined["entry_signal"] == "STARK"].sort_values(score_c, ascending=False).head(5)
                 if not buy.empty:
                     show = buy[[c for c in ["ticker", "name", score_c, "sector"] if c in buy.columns]].copy()
