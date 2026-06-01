@@ -32,7 +32,10 @@ from web.utils import (
 from web.pages.overview        import page_overview
 from web.pages.weekly_scan     import page_weekly_scan
 from web.pages.smallcap        import page_smallcap
-from web.pages.portfolio       import page_portfolio
+from web.pages.portfolio       import (
+    page_portfolio, page_portfolio_holdings, page_portfolio_analysis,
+    page_portfolio_rebalance, page_portfolio_manage,
+)
 from web.pages.technical       import page_technical
 from web.pages.ai_page         import page_ai
 from web.pages.admin           import _search_ticker_yfinance
@@ -261,6 +264,9 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             "sector-rotation":"🏭 Sektorrotation",
             "backtesting":    "📈 Backtesting",
             "portfolio":      "💼 Portfölj",
+            "portfolio-analysis":  "💼 Portföljanalys",
+            "portfolio-rebalance": "💼 Rebalansering",
+            "portfolio-manage":    "💼 Hantera innehav",
             "paper-trading":  "📄 Paper Trading",
             "ai-paper-trading":"🤖 AI Paper Trading",
             "alerts":         "🚨 Larm & Notiser",
@@ -315,7 +321,12 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                 ("⭐ Bevakningar",      "Bevakningar",       "watch"),
             ]),
             ("PORTFÖLJ", True, [
-                ("💼 Portfölj",         "Portfölj",          "portfolio"),
+                ("💼 Portfölj",          "Innehav",           "holdings"),
+                ("💼 Portföljanalys",    "Analys",            "analysis"),
+                ("💼 Rebalansering",     "Rebalansering",     "rebalance"),
+                ("💼 Hantera innehav",   "Hantera innehav",   "manage"),
+            ]),
+            ("SIMULERING", False, [
                 ("📄 Paper Trading",    "Paper Trading",     "paper"),
                 ("🤖 AI Paper Trading", "AI Paper Trading",  "simulation"),
                 ("📈 Backtesting",      "Backtesting",       "backtest"),
@@ -1046,7 +1057,16 @@ def main():
             page_global_markets()
 
         elif page == "💼 Portfölj":
-            page_portfolio(df, holdings, watchlist, sc_df=sc_df)
+            page_portfolio_holdings(df, holdings, watchlist, sc_df=sc_df)
+
+        elif page == "💼 Portföljanalys":
+            page_portfolio_analysis(df, holdings, watchlist, sc_df=sc_df)
+
+        elif page == "💼 Rebalansering":
+            page_portfolio_rebalance(df, holdings, watchlist, sc_df=sc_df)
+
+        elif page == "💼 Hantera innehav":
+            page_portfolio_manage(df, holdings, watchlist, sc_df=sc_df)
 
         elif page == "📄 Paper Trading":
             page_paper_trading()
