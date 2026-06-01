@@ -963,25 +963,54 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
 
         raw_df = fetch_universe_data(all_tickers, verbose=True)
 
-        # Auto-flagga misslyckade tickers (P1.3: strike-system integration).
-        # Tickers som fetch_universe_data inte lyckades hämta alls (404/delisted)
-        # får ett strike. 3 strikes -> auto-blacklist (skyddat av NEVER_BLACKLIST).
-        # Nästa `config._load_blacklist_set()` (nästa pipeline-start) exkluderar dem.
+        # Auto-flagga misslyckade tickers (strike-system), men bara for
+        # GENUINA fetch-fel (t.ex. 404/delisted), INTE for rate-limited (429)
+        # dar felet sitter hos yfinance, inte aktien.
+        # Vi laser fetch_errors.json for att fa ratt status per ticker.
         try:
             from core.filters import update_ticker_health
             survived = set(raw_df["ticker"].tolist()) if not raw_df.empty and "ticker" in raw_df.columns else set()
-            failed_tickers = [t for t in all_tickers if t not in survived]
-            if failed_tickers:
+            all_failed = [t for t in all_tickers if t not in survived]
+
+            # Las fetch_errors.json for att fa ratt status per ticker
+            _fe_path = DATA_DIR / "fetch_errors.json"
+            fetch_failed = list(all_failed)
+
+            if os.path.exists(_fe_path):
+                try:
+                    _fe_data = json.loads(open(_fe_path, encoding="utf-8").read())
+                    if _fe_data:
+                        latest = _fe_data[-1]
+                        rate_limited_set = set(latest.get("rate_limited_tickers", []))
+                        genuine_fails = []
+                        for t in all_failed:
+                            if t in rate_limited_set:
+                                continue
+                            # Kolla failed_detail for status
+                            status = "FAILED"
+                            for fd in latest.get("failed_tickers", []):
+                                if fd.get("ticker") == t:
+                                    status = fd.get("status", "FAILED")
+                                    break
+                            if status not in ("RATE_LIMITED", "TIMEOUT", "SKIPPED"):
+                                genuine_fails.append(t)
+                        if genuine_fails:
+                            fetch_failed = genuine_fails
+                            logger.info(f"  🔍 {len(genuine_fails)} genuina fetch-fel (exkl rate-limited)")
+                except Exception:
+                    pass
+
+            if fetch_failed:
                 _warnings, _removed = update_ticker_health(
                     attempted_tickers=all_tickers,
                     survived_tickers=list(survived),
                     df_raw=raw_df,
-                    fetch_failed=failed_tickers,
+                    fetch_failed=fetch_failed,
                 )
                 if _removed:
                     logger.info(f"  🚫 Auto-blacklistad: {[r['ticker'] for r in _removed[:5]]}")
         except Exception as _the:
-            logger.debug(f"  ℹ ticker-health update hoppades över: {_the}")
+            logger.debug(f"  ufe0f ticker-health update hoppades over: {_the}")
 
         if not raw_df.empty:
             # Detektera marknadsregim för dynamiska vikter

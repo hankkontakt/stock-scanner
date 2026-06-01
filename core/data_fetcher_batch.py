@@ -185,7 +185,10 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
             "n_ok": len(df),
             "n_failed": len(failed),
             "n_delisted": len(delisted),
-            "n_rate_limited": len(rate_limited) - len([t for t in rate_limited if t not in failed_detail]),
+            "n_rate_limited": len(
+                [t for t in rate_limited if t not in [f.get("ticker") for f in failed_detail.values()]]
+            ),
+            "rate_limited_tickers": list(set(rate_limited) - set(failed)),
             "failed_tickers": [
                 {"ticker": t, **v} for t, v in failed_detail.items()
             ],
