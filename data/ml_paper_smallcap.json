@@ -99,6 +99,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "DMYD-B.ST",
+      "name": "Diamyd Medical AB (publ)",
+      "entry_price": 1.116,
+      "predicted_return": 0.5938898921012878,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "BUSER.ST",
+      "name": "Bambuser AB (publ)",
+      "entry_price": 27.2,
+      "predicted_return": 0.2224554568529129,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "DICOT.ST",
+      "name": "Dicot Pharma AB",
+      "entry_price": 0.1946,
+      "predicted_return": 0.1655770242214203,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "IMPC.ST",
+      "name": "Impact Coatings AB (publ)",
+      "entry_price": 3.53,
+      "predicted_return": 0.15548768639564514,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "TOBII.ST",
+      "name": "Tobii AB (publ)",
+      "entry_price": 2.966,
+      "predicted_return": 0.13433314859867096,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "NIL-B.ST",
+      "name": "Nilörngruppen AB (publ)",
+      "entry_price": 73.9,
+      "predicted_return": 0.09744829684495926,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "ADVE.ST",
+      "name": "Advenica AB (publ)",
+      "entry_price": 19.9,
+      "predicted_return": 0.08091893792152405,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "CANTA.ST",
+      "name": "Cantargia AB (publ)",
+      "entry_price": 2.15,
+      "predicted_return": 0.06901626288890839,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "ELIC.ST",
+      "name": "Elicera Therapeutics AB (publ)",
+      "entry_price": 2.96,
+      "predicted_return": 0.06663098186254501,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "ALCA.ST",
+      "name": "Alcadon Group AB (publ)",
+      "entry_price": 32.2,
+      "predicted_return": 0.0666017159819603,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -106,6 +206,11 @@
       "date": "2026-05-31",
       "equity": 100000.0,
       "n_open": 10
+    },
+    {
+      "date": "2026-06-01",
+      "equity": 100000.0,
+      "n_open": 20
     }
   ]
 }

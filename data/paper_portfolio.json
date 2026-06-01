@@ -34,5 +34,23 @@
       "QCOM",
       "BHP"
     ]
+  },
+  "2026-06-01_smallcap": {
+    "capital": 100000,
+    "universe": "smallcap",
+    "n_picks": 10,
+    "benchmark_buy": 756.489990234375,
+    "tickers": [
+      "MAGI.ST",
+      "CTM.ST",
+      "MEKKO.HE",
+      "ALCA.ST",
+      "ADMCM.HE",
+      "ADTR.ST",
+      "UPSALE.ST",
+      "ENRO.ST",
+      "TAGM-B.ST",
+      "DEDI.ST"
+    ]
   }
 }
