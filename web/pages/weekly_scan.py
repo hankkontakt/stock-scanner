@@ -13,6 +13,7 @@ from web.utils import (
     conviction_meter_chart, conviction_meter_breakdown,
 )
 from web.stock_detail import render_stock_detail
+from web.ui.components import clickable_stock_table
 from core.country_flags import flag_for_ticker
 
 
@@ -395,6 +396,27 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
         if filt_df.empty:
             st.info("Inga data.")
         else:
+            with st.expander("ℹ️ Guide: Vad är fundamental analys? Klicka för förklaring", expanded=False):
+                st.markdown("""
+Fundamental analys handlar om att bedöma **bolagets faktiska ekonomiska hälsa** — inte bara hur kursen rör sig.
+Du tittar på vinster, skulder, tillväxt och lönsamhet för att avgöra om ett bolag är värt sitt pris.
+
+| Nyckeltal | Förklaring | Vad är bra? |
+|---|---|---|
+| **P/E (Price/Earnings)** | Aktiekurs delat med vinst per aktie. Visar hur "dyrt" marknaden värderar bolaget | Lågt P/E (<15) = billigare; Högt P/E (>30) = dyrt. Beror på bransch |
+| **P/B (Price/Book)** | Aktiekurs delat med bokfört värde. Visar hur mycket du betalar för bolagets tillgångar | Under 1 = handlas under bokfört värde (möjlig fynd); >3 = dyrt |
+| **ROE (Return on Equity)** | Hur mycket vinst bolaget genererar per investerad krona av aktieägarna | >15% = bra; >20% = utmärkt |
+| **ROA (Return on Assets)** | Hur effektivt bolaget använder sina tillgångar | >5% är generellt bra |
+| **Nettomarginal** | Andel av omsättningen som blir vinst efter alla kostnader | >10% = bra; Negativt = bolaget går med förlust |
+| **Bruttomarginal** | Andel av intäkter kvar efter direkta produktionskostnader | Högt är bra; beror på bransch (SaaS >60%, handel ~30%) |
+| **Omsättningstillväxt** | Hur mycket bolagets försäljning vuxit senaste år | >10% = god tillväxt; >20% = snabbväxande |
+| **D/E (Skuldsättning)** | Total skuld i förhållande till eget kapital | Under 1.0 = låg skuldsättning; >2.0 = hög risk |
+| **Current Ratio** | Om bolaget kan betala sina kortfristiga skulder | >1.5 = tryggt; <1.0 = likviditetsproblem |
+| **Piotroski F-score** | Sammanfattar 9 finansiella styrkekriterier (0–9) | 7–9 = stark; 0–2 = svag finansiell hälsa |
+
+**Klicka på en rad** för att se full analys av aktien.
+""")
+
             fund_cols = [c for c in [
                 "ticker", "name", "sector",
                 "pe_trailing", "pe_forward", "price_to_book",
@@ -419,12 +441,32 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
             for c in pct_fcols:
                 if c in fund.columns:
                     fund[c] = fund[c].apply(lambda v: pct_fmt(v))
-            st.dataframe(fund, use_container_width=True, hide_index=True, height=600)
+            clickable_stock_table(fund, ticker_col="Ticker", context_df=filt_df,
+                                  key="ws_fund_table", height=600)
 
     with tab3:
         if filt_df.empty:
             st.info("Inga data.")
         else:
+            with st.expander("ℹ️ Guide: Tekniska indikatorer – vad kollar man på? Klicka för förklaring", expanded=False):
+                st.markdown("""
+Tekniska indikatorer hjälper dig förstå **hur aktien rör sig** och om det är ett bra tillfälle att köpa/sälja.
+
+| Indikator | Förklaring | Vad är bra att leta efter? |
+|---|---|---|
+| **vs MA50** | Hur mycket aktiekursen avviker från 50-dagars medelvärde | Positivt värde = kursen är *över* snittet (styrka) |
+| **vs MA200** | Hur mycket kursen avviker från 200-dagars medelvärde | Positivt = långsiktig upptrend; Negativt = nedtrend |
+| **RSI** | Relativ styrkeindikator (0–100) | 30–70 = normalt; <30 = kan vara köpläge; >70 = var försiktig |
+| **BB pos** | Bollinger-position – var kursen befinner sig i sina prissvängningar | Nära 0 = vid nedre bandet (billig relativt swinget); Nära 1 = övre bandet |
+| **MACD>signal** | Om MACD-linjen är över signallinjen | Sant (✓) = positivt momentum (köpsignal) |
+| **1m / 3m / 6m / 12m** | Avkastning senaste 1, 3, 6 och 12 månader | Positiva värden = kursen har stigit; Flera gröna perioder = stark trend |
+| **Volatilitet** | Hur mycket aktien svänger i pris | Hög = rörligare aktie; bra om du vill ha snabba rörelser, riskigt för stabilt sparande |
+| **Beta** | Hur aktien rör sig jämfört med marknaden som helhet | Beta 1.0 = följer marknaden; >1.5 = rör sig mer än marknaden (hög risk) |
+| **från 52v-high** | Hur långt under årets högsta punkt kursen befinner sig | Nära 0% = nära toppen; -30% = 30% under toppnivån |
+
+**Klicka på en rad** för att öppna fullständig analys av aktien.
+""")
+
             tech_cols = [c for c in [
                 "ticker", "name", "sector",
                 "current_price", "price_vs_ma50", "price_vs_ma200",
@@ -450,7 +492,8 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
             for c in ["vs MA50", "vs MA200", "1m", "3m", "6m", "12m", "från 52v-high"]:
                 if c in tech.columns:
                     tech[c] = tech[c].apply(lambda v: pct_fmt(v))
-            st.dataframe(tech, use_container_width=True, hide_index=True, height=600)
+            clickable_stock_table(tech, ticker_col="Ticker", context_df=filt_df,
+                                  key="ws_tech_table", height=600)
             st.markdown("---")
             st.plotly_chart(scatter_momentum_value(filt_df), use_container_width=True)
 
@@ -484,8 +527,9 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
                     col_cfg[lbl] = st.column_config.ProgressColumn(
                         lbl, min_value=0, max_value=100, format="%.0f"
                     )
-            st.dataframe(sc_disp, use_container_width=True, hide_index=True,
-                         column_config=col_cfg, height=600)
+            clickable_stock_table(sc_disp, ticker_col="Ticker", context_df=filt_df,
+                                  key="ws_score_table", height=600,
+                                  column_config=col_cfg or None)
 
             st.markdown("---")
             st.subheader("🕸️ Score-radar – enskilt bolag")

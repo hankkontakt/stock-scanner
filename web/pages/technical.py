@@ -10,6 +10,7 @@ import yfinance as yf
 from web.utils import (
     kpi_row, scatter_momentum_value, pct_fmt, _get_provider, _get_depth,
 )
+from web.ui.components import clickable_stock_table
 from core import ai_analysis
 from core.country_flags import flag_for_ticker
 
@@ -89,6 +90,27 @@ def page_technical(df: pd.DataFrame, filters: dict):
          "Genomsnittlig RSI för universumet / antal bolag med RSI >70. RSI >70 = överköpt. Många överköpta bolag kan indikera att marknaden är het och riskerar korrigering."),
     ])
 
+    with st.expander("ℹ️ Vad är teknisk analys? Klicka för nybörjarguide", expanded=False):
+        st.markdown("""
+Teknisk analys handlar om att studera **hur aktiens pris och handelsvolym rör sig** för att hitta mönster och potentiella köp- eller säljlägen.
+Till skillnad från fundamental analys (som tittar på bolagets vinster och balansräkning) fokuserar teknisk analys enbart på prisets rörelse.
+
+### De viktigaste begreppen
+
+| Begrepp | Förklaring | Bra värde |
+|---|---|---|
+| **RSI** | Visar om en aktie stigit/sjunkit för snabbt (0–100) | 30–70 är normalt; <30 kan vara köpläge; >70 var försiktig |
+| **MA50 / MA200** | Glidande medelvärde (snittpris) senaste 50/200 dagar | Pris *över* MA200 = upptrend (positivt) |
+| **MACD** | Mäter momentum – om farten uppåt/nedåt ökar eller minskar | MACD över signallinjen = positivt momentum |
+| **Bollinger-position (BB)** | Var priset befinner sig relativt sin normala prissvängning | 0 = vid nedre bandet (billigt), 1 = vid övre bandet (dyrt) |
+| **Trend** | UPPTREND = priset är över både MA50 och MA200 | UPPTREND är positivt; bättre riskmiljö |
+| **Entry-signal** | Systemets samlade bedömning av köptillfälle | STARK/OK = systemet ser ett bra läge |
+| **Volatilitet** | Hur mycket aktien svänger i pris | Låg = stabilt; Hög = rörigt men kan ge stora uppgångar |
+| **Beta** | Hur mycket aktien rör sig jämfört med marknaden | Beta 1.0 = rör sig som marknaden; >1.5 = rörligare |
+
+**Klicka på en rad i tabellen nedan** för att se en fullständig analys av aktien.
+""")
+
     tab1, tab2, tab3, tab4 = st.tabs(["📋 Tabell", "📊 Diagram", "📉 MACD/RSI", "🔀 Jämför"])
 
     with tab1:
@@ -113,7 +135,11 @@ def page_technical(df: pd.DataFrame, filters: dict):
         for c in ["vs MA50", "vs MA200", "1m", "3m", "6m", "12m", "från ATH"]:
             if c in td.columns:
                 td[c] = td[c].apply(lambda v: pct_fmt(v))
-        st.dataframe(td, use_container_width=True, hide_index=True, height=600)
+        clickable_stock_table(td, ticker_col="Ticker", context_df=out,
+                              key="tech_main", height=600,
+                              column_help={"RSI": "Relativ styrka 0–100. >70 överköpt, <30 översålt.",
+                                           "BB": "Bollinger-position: 0=nedre bandet (billigt), 1=övre (dyrt).",
+                                           "MACD>sig.": "Sant = MACD över signallinjen (uppåtmomentum)."})
 
     with tab2:
         if "rsi_14" in out.columns and "ticker" in out.columns:
@@ -161,31 +187,70 @@ def page_technical(df: pd.DataFrame, filters: dict):
                 top_mom = (out[["ticker", "name", "return_12m", "return_3m", "score_total"]]
                            .dropna(subset=["return_12m"])
                            .sort_values("return_12m", ascending=False)
-                           .head(10))
+                           .head(10)).copy()
                 top_mom["return_12m"] = top_mom["return_12m"].apply(lambda v: pct_fmt(v))
                 top_mom["return_3m"]  = top_mom["return_3m"].apply(lambda v: pct_fmt(v)) \
                     if "return_3m" in top_mom.columns else "—"
-                st.dataframe(top_mom.rename(columns={
+                top_mom = top_mom.rename(columns={
                     "ticker": "Ticker", "name": "Bolag",
                     "return_12m": "12m", "return_3m": "3m", "score_total": "Score"
-                }), use_container_width=True, hide_index=True)
+                })
+                clickable_stock_table(top_mom, ticker_col="Ticker", context_df=out,
+                                      key="tech_top_mom")
             with col_b:
                 st.subheader("📉 Svagast momentum (12m)")
                 bot_mom = (out[["ticker", "name", "return_12m", "return_3m", "score_total"]]
                            .dropna(subset=["return_12m"])
                            .sort_values("return_12m")
-                           .head(10))
+                           .head(10)).copy()
                 bot_mom["return_12m"] = bot_mom["return_12m"].apply(lambda v: pct_fmt(v))
                 bot_mom["return_3m"]  = bot_mom["return_3m"].apply(lambda v: pct_fmt(v)) \
                     if "return_3m" in bot_mom.columns else "—"
-                st.dataframe(bot_mom.rename(columns={
+                bot_mom = bot_mom.rename(columns={
                     "ticker": "Ticker", "name": "Bolag",
                     "return_12m": "12m", "return_3m": "3m", "score_total": "Score"
-                }), use_container_width=True, hide_index=True)
+                })
+                clickable_stock_table(bot_mom, ticker_col="Ticker", context_df=out,
+                                      key="tech_bot_mom")
 
     with tab3:
         """MACD/RSI-diagram för vald aktie."""
         st.subheader("📉 MACD & RSI – realtidsdiagram")
+
+        with st.expander("ℹ️ Vad är MACD och RSI? Klicka för förklaring", expanded=False):
+            st.markdown("""
+### RSI – Relative Strength Index (Relativ styrkeindikator)
+RSI mäter om en aktie har stigit eller sjunkit **för snabbt** på kort tid (14 dagar).
+Värdet går alltid mellan **0 och 100**.
+
+| RSI-värde | Vad det betyder | Vad du ska tänka på |
+|---|---|---|
+| **Under 30** | Aktien har fallit kraftigt – kallas "översålt" | Kan vara ett köptillfälle, men kontrollera varför den fallit |
+| **30–70** | Normalt läge | Ingen extrem signal just nu |
+| **Över 70** | Aktien har stigit kraftigt – kallas "överköpt" | Kan vara dags att vara försiktig; priset kan korrigera |
+
+**Tips för nybörjare:** RSI > 70 betyder inte att du *måste* sälja – en stark aktie kan hålla sig överköpt länge. Använd RSI som ett varningsklocka, inte ett absolut beslut.
+
+---
+
+### MACD – Moving Average Convergence/Divergence
+MACD visar om en aktie befinner sig i ett **uppåt- eller nedåtgående momentum** genom att jämföra två glidande medelvärden (12 och 26 dagar).
+
+Diagrammet visar tre saker:
+- **MACD-linjen** (blå): det faktiska momentummåttet
+- **Signallinjen** (orange): ett 9-dagars medelvärde av MACD
+- **Histogrammet** (gröna/röda staplar): skillnaden mellan MACD och signallinjen
+
+| Signal | Vad det betyder |
+|---|---|
+| **MACD korsar uppåt över signallinjen** | Köpsignal – momentum vänder uppåt |
+| **MACD korsar nedåt under signallinjen** | Säljsignal – momentum vänder nedåt |
+| **Gröna histogram-staplar** | Positivt momentum (bull) |
+| **Röda histogram-staplar** | Negativt momentum (bear) |
+
+**Tips för nybörjare:** MACD fungerar bäst i trendande marknader. I sidledsmarknader ger det många falska signaler. Kombinera alltid MACD med andra indikatorer.
+""")
+
         st.caption("Välj en aktie för att visa MACD (histogram + signal) och RSI (14) baserat på 6 månaders data.")
 
         if not out.empty and "ticker" in out.columns:

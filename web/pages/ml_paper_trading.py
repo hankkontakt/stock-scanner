@@ -4,6 +4,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from web.ui.components import clickable_stock_table
+
 
 def page_ml_paper_trading():
     """Dashboard för ML-modellens paper trading (parallellt spår mot klassisk)."""
@@ -91,7 +93,9 @@ def page_ml_paper_trading():
             if open_df.empty:
                 st.caption("Inga öppna positioner just nu.")
             else:
-                st.dataframe(open_df, use_container_width=True, hide_index=True, height=300)
+                clickable_stock_table(open_df, ticker_col="ticker",
+                                      context_df=st.session_state.get("scored_df"),
+                                      key=f"mlpt_open_{universe}", height=300)
 
         # Stängda
         all_df = mlpt.get_trades_df(universe, only_open=False)
@@ -103,6 +107,8 @@ def page_ml_paper_trading():
                 show = closed_df.copy()
                 if "realized_return" in show.columns:
                     show["realized_return"] = (show["realized_return"] * 100).round(2)
-                st.dataframe(show, use_container_width=True, hide_index=True, height=300)
+                clickable_stock_table(show, ticker_col="ticker",
+                                      context_df=st.session_state.get("scored_df"),
+                                      key=f"mlpt_closed_{universe}", height=300)
 
         st.markdown("---")

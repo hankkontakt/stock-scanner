@@ -768,21 +768,42 @@ def _apply_scores_and_discounts(df: pd.DataFrame, w: dict) -> pd.DataFrame:
     }
 
     def _composite(weights: dict) -> pd.Series:
-        s = pd.Series(0.0, index=df.index)
+        """Beräknar viktad summa. NaN sub-scores ersätts med 50 (neutralt) och
+        vikterna renormaliseras så att saknad data inte sänker totalpoängen."""
+        s          = pd.Series(0.0, index=df.index)
+        w_used     = pd.Series(0.0, index=df.index)
+        total_w    = sum(weights.get(wk, 0) for wk in _factor_map)
         for wkey, scol in _factor_map.items():
-            s = s + weights.get(wkey, 0) * df[scol]
-        return s
+            wval = weights.get(wkey, 0)
+            if wval == 0 or scol not in df.columns:
+                continue
+            valid = df[scol].notna()
+            # Använd faktisk poäng där den finns, 0 annars (vikten räknas in ändå)
+            s      = s + wval * df[scol].fillna(0)
+            w_used = w_used + wval * valid.astype(float)
+        # Skala upp till hela viktomfånget (kompenserar för saknade faktorer).
+        # Exempel: om 30% vikt saknas men rest är 60 → skalat 60/0.70 = 85.7
+        scale = (total_w / w_used.clip(lower=1e-6)).clip(upper=3.0)
+        return (s * scale).clip(0, 100)
 
     sector_profiles = getattr(config, "SECTOR_FACTOR_WEIGHTS", {})
     if "sector" in df.columns and sector_profiles:
         # Per-sektor-vikter: banker viktar kvalitet/värde, tech tillväxt/momentum osv.
         score_total = pd.Series(0.0, index=df.index)
         for sector_name, idx in df.groupby(df["sector"].fillna("Unknown")).groups.items():
-            sw = get_sector_weights(sector_name, w)
-            sub = pd.Series(0.0, index=idx)
+            sw        = get_sector_weights(sector_name, w)
+            total_sw  = sum(sw.get(wk, 0) for wk in _factor_map)
+            sub       = pd.Series(0.0, index=idx)
+            w_used_s  = pd.Series(0.0, index=idx)
             for wkey, scol in _factor_map.items():
-                sub = sub + sw.get(wkey, 0) * df.loc[idx, scol]
-            score_total.loc[idx] = sub
+                wval = sw.get(wkey, 0)
+                if wval == 0 or scol not in df.columns:
+                    continue
+                valid     = df.loc[idx, scol].notna()
+                sub       = sub + wval * df.loc[idx, scol].fillna(0)
+                w_used_s  = w_used_s + wval * valid.astype(float)
+            scale_s         = (total_sw / w_used_s.clip(lower=1e-6)).clip(upper=3.0)
+            score_total.loc[idx] = (sub * scale_s).clip(0, 100)
         df["score_total"] = score_total
     else:
         df["score_total"] = _composite(w)

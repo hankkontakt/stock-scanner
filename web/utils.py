@@ -479,6 +479,23 @@ def conviction_meter_breakdown(row) -> str:
     return f"Styrkor: {top_str}   Svagheter: {bot_str}"
 
 
+@st.cache_data(ttl=86400)
+def _build_sector_cache() -> dict:
+    """Bygger ett sektorcache från ALLA tillgängliga scan-filer.
+    Nyare scan-filer prioriteras. Returnerar {ticker: sector}."""
+    cache: dict = {}
+    scan_files = sorted(REPORT_DIR.glob("scored_universe_*.csv"))  # äldst → nyast
+    for f in scan_files:
+        try:
+            tmp = pd.read_csv(f, usecols=lambda c: c in ["ticker", "sector"])
+            if "ticker" in tmp.columns and "sector" in tmp.columns:
+                for _, r in tmp.dropna(subset=["sector"]).iterrows():
+                    cache[str(r["ticker"]).upper()] = str(r["sector"])
+        except Exception:
+            pass
+    return cache
+
+
 def holdings_pie(df: pd.DataFrame, score_df: pd.DataFrame = None, mvs: dict = None) -> go.Figure:
     """Sektorpaj för innehav.
 
@@ -491,10 +508,14 @@ def holdings_pie(df: pd.DataFrame, score_df: pd.DataFrame = None, mvs: dict = No
         score_lu = {}
         if not score_df.empty and "ticker" in score_df.columns:
             score_lu = score_df.set_index("ticker").to_dict("index")
+        # Bygg sektorcache från alla scans som fallback för aktier som saknas i senaste scan
+        sector_fallback = _build_sector_cache()
         sector_mv: dict[str, float] = {}
         for _, row in df.iterrows():
             t = str(row["ticker"]).upper()
-            sector = score_lu.get(t, {}).get("sector") or "Okänd"
+            sector = (score_lu.get(t, {}).get("sector")
+                      or sector_fallback.get(t)
+                      or "Okänd")
             mv = float(mvs.get(t, 0) or 0)
             sector_mv[sector] = sector_mv.get(sector, 0) + mv
         if not sector_mv:

@@ -17,7 +17,7 @@ from web.utils import (
     portfolio_value_chart, calc_period_returns, save_portfolio_snapshot,
 )
 from core import ai_analysis
-from web.ui.components import page_header, empty_state
+from web.ui.components import page_header, empty_state, clickable_stock_table
 
 @st.cache_data(ttl=3600)
 def _fetch_live_price_cached(ticker):
@@ -1152,7 +1152,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                         st.rerun()
 
 
-def _portfolio_stress_test(holdings: pd.DataFrame, score_data: dict) -> None:
+def _portfolio_stress_test(holdings: pd.DataFrame, score_data: dict, df: pd.DataFrame = None) -> None:
     """Show how portfolio would perform in market crash scenarios."""
     if holdings.empty:
         return
@@ -1167,10 +1167,14 @@ def _portfolio_stress_test(holdings: pd.DataFrame, score_data: dict) -> None:
     }
 
     rows = []
+    fund_tickers_used = []
     for _, h in holdings.iterrows():
         ticker = h["ticker"]
         shares = float(h.get("shares", 0))
         cost = float(h.get("cost_basis", 0))
+        is_fund = _is_fund_holding(
+            str(h.get("typ", "")), str(h.get("konto", "")), ticker=ticker
+        )
 
         # Get beta and current price from score_data
         sd = score_data.get(ticker, {})
@@ -1182,8 +1186,17 @@ def _portfolio_stress_test(holdings: pd.DataFrame, score_data: dict) -> None:
         current_price = sd.get("current_price") or sd.get("close")
         if current_price and pd.notna(current_price):
             market_value = shares * float(current_price)
+        elif not is_fund:
+            # Aktier som inte är i scan: hämta live-pris
+            try:
+                live = _fetch_live_price_cached(ticker)
+                market_value = shares * live if live else shares * cost
+            except Exception:
+                market_value = shares * cost
         elif cost > 0:
+            # Fond: använd inköpskostnad (inga yfinance-priser tillgängliga)
             market_value = shares * cost
+            fund_tickers_used.append(ticker)
         else:
             continue
 
@@ -1224,13 +1237,20 @@ def _portfolio_stress_test(holdings: pd.DataFrame, score_data: dict) -> None:
             lambda x: f"{x:,.0f} kr" if pd.notna(x) else "—"
         )
 
-    st.dataframe(display_stress, use_container_width=True, hide_index=True)
+    clickable_stock_table(display_stress, ticker_col="Ticker", context_df=df,
+                          key="pf_stress_table", caption="Klicka för analys.")
     if total_value:
         weighted_beta = (stress_df["Beta"] * stress_df["Marknadsvärde (SEK)"]).sum() / total_value
         st.caption(f"Portföljvärde: {total_value:,.0f} kr | Viktad beta: {weighted_beta:.2f}")
+    if fund_tickers_used:
+        st.info(
+            f"**Fondvärde:** {', '.join(fund_tickers_used)} visas till **inköpsvärde** (antal andelar × GAV) "
+            f"eftersom fonder saknar realtidspriser via Yahoo Finance. "
+            f"Det faktiska marknadsvärdet kan vara högre eller lägre."
+        )
 
 
-def _dividend_simulator(holdings: pd.DataFrame, score_data: dict) -> None:
+def _dividend_simulator(holdings: pd.DataFrame, score_data: dict, df: pd.DataFrame = None) -> None:
     """Dividend income simulator with optional reinvestment."""
     if holdings.empty:
         return
@@ -1330,7 +1350,8 @@ def _dividend_simulator(holdings: pd.DataFrame, score_data: dict) -> None:
 
     if per_stock:
         with st.expander("Per aktie", expanded=False):
-            st.dataframe(pd.DataFrame(per_stock), use_container_width=True, hide_index=True)
+            clickable_stock_table(pd.DataFrame(per_stock), ticker_col="Ticker", context_df=df,
+                                  key="pf_div_per_stock_table", caption="Klicka för analys.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1423,7 +1444,8 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
                 "P&L %":      f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), float) else "—",
                 "Konto":      r.get("Konto", ""),
             } for r in stock_rows_ov]
-            st.dataframe(pd.DataFrame(stocks_detail), use_container_width=True, hide_index=True)
+            clickable_stock_table(pd.DataFrame(stocks_detail), ticker_col="Ticker", context_df=df,
+                                  key="pf_stocks_detail_table", caption="Klicka på en aktie för full analys.")
         if fund_rows_ov:
             st.markdown("**Fonder**")
             funds_detail = [{
@@ -1521,7 +1543,8 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
     with col_table:
         if display_rows_stocks:
             df_show = pd.DataFrame(display_rows_stocks).drop(columns=["_pnl", "_is_fund"], errors="ignore")
-            st.dataframe(df_show, use_container_width=True, hide_index=True)
+            clickable_stock_table(df_show, ticker_col="Ticker", context_df=df,
+                                  key="pf_overview_main_table", caption="Klicka på en aktie för full analys.")
         if display_rows_funds:
             st.caption(f"🏦 {len(display_rows_funds)} fond{'er' if len(display_rows_funds)>1 else ''} ingår — se detaljer i 📋 Visa alla innehav ovan eller i Analys-fliken")
 
@@ -1684,11 +1707,11 @@ def _tab_analys(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame)
 
     # ── Stresstest ───────────────────────────────────────────────────────────
     with st.expander("📉 Stresstest — kraschscenarier"):
-        _portfolio_stress_test(holdings_view, score_data)
+        _portfolio_stress_test(holdings_view, score_data, df=df)
 
     # ── Utdelningssimulator ──────────────────────────────────────────────────
     with st.expander("💰 Utdelningssimulator"):
-        _dividend_simulator(holdings_view, score_data)
+        _dividend_simulator(holdings_view, score_data, df=df)
 
     # ── AI-portföljchat ──────────────────────────────────────────────────────
     st.markdown("---")
@@ -1778,6 +1801,25 @@ def _tab_rebalans(holdings: pd.DataFrame, df: pd.DataFrame):
 
     # ── Korrelationsmatris ────────────────────────────────────────────────────
     st.subheader("📐 Korrelationsmatris (1 år)")
+    with st.expander("ℹ️ Vad visar korrelationsmatrisen? Klicka för förklaring", expanded=False):
+        st.markdown("""
+**Korrelation** mäter hur likt två aktier rör sig i förhållande till varandra.
+Värdet går från **-1 till +1**:
+
+| Värde | Vad det betyder | Exempel |
+|---|---|---|
+| **+1.0** | Rör sig alltid i exakt samma riktning | Två aktier i samma bransch |
+| **+0.8 till +1.0** | Rör sig väldigt likt (hög korrelation) | ⚠️ Dålig diversifiering – om en faller, faller sannolikt den andra |
+| **0** | Rör sig helt oberoende av varandra | Idealiskt för diversifiering |
+| **-1.0** | Rör sig alltid i motsatt riktning | Kan användas som hedge |
+
+### Vad ska du leta efter?
+- **Gröna celler (högt värde nära +1):** De aktier är för lika – hela portföljen faller om den sektorn går dåligt.
+- **Gula/vita celler (värde nära 0):** Bra! Dessa aktier är oberoende av varandra.
+- **Röda celler (negativt värde):** Dessa rör sig mot varandra – bra för riskspridning.
+
+**Tumregel:** Sträva efter att inga par har korrelation över **+0.80**. Har du bara tech-aktier är de ofta högt korrelerade.
+""")
     with st.spinner("Hämtar prishistorik..."):
         try:
             corr_df = calc_correlation_matrix(holdings)
@@ -1833,7 +1875,9 @@ def _tab_rebalans(holdings: pd.DataFrame, df: pd.DataFrame):
                 st.caption("Aktier med hög score som minskar portföljkorrelationen mest:")
                 cols = ["ticker", "name", "sector", "score_total"]
                 show_cols = [c for c in cols if c in suggestions.columns]
-                st.dataframe(suggestions[show_cols].head(5), use_container_width=True, hide_index=True)
+                _sug_disp = suggestions[show_cols].head(5).rename(columns={"ticker": "Ticker"})
+                clickable_stock_table(_sug_disp, ticker_col="Ticker", context_df=df,
+                                      key="pf_diversify_table", caption="Klicka för analys.")
             else:
                 st.info("Inga diversifieringsförslag tillgängliga.")
         except Exception as e:
@@ -1844,11 +1888,33 @@ def _tab_rebalans(holdings: pd.DataFrame, df: pd.DataFrame):
     st.markdown("---")
 
     # ── Black-Litterman optimala vikter ──────────────────────────────────────
-    st.subheader("⚖️ Föreslagna portföljvikter (Black-Litterman)")
-    st.caption(
-        "Kombinerar marknadskapitaliseringsvikter (prior) med systemets score-prediktion "
-        "för att föreslå optimala portföljvikter (max 15% per position)."
-    )
+    st.subheader("⚖️ Föreslagna portföljvikter")
+    with st.expander("ℹ️ Vad är en portföljvikt och varför ändra den? Klicka för förklaring", expanded=False):
+        st.markdown("""
+**Portföljvikt** = hur stor andel av ditt totala kapital du har i en viss aktie.
+
+**Exempel:** Om du har 100 000 kr och 30 000 kr i Ericsson → Ericsson har **30% vikt**.
+
+### Varför är det viktigt?
+En portfölj där en enda aktie utgör 50% av kapitalet är mycket riskabelt.
+Om den aktien faller 50%, har du förlorat 25% av hela ditt kapital.
+
+### Hur beräknas de föreslagna vikterna?
+Systemet använder en metod kallad **Black-Litterman** som kombinerar:
+1. **Marknadskapitalisering** – större bolag får naturligt lite mer vikt (som marknaden värderar dem)
+2. **Systemets score** – aktier med hög score premieras
+
+Resultatet är en fördelning som är **balanserad och riskspridd**, med max 15% per aktie.
+
+### Hur använder du tabellen?
+- **Nu (blå stapel):** din nuvarande andel i aktien
+- **Föreslaget (grön stapel):** vad systemet rekommenderar
+- Om en aktie har högt "Nu" men lågt "Föreslaget" → överväg att minska positionen
+- Om en aktie har lågt "Nu" men högt "Föreslaget" → överväg att öka
+
+**Viktigt:** Det här är ett beslutsstöd, inte finansiell rådgivning. Gör alltid din egen bedömning.
+""")
+    st.caption("Kombinerar marknadskapitaliseringsvikter med systemets score-prediktion (max 15% per position).")
     if df is not None and not df.empty:
         try:
             holdings_tickers = set(tickers)
@@ -1876,11 +1942,16 @@ def _tab_rebalans(holdings: pd.DataFrame, df: pd.DataFrame):
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown("**Nuvarande vs föreslagna vikter**")
-                        st.dataframe(
-                            display_df.style.format({"current_weight": "{:.1%}", "optimal_weight": "{:.1%}"}),
-                            use_container_width=True,
-                            hide_index=True,
-                        )
+                        _bl_disp = display_df.copy()
+                        _bl_disp["current_weight"] = _bl_disp["current_weight"].apply(lambda v: f"{v:.1%}")
+                        _bl_disp["optimal_weight"] = _bl_disp["optimal_weight"].apply(lambda v: f"{v:.1%}")
+                        _bl_disp = _bl_disp.rename(columns={
+                            "ticker": "Ticker",
+                            "current_weight": "Nu",
+                            "optimal_weight": "Föreslaget",
+                        })
+                        clickable_stock_table(_bl_disp, ticker_col="Ticker", context_df=df,
+                                              key="pf_bl_weights_table", caption="Klicka för analys.")
                     with col2:
                         # Bar-chart för jämförelse
                         if "current_weight" in display_df.columns and "optimal_weight" in display_df.columns:
@@ -1909,7 +1980,7 @@ def _tab_rebalans(holdings: pd.DataFrame, df: pd.DataFrame):
                 else:
                     st.info("Black-Litterman-optimering ej tillgänglig (för få datapunkter).")
             else:
-                st.info("Behöver fler innehav i scan­datan för optimering.")
+                st.info("Portföljoptimering kräver att dina innehav finns i senaste veckoscannen. Kör en scan och försök igen.")
         except Exception as e:
             st.caption(f"Optimeringen ej tillgänglig: {e}")
     else:
@@ -1987,13 +2058,15 @@ def page_portfolio(df: pd.DataFrame = None, holdings: pd.DataFrame = None,
             })
 
         wl_df   = pd.DataFrame(wl_rows)
-        col_cfg = {}
+        _wl_col_cfg = {}
         if "Score" in wl_df.columns:
-            col_cfg["Score"] = st.column_config.ProgressColumn(
+            _wl_col_cfg["Score"] = st.column_config.ProgressColumn(
                 "Score", min_value=0, max_value=100, format="%.0f"
             )
-        st.dataframe(wl_df, use_container_width=True, hide_index=True,
-                     column_config=col_cfg)
+        clickable_stock_table(wl_df, ticker_col="Ticker", context_df=df,
+                              key="pf_watchlist_bottom_table",
+                              column_config=_wl_col_cfg or None,
+                              caption="Klicka på en aktie för full analys.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

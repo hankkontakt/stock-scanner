@@ -7,6 +7,7 @@ from datetime import datetime
 
 from web.utils import kpi_row, _get_provider, _get_depth
 from core import ai_analysis
+from web.ui.components import clickable_stock_table
 
 
 def page_backtesting():
@@ -423,14 +424,16 @@ men garanterar ingenting om framtiden.
                 st.markdown("**⬆️ Största ökningar**")
                 mu = pd.DataFrame(diff.get("movers_up", []))
                 if not mu.empty:
-                    st.dataframe(mu[["ticker", "score_total_a", "score_total_b", "score_delta"]],
-                                 use_container_width=True, hide_index=True)
+                    _mu_disp = mu[["ticker", "score_total_a", "score_total_b", "score_delta"]].rename(columns={"ticker": "Ticker"})
+                    clickable_stock_table(_mu_disp, ticker_col="Ticker", key="bt_movers_up_table",
+                                         caption="Klicka för analys.")
             with cd:
                 st.markdown("**⬇️ Största minskningar**")
                 md = pd.DataFrame(diff.get("movers_down", []))
                 if not md.empty:
-                    st.dataframe(md[["ticker", "score_total_a", "score_total_b", "score_delta"]],
-                                 use_container_width=True, hide_index=True)
+                    _md_disp = md[["ticker", "score_total_a", "score_total_b", "score_delta"]].rename(columns={"ticker": "Ticker"})
+                    clickable_stock_table(_md_disp, ticker_col="Ticker", key="bt_movers_dn_table",
+                                         caption="Klicka för analys.")
             new_e = diff.get("new_entries", [])
             fallen = diff.get("fallen", [])
             if new_e:
@@ -453,4 +456,6 @@ men garanterar ingenting om framtiden.
                 show_cols = [c for c in ["ticker", "name", "sector", "score_total", "entry_signal"]
                              if c in top15.columns]
                 st.caption(f"Systemets topp-15 den {replay_date}:")
-                st.dataframe(top15[show_cols], use_container_width=True, hide_index=True)
+                _replay_disp = top15[show_cols].rename(columns={"ticker": "Ticker"})
+                clickable_stock_table(_replay_disp, ticker_col="Ticker", key="bt_replay_table",
+                                      caption="Klicka för analys.")

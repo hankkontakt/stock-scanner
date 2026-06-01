@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from web.utils import kpi_row, load_portfolio, load_watchlist, _load_nth_latest_scored
+from web.ui.components import clickable_stock_table
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -219,6 +220,25 @@ def page_alerts_notices(df: pd.DataFrame):
     # TAB 1 — Signaler & Larm (f.d. Positioner & Prislarm)
     # ══════════════════════════════════════════════════════════════════════
     with tab_pos:
+        with st.expander("ℹ️ Vad är det här? — Förklaring för nybörjare", expanded=False):
+            st.markdown("""
+**Den här fliken visar automatiska larm baserade på systemets analys av dina bevakade aktier.**
+
+### ⚡ STARK köpsignal
+Det starkaste larmet i systemet. Det innebär att aktien uppfyller *flera* positiva kriterier samtidigt:
+- **Hög totalpoäng** (≥ 60 av 100)
+- **STARK entry-signal** = tekniska indikatorer pekar uppåt (momentum, RSI, trend)
+
+Det betyder *inte* att aktien garanterat stiger — men det är systemets starkaste köprekommendation.
+**Gör alltid din egen research** och kolla nyheter innan du köper.
+
+### ⚠️ Prislarm
+Aktier på din bevakningslista som rört sig mer än 3% på en dag — kan vara köp- eller säljsignal
+beroende på riktning och nyhetsbakgrund.
+
+### 📋 Övriga aktier
+Resten av bevakningslistan med nuvarande status. Grön entry = positivt, röd = negativt.
+""")
 
         # ── STARK-signaler från bevakningslista ────────────────────────────
         st.subheader("⚡ Köpsignaler – bevakningslista")
@@ -277,13 +297,11 @@ def page_alerts_notices(df: pd.DataFrame):
                     f'Kontrollera alltid trend och nyheter innan du agerar.</div></div>',
                     unsafe_allow_html=True,
                 )
-                st.dataframe(
-                    pd.DataFrame(stark_hits),
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.0f"),
-                    },
+                clickable_stock_table(
+                    pd.DataFrame(stark_hits), ticker_col="Ticker", context_df=df,
+                    key="alerts_stark_table",
+                    column_config={"Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.0f")},
+                    caption="Klicka på en aktie för full analys.",
                 )
             else:
                 st.info("Inga STARK-signaler på bevakningslistan just nu — systemet bevakar åt dig.")
@@ -292,12 +310,14 @@ def page_alerts_notices(df: pd.DataFrame):
             if alarms:
                 st.markdown("---")
                 st.markdown(f"**⚠️ Prislarm — {len(alarms)} aktie(r) med stor rörelse idag**")
-                st.dataframe(pd.DataFrame(alarms), use_container_width=True, hide_index=True)
+                clickable_stock_table(pd.DataFrame(alarms), ticker_col="Ticker", context_df=df,
+                                      key="alerts_prislarm_table", caption="Klicka på en aktie för full analys.")
 
             # Alla övriga
             if normal:
                 with st.expander(f"📋 Resten av bevakningslistan ({len(normal)} aktier)", expanded=False):
-                    st.dataframe(pd.DataFrame(normal), use_container_width=True, hide_index=True)
+                    clickable_stock_table(pd.DataFrame(normal), ticker_col="Ticker", context_df=df,
+                                         key="alerts_normal_table", caption="Klicka på en aktie för full analys.")
         else:
             st.info("Lägg till aktier i bevakningslistan (⭐ Bevakningar) för att få signaler och larm här.")
 
@@ -305,6 +325,24 @@ def page_alerts_notices(df: pd.DataFrame):
     # TAB 2 — Vad stack ut idag?
     # ══════════════════════════════════════════════════════════════════════
     with tab_movers:
+        with st.expander("ℹ️ Vad är det här? — Förklaring för nybörjare", expanded=False):
+            st.markdown("""
+**Den här fliken visar aktier som stuckit ut jämfört med föregående dag.**
+
+### ⬆️ / ⬇️ Score-förändringar
+Systemet beräknar en **totalpoäng (0–100)** för varje aktie baserat på 10 faktorer.
+En stor poängökning (+) betyder att aktien förbättrats på flera faktorer — t.ex. bättre momentum,
+tekniska signaler, eller förbättrad fundamenta. Stor poängnedgång (-) är varningssignal.
+
+### 📈 RSI-korsningar (30↑ / 70↓)
+**RSI (Relative Strength Index)** mäter om en aktie är överköpt eller översåld:
+- **RSI korsade 30 uppåt (30↑):** Aktien var tidigare "översåld" (nedtryckt) och börjar studsa — potentiell köpsignal
+- **RSI korsade 70 nedåt (70↓):** Aktien var "överköpt" (dyr tekniskt) och börjar falla — potentiell säljsignal
+
+### 💥 Stora kursrörelser (>4%)
+Aktier som rört sig mer än 4% på en enda dag. Kan bero på kvartalsrapport, nyhet,
+eller generell marknadsrörelse. Kolla alltid nyheter för att förstå varför!
+""")
         st.subheader("🔥 Vad stack ut de senaste 24 timmarna?")
 
         today_scored   = _load_nth_latest_scored(n=1)
@@ -490,7 +528,8 @@ def page_alerts_notices(df: pd.DataFrame):
                                 "Δ Score": f"+{delta:.1f}",
                                 "Δ Pris": f"{price_d:+.1f}%",
                             })
-                        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                        clickable_stock_table(pd.DataFrame(rows), ticker_col="Ticker", context_df=today_scored,
+                                             key="alerts_movers_up_table", caption="Klicka för analys.")
                     else:
                         st.caption("Inga data.")
 
@@ -510,7 +549,8 @@ def page_alerts_notices(df: pd.DataFrame):
                                 "Δ Score": f"{delta:.1f}",
                                 "Δ Pris": f"{price_d:+.1f}%",
                             })
-                        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                        clickable_stock_table(pd.DataFrame(rows), ticker_col="Ticker", context_df=today_scored,
+                                             key="alerts_movers_dn_table", caption="Klicka för analys.")
                     else:
                         st.caption("Inga data.")
 
@@ -534,7 +574,8 @@ def page_alerts_notices(df: pd.DataFrame):
                                     "RSI igår": f"{r.get('rsi_yesterday', 0):.0f}",
                                     "Signal": crossed,
                                 })
-                            st.dataframe(pd.DataFrame(rsi_rows), use_container_width=True, hide_index=True)
+                            clickable_stock_table(pd.DataFrame(rsi_rows), ticker_col="Ticker", context_df=today_scored,
+                                                 key="alerts_rsi_table", caption="Klicka för analys.")
 
                     with col_big:
                         if big_data:
@@ -548,7 +589,8 @@ def page_alerts_notices(df: pd.DataFrame):
                                     "Δ Pris": f"{d:+.1f}%",
                                     "Riktning": "🟢 Upp" if d > 0 else "🔴 Ned",
                                 })
-                            st.dataframe(pd.DataFrame(big_rows), use_container_width=True, hide_index=True)
+                            clickable_stock_table(pd.DataFrame(big_rows), ticker_col="Ticker", context_df=today_scored,
+                                                 key="alerts_big_table", caption="Klicka för analys.")
 
                 # ── Nyheter för noterbara aktier (lazy expanders) ────────────
                 if notable_tickers:
@@ -627,7 +669,8 @@ def page_alerts_notices(df: pd.DataFrame):
                     if not port_cal.empty:
                         _pc = port_cal[["ticker", "earnings_date", "days_until"]].copy()
                         _pc.columns = ["Ticker", "Datum", "Dagar kvar"]
-                        st.dataframe(_pc, use_container_width=True, hide_index=True)
+                        clickable_stock_table(_pc, ticker_col="Ticker", context_df=_scored_for_cal,
+                                             key="alerts_port_cal_table", caption="Klicka för analys.")
                         st.caption("⚠️ Var försiktig med köp precis innan rapport (gap-risk)")
                     else:
                         st.info("Inga rapporter de närmsta 30 dagarna.")
@@ -649,7 +692,8 @@ def page_alerts_notices(df: pd.DataFrame):
                         _tc.columns = [{"ticker": "Ticker", "earnings_date": "Datum",
                                          "days_until": "Dagar kvar", "rank": "Rank"}.get(c, c)
                                         for c in _tc_cols]
-                        st.dataframe(_tc, use_container_width=True, hide_index=True)
+                        clickable_stock_table(_tc, ticker_col="Ticker", context_df=_scored_for_cal,
+                                             key="alerts_top_cal_table", caption="Klicka för analys.")
                     else:
                         st.info("Inga rapporter de närmsta 14 dagarna.")
                 else:
@@ -690,7 +734,8 @@ def page_alerts_notices(df: pd.DataFrame):
                     _dc.columns = [{"ticker": "Ticker", "next_div_date": "Ex-datum",
                                      "amount": "Belopp", "yield_pct": "Yield %",
                                      "days_until": "Dagar kvar"}.get(c, c) for c in _dc_cols]
-                    st.dataframe(_dc, use_container_width=True, hide_index=True)
+                    clickable_stock_table(_dc, ticker_col="Ticker", context_df=_scored_for_cal,
+                                         key="alerts_div_cal_table", caption="Klicka för analys.")
                 else:
                     st.info("Inga utdelningar de närmsta 60 dagarna.")
             else:
@@ -736,7 +781,9 @@ def page_alerts_notices(df: pd.DataFrame):
                                 if c in wl_data.columns]
                 if "score_total" in wl_data.columns:
                     wl_data = wl_data.sort_values("score_total", ascending=False)
-                st.dataframe(wl_data[show_cols_wl], use_container_width=True, hide_index=True)
+                clickable_stock_table(wl_data[show_cols_wl].rename(columns={"ticker": "Ticker"}),
+                                     ticker_col="Ticker", context_df=df,
+                                     key="alerts_wl_health_table", caption="Klicka för analys.")
             else:
                 st.info("Inga av dina bevakade aktier hittades i nuvarande scan.")
 
@@ -746,6 +793,33 @@ def page_alerts_notices(df: pd.DataFrame):
     with tab_insider:
         st.subheader("👔 Insynsköp – Signaler")
         st.caption("Aktier där insiders (VD, CFO, styrelse) nyligen köpt aktier eller har högt ägande.")
+        with st.expander("ℹ️ Vad är insynsköp och varför spelar det roll? — Förklaring för nybörjare", expanded=False):
+            st.markdown("""
+### 👔 Vad är ett insynsköp?
+**Insiders** är personer med tillgång till icke-offentlig information om ett bolag —
+t.ex. VD, CFO, styrelseledamöter och storägare (≥10% av aktierna).
+
+När dessa personer **köper aktier i det egna bolaget** med egna pengar kallas det **insynsköp**.
+Det måste rapporteras till Finansinspektionen (FI) inom 3 dagar.
+
+### Varför är det intressant?
+Insiders känner bolaget bättre än någon annan. Om VD:n köper aktier för egna pengar
+är det ett starkt signalvärde att han/hon tror på bolagets framtid.
+
+**Forskning visar** att aktier med stora insynsköp tenderar att prestera bättre
+på 6–12 månaders sikt jämfört med börsen som helhet.
+
+### ⚠️ Tolka med försiktighet
+- **VD/CFO-köp** väger tyngre än passivt ägarskap
+- **Klusterköp** (3+ insiders köper samtidigt) är starkaste signalen
+- Insyns**sälj** är svagare signal — de säljer av många skäl (skatt, privatekonomin)
+- Kolla alltid bolaget i övrigt — insynsköp är ett av flera verktyg
+
+### 🩳 Hög blankningsandel (Short Squeeze)
+**Blankning** = någon lånar aktier och säljer dem, hoppas köpa tillbaka billigare.
+Hög blankningsandel (>10%) innebär att många satsar *mot* aktien.
+Om aktien sedan stiger tvingas blankarna köpa tillbaka → **short squeeze** → kurs rusar ännu mer.
+""")
 
         insider_df = _get_insider_alerts(df)
         if insider_df.empty:
@@ -760,7 +834,9 @@ def page_alerts_notices(df: pd.DataFrame):
             col3.metric("Totalt insynssignaler", len(insider_df))
 
             st.markdown("---")
-            st.dataframe(insider_df, use_container_width=True, hide_index=True)
+            clickable_stock_table(insider_df.rename(columns={"ticker": "Ticker"}),
+                                  ticker_col="Ticker", context_df=df,
+                                  key="alerts_insider_table", caption="Klicka på en aktie för full analys.")
 
             # Link to Finansinspektionen
             st.markdown("[Finansinspektionens Insynsregister](https://www.fi.se/sv/vara-register/insynsregistret/) — officiell källa för svenska insynsaffärer")
@@ -775,13 +851,13 @@ def page_alerts_notices(df: pd.DataFrame):
                               if c in high_short.columns]
                 high_short = high_short.copy()
                 high_short["short_pct_float"] = (high_short["short_pct_float"] * 100).round(1)
-                st.dataframe(
-                    high_short[show_short].rename(columns={
-                        "short_pct_float": "Blankat % av float",
-                        "short_ratio": "Days to cover"
-                    }).sort_values("Blankat % av float", ascending=False).head(15),
-                    use_container_width=True, hide_index=True
-                )
+                _hs_display = high_short[show_short].rename(columns={
+                    "short_pct_float": "Blankat % av float",
+                    "short_ratio": "Days to cover",
+                    "ticker": "Ticker",
+                }).sort_values("Blankat % av float", ascending=False).head(15)
+                clickable_stock_table(_hs_display, ticker_col="Ticker", context_df=df,
+                                      key="alerts_short_table", caption="Klicka för analys.")
             else:
                 st.info("Inga aktier med hög blankningsandel (>5%) i nuvarande scan")
         else:

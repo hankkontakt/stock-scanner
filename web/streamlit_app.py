@@ -327,7 +327,6 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                 ("🏭 Sektorrotation",   "Sektorrotation",    "sector"),
             ]),
             ("AKTIE", True, [
-                ("🔍 Aktie-sök",        "Aktiesök",          "search"),
                 ("📈 Teknisk analys",   "Teknisk analys",    "technical"),
                 ("⭐ Bevakningar",      "Bevakningar",       "watch"),
             ]),
