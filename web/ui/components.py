@@ -193,7 +193,14 @@ def clickable_stock_table(df: pd.DataFrame, *, ticker_col: str = "ticker",
     if column_config:
         col_cfg.update(column_config)
 
-    safe_height = None if height is None else max(height, 200)
+    # Streamlit Cloud 1.44+ requires explicit integer height for interactive
+    # dataframes (on_select="rerun"). Compute from row count; 35px/row + 38px
+    # header, minimum 400px (Cloud lower bound observed in practice).
+    _n_rows = len(df)
+    computed_height = max(400, _n_rows * 35 + 38)
+    safe_height = max(height, 400) if height is not None else computed_height
+
+    event = None
     try:
         event = st.dataframe(
             df, use_container_width=True, hide_index=True, height=safe_height,
@@ -201,10 +208,11 @@ def clickable_stock_table(df: pd.DataFrame, *, ticker_col: str = "ticker",
             on_select="rerun", selection_mode="single-row", key=key,
         )
     except Exception:
-        event = st.dataframe(
+        # Static fallback: no on_select → height=None always valid.
+        # Selection won't work; event stays None → detail panel skipped.
+        st.dataframe(
             df, use_container_width=True, hide_index=True, height=None,
             column_config=col_cfg or None,
-            on_select="rerun", selection_mode="single-row", key=key,
         )
 
     if event and getattr(event, "selection", None) and event.selection.get("rows"):

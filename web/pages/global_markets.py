@@ -55,8 +55,12 @@ def page_global_markets():
             try:
                 fx_rows = fetch_fx_rows()
                 if fx_rows:
-                    st.dataframe(pd.DataFrame(fx_rows), use_container_width=True,
-                                 hide_index=True, height=220)
+                    try:
+                        st.dataframe(pd.DataFrame(fx_rows), use_container_width=True,
+                                     hide_index=True, height=220)
+                    except Exception:
+                        st.dataframe(pd.DataFrame(fx_rows), use_container_width=True,
+                                     hide_index=True)
                 else:
                     st.info("Kunde inte hämta valutakurser.")
             except Exception as e:
@@ -86,8 +90,12 @@ def page_global_markets():
             try:
                 rate_rows = fetch_rate_rows()
                 if rate_rows:
-                    st.dataframe(pd.DataFrame(rate_rows), use_container_width=True,
-                                 hide_index=True, height=280)
+                    try:
+                        st.dataframe(pd.DataFrame(rate_rows), use_container_width=True,
+                                     hide_index=True, height=280)
+                    except Exception:
+                        st.dataframe(pd.DataFrame(rate_rows), use_container_width=True,
+                                     hide_index=True)
                 else:
                     st.info("Kunde inte hämta räntor.")
             except Exception as e:

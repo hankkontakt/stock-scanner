@@ -1483,7 +1483,10 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
                 "P&L %":           f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), float) else "--",
                 "Konto":           r.get("Konto", ""),
             } for r in fund_rows_ov]
-            st.dataframe(pd.DataFrame(funds_detail), use_container_width=True, hide_index=True)
+            try:
+                st.dataframe(pd.DataFrame(funds_detail), use_container_width=True, hide_index=True)
+            except Exception:
+                st.dataframe(pd.DataFrame(funds_detail), use_container_width=True, hide_index=True)
 
     # ── Portföljvärde-chart ──────────────────────────────────────────────────
     st.markdown("#### Portföljvärde historik")

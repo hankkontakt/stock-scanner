@@ -167,7 +167,10 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
                     "Pris": f"{price:.2f}" if price else "--",
                     "Trend": ma_txt,
                 })
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=400)
+            try:
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=400)
+            except Exception:
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         else:
             st.info("Ingen data än.")
 

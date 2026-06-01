@@ -60,6 +60,8 @@ def page_admin():
     from web.pages.admin_tabs.config_tab import render as _config
     from web.pages.admin_tabs.cache_tab import render_cache, render_ai_log, render_alarms
     from web.pages.admin_tabs.debug_tab import render as _debug
+    from web.pages.admin_tabs.data_quality import render as _data_quality
+    from web.pages.admin_tabs.universe_discovery import render as _universe_discovery
 
     tabs = st.tabs([
         "Oversikt",
@@ -68,6 +70,8 @@ def page_admin():
         "Starta scan",
         "Avanza-import",
         "Universe Health",
+        "Ticker-discovery",
+        "Datakvalitet",
         "E-post",
         "Anvandare",
         "Konfiguration",
@@ -90,16 +94,20 @@ def page_admin():
     with tabs[5]:
         _health()
     with tabs[6]:
-        _email()
+        _universe_discovery()
     with tabs[7]:
-        _users()
+        _data_quality()
     with tabs[8]:
-        _config()
+        _email()
     with tabs[9]:
-        render_cache()
+        _users()
     with tabs[10]:
-        render_ai_log()
+        _config()
     with tabs[11]:
-        render_alarms()
+        render_cache()
     with tabs[12]:
+        render_ai_log()
+    with tabs[13]:
+        render_alarms()
+    with tabs[14]:
         _debug(_load_scan_log)

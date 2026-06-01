@@ -61,6 +61,7 @@ from web.pages.ml_paper_trading   import page_ml_paper_trading
 from web.pages.stock_search    import page_stock_search
 from web.pages.watchlist_detail import page_watchlist_detail
 from web.pages.ai_journal       import page_ai_journal
+from web.pages.universe_explorer import page_universe_explorer
 
 # ── Page-konfiguration ────────────────────────────────────────────────────────
 st.set_page_config(
@@ -286,6 +287,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             "ai":             "🤖 AI",
             "admin":          "🔧 Admin",
             "ai-journal":     "📓 AI Journal",
+            "universe":       "🔭 Universe Explorer",
         }
         _reverse_map = {v: k for k, v in _known_pages.items()}
 
@@ -325,6 +327,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                 ("🏦 Småbolag",         "Småbolag",          "smallcap"),
                 ("🌍 Globala marknader","Globala marknader", "globe"),
                 ("🏭 Sektorrotation",   "Sektorrotation",    "sector"),
+                ("🔭 Universe Explorer","Universe Explorer", "explore"),
             ]),
             ("AKTIE", True, [
                 ("📈 Teknisk analys",   "Teknisk analys",    "technical"),
@@ -1107,6 +1110,9 @@ def main():
         elif page == "⚙️ Inställningar":
             from web.pages.settings_page import page_settings
             page_settings()
+
+        elif page == "🔭 Universe Explorer":
+            page_universe_explorer(df)
 
         elif page == "🔧 Admin":
             page_admin()
