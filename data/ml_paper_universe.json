@@ -99,6 +99,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "RGTI",
+      "name": "Rigetti Computing, Inc.",
+      "entry_price": 25.540000915527344,
+      "predicted_return": 0.4331257939338684,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "ENPH",
+      "name": "Enphase Energy, Inc.",
+      "entry_price": 68.36000061035156,
+      "predicted_return": 0.3036371171474457,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "TEAM",
+      "name": "Atlassian Corporation",
+      "entry_price": 107.61000061035156,
+      "predicted_return": 0.2928692698478699,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "QBTS",
+      "name": "D-Wave Quantum Inc.",
+      "entry_price": 30.139999389648438,
+      "predicted_return": 0.2731909155845642,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "ASTS",
+      "name": "AST SpaceMobile, Inc.",
+      "entry_price": 113.41000366210938,
+      "predicted_return": 0.2468278706073761,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "SNOW",
+      "name": "Snowflake Inc.",
+      "entry_price": 255.5500030517578,
+      "predicted_return": 0.24461010098457336,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "RIOT",
+      "name": "Riot Platforms, Inc.",
+      "entry_price": 27.110000610351562,
+      "predicted_return": 0.23580867052078247,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "2454.TW",
+      "name": "MediaTek Inc.",
+      "entry_price": 4310.0,
+      "predicted_return": 0.23520207405090332,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "MIGI",
+      "name": "Big Digital Energy Inc",
+      "entry_price": 7.230000019073486,
+      "predicted_return": 0.21492868661880493,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-01",
+      "ticker": "012330.KS",
+      "name": "Hyundai Mobis Co.,Ltd",
+      "entry_price": 768000.0,
+      "predicted_return": 0.19634297490119934,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -106,6 +206,11 @@
       "date": "2026-05-31",
       "equity": 100000.0,
       "n_open": 10
+    },
+    {
+      "date": "2026-06-01",
+      "equity": 100000.0,
+      "n_open": 20
     }
   ]
 }
