@@ -62,16 +62,7 @@ def _apply_weekly_filters(df: pd.DataFrame, filters: dict,
     if filters.get("hide_illiquid") and "low_liquidity" in out.columns:
         out = out[~out["low_liquidity"].fillna(False)]
 
-    _SUFFIX_MAP = {
-        "🇸🇪 Sverige": ".ST",
-        "🇬🇧 UK":      ".L",
-        "🇩🇪 Tyskland": ".DE",
-        "🇫🇮 Finland": ".HE",
-        "🇩🇰 Danmark": ".CO",
-        "🇳🇴 Norge":   ".OL",
-        "🇨🇳 Kina":    ".SS",
-        "🇯🇵 Japan":   ".T",
-    }
+    from core.suffix_map import COUNTRY_SUFFIXES as _SUFFIX_MAP
     _ALL_NON_US = set(_SUFFIX_MAP.values())
     selected_countries = filters.get("countries", [])
     if selected_countries:

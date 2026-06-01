@@ -117,23 +117,9 @@ def _make_candidate(ticker: str, source: str, reason: str,
 
 
 def _ticker_region(ticker: str) -> str:
-    """Gissa region baserat på börs-suffix."""
-    t = ticker.upper()
-    if any(t.endswith(s) for s in (".ST",)):
-        return "NORDIC"
-    if any(t.endswith(s) for s in (".CO", ".OL", ".HE")):
-        return "NORDIC"
-    if any(t.endswith(s) for s in (".L",)):
-        return "UK"
-    if any(t.endswith(s) for s in (".DE", ".PA", ".AS", ".MI", ".MC", ".VI", ".WA", ".LS", ".SW")):
-        return "EUROPE"
-    if any(t.endswith(s) for s in (".TO",)):
-        return "CANADA"
-    if any(t.endswith(s) for s in (".AX", ".T", ".HK", ".TW", ".KS", ".NS", ".BO", ".SI")):
-        return "ASIA"
-    if any(t.endswith(s) for s in (".SA", ".MX")):
-        return "LATAM"
-    return "US"
+    """Gissa region baserat pa borst-suffix."""
+    from core.suffix_map import suffix_to_region
+    return suffix_to_region(ticker)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

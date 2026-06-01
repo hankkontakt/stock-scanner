@@ -11,16 +11,7 @@ from web.ui.components import clickable_stock_table
 from core.country_flags import flag_for_ticker
 
 
-_COUNTRY_SUFFIX_MAP = {
-    "🇸🇪 Sverige":  ".ST",
-    "🇬🇧 UK":       ".L",
-    "🇩🇪 Tyskland": ".DE",
-    "🇫🇮 Finland":  ".HE",
-    "🇩🇰 Danmark":  ".CO",
-    "🇳🇴 Norge":    ".OL",
-    "🇨🇳 Kina":     ".SS",
-    "🇯🇵 Japan":    ".T",
-}
+from core.suffix_map import COUNTRY_SUFFIXES as _COUNTRY_SUFFIX_MAP
 _ALL_NON_US_SUFFIXES = set(_COUNTRY_SUFFIX_MAP.values())
 
 

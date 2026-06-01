@@ -12,35 +12,7 @@ Användning:
     flag_for_ticker("NVO")         -> "🇩🇰"  (Novo Nordisk ADR)
 """
 
-_SUFFIX_MAP: dict[str, tuple[str, str]] = {
-    ".ST":  ("🇸🇪", "Sverige"),
-    ".CO":  ("🇩🇰", "Danmark"),
-    ".OL":  ("🇳🇴", "Norge"),
-    ".HE":  ("🇫🇮", "Finland"),
-    ".L":   ("🇬🇧", "Storbritannien"),
-    ".DE":  ("🇩🇪", "Tyskland"),
-    ".PA":  ("🇫🇷", "Frankrike"),
-    ".AS":  ("🇳🇱", "Nederländerna"),
-    ".T":   ("🇯🇵", "Japan"),
-    ".TW":  ("🇹🇼", "Taiwan"),
-    ".KS":  ("🇰🇷", "Sydkorea"),
-    ".HK":  ("🇭🇰", "Hongkong"),
-    ".NS":  ("🇮🇳", "Indien"),
-    ".TO":  ("🇨🇦", "Kanada"),
-    ".SA":  ("🇧🇷", "Brasilien"),
-    ".MI":  ("🇮🇹", "Italien"),
-    ".MC":  ("🇪🇸", "Spanien"),
-    ".SW":  ("🇨🇭", "Schweiz"),
-    ".VI":  ("🇦🇹", "Österrike"),
-    ".BR":  ("🇧🇪", "Belgien"),
-    ".AX":  ("🇦🇺", "Australien"),
-    ".NZ":  ("🇳🇿", "Nya Zeeland"),
-    ".SI":  ("🇸🇬", "Singapore"),
-    ".KL":  ("🇲🇾", "Malaysia"),
-    ".BK":  ("🇹🇭", "Thailand"),
-    ".SS":  ("🇨🇳", "Kina (Shanghai)"),
-    ".SZ":  ("🇨🇳", "Kina (Shenzhen)"),
-}
+from core.suffix_map import SUFFIX_COUNTRY as _SUFFIX_MAP
 
 # Kända ADR-tickers (US-noterade men utländska bolag) som saknar suffix
 _ADR_EXCEPTIONS: dict[str, tuple[str, str]] = {
