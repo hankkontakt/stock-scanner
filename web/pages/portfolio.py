@@ -1444,8 +1444,8 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
                 "Inköpspris": f"{float(r['Inköpspris']):.2f}" if r.get("Inköpspris") else "--",
                 "Värde":      f"{r['_market_value']:,.0f} kr" if r.get("_market_value") else "--",
                 "P&L %":      f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), float) else "--",
-                "Pred 30d":   pred_str,
-                "ML rank":    mlr_str,
+                "Pred 30d":   (lambda pr: f"{pr*100:+.1f}%" if isinstance(pr, (int, float)) else "--")(r.get("Pred 30d")),
+                "ML rank":    (lambda mr: f"{mr:.0f}" if isinstance(mr, (int, float)) else "--")(r.get("ML rank")),
                 "Konto":      r.get("Konto", ""),
             } for r in stock_rows_ov]
             clickable_stock_table(pd.DataFrame(stocks_detail), ticker_col="Ticker", context_df=df,
