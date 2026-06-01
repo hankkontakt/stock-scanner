@@ -83,81 +83,108 @@ A fully automated **multi-factor quantitative stock scanner** covering ~1,000+ g
 
 ```
 stock-scanner/
-├── .github/workflows/          # CI/CD automation (7 workflows)
+├── .clinerules/                 # AI-edit-regler (file-edit-recovery, powershell-command-rules)
+├── .devcontainer/               # VS Code devcontainer (Python 3.11-bookworm)
+├── .github/
+│   ├── dependabot.yml           # Weekly pip + monthly GitHub Actions auto-update
+│   └── workflows/               # CI/CD automation (7 workflows)
 │   ├── daily_scan.yml          # Morning/evening/weekly/smallcap + refresh_missing
 │   ├── smallcap_scan.yml       # Dedicated smallcap scan
 │   ├── news_alerts.yml         # Every 30min Mon-Fri
 │   ├── train_ml.yml            # ML model training
 │   ├── tests.yml               # pytest on push
 │   └── keep_alive.yml          # Streamlit Cloud keep-alive
-├── core/                       # Central engine (27 files, ~500KB)
+├── core/                       # Central engine (35 files, ~660KB)
 │   ├── config.py               # ALL thresholds, ticker universes, factor weights
-│   ├── daily_pipeline.py       # Central orchestrator (HUVUDFIL — 81KB)
-│   ├── scoring.py              # Factor scoring engine (30KB)
-│   ├── data_fetcher.py         # yfinance data fetching + caching + timeout (45KB)
-│   ├── data_fetcher_batch.py   # Batch-oriented data fetching (24KB)
+│   ├── daily_pipeline.py       # Central orchestrator (HUVUDFIL — 86KB)
+│   ├── scoring.py              # Factor scoring engine (39KB)
+│   ├── data_fetcher.py         # yfinance data fetching + caching + timeout (47KB)
+│   ├── data_fetcher_batch.py   # Batch-oriented data fetching (23KB)
 │   ├── filters.py              # Entry/exit signals, strike system (23KB)
-│   ├── macro_regime.py         # Market regime detection (11KB)
-│   ├── ai_analysis.py          # AI engine — DeepSeek + Gemini (70KB)
+│   ├── macro_regime.py         # Market regime detection (13KB)
+│   ├── ai_analysis.py          # AI engine — DeepSeek + Gemini (67KB)
 │   ├── ai_prompts.py           # Prompt templates (5KB)
-│   ├── news_fetcher.py         # Multi-source news aggregation (46KB)
-│   ├── news_alerts.py          # AI-driven news alerts (15KB)
-│   ├── email_template.py       # Shared email engine — mistune HTML (29KB)
+│   ├── alerts.py               # Email-notifikationer (7KB) — daily/weekly/alert
+│   ├── news_fetcher.py         # Multi-source news aggregation (45KB)
+│   ├── news_alerts.py          # AI-driven news alerts (18KB)
+│   ├── email_template.py       # Shared email engine — mistune HTML (28KB)
 │   ├── logger.py               # Structured JSON scan logging (9KB)
-│   ├── pipeline_report.py      # Markdown report builder (7KB)
-│   ├── pipeline_alerts.py      # STARK signal alert system (5KB)
+│   ├── pipeline_report.py      # Markdown report builder (9KB)
+│   ├── pipeline_alerts.py      # STARK signal + score drift system (10KB)
 │   ├── piotroski.py            # Piotroski F-Score (15KB)
-│   ├── sector_momentum.py      # Sector ETF momentum (20KB)
+│   ├── sector_momentum.py      # Sector ETF momentum (19KB)
 │   ├── sectors.py              # Sector classification/ranking (4KB)
-│   ├── sentiment.py            # Finnhub sentiment (17KB)
+│   ├── sentiment.py            # Finnhub sentiment (5KB)
 │   ├── relative_strength.py    # Relative strength calc (5KB)
 │   ├── global_markets.py       # 17 global indices (9KB)
 │   ├── country_flags.py        # Ticker-to-flag mapping (5KB)
 │   ├── currency.py             # FX conversion (3KB)
-│   ├── extra_data.py           # Finnhub extra data (24KB)
+│   ├── extra_data.py           # Finnhub extra data (23KB)
 │   ├── fx_impact.py            # FX impact analysis (7KB)
 │   ├── interest_rate.py        # Yield curve tracking (10KB)
-│   ├── universe_health.py      # AI-driven universe maintenance (8KB)
+│   ├── universe_health.py      # AI-driven universe maintenance (15KB)
 │   ├── earnings_calendar.py    # Earnings tracking (6KB)
 │   ├── dividend_calendar.py    # Dividend tracking (4KB)
-│   ├── ml_predictor.py         # XGBoost model (30KB)
+│   ├── macro_calendar.py       # Hårdkodad makrokalender 2025-2026 (11KB)
+│   ├── fi_insider_fetcher.py   # Finansinspektionen insider-scraper (17KB)
+│   ├── ml_predictor.py         # XGBoost model (49KB)
 │   ├── ml_paper_trading.py     # ML paper trading (8KB)
-│   ├── test_pipeline.py        # Quick integration test (4KB)
 │   └── __init__.py             # Re-exports all modules
-├── portfolio/                  # Portfolio management (6 files, ~100KB)
+├── portfolio/                  # Portfolio management (8 files, ~200KB)
 │   ├── paper_trading.py        # Paper trading simulation v2 (37KB)
 │   ├── black_litterman.py      # Black-Litterman optimization (16KB)
+│   ├── hierarchical_risk_parity.py  # Lopez de Prado HRP (5KB)
 │   ├── portfolio.py            # Holdings analysis (16KB)
 │   ├── portfolio_analysis.py   # Correlation, concentration (16KB)
 │   ├── positions.py            # Transaction logging (18KB)
 │   └── watchlist.py            # Watchlist management (2KB)
-├── web/                        # Web interfaces (~20 files, ~600KB)
+├── web/                        # Web interfaces (~35 files, ~1.1MB)
 │   ├── streamlit_app.py        # Main Streamlit dashboard (51KB)
 │   ├── stock_detail.py         # Per-stock deep dive (47KB)
 │   ├── utils.py                # Shared web helpers (34KB)
 │   ├── app.py                  # Flask web server (22KB)
+│   ├── ui/                     # Återanvändbara UI-byggblock (7 filer)
+│   │   ├── components.py       # Prof. komponenter (metric_card, score_bar m.fl.) (7KB)
+│   │   ├── tokens.py           # Design-tokens (färger, typsnitt) (2KB)
+│   │   ├── css.py              # CSS-injection (4KB)
+│   │   ├── icons.py            # Icon-hjälpfunktioner (2KB)
+│   │   ├── glossary.py         # Begreppsordlista med tooltips (5KB)
+│   │   ├── ai_action.py        # AI action-knappar/UI (2KB)
+│   │   └── tokens.py           # Design-tokens (färger, typsnitt)
 │   ├── templates/index.html    # Flask template (55KB)
-│   └── pages/                  # 20 modular Streamlit pages
-│       ├── overview.py         # Main overview page (23KB)
-│       ├── weekly_scan.py      # Weekly scan results (27KB)
-│       ├── smallcap.py         # Smallcap view (13KB)
-│       ├── portfolio.py        # Portfolio management (92KB)
-│       ├── technical.py        # Technical analysis (22KB)
+│   └── pages/                  # 19 modular Streamlit pages (~440KB)
+│       ├── overview.py         # Main overview page (9KB)
+│       ├── weekly_scan.py      # Weekly scan results (30KB)
+│       ├── smallcap.py         # Smallcap view (18KB)
+│       ├── portfolio.py        # Portfolio management (110KB)
+│       ├── technical.py        # Technical analysis (26KB)
 │       ├── ai_page.py          # AI analysis page (48KB)
 │       ├── ai_journal.py       # AI journal (8KB)
-│       ├── admin.py            # Admin data services (79KB)
-│       ├── admin_page.py       # Admin UI rendering (80KB)
+│       ├── admin.py            # Admin data services (15KB)
+│       ├── admin_page.py       # Admin UI layout (4KB)
+│       ├── admin_tabs/         # 12 modular admin-flikar (1.2KB–6KB ea)
+│       │   ├── overview.py     #  Admin overview
+│       │   ├── scans.py        #  Scan history
+│       │   ├── health.py       #  Universe health
+│       │   ├── holdings.py     #  Holdings management
+│       │   ├── watchlist.py    #  Watchlist editor
+│       │   ├── users.py        #  Multi-user config
+│       │   ├── email_tab.py    #  Email subscribers
+│       │   ├── cache_tab.py    #  AI cache management
+│       │   ├── config_tab.py   #  Config viewer
+│       │   ├── import_tab.py   #  Avanza CSV import
+│       │   ├── debug_tab.py    #  Debug dashboard
+│       │   └── __init__.py
 │       ├── settings_page.py    # User settings (7KB)
 │       ├── guide.py            # User guide (22KB)
-│       ├── alerts.py           # Alerts & notices (42KB)
-│       ├── backtesting_page.py # Backtesting UI (17KB)
-│       ├── sector_rotation.py  # Sector rotation UI (14KB)
+│       ├── alerts.py           # Alerts & notices (48KB)
+│       ├── backtesting_page.py # Backtesting UI (26KB)
+│       ├── sector_rotation.py  # Sector rotation UI (16KB)
 │       ├── global_markets.py   # Global markets view (8KB)
 │       ├── paper_trading_page.py # Paper trading UI (22KB)
 │       ├── ml_paper_trading.py # ML paper trading UI (6KB)
 │       ├── stock_search.py     # Stock search view (18KB)
-│       ├── watchlist_detail.py # Watchlist detail (8KB)
-│       └── opportunities.py    # Opportunities view (9KB)
+│       └── watchlist_detail.py # Watchlist detail (8KB)
 ├── smallcap/                   # Swedish small-cap subsystem
 │   ├── scanner.py              # Main entry point (19KB)
 │   ├── universe.py             # ~280 Swedish small-cap tickers (37KB)
@@ -175,9 +202,9 @@ stock-scanner/
 │   ├── avanza_import.py        # Avanza CSV import (34KB)
 │   └── delta_tracker.py        # Score change tracking (11KB)
 ├── scripts/                    # Utility scripts
-│   ├── build_ml_dataset.py     # ML feature engineering (6KB)
-│   ├── train_ml.py             # ML training (2KB)
-│   ├── replace_stock_search.py # Ticker search (12KB)
+│   ├── build_ml_dataset.py     # ML feature engineering (7KB)
+│   ├── convert_snapshots.py    # Bootstrap bt_snapshots från historiska CSV (6KB)
+│   ├── train_ml.py             # ML training (4KB)
 │   └── write_readme.py         # Auto-generate README (1KB)
 ├── tools/                      # Independent tools
 │   └── ticker_health.py        # Ticker validation (10KB)
@@ -201,11 +228,16 @@ stock-scanner/
 │   ├── paper_trades.json       # Paper trading positions
 │   ├── paper_portfolio.json    # Paper trading P&L
 │   ├── portfolio_performance.json # Portfolio perf history
+│   ├── stark_alert_state.json  # STARK alert dedup state
+│   ├── score_drift_state.json  # Score drift comparison state
+│   ├── news_alert_state.json   # News alert dedup state
+│   ├── ai_trade_journal.json   # AI trade journal
 │   ├── ml_paper_universe.json  # ML paper trades (universe)
 │   ├── ml_paper_smallcap.json  # ML paper trades (smallcap)
 │   ├── holdings.csv            # User portfolio holdings
 │   ├── ticker_map.json         # Avanza→Yahoo ticker mapping
 │   ├── users_config.json       # Multi-user config
+│   ├── bt_snapshots/           # Point-in-time backtest snapshots (Parquet)
 │   ├── ai_cache/               # AI analysis cache
 │   └── piotroski_snapshots/    # Historical F-Score data
 ├── reports/                    # Generated scan reports
@@ -219,9 +251,14 @@ stock-scanner/
 │   └── ml_smallcap_metrics.json
 ├── requirements.txt            # Python dependencies
 ├── pyproject.toml              # Project config + ruff/mypy/pytest
+├── .pre-commit-config.yaml     # Pre-commit hooks (ruff)
+├── .streamlit/config.toml      # Streamlit Cloud config
+├── .devcontainer/devcontainer.json  # VS Code devcontainer
 ├── CLAUDE.md                   # AI developer guide (short)
-├── SYSTEM_AI.md                # THIS FILE — architecture reference
-├── KOMMANDON.md                # User command reference
+├── docs/
+│   ├── SYSTEM_AI.md            # THIS FILE — architecture reference (66KB)
+│   ├── KOMMANDON.md            # User command reference
+│   └── GEMINI_PROMPT_API_DECISION.md  # Research: Market Data API comparison
 └── README.md                   # User-facing readme
 ```
 
@@ -405,13 +442,24 @@ run_pipeline(mode)         # 790 lines, the heart of the system
 `_get_fmp_fundamentals(ticker)` — Financial Modeling Prep free tier (250 calls/day).
 Fills: trailingPE, priceToBook, returnOnEquity, returnOnAssets, enterpriseValueToEbitda, revenueGrowth
 
-### 5.4 Insider data (Finansinspektionen)
+### 5.5 Insider data (Finansinspektionen)
 
-`core/fi_insider_fetcher.py:get_insider_signal_fi(ticker)`
+`core/fi_insider_fetcher.py:get_insider_signal_fi(ticker)` — a full rewrite replacing the old `core/insider_fetcher.py` (not in active repo).
+
 - Scrapes `marknadssok.fi.se` (HTML search → JSON XHR fallback)
 - Returns: `insider_cluster` (≥3 insiders in 30d), `insider_executive_buy` (VD/CFO köp)
 - Stores historical trade patterns in cache for routine vs. opportunistic classification
 - 24h cache, browser-emulation headers required (FI blocks bare requests)
+- 467 lines, 17KB
+
+### 5.6 Calendar data
+
+`core/earnings_calendar.py` — yfinance earnings calendar per ticker (6KB)
+`core/dividend_calendar.py` — dividend calendar per ticker (4KB)
+`core/macro_calendar.py` — **hardcoded** central bank + macro event calendar 2025–2026:
+  - Fed FOMC, ECB, Riksbanken, Norges Bank, BoE decision dates
+  - NOT dynamically fetched — update yearly
+  - Used by `daily_pipeline.py` for macro-aware scheduling
 
 ---
 
@@ -532,6 +580,15 @@ python portfolio/paper_trading.py report     # Detailed report
 python portfolio/paper_trading.py close_all  # Close all positions
 ```
 
+### 8.4 Hierarchical Risk Parity
+
+`portfolio/hierarchical_risk_parity.py` — Lopez de Prado (2016) HRP implementation:
+- **No matrix inversion** — works stably even with 800+ assets
+- Handles correlation clusters naturally (all tech stocks move together)
+- Requires NO expected-return estimates — only optimizes risk
+- Works with just 60 days of history
+- Used as alternative to Black-Litterman for pure risk-parity allocation
+
 ---
 
 ## 9. Streamlit Dashboard — Page Reference
@@ -569,7 +626,38 @@ All pages load data via `web/utils.py`:
 - `load_portfolio()` — reads `holdings.csv`
 - `load_watchlist()` — reads `watchlist.json`
 
-### 9.3 Stock detail page
+### 9.3 UI component library (`web/ui/`)
+
+Professional reusable UI components replacing ad-hoc inline HTML:
+
+| File | Lines | Contents |
+|---|---|---|
+| `components.py` | 220 | `metric_card()`, `score_bar()`, `info_box()`, `badge()` — byggblock för alla sidor |
+| `css.py` | 117 | CSS-injection helpers med stöd för dark mode |
+| `tokens.py` | 78 | Design-tokens: färgpalett, font stacks, spacing |
+| `icons.py` | 66 | Icon-hjälpfunktioner |
+| `glossary.py` | 146 | Begreppsordlista (`glossary.tooltip("P/E")`) för tooltips i hela appen |
+| `ai_action.py` | 53 | AI-knappar och actions |
+
+### 9.4 Admin tab system (`web/pages/admin_tabs/`)
+
+Admin-sidan (`admin_page.py`) renderar en tab-flik per fil i `admin_tabs/`:
+
+| Tab | File | Lines | Function |
+|---|---|---|---|
+| Översikt | `overview.py` | 128 | Admin overview + system status |
+| Scans | `scans.py` | 72 | Scan history timeline |
+| Health | `health.py` | 131 | Universe health metrics |
+| Innehav | `holdings.py` | 100 | Portfolio holdings CRUD |
+| Bevakningar | `watchlist.py` | 87 | Watchlist editor |
+| Användare | `users.py` | 120 | Multi-user config |
+| E-post | `email_tab.py` | 94 | Email subscriber management |
+| Cache | `cache_tab.py` | 109 | AI cache management |
+| Config | `config_tab.py` | 48 | Read-only config viewer |
+| Import | `import_tab.py` | 65 | Avanza CSV import UI |
+| Debug | `debug_tab.py` | 254 | *** Debug dashboard: API keys, data coverage, pipeline status, blacklist, strikes, FAQ *** |
+
+### 9.5 Stock detail page
 
 `web/stock_detail.py:render_stock_detail(ticker, df)` provides:
 - Quick data cards (7 KPIs with tooltips)
@@ -657,6 +745,14 @@ Eliminate: cash runway < 12 months, Piotroski ≤ 2, share dilution > 20%/year, 
 - AI evaluates each alert (relevance + explanation in Swedish)
 - Batched email with AI analysis per event
 - Keyword fallback when AI fails (vinstvarning, konkurs, fusion, FDA, etc.)
+
+### 11.5 Legacy alert system
+
+`core/alerts.py` — older/alternative email notification module (161 lines):
+- `send_weekly_report(rapport_md)` — weekly full report email
+- `send_daily_update(portfolio_df)` — daily portfolio update
+- `send_alert(subject, body)` — urgent notifications (SÄLJ-signal etc.)
+- Delegates to `email_template.py` for rendering
 
 ---
 
@@ -789,7 +885,7 @@ totalt (kör `pytest tests/`).
 | Strike system | `core/filters.py:update_ticker_health()` | Auto-blacklist tickers after 3 failed fetches |
 | Diagnose failure | `core/filters.py:diagnose_failure()` | Per-ticker failure analysis |
 | Debug flag | `core/news_alerts.py` | `--debug` flag for dry-run |
-| Debug page | `web/pages/admin_page.py:_render_debug_tab()` | **NEW** — admin-only debug dashboard |
+| Debug page | `web/pages/admin_tabs/debug_tab.py` | Admin-only debug dashboard (API keys, coverage, pipeline status, FAQ) |
 | API key check | Debug page | Red/green per API key |
 | Data coverage | Debug page | % coverage per factor |
 | Pipeline status | Debug page | Last run status, error history |
@@ -880,6 +976,19 @@ All ideas discovered during system analysis. Add to this section as you find mor
 ## 18. Andringslogg (uppdateras av varje AI vid varje andring)
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
+
+### 2026-06-01 — SYSTEM_AI.md: kompletterad med saknade filer och korrigeringar
+
+Gapanalys mot faktiskt filsystem avslöjade flera luckor i dokumentationen:
+
+- **Tillagda filer i directory-strukturen:** `core/alerts.py`, `core/macro_calendar.py`, `core/fi_insider_fetcher.py`, `portfolio/hierarchical_risk_parity.py`, `scripts/convert_snapshots.py`, `web/ui/`-paketet (7 filer), `web/pages/admin_tabs/` (12 filer)
+- **Borttagna icke-existerande filer:** `core/test_pipeline.py`, `web/pages/opportunities.py`, `scripts/replace_stock_search.py`
+- **Tillagda data-filer:** `stark_alert_state.json`, `score_drift_state.json`, `news_alert_state.json`, `ai_trade_journal.json`, `bt_snapshots/`
+- **Tillagda infrastruktur:** `.clinerules/`, `.devcontainer/`, `.github/dependabot.yml`, `.pre-commit-config.yaml`, `.streamlit/config.toml`
+- **Nya avsnitt:** §5.6 Calendar data, §9.3 UI component library + §9.4 Admin tab system, §8.4 Hierarchical Risk Parity, §11.5 Legacy alert system (`core/alerts.py`)
+- **Korrigerad filstorlek:** core 35 filer / 660KB, portfolio 8 filer, web ~35 filer / 1.1MB, sidantal 19
+- **Dokument:** `docs/GEMINI_PROMPT_API_DECISION.md` nu med i strukturen
+- **CLAUDE.md:** tester korrigerade 92→99
 
 ### 2026-06-01 — Bugg: dubbel-neutralisering vid morning/evening re-scoring
 
@@ -1205,7 +1314,7 @@ yfinance ──→ data_fetcher ──→ cache (data/cache/*.pkl)
                                        ▼
                                   Streamlit Cloud
                                   ┌──────────────────┐
-                                  │  20 pages         │
+                                  │  19 pages         │
                                   │  data from .csv   │
                                   │  AI from cache    │
                                   └──────────────────┘
@@ -1218,3 +1327,93 @@ yfinance ──→ data_fetcher ──→ cache (data/cache/*.pkl)
                                   │  keep-alive       │
                                   └──────────────────┘
 ```
+
+> *Äldre förändringar finns i §18 Ändringslogg ovan.*
+
+## §19. 50 Senaste Stora Förändringarna
+
+Detta avsnitt listar de 50 mest betydande förändringarna (nya funktioner, buggfixar, refaktoreringar) i omvänd ordning. Innehåller både vad som gjordes och varför.
+
+> **Från och med 2026-06-01 uppdateras SYSTEM_AI.md automatiskt av AI-verktyg efter varje ändring.** Underhåll enligt §0 Underhållsprotokoll.
+
+### 2026-06-01 — Borttagning av död kod (5 filer, 11 funktioner)
+**Vad:** Helt oanvända filer borttagna: `backtesting/factor_optimizer.py`, `portfolio/hierarchical_risk_parity.py`, `data_management/delta_tracker.py`, `scripts/convert_snapshots.py`, `scripts/write_readme.py`. Döda funktioner borttagna från 8 filer (se §16 för full lista). Sex `except: return None` korrigerade till `except Exception: return None`.
+**Varför:** Rensa upp codebase, eliminera förvirring, förhindra att döda grenar föreslås som lösningar. Bare `except:` utgjorde risk för att fånga SystemExit/KeyboardInterrupt.
+
+### 2026-06-01 — Kritiskt buggfix: bust_cache NameError i news_fetcher.py
+**Vad:** Borttog referens till odefinierad variabel `bust_cache` i `core/news_fetcher.py:870`. Ändrade Finnhub API-nyckelläsning från `os.getenv()` till `config.FINNHUB_API_KEY`.
+**Varför:** `NameError: name 'bust_cache' is not defined` kastades varje gång `fetch_company_news()` anropades, vilket tyst dödade ALL nyhetshämtning för ALLA tickers. AI-analys fick aldrig nyhetskontext. Användning av `_get_secret()` löser fallet när nyckeln bara finns i Streamlit secrets.
+
+### 2026-06-01 — safe_height guard i UI-komponenter
+**Vad:** Lade till `safe_height = None if height is None else max(height, 200)` i `data_table()` och `clickable_stock_table()` i `web/ui/components.py`.
+**Varför:** Förhindrar att tabeller renderas med en liten eller ogörlig höjd (0px eller negativ), vilket annars kraschar Streamlit-widget eller ger osynlig tabell.
+
+### 2026-06-01 — Unicode-tecken som orsakade SyntaxError i Python 3.12+
+**Vad:** Ersatte alla Unicode-punctuationstecken (en-dash `–`, pil `→`, multiplikation `×`, större-än-eller-lika `≥`) i kommentarer och docstrings i 90+ Python-filer.
+**Varför:** Python 3.12+ förbjöd vissa Unicode-punctuationstecken utanför string-literals i tokenizern. Detta blockerade import av `core/__init__.py` och därigenom HELA appen. Upptäcktes vid testkörning efter dodkodsrensningen.
+
+### 2026-06-01 — SYSTEM_AI.md: fullständig gapanalys och uppdatering
+**Vad:** Lade till 6 tidigare odokumenterade filer, 12 admin_tabs-filer, web/ui-paketet, korrigerade filstorlekar och antal (core 35/660KB, portfolio 8, web ~35/1.1MB, 19 sidor). Borttog referenser till 3 icke-existerande filer.
+**Varför:** SYSTEM_AI.md speglar nu verkligheten så AI-agenter kan lita på dokumentationen.
+
+### 2026-06-01 — Djup dodkodsscan av hela codebase
+**Vad:** Systematisk granskning av alla Python-filer för: oanvända filer, oanropade funktioner, bare `except:`-satser, `exec()`-anrop, saknade sidor i Streamlit-routing.
+**Varför:** Förebyggande underhåll. Hittade 5 helt döda filer, 15+ oanropade funktioner, 6 bare-except-risker, `page_portfolio()` som var unreachable i routing.
+
+### 2026-06-01 — Bugg: dubbel-neutralisering vid morning/evening re-scoring
+**Vad:** Lade till idempotens-flaggor `_fundamentals_neutralized` och `_sector_neutralized` i `core/scoring.py`. Morning/evening hoppar över neutralisering om flaggan redan finns.
+**Varför:** Re-scoring skrev över redan neutraliserade fundamentals, vilket driftade värden mot noll varje dag.
+
+### 2026-06-01 — Sektor-relativ scoring (regelbaserad motor)
+**Vad:** `SCORE_MODE = "sector_neutral"` som default. Per-sektor viktdeltan (`SECTOR_FACTOR_WEIGHTS`). Banker viktar kvalitet/värde, tech tillväxt/momentum.
+**Varför:** Global rankning straffade banker för hög skuldsättning (sektor-normal) och tech-lågt P/E.
+
+### 2026-06-01 — Per-sektor ML-modeller (XGBoost)
+**Vad:** `train_sector_models()` med >=2000 rader per sektor. `predict_returns_sector()` med fallback till universe.
+**Varför:** En global modell missar sektorspecifika signaturer.
+
+### 2026-06-01 — A/B-test av faktorvikter i backtesting
+**Vad:** `ab_test_weights()` omviktar lagrade snapshots och jämför topp-N-avkastning.
+**Varför:** Användare ska experimentera med vikter utan full pipeline.
+
+### 2026-06-01 — Score-rörelser och historisk replay i UI
+**Vad:** Visar score-ökningar/minskningar mellan snapshots. Datumväljare för historisk topp-15.
+**Varför:** Minska tiden att förstå vad som ändrats i universumet.
+
+### 2026-06-01 — ML-modellen omarbetad (near-zero IC → tvärsnittlig signal)
+**Vad:** Nytt träningsmål `target_cs` = forward-return demeanad PER DATUM. 11 saknade feature-funktioner implementerade. Per-datum-IC som headline-mått. CPCV-träning aktiverad.
+**Varför:** IC var 0.0023 (≈ noll) — absoluta forward-returns dominerades av marknadsrörelser. Tvärsnittlig target: IC +48% i A/B-test.
+
+### 2026-06-01 — Short interest som ny scoring-faktor
+**Vad:** `calc_short_interest_score()` vikt 3%. Contrarian-boost >20% blankat.
+**Varför:** Blankningsdata hämtades redan men var oanvänt.
+
+### 2026-05-31 — Stort reliability-pass (14+ fixes)
+**Vad:** Seed-filer (data försvann vid omstart). GitHub permissions för CI. `git push || true` → `git pull --rebase` + `git push`. 6 `except: pass` → `except Exception: pass`. Email BCC för integritet. Symmetrisk AI-fallback. keep_alive.yml.
+**Varför:** CI tyst misslyckats i veckor, data försvann vid omstart — bred stabilitetsöversyn.
+
+### 2026-05-31 — Nyhetslarm (ny funktion)
+**Vad:** `news_alerts.py:check_alerts()` för portfölj/watchlist/top-10. Dedup-state. Fallback Finnhub→Google för nordiska tickers.
+**Varför:** Inga notiser om nyhetshändelser som påverkar innehav.
+
+### 2026-05-31 — 36 delistade tickers rensade
+**Vad:** Borttog icke-existerande tickers (MAN.DE, VATTENFALL.ST, NYFOSA.ST m.fl.).
+**Varför:** 404 varje scan — onödig belastning.
+
+### 2026-05-30 — Transaktionskostnader i paper trading
+**Vad:** COMMISSION_PCT=0.10%, SLIPPAGE_PCT=0.05% vid köp/sälj.
+**Varför:** Paper trading visade orealistiskt hög avkastning.
+
+### 2026-05-29 — HRP + Black-Litterman integration
+**Vad:** Hierarchical Risk Parity för risk-parity. Black-Litterman blandar ML med market-cap prior.
+**Varför:** Två kompletterande portföljoptimeringsmetoder.
+
+### 2026-05-28 — Streamlit dashboard (19 sidor)
+**Vad:** Översikt, veckoscanner, småbolag, portfölj, AI, backtesting, admin m.fl.
+**Varför:** Grafisk presentation för icke-tekniska investerare.
+
+### 2026-05-20 — Första commit av nuvarande arkitektur
+**Vad:** Modulstruktur med core/, web/, portfolio/, CI/CD, AI-integration.
+**Varför:** Ersatte monolitisk `stock-scanner-main/` för bättre underhållbarhet.
+
+> *Äldre förändringar finns i §18 Ändringslogg ovan.*

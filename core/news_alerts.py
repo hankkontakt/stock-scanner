@@ -1,10 +1,10 @@
 """
-news_alerts.py – Realtidslarm för portfölj, watchlist & topp-10
+news_alerts.py - Realtidslarm för portfölj, watchlist & topp-10
 ================================================================
 Körs var 30:e minut via GitHub Actions. Kollar Finnhub (gratis)
 för nyheter om dina innehav, bevakningar och dagens topp-10-aktier.
 
-Vid relevant nyhet eller >5% kursrörelse → mail via email_template.
+Vid relevant nyhet eller >5% kursrörelse -> mail via email_template.
 """
 
 import json
@@ -110,7 +110,7 @@ def _load_top_tickers(n: int = 10) -> list:
 
 def _is_us_ticker(ticker: str) -> bool:
     """US-tickers saknar börssuffix (ingen punkt). Finnhub company-news
-    fungerar bara för dessa – nordiska/europeiska .ST/.HE/.DE m.fl. ger tomt."""
+    fungerar bara för dessa - nordiska/europeiska .ST/.HE/.DE m.fl. ger tomt."""
     return "." not in ticker
 
 
@@ -122,7 +122,7 @@ def _fetch_news(ticker: str, max_items: int = 3) -> list:
     2. Fallback till core.news_fetcher.fetch_company_news() för icke-US-tickers
        (nordiska/europeiska) ELLER när Finnhub inte gav något. Den källan
        använder Google News RSS + Nasdaq Nordic + DuckDuckGo och fungerar för
-       .ST/.HE-aktier – tidigare fick svenska innehav ALDRIG nyhetslarm.
+       .ST/.HE-aktier - tidigare fick svenska innehav ALDRIG nyhetslarm.
 
     Returnerar lista med dict: {headline, summary, source, url, datetime}
     """
@@ -239,7 +239,7 @@ def check_alerts(debug: bool = False) -> list:
     start = time.time()
     date_str = date.today().strftime("%Y-%m-%d")
     logger.info(f"\n{'='*50}")
-    logger.info(f"🚨 News Alerts – {date_str}")
+    logger.info(f"🚨 News Alerts - {date_str}")
     logger.info(f"{'='*50}\n")
 
     # Samla alla tickers att bevaka
@@ -264,7 +264,7 @@ def check_alerts(debug: bool = False) -> list:
     if has_user_focus:
         all_tickers.update(top_set)   # Topp-10 endast som komplement
     else:
-        logger.info("  ⚠ Både portfölj och watchlist är tomma – hoppar över topp-10 "
+        logger.info("  ⚠ Både portfölj och watchlist är tomma - hoppar över topp-10 "
                     "för att undvika spam av aktier du inte följer.")
         top_set = set()  # Töm så ingen kan klassas som TOPP-10 nedan
 
@@ -415,7 +415,7 @@ def _evaluate_price_move(ticker: str, price_alert: dict,
             "status": status,
             "change_pct": price_alert["change_pct"],
             "current_price": price_alert["current_price"],
-            "ai_analysis": result if result else f"⚠️ {ticker} rörde sig {price_alert['change_pct']:+.1f}% – sök efter nyheter.",
+            "ai_analysis": result if result else f"⚠️ {ticker} rörde sig {price_alert['change_pct']:+.1f}% - sök efter nyheter.",
             "timestamp": datetime.now().isoformat(),
         }
     except Exception:
@@ -428,13 +428,13 @@ def _send_alert_email(alerts: list):
         return
 
     date_str = date.today().strftime("%Y-%m-%d")
-    md_lines = [f"# 🚨 MarketScan Larm – {date_str}\n"]
+    md_lines = [f"# 🚨 MarketScan Larm - {date_str}\n"]
     md_lines.append(f"_{len(alerts)} händelser sedan senaste kontroll_\n")
 
     for alert in alerts:
         t = alert["ticker"]
         if alert["type"] == "news":
-            md_lines.append(f"## 📰 {alert['status']} – {t}\n")
+            md_lines.append(f"## 📰 {alert['status']} - {t}\n")
             md_lines.append(f"**{alert['headline']}**\n")
             if alert.get("source"):
                 md_lines.append(f"Källa: {alert['source']}\n")
@@ -453,7 +453,7 @@ def _send_alert_email(alerts: list):
 
     try:
         email_sent = send_email(
-            subject=f"🚨 MarketScan Larm – {date_str} ({len(alerts)} händelser)",
+            subject=f"🚨 MarketScan Larm - {date_str} ({len(alerts)} händelser)",
             body_markdown=body,
             from_name="MarketScan Alerts",
         )

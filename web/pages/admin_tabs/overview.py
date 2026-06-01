@@ -1,4 +1,4 @@
-"""admin/overview.py – Overview tab for admin page."""
+"""admin/overview.py - Overview tab for admin page."""
 import json
 from datetime import date, datetime
 from pathlib import Path
@@ -42,9 +42,9 @@ def render(load_scan_log_fn):
     try:
         scan_log = load_scan_log_fn()
         last = scan_log[-1] if scan_log else {}
-        c1.metric("Senaste scan", last.get("scan_type", "—"), last.get("status", "—"))
+        c1.metric("Senaste scan", last.get("scan_type", "--"), last.get("status", "--"))
     except Exception:
-        c1.metric("Senaste scan", "Okänd", "—")
+        c1.metric("Senaste scan", "Okänd", "--")
     c2.metric("Bevakningar", len(load_watchlist()))
     try:
         portfolio = load_portfolio()
@@ -95,7 +95,7 @@ def _render_github_sync_status():
     ]
 
     if not token:
-        st.warning("Ingen GitHub-token — kan inte kontrollera synkstatus")
+        st.warning("Ingen GitHub-token -- kan inte kontrollera synkstatus")
         return
 
     rows = []
@@ -103,9 +103,9 @@ def _render_github_sync_status():
         local_exists = local_path.exists()
         local_mtime = (
             datetime.fromtimestamp(local_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
-            if local_exists else "—"
+            if local_exists else "--"
         )
-        gh_committed = "—"
+        gh_committed = "--"
         try:
             import requests as _req
             r = _req.get(

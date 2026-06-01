@@ -1,5 +1,5 @@
 """
-pipeline_report.py – Markdown/email report builder helpers for daily_pipeline.py
+pipeline_report.py - Markdown/email report builder helpers for daily_pipeline.py
 """
 import json
 import logging
@@ -38,16 +38,16 @@ def _portfolio_table(enriched: list, show_stop_loss: bool = False) -> str:
 
     rows = []
     for h in enriched[:20]:
-        pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "—"
+        pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "--"
         row = [
             f"**{h['ticker']}**",
-            f"{h['score']:.0f}" if h['score'] else "—",
+            f"{h['score']:.0f}" if h['score'] else "--",
             pnl,
             h['entry'],
             h['trend'],
         ]
         if show_stop_loss:
-            sl = f"{h['stop_loss_pct']:+.1f}%" if h['stop_loss_pct'] else "—"
+            sl = f"{h['stop_loss_pct']:+.1f}%" if h['stop_loss_pct'] else "--"
             row.append(sl)
         rows.append(row)
 
@@ -64,7 +64,7 @@ def _opportunity_section(opportunities: list) -> str:
         ticker = opp["ticker"]
         score = opp.get("score", 0)
         reason = opp.get("reason", "")
-        out += f"- {emoji} **{ticker}** (score {score:.0f}) – {reason}\n"
+        out += f"- {emoji} **{ticker}** (score {score:.0f}) - {reason}\n"
     return out + "\n"
 
 
@@ -104,13 +104,13 @@ def format_factor_attribution_md(row: dict, compact: bool = True) -> str:
         try:
             fv = float(v)
             if fv != fv:  # NaN
-                return "—"
+                return "--"
             # Procentformat: om värdet är i decimalform (|v| < 1) multiplicera med 100
             if fmt.endswith("%") and abs(fv) < 1:
                 return f"{fv * 100:{fmt[:-1]}f}%"
             return f"{fv:{fmt}}"
         except Exception:
-            return "—"
+            return "--"
 
     def _score_bar(s: float) -> str:
         """Mini progress bar: ██░░░"""
@@ -132,7 +132,7 @@ def format_factor_attribution_md(row: dict, compact: bool = True) -> str:
                 v = row.get(col)
                 if v is not None:
                     kpi_vals.append(f"{kl}:{_sfmt(v, kfmt)}")
-            kpi_str = " · ".join(kpi_vals) if kpi_vals else ""
+            kpi_str = " * ".join(kpi_vals) if kpi_vals else ""
             parts.append(f"`{label[:6]:<6}` `{s:5.1f}` `{_score_bar(s)}` {kpi_str}")
         else:
             parts.append(f"**{label}**: {s:.0f}/100")
@@ -195,8 +195,8 @@ def _build_ai_weekly_context(scored, enriched, watchlist, top_10, bottom_5,
                     for t, d in indices.items() if d.get("change_pct") is not None},
         "portfolio_weekly_summary": {
             "total_pnl_pct": sum(h["pnl_pct"] for h in enriched if h["pnl_pct"] is not None) / max(len([h for h in enriched if h["pnl_pct"] is not None]), 1),
-            "best": max([h for h in enriched if h["pnl_pct"] is not None], key=lambda h: h["pnl_pct"], default={}).get("ticker", "—"),
-            "worst": min([h for h in enriched if h["pnl_pct"] is not None], key=lambda h: h["pnl_pct"], default={}).get("ticker", "—"),
+            "best": max([h for h in enriched if h["pnl_pct"] is not None], key=lambda h: h["pnl_pct"], default={}).get("ticker", "--"),
+            "worst": min([h for h in enriched if h["pnl_pct"] is not None], key=lambda h: h["pnl_pct"], default={}).get("ticker", "--"),
         },
         "holdings": enriched,
         "top_10_week": top_10,

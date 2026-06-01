@@ -1,5 +1,5 @@
 ﻿"""
-universe_health.py – AI-driven underhall av aktieuniversum
+universe_health.py - AI-driven underhall av aktieuniversum
 =================================================================
 Upptack avnoterade/inkorrekta tickers, foresl ersattningar
 och hitta nya intressanta bolag med hjalp av AI.
@@ -26,7 +26,7 @@ import yfinance as yf
 
 from . import config
 
-# –– Sokvagar ––
+# -- Sokvagar --
 MODULE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = MODULE_DIR / "data"
 BLACKLIST_FILE = DATA_DIR / "blacklist.json"
@@ -36,14 +36,14 @@ CACHE_TTL_SEC = 86400  # 24 timmars cache for health check-resultat
 
 
 def load_blacklist() -> list:
-    """Ladda svartlistan. Hanterar både dict-format (ticker → info) och list-format (alla historiska)."""
+    """Ladda svartlistan. Hanterar både dict-format (ticker -> info) och list-format (alla historiska)."""
     try:
         if BLACKLIST_FILE.exists():
             data = json.loads(BLACKLIST_FILE.read_text(encoding="utf-8"))
             if isinstance(data, list):
                 return data
             if isinstance(data, dict):
-                # Konvertera dict → list för att kunna iterera
+                # Konvertera dict -> list för att kunna iterera
                 return [
                     {"ticker": k, "reason": v.get("reason", ""), "date": v.get("date", "")}
                     for k, v in data.items()
@@ -90,7 +90,7 @@ def detect_invalid_tickers(df: pd.DataFrame) -> list:
     blacklist = {i.get("ticker") for i in load_blacklist()}
     current_tickers = set(df["ticker"].dropna().str.upper().unique())
 
-    # Hoppa över svartlistade direkt — de är redan kända
+    # Hoppa över svartlistade direkt -- de är redan kända
     remaining = [t for t in current_tickers if t not in blacklist]
     if not remaining:
         return []
@@ -136,12 +136,12 @@ def detect_invalid_tickers(df: pd.DataFrame) -> list:
             info = stock.info or {}
             quote_type = info.get("quoteType", "")
             if not quote_type or quote_type == "NONE":
-                reason = "ingen quoteType – troligen avnoterad"
+                reason = "ingen quoteType - troligen avnoterad"
                 name = info.get("shortName", info.get("longName", ""))
                 return (ticker, True, {"ticker": ticker, "name": name, "reason": reason})
             exchange = info.get("exchange", "")
             if exchange == "NONE" or exchange == "":
-                reason = "tom exchange – ogiltig ticker"
+                reason = "tom exchange - ogiltig ticker"
                 name = info.get("shortName", info.get("longName", ""))
                 return (ticker, True, {"ticker": ticker, "name": name, "reason": reason})
             try:
@@ -272,119 +272,3 @@ def run_health_check(df: pd.DataFrame = None, provider: str = "auto") -> dict:
     return result
 
 
-def auto_remove_invalid_tickers(
-    invalid_list: list[dict],
-    dry_run: bool = True,
-    verbose: bool = True,
-) -> dict:
-    """
-    Ta bort ogiltiga/avnoterade tickers fran universe.json och lagg till i blacklist.json.
-
-    Args:
-        invalid_list: Lista fran detect_invalid_tickers() — [{"ticker", "name", "reason"}, ...]
-        dry_run: Om True, rapportera utan att andra filer
-        verbose: Skriv ut detaljer
-
-    Returns:
-        dict med antal borttagna och blacklistade
-    """
-    import json as _json
-    universe_path = MODULE_DIR / "data" / "universe.json"
-    blacklist_path = DATA_DIR / "blacklist.json"
-
-    if not invalid_list:
-        return {"removed": 0, "blacklisted": 0, "not_found": 0}
-
-    # Ladda universe.json
-    try:
-        universe = _json.loads(universe_path.read_text(encoding="utf-8"))
-    except Exception as e:
-        if verbose:
-            print(f"  Kunde inte lasa universe.json: {e}")
-        return {"error": str(e)}
-
-    # Ladda blacklist.json
-    try:
-        bl = _json.loads(blacklist_path.read_text(encoding="utf-8")) if blacklist_path.exists() else {}
-    except Exception:
-        bl = {}
-
-    removed = 0
-    blacklisted = 0
-    not_found = 0
-
-    for inv in invalid_list:
-        ticker = inv.get("ticker", "").upper().strip()
-        if not ticker:
-            continue
-
-        # Kolla om tickern finns i nagot universum
-        found = False
-        for category_key, category_data in list(universe.items()):
-            if not isinstance(category_data, dict):
-                continue
-            tickers_list = category_data.get("tickers", []) or []
-            markets = category_data.get("markets", {})
-            all_tickers = list(tickers_list)
-            for mkt_key, mkt_tickers in markets.items():
-                all_tickers.extend(mkt_tickers)
-
-            if ticker in all_tickers:
-                found = True
-                # Ta bort fran listor
-                if "tickers" in category_data and ticker in category_data["tickers"]:
-                    if not dry_run:
-                        category_data["tickers"] = [t for t in category_data["tickers"] if t != ticker]
-                    if verbose:
-                        print(f"  Tar bort {ticker} fran {category_key}.tickers")
-                for mkt_key, mkt_tickers in list(markets.items()):
-                    if ticker in mkt_tickers:
-                        if not dry_run:
-                            markets[mkt_key] = [t for t in mkt_tickers if t != ticker]
-                        if verbose:
-                            print(f"  Tar bort {ticker} fran {category_key}.markets.{mkt_key}")
-
-        if not found:
-            if verbose:
-                print(f"  {ticker}: finns inte i universe.json (hoppar over)")
-            not_found += 1
-            continue
-
-        removed += 1
-
-        # Lagg till i blacklist om den inte redan finns
-        if ticker not in bl:
-            if not dry_run:
-                bl[ticker] = {
-                    "reason": inv.get("reason", "auto-upptackt av health check"),
-                    "date": datetime.now().strftime("%Y-%m-%d"),
-                }
-            blacklisted += 1
-            if verbose:
-                print(f"  Lagger till {ticker} i blacklist.json")
-
-    # Spara andringar
-    if not dry_run and (removed > 0 or blacklisted > 0):
-        try:
-            universe_path.write_text(
-                _json.dumps(universe, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
-            if verbose:
-                print(f"  Sparade universe.json ({removed} borttagna)")
-        except Exception as e:
-            print(f"  Kunde inte spara universe.json: {e}")
-
-        try:
-            blacklist_path.write_text(
-                _json.dumps(bl, indent=2, ensure_ascii=False), encoding="utf-8"
-            )
-            if verbose:
-                print(f"  Sparade blacklist.json ({blacklisted} tillagda)")
-        except Exception as e:
-            print(f"  Kunde inte spara blacklist.json: {e}")
-
-    return {
-        "removed": removed,
-        "blacklisted": blacklisted,
-        "not_found": not_found,
-    }

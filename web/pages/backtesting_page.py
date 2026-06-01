@@ -1,4 +1,4 @@
-"""web/pages/backtesting_page.py – Sida 9: Backtesting"""
+"""web/pages/backtesting_page.py - Sida 9: Backtesting"""
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -17,7 +17,7 @@ def page_backtesting():
         st.markdown("""
 ### Vad är backtesting?
 
-Backtesting är ett sätt att se hur en strategi *hade* fungerat historiskt —
+Backtesting är ett sätt att se hur en strategi *hade* fungerat historiskt --
 vi reser "tillbaka i tid" och låtsas att vi handlade enligt modellens regler
 för varje månad under den valda perioden.
 
@@ -27,11 +27,11 @@ Varje månad gör systemet följande:
 
 1. **Hämtar historisk prisdata** för alla aktier i universum (via Yahoo Finance)
 2. **Beräknar teknisk momentum-score** för varje aktie baserat på data som *faktiskt
-   var tillgänglig den dagen* — ingen fusk med framtida data
-   - 12-månaders momentum — 40 %
-   - 6-månaders momentum — 30 %
-   - 3-månaders momentum — 20 %
-   - Avstånd från 52-veckors-high — 10 %
+   var tillgänglig den dagen* -- ingen fusk med framtida data
+   - 12-månaders momentum -- 40 %
+   - 6-månaders momentum -- 30 %
+   - 3-månaders momentum -- 20 %
+   - Avstånd från 52-veckors-high -- 10 %
 3. **Väljer topp-N aktier** (du styr antalet) och köper likaviktat
 4. **Mäter avkastningen** tills nästa månadsskifte, sedan rebalanseras portföljen
 5. **Jämför mot benchmark** (SPY = S&P 500, ^OMXS30 = svenska börsen)
@@ -42,29 +42,29 @@ Det finns tre inbyggda problem som blåser upp resultaten:
 
 | Problem | Förklaring | Effekt |
 |---------|------------|--------|
-| **Survivorship bias** | Bara aktier som *finns kvar idag* ingår. Aktier som gick i konkurs eller avnoterades saknas. | Kan blåsa upp +5–15 % per år |
-| **Momentum-only modell** | Scoringen bygger bara på pris — inte fundamenta, insider, sentiment m.m. | Underpresterar jämfört med fulla modellen |
-| **Transaktionskostnader** | 0,2 % per omsatt position är inkluderat, men spread, slippage och skatt saknas | Kan kosta ytterligare 0,5–1 % per år |
+| **Survivorship bias** | Bara aktier som *finns kvar idag* ingår. Aktier som gick i konkurs eller avnoterades saknas. | Kan blåsa upp +5-15 % per år |
+| **Momentum-only modell** | Scoringen bygger bara på pris -- inte fundamenta, insider, sentiment m.m. | Underpresterar jämfört med fulla modellen |
+| **Transaktionskostnader** | 0,2 % per omsatt position är inkluderat, men spread, slippage och skatt saknas | Kan kosta ytterligare 0,5-1 % per år |
 
-**Tumregel:** Ta det visade resultatet och dra av ~10–15 % per år för att få en
+**Tumregel:** Ta det visade resultatet och dra av ~10-15 % per år för att få en
 mer realistisk uppskattning av faktisk prestanda.
 
 ### Vad är de viktigaste nyckeltalen?
 
-- **Sharpe ratio > 1.0** — bra riskjusterad avkastning
-- **Hit rate > 55 %** — strategin slog index mer än hälften av månaderna
-- **Max drawdown** — hur mycket portföljen gick ned som värst (ju lägre desto bättre)
-- **Alpha** — meravkastning utöver benchmark (kan vara positiv av survivorship bias)
+- **Sharpe ratio > 1.0** -- bra riskjusterad avkastning
+- **Hit rate > 55 %** -- strategin slog index mer än hälften av månaderna
+- **Max drawdown** -- hur mycket portföljen gick ned som värst (ju lägre desto bättre)
+- **Alpha** -- meravkastning utöver benchmark (kan vara positiv av survivorship bias)
 
 ### Hur ska jag använda resultaten?
 
 Använd backtestingen för att **jämföra varianter** (t.ex. topp-10 vs topp-20,
 1 år vs 3 år) snarare än att ta de absoluta siffrorna bokstavligt.
-Om modellen konsistent slår index i 60–70 % av perioderna är det ett bra tecken —
+Om modellen konsistent slår index i 60-70 % av perioderna är det ett bra tecken --
 men garanterar ingenting om framtiden.
         """)
 
-    st.warning("⚠️ **Tolkningsvarning:** Survivorship bias och förenklad scoring gör att siffrorna troligen är 10–15 %/år för höga. Se förklaringen ovan.")
+    st.warning("⚠️ **Tolkningsvarning:** Survivorship bias och förenklad scoring gör att siffrorna troligen är 10-15 %/år för höga. Se förklaringen ovan.")
 
     col_yr, col_top, col_bench, col_bench2, col_run = st.columns([1, 1, 1, 1, 1])
     with col_yr:
@@ -84,7 +84,7 @@ men garanterar ingenting om framtiden.
         st.session_state["bt_result2"] = None
 
     if run_bt:
-        with st.spinner(f"Kör backtest {int(years)} år, topp-{int(top_n)}... (kan ta 1–2 min)"):
+        with st.spinner(f"Kör backtest {int(years)} år, topp-{int(top_n)}... (kan ta 1-2 min)"):
             try:
                 from backtesting.backtest import run_backtest
                 from core import config
@@ -108,13 +108,13 @@ men garanterar ingenting om framtiden.
             ("📅 Perioder testade",  f"{result['perioder']} mån",                        f"{result['år_testat']} år",
              "Antal månader som backtestet täcker. Fler perioder ger mer statistisk säkerhet. Minst 24 perioder (2 år) rekommenderas för meningsfulla slutsatser."),
             ("📈 Kumulativ",          f"{result['kumulativ_avkastning']:+.1f}%",           f"{bench}: {result.get('kumulativ_benchmark', 0):+.1f}%",
-             "Total avkastning under hela testperioden om du investerat 100 kr från start. OBS: Survivorship bias blåser upp siffran med +5–15 %/år — ta den inte bokstavligt."),
+             "Total avkastning under hela testperioden om du investerat 100 kr från start. OBS: Survivorship bias blåser upp siffran med +5-15 %/år -- ta den inte bokstavligt."),
             ("📊 Annualiserad",       f"{result['annualiserad_port']:+.1f}%/år",           f"Alpha: {result.get('alpha_annualiserad', 0) or 0:+.1f}%/år",
              "Genomsnittlig årsavkastning (geometriskt medelvärde). Alpha = meravkastning utöver benchmark. Högt alpha kan bero på survivorship bias snarare än riktig skicklighet."),
             ("🎯 Sharpe ratio",       f"{result['sharpe_ratio']:.2f}",                    ">1.0 = bra",
-             "Riskjusterad avkastning: (avkastning − riskfri ränta) ÷ volatilitet. >1.0 = bra, >1.5 = mycket bra, >2.0 = utmärkt. Beräknas mot riskfri ränta ~4 %/år. Tar inte hänsyn till survivorship bias."),
+             "Riskjusterad avkastning: (avkastning − riskfri ränta) / volatilitet. >1.0 = bra, >1.5 = mycket bra, >2.0 = utmärkt. Beräknas mot riskfri ränta ~4 %/år. Tar inte hänsyn till survivorship bias."),
             ("✅ Hit rate",           f"{result.get('hit_rate_pct', 0):.0f}%",            ">50 % slår index",
-             "Andel månader som modellen slog benchmark. 50 % = kasta krona/klave. >55 % = bra. >60 % = mycket bra. Det viktigaste nyckeltalet — påverkas minst av survivorship bias."),
+             "Andel månader som modellen slog benchmark. 50 % = kasta krona/klave. >55 % = bra. >60 % = mycket bra. Det viktigaste nyckeltalet -- påverkas minst av survivorship bias."),
             ("💀 Max drawdown",       f"{result['max_drawdown_pct']:.1f}%",               None,
              "Värsta nedgång från toppnivå till bottennivå under testperioden. −20 % = portföljen tappade 20 % som värst innan den vände upp. Ju mer negativt, desto mer risk att du säljer i panik."),
         ])
@@ -185,7 +185,7 @@ men garanterar ingenting om framtiden.
                 fig_bar.update_layout(
                     template="plotly_dark", paper_bgcolor="#131722", plot_bgcolor="#1e2230",
                     height=280, margin=dict(t=36, b=16, l=16, r=16),
-                    title=dict(text="Månadsavkastning — modell (staplar) vs benchmark (linje)", font=dict(size=13)),
+                    title=dict(text="Månadsavkastning -- modell (staplar) vs benchmark (linje)", font=dict(size=13)),
                     yaxis=dict(title="%", zeroline=True, zerolinecolor="#64748b"),
                     legend=dict(orientation="h", y=1.1, x=0.5, xanchor="center"),
                 )
@@ -203,13 +203,13 @@ men garanterar ingenting om framtiden.
                         ],
                         bench: [
                             f"{result.get('kumulativ_benchmark', 0):+.1f}%",
-                            f"{result.get('annualiserad_bench', 0) or 0:+.1f}%/år", "—", "—",
+                            f"{result.get('annualiserad_bench', 0) or 0:+.1f}%/år", "--", "--",
                         ],
                     }
                     if b2_label:
                         cmp_data[b2_label] = [
                             f"{result2.get('kumulativ_benchmark', 0):+.1f}%",
-                            f"{result2.get('annualiserad_bench', 0) or 0:+.1f}%/år", "—", "—",
+                            f"{result2.get('annualiserad_bench', 0) or 0:+.1f}%/år", "--", "--",
                         ]
                     st.dataframe(pd.DataFrame(cmp_data), use_container_width=True, hide_index=True)
             else:
@@ -257,7 +257,7 @@ men garanterar ingenting om framtiden.
             if "bt_chat" not in st.session_state:
                 st.session_state["bt_chat"] = []
 
-            st.caption("Snabbfrågor — klicka för att skicka:")
+            st.caption("Snabbfrågor -- klicka för att skicka:")
             _qcols = st.columns(3)
             for _qi, _qtext in enumerate(_PRESET_QUESTIONS):
                 _qcol = _qcols[_qi % 3]
@@ -272,7 +272,7 @@ men garanterar ingenting om framtiden.
             if "bt_chat_pending" in st.session_state:
                 _q = st.session_state.pop("bt_chat_pending")
                 st.session_state["bt_chat"].append({"role": "user", "content": _q})
-                _system_note = "\n\nViktigt: Nämn begränsningarna (survivorship bias ~+5–15 %/år, momentum-only modell, transaktionskostnader). Svara kortfattat på svenska."
+                _system_note = "\n\nViktigt: Nämn begränsningarna (survivorship bias ~+5-15 %/år, momentum-only modell, transaktionskostnader). Svara kortfattat på svenska."
                 with st.spinner("AI analyserar…"):
                     try:
                         _resp = ai_analysis.ai_chat(
@@ -300,14 +300,14 @@ men garanterar ingenting om framtiden.
     st.subheader("📸 Point-in-time Backtest (reella score-snapshots)")
     st.caption(
         "Backtestas mot de **faktiska score­rekommendationer** som systemet gav vid varje "
-        "veckoscan — ingen look-ahead bias eller rekonstruerad scoring. "
+        "veckoscan -- ingen look-ahead bias eller rekonstruerad scoring. "
         "Historiken byggs upp löpande; ju fler vecko­scanningar som körts, desto mer data."
     )
 
     from backtesting.backtest_snapshots import list_snapshots, run_snapshot_backtest
     snaps = list_snapshots()
     st.metric("Tillgängliga snapshots", len(snaps),
-              help=f"Senaste: {snaps[-1] if snaps else '—'}, Första: {snaps[0] if snaps else '—'}")
+              help=f"Senaste: {snaps[-1] if snaps else '--'}, Första: {snaps[0] if snaps else '--'}")
 
     if len(snaps) < 3:
         st.info(
@@ -368,11 +368,11 @@ men garanterar ingenting om framtiden.
     st.markdown("---")
     st.subheader("⚖️ A/B-test av faktorvikter")
     st.caption(
-        "Jämför två viktuppsättningar mot historiska snapshots — omviktar de lagrade "
+        "Jämför två viktuppsättningar mot historiska snapshots -- omviktar de lagrade "
         "faktorpoängen utan att hämta om data. Bra för att se om en viktändring hade lönat sig."
     )
     if len(snaps) < 3:
-        st.info(f"Behöver ≥3 snapshots för A/B-test (har {len(snaps)}).")
+        st.info(f"Behöver >=3 snapshots för A/B-test (har {len(snaps)}).")
     else:
         from core.config import FACTOR_WEIGHTS as _FW
         _factor_keys = ["value", "quality", "momentum", "growth", "risk",
@@ -405,20 +405,20 @@ men garanterar ingenting om framtiden.
                     with col:
                         st.markdown(f"**{lbl}**" + (" 🏆" if ab.get("winner") == lbl else ""))
                         st.metric("Kumulativ avk.", f"{r.get('cum_return_pct', 0):+.1f}%")
-                        st.caption(f"Sharpe {r.get('sharpe', 0):.2f} · Win-rate {r.get('win_rate', 0):.0f}% · {r.get('n_periods', 0)} perioder")
+                        st.caption(f"Sharpe {r.get('sharpe', 0):.2f} * Win-rate {r.get('win_rate', 0):.0f}% * {r.get('n_periods', 0)} perioder")
 
     # ── Score-drift: top movers mellan senaste snapshots (P3.1) ──────────────
     st.markdown("---")
     st.subheader("📊 Score-rörelser (senaste två scans)")
     if len(snaps) < 2:
-        st.info("Behöver ≥2 snapshots för att visa score-rörelser.")
+        st.info("Behöver >=2 snapshots för att visa score-rörelser.")
     else:
         from backtesting.backtest_snapshots import compare_snapshots
         diff = compare_snapshots(snaps[-2], snaps[-1], top_n=15, min_score_change=3.0)
         if "error" in diff:
             st.caption(diff["error"])
         else:
-            st.caption(f"Jämför {snaps[-2]} → {snaps[-1]}")
+            st.caption(f"Jämför {snaps[-2]} -> {snaps[-1]}")
             cu, cd = st.columns(2)
             with cu:
                 st.markdown("**⬆️ Största ökningar**")
@@ -443,7 +443,7 @@ men garanterar ingenting om framtiden.
 
     # ── Historisk replay: vad rekommenderade systemet då? (P3.2) ─────────────
     st.markdown("---")
-    st.subheader("🕰️ Historisk replay — vad rekommenderade systemet då?")
+    st.subheader("🕰️ Historisk replay -- vad rekommenderade systemet då?")
     if not snaps:
         st.info("Inga snapshots ännu.")
     else:

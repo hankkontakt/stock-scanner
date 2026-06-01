@@ -1,7 +1,7 @@
 """
 interest_rate.py
 ================
-Interest Rate Sensitivity Module – analyserar hur portföljen påverkas av
+Interest Rate Sensitivity Module - analyserar hur portföljen påverkas av
 förändringar i styrräntor (Fed, ECB, Riksbanken).
 
 Beräknar en 'räntekänslighetspoäng' baserat på sektorer och duration,
@@ -252,18 +252,18 @@ def build_rates_section(holdings: Optional[list[dict]] = None) -> str:
         ])
         if result["score"] >= 7:
             lines.append(
-                "> ⚠ Hög räntekänslighet – överväg att minska exponeringen mot "
+                "> ⚠ Hög räntekänslighet - överväg att minska exponeringen mot "
                 "räntekänsliga sektorer (Fastigheter, Utility) i en "
                 "stigande räntemiljö."
             )
         elif result["score"] >= 5:
             lines.append(
-                "> 📊 Måttlig räntekänslighet – bevaka ränteutvecklingen, "
+                "> 📊 Måttlig räntekänslighet - bevaka ränteutvecklingen, "
                 "särskilt för sektorer med hög belåning."
             )
         else:
             lines.append(
-                "> ✅ Låg räntekänslighet – portföljen är relativt okänslig "
+                "> ✅ Låg räntekänslighet - portföljen är relativt okänslig "
                 "för ränteförändringar."
             )
 

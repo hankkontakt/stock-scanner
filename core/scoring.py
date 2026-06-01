@@ -13,7 +13,7 @@ Scoring philosophy:
 Region neutralization (added 2026-05):
 - Fundamental metrics (P/E, P/B, ROE, margins) are region-adjusted before
   percentile ranking. A Swedish industrial stock's P/E 15 is no longer ranked
-  against Nasdaq tech P/E 35 — instead it's ranked relative to its regional
+  against Nasdaq tech P/E 35 -- instead it's ranked relative to its regional
   peers. This corrects the most significant cross-market bias in the original
   global-percentile approach.
 - Momentum is intentionally kept global (cross-market relative strength is
@@ -37,13 +37,13 @@ HOLDING_DISCOUNT       = 0.85  # Multiplikator för holdingbolag
 COMMODITY_DISCOUNT     = 0.90  # Multiplikator för råvarubolag
 
 # ── Likviditetsgräns ─────────────────────────────────────────────────────────
-# Uppskattad daglig omsättning i USD under denna gräns → low_liquidity = True.
-# avg_volume (aktier/dag) × current_price (lokal valuta) omräknas till USD via
+# Uppskattad daglig omsättning i USD under denna gräns -> low_liquidity = True.
+# avg_volume (aktier/dag) x current_price (lokal valuta) omräknas till USD via
 # en förenklad tabell. Allt under $50k/dag är i praktiken handelsmässigt svårt
 # att kliva in/ur utan onödig spread och slippage.
 MIN_DAILY_TURNOVER_USD = 50_000
 
-# Ungefärliga konverteringsfaktorer lokal valuta → USD (uppdateras sällan).
+# Ungefärliga konverteringsfaktorer lokal valuta -> USD (uppdateras sällan).
 # Används ENBART för likviditetsestimering, inte för kursjämförelser.
 _CCY_TO_USD = {
     "SEK": 0.095,   # 1 SEK ≈ 0.095 USD (1 USD ≈ 10.5 SEK)
@@ -82,7 +82,7 @@ COMMODITY_INDUSTRIES = {
 # percentilrankning så att en svenska aktie rankas mot svenska aktier,
 # inte mot Nasdaq-tech.
 #
-# Ticker-suffix → exchange_group
+# Ticker-suffix -> exchange_group
 _SUFFIX_TO_GROUP = {
     # Norden
     ".ST": "Nordic", ".HE": "Nordic", ".CO": "Nordic", ".OL": "Nordic",
@@ -105,7 +105,7 @@ _SUFFIX_TO_GROUP = {
 }
 
 # Fundamentala kolumner som ska region-neutraliseras.
-# Momentum-kolumner (return_*) är medvetet EXKLUDERADE — global relativ styrka
+# Momentum-kolumner (return_*) är medvetet EXKLUDERADE -- global relativ styrka
 # är ett legitimt cross-market-signal.
 _REGION_NEUTRALIZE_COLS = [
     ("pe_trailing",       False),   # Lägre är bättre
@@ -119,7 +119,7 @@ _REGION_NEUTRALIZE_COLS = [
     ("gross_margin",      True),
     ("debt_to_equity",    False),
     ("current_ratio",     True),
-    ("free_cash_flow",    True),    # Relativt EV — region-median påverkar FCF-yield-rankning
+    ("free_cash_flow",    True),    # Relativt EV -- region-median påverkar FCF-yield-rankning
 ]
 
 # ── Hjälpfunktioner ────────────────────────────────────────────────────────
@@ -133,10 +133,10 @@ def _assign_exchange_group(ticker: str) -> str:
     """Returnerar börsgrupp baserat på ticker-suffix.
 
     Exempel:
-        'VOLV-B.ST' → 'Nordic'
-        'AAPL'      → 'US'
-        'SAP.DE'    → 'Europe'
-        '7203.T'    → 'Japan'
+        'VOLV-B.ST' -> 'Nordic'
+        'AAPL'      -> 'US'
+        'SAP.DE'    -> 'Europe'
+        '7203.T'    -> 'Japan'
     """
     t = str(ticker).upper()
     for suffix, group in _SUFFIX_TO_GROUP.items():
@@ -165,7 +165,7 @@ def _region_neutralize_fundamentals(df: pd.DataFrame) -> pd.DataFrame:
     svenska/nordiska peers, inte mot global median.
 
     Kolumner som neutraliseras definieras i _REGION_NEUTRALIZE_COLS.
-    Momentum (return_*) neutraliseras INTE — global relativ styrka är valid.
+    Momentum (return_*) neutraliseras INTE -- global relativ styrka är valid.
 
     Returnerar en kopia av df med justerade kolumnvärden.
     Originaldatan skrivs inte tillbaka; df-schemat bibehålls.
@@ -173,7 +173,7 @@ def _region_neutralize_fundamentals(df: pd.DataFrame) -> pd.DataFrame:
     IDEMPOTENS: sätter flaggan `_fundamentals_neutralized` och hoppar över om den
     redan finns. Annars dubbel-neutraliserar morning/evening-re-scoringen
     (som laddar redan-neutraliserad scored_universe-CSV) fundamentals varje dag
-    → faktorvärdena driftar mot noll. Weekly startar från rå data (ingen flagga).
+    -> faktorvärdena driftar mot noll. Weekly startar från rå data (ingen flagga).
     """
     if "_fundamentals_neutralized" in df.columns:
         return df  # Redan neutraliserad (t.ex. morning re-score på sparad CSV)
@@ -184,7 +184,7 @@ def _region_neutralize_fundamentals(df: pd.DataFrame) -> pd.DataFrame:
     for col, _ in _REGION_NEUTRALIZE_COLS:
         if col not in df.columns:
             continue
-        # Tvinga numerisk typ — yfinance kan returnera strängen "Infinity"
+        # Tvinga numerisk typ -- yfinance kan returnera strängen "Infinity"
         # (eller "-Infinity") som JSON-token för P/E när vinst ≈ 0.
         # pd.to_numeric(..., errors="coerce") konverterar sådana strängar till NaN.
         series = pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan)
@@ -204,15 +204,15 @@ def _region_neutralize_fundamentals(df: pd.DataFrame) -> pd.DataFrame:
 def _estimate_daily_turnover_usd(df: pd.DataFrame) -> pd.Series:
     """Uppskattar daglig omsättning i USD per aktie.
 
-    Formel: avg_volume_10d (aktier/dag) × current_price (lokal valuta) × FX → USD
+    Formel: avg_volume_10d (aktier/dag) x current_price (lokal valuta) x FX -> USD
 
     Fallback-kedja:
-        1. avg_volume_10d × current_price × FX
-        2. avg_volume × current_price × FX
+        1. avg_volume_10d x current_price x FX
+        2. avg_volume x current_price x FX
         3. NaN (otillräcklig data)
 
     Notera: FX-faktorerna i _CCY_TO_USD är statiska approximationer som
-    enbart används för likviditetsflaggning — inte för kursjämförelser.
+    enbart används för likviditetsflaggning -- inte för kursjämförelser.
     """
     # Välj bästa volymkolumn
     if "avg_volume_10d" in df.columns and df["avg_volume_10d"].notna().any():
@@ -241,7 +241,7 @@ def _estimate_daily_turnover_usd(df: pd.DataFrame) -> pd.Series:
                 t = str(t).upper()
                 for sfx, grp in _SUFFIX_TO_GROUP.items():
                     if t.endswith(sfx.upper()):
-                        # Approximera: Nordic→SEK, UK→GBP, Europe→EUR, Japan→JPY
+                        # Approximera: Nordic->SEK, UK->GBP, Europe->EUR, Japan->JPY
                         _grp_ccy = {
                             "Nordic": "SEK", "UK": "GBP", "Europe": "EUR",
                             "Japan": "JPY", "Asia": "HKD", "Canada": "CAD",
@@ -364,7 +364,7 @@ def calc_value_score(df: pd.DataFrame) -> pd.Series:
 
     # ── Conditioning: EV/EBITDA (30% of value score) ───────────────────
     # Also serves as penalty flag: if EV/EBITDA is extremely low (< 3) while
-    # FCF yield is poor → possible aggressive accruals / tax deferral
+    # FCF yield is poor -> possible aggressive accruals / tax deferral
     ev_ebitda = df.get("ev_to_ebitda")
     if ev_ebitda is not None:
         ev_ebitda = ev_ebitda.where(ev_ebitda > 0)
@@ -615,8 +615,8 @@ def _insider_decay_weight(df: pd.DataFrame) -> pd.Series:
     Nyinsider-signaler får full vikt, men avtar linjärt mot 0 efter 180 dagar.
     Detta eftersom forskning visar att insider alpha decayar inom 3-6 månader.
     
-    Returnerar pd.Series med decay weights (0.0–1.0).
-    Om datum saknas → weight = 1.0 (full boost, bakåtkompatibelt).
+    Returnerar pd.Series med decay weights (0.0-1.0).
+    Om datum saknas -> weight = 1.0 (full boost, bakåtkompatibelt).
     """
     if "insider_recent_date" not in df.columns:
         return pd.Series(1.0, index=df.index)
@@ -625,7 +625,7 @@ def _insider_decay_weight(df: pd.DataFrame) -> pd.Series:
     dates = pd.to_datetime(df["insider_recent_date"], errors="coerce")
     
     days_since = (now - dates).dt.days.clip(lower=0)
-    decay = 1.0 - (days_since / 180.0)  # Linjär decay: 1.0 dag 0 → 0.0 dag 180
+    decay = 1.0 - (days_since / 180.0)  # Linjär decay: 1.0 dag 0 -> 0.0 dag 180
     decay = decay.clip(lower=0.0, upper=1.0)
     # NaT = datum saknas (t.ex. gammal cachad data utan datumsupport).
     # Bakåtkompatibelt beteende: behåll full boost (1.0) så att befintliga
@@ -636,18 +636,18 @@ def _insider_decay_weight(df: pd.DataFrame) -> pd.Series:
 
 def calc_short_interest_score(df: pd.DataFrame) -> pd.Series:
     """
-    Short interest score — låg blankning är positivt (färre skeptiker),
+    Short interest score -- låg blankning är positivt (färre skeptiker),
     men EXTREM blankning kan vara contrarian-signal (short squeeze potential).
 
     Primärt mått: short_pct_float (% av float som är blankat).
     Fallback:     short_ratio (dagar att täcka = dagar till short cover).
 
     Logik:
-    - 0–10 % blankat → högt score (låg skepticism)
-    - 10–20 % → medel
-    - >30 % → bottnar, kan ha contrarian-boost (short squeeze risk)
+    - 0-10 % blankat -> högt score (låg skepticism)
+    - 10-20 % -> medel
+    - >30 % -> bottnar, kan ha contrarian-boost (short squeeze risk)
 
-    Skalning: inverterad percentil­rankning → låg blankning = högt score.
+    Skalning: inverterad percentil­rankning -> låg blankning = högt score.
     Contrarian-boost: om short_pct_float > 20 % adderas upp till +10 extra
     (squeeze-potential bestraffas inte utan bel­önas marginellt).
     """
@@ -667,10 +667,10 @@ def calc_short_interest_score(df: pd.DataFrame) -> pd.Series:
     if series.notna().sum() < MIN_VALID_OBSERVATIONS:
         return _neutral_series(df.index)
 
-    # Inverterad rankning: låg blankning → högt score
+    # Inverterad rankning: låg blankning -> högt score
     base_score = percentile_rank(series, ascending=False)
 
-    # Contrarian-boost: hög blankning → liten positiv justering (short-squeeze)
+    # Contrarian-boost: hög blankning -> liten positiv justering (short-squeeze)
     if "short_pct_float" in df.columns:
         high_short = pd.to_numeric(df["short_pct_float"], errors="coerce").fillna(0) > 0.20
         boost = high_short.astype(float) * 10
@@ -694,7 +694,7 @@ def calc_options_flow_score(df: pd.DataFrame) -> pd.Series:
     if signal.notna().sum() < MIN_VALID_OBSERVATIONS:
         return _neutral_series(df.index)
 
-    # Signal ar redan 0.1-0.9 — skala till 10-90
+    # Signal ar redan 0.1-0.9 -- skala till 10-90
     score = signal * 100
     score = score.fillna(NEUTRAL_SCORE)
 
@@ -712,7 +712,7 @@ def calc_sentiment_score(df: pd.DataFrame) -> pd.Series:
     """
     Sentiment score från Finnhub-nyhetsdata + insiderhandelssignaler.
     'sentiment_raw' = -1 till +1 från Finnhub.
-    Insider-boost: VD/CFO-köp → +20 poäng, cluster-köp → +30 poäng.
+    Insider-boost: VD/CFO-köp -> +20 poäng, cluster-köp -> +30 poäng.
     Insider-boosten är tidsdämpad (decay över 180 dagar) enligt forskning
     som visar att insider alpha förfaller inom 3-6 månader.
     """
@@ -729,7 +729,7 @@ def calc_sentiment_score(df: pd.DataFrame) -> pd.Series:
 
     # ── Insider-boost med tidsdämpning ──────────────────────────────────────
     # VD/CFO köper: starkt bullish signal (+20 base, capped 95)
-    # Cluster (≥3 insiders inom 30d): ännu starkare (+30 base, capped 98)
+    # Cluster (>=3 insiders inom 30d): ännu starkare (+30 base, capped 98)
     # Båda dämpas linjärt över 180 dagar via _insider_decay_weight()
     if "insider_executive_buy" in df.columns:
         exec_mask    = df["insider_executive_buy"].fillna(False).astype(bool)
@@ -782,7 +782,7 @@ def _apply_scores_and_discounts(df: pd.DataFrame, w: dict) -> pd.DataFrame:
             s      = s + wval * df[scol].fillna(0)
             w_used = w_used + wval * valid.astype(float)
         # Skala upp till hela viktomfånget (kompenserar för saknade faktorer).
-        # Exempel: om 30% vikt saknas men rest är 60 → skalat 60/0.70 = 85.7
+        # Exempel: om 30% vikt saknas men rest är 60 -> skalat 60/0.70 = 85.7
         scale = (total_w / w_used.clip(lower=1e-6)).clip(upper=3.0)
         return (s * scale).clip(0, 100)
 
@@ -843,9 +843,9 @@ def score_universe_sector_neutralized(df: pd.DataFrame, regime: str = "OSÄKER")
     Calculate factor scores with BOTH region- and sector-neutralization.
 
     Tillämpningsordning:
-        1. Region-neutralisering (subtrahera regionmedian) — tar bort systematiska
+        1. Region-neutralisering (subtrahera regionmedian) -- tar bort systematiska
            skillnader i värderingsregim mellan marknader (US tech vs Nordic industrial).
-        2. Sektor-neutralisering (subtrahera sektormedianen) — isolerar
+        2. Sektor-neutralisering (subtrahera sektormedianen) -- isolerar
            bolagsspecifik alpha från sektorexponering.
 
     Returns df with same schema as score_universe() + low_liquidity flag.
@@ -876,7 +876,7 @@ def score_universe_sector_neutralized(df: pd.DataFrame, regime: str = "OSÄKER")
         df["_sector_neutralized"] = True
 
     # ── Steg 3: Faktorscore + rabatter + rank ─────────────────────────────────
-    # Respektera marknadsregimen (tidigare hårdkodat "OSÄKER" → ignorerade TJUR/BJÖRN).
+    # Respektera marknadsregimen (tidigare hårdkodat "OSÄKER" -> ignorerade TJUR/BJÖRN).
     w = get_dynamic_weights(regime, config.FACTOR_WEIGHTS)
     df = _apply_scores_and_discounts(df, w)
 
@@ -899,7 +899,7 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
         1. Region-neutralisera fundamentala metrics (subtrahera regionmedian)
            så att P/E 15 för ett nordiskt bolag inte jämförs mot Nasdaq-tech P/E 35.
         2. Beräkna faktorscore på de region-justerade värdena.
-        3. Momentum hålls globalt (intentionellt — cross-market relativ styrka är valid).
+        3. Momentum hålls globalt (intentionellt -- cross-market relativ styrka är valid).
         4. Likviditetsflagg: low_liquidity=True om dagsomsättning < MIN_DAILY_TURNOVER_USD.
     """
     df = df.copy()
@@ -927,7 +927,7 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     # (MIN_DAILY_TURNOVER_USD) flaggas low_liquidity=True. Dessa visas
     # fortfarande i UI:t men kan filtreras bort av användaren.
     # Flaggan påverkar INTE score_total (vi bestraffar inte för låg likviditet
-    # eftersom småbolagspremien är en del av poängsättningen — storlekspoängen
+    # eftersom småbolagspremien är en del av poängsättningen -- storlekspoängen
     # hanterar det redan via calc_size_score).
     turnover = _estimate_daily_turnover_usd(df)
     df["est_daily_turnover_usd"] = turnover.round(0).astype("Int64", errors="ignore")

@@ -1,5 +1,5 @@
 """
-ai_analysis.py – MarketScan AI Engine (Multi-Provider)
+ai_analysis.py - MarketScan AI Engine (Multi-Provider)
 ======================================================
 Stöder både DeepSeek (komplex, kostar) och Google Gemini (enkel, gratis).
 
@@ -45,7 +45,7 @@ _token_sanitize = re.compile(r"(sk-[a-zA-Z0-9]{10,}|AIza[a-zA-Z0-9_-]{20,})")
 from core.config import _get_secret
 
 
-# ── Depth-nivå → max_tokens mapping ──────────────────────────────────────────
+# ── Depth-nivå -> max_tokens mapping ──────────────────────────────────────────
 DEPTH_MAP = {
     "Snabb":      512,
     "Normal":     2048,
@@ -75,8 +75,8 @@ SNABB_KEYS = {
 
 def _build_depth_context(stock_data: dict, depth: str) -> dict:
     """Filtrera stock_data-dict baserat på vald djupnivå.
-    'Snabb' → bara de viktigaste 6 nyckeltalen.
-    'Normal'/'Djup'/'Extra djup' → returnerar orört (allt som finns)."""
+    'Snabb' -> bara de viktigaste 6 nyckeltalen.
+    'Normal'/'Djup'/'Extra djup' -> returnerar orört (allt som finns)."""
     if depth == "Snabb":
         return {k: v for k, v in stock_data.items() if k in SNABB_KEYS}
     return stock_data   # Normal, Djup, Extra djup: inga filter
@@ -99,7 +99,7 @@ def _depth_system_prompt_addon(depth: str) -> str:
             "3) Risker och katalysatorer "
             "4) Konkret positionsstorlek och entry/exit"
         )
-    return ""   # "Normal" → inga tillägg
+    return ""   # "Normal" -> inga tillägg
 
 
 def _is_swedish_stock(ticker: str) -> bool:
@@ -110,7 +110,7 @@ def _k3_accounting_note(ticker: str, depth: str) -> str:
     """För Djup/Extra djup på svenska aktier: notering om K3/K2-redovisning."""
     if depth in ("Djup", "Extra djup") and _is_swedish_stock(ticker):
         return (
-            "\n\n**OBS – Svensk redovisning (K3/K2):** Obeskattade reserver kan reducera "
+            "\n\n**OBS - Svensk redovisning (K3/K2):** Obeskattade reserver kan reducera "
             "redovisat resultat. ROA och marginaler är troligen undervärdering av faktisk lönsamhet."
         )
     return ""
@@ -166,7 +166,7 @@ GEMINI_FALLBACK_MODELS = [
 ]
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SYSTEM PROMPTS – importerade från core/ai_prompts.py
+# SYSTEM PROMPTS - importerade från core/ai_prompts.py
 # ══════════════════════════════════════════════════════════════════════════════
 
 from core.ai_prompts import (  # noqa: E402
@@ -182,7 +182,7 @@ from core.ai_prompts import (  # noqa: E402
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# HJÄLPFUNKTIONER – Bestäm provider
+# HJÄLPFUNKTIONER - Bestäm provider
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _resolve_provider(provider: str = "auto", task_type: str = "light") -> str:
@@ -276,7 +276,7 @@ def _deepseek_call(messages: list, system_prompt: str = "",
                 content = data["choices"][0]["message"]["content"]
                 return content
 
-            # ❌ 401/403 – nyckelproblem, ge upp direkt
+            # ❌ 401/403 - nyckelproblem, ge upp direkt
             if resp.status_code in (401, 403):
                 try:
                     body = resp.json().get("error", {}).get("message", resp.text[:200])
@@ -285,20 +285,20 @@ def _deepseek_call(messages: list, system_prompt: str = "",
                 body = _token_sanitize.sub("***", body)
                 return f"❌ **DeepSeek nekade åtkomst ({resp.status_code}):** {body}"
 
-            # ❌ 429 – rate-limit, vänta längre (exponential backoff)
+            # ❌ 429 - rate-limit, vänta längre (exponential backoff)
             if resp.status_code == 429:
                 delay = 5.0 * (2 ** attempt)  # 5s, 10s, 20s
-                last_error = f"⚠️ DeepSeek rate-limit (429) – väntar {delay:.0f}s (försök {attempt+1}/{max_retries})"
+                last_error = f"⚠️ DeepSeek rate-limit (429) - väntar {delay:.0f}s (försök {attempt+1}/{max_retries})"
                 if attempt < max_retries - 1:
                     time.sleep(delay)
                     continue
                 # Om sista retryn också är 429, returnera DeepSeek-fel och låt _ai_call falla tillbaka
                 return f"⚠️ **DeepSeek rate-limited efter {max_retries} försök.** Försök igen senare."
 
-            # ❌ 5xx – server error, retry med kort backoff
+            # ❌ 5xx - server error, retry med kort backoff
             if 500 <= resp.status_code < 600:
                 delay = 2.0 * (2 ** attempt)  # 2s, 4s, 8s
-                last_error = f"⚠️ DeepSeek server error ({resp.status_code}) – väntar {delay:.0f}s"
+                last_error = f"⚠️ DeepSeek server error ({resp.status_code}) - väntar {delay:.0f}s"
                 if attempt < max_retries - 1:
                     time.sleep(delay)
                     continue
@@ -317,7 +317,7 @@ def _deepseek_call(messages: list, system_prompt: str = "",
 
         except requests.exceptions.Timeout:
             delay = 1.0 * (2 ** attempt)  # 1s, 2s, 4s
-            last_error = f"⚠️ DeepSeek timeout – väntar {delay:.0f}s"
+            last_error = f"⚠️ DeepSeek timeout - väntar {delay:.0f}s"
             if attempt < max_retries - 1:
                 time.sleep(delay)
                 continue
@@ -472,18 +472,18 @@ def _gemini_call(messages: list, system_prompt: str = "",
                     return f"⚠️ **Gemini nekade åtkomst (403):** {body}"
 
                 elif resp.status_code == 404:
-                    # Modellen finns inte → bryt inre loop, gå till nästa modell.
+                    # Modellen finns inte -> bryt inre loop, gå till nästa modell.
                     last_error = f"⚠️ **Gemini: modell '{model}' hittades inte (404).**"
                     model_got_404 = True
                     break
 
                 elif resp.status_code == 429:
                     delay = 5.0 * (2 ** attempt)  # 5s, 10s, 20s
-                    last_error = f"⚠️ **Gemini rate-limit (429)** – väntar {delay:.0f}s..."
+                    last_error = f"⚠️ **Gemini rate-limit (429)** - väntar {delay:.0f}s..."
                     if attempt < max_retries - 1:
                         time.sleep(delay)
                         continue
-                    return ""  # uttömda retries → fallback till DeepSeek
+                    return ""  # uttömda retries -> fallback till DeepSeek
 
                 else:
                     try:
@@ -497,7 +497,7 @@ def _gemini_call(messages: list, system_prompt: str = "",
                     return last_error
 
             except requests.exceptions.Timeout:
-                last_error = "⚠️ **Gemini timeout – försök igen.**"
+                last_error = "⚠️ **Gemini timeout - försök igen.**"
                 if attempt < max_retries - 1:
                     time.sleep(1)
                     continue
@@ -553,15 +553,15 @@ def _ai_call(messages: list, system_prompt: str = "",
                 ds_result = _deepseek_call(messages, system_prompt, max_tokens, temperature)
                 if not ds_result.startswith("⚠️") and not ds_result.startswith("❌"):
                     gemini_reason = result if result else "ingen nyckel/tomt svar"
-                    return ds_result + f"\n\n---\n*ℹ️ Gemini ej tillgänglig ({gemini_reason[:60]}) – svar från DeepSeek (fallback)*"
-                # DeepSeek misslyckades också – visa Geminis ursprungliga fel
+                    return ds_result + f"\n\n---\n*ℹ️ Gemini ej tillgänglig ({gemini_reason[:60]}) - svar från DeepSeek (fallback)*"
+                # DeepSeek misslyckades också - visa Geminis ursprungliga fel
                 return result or "⚠️ **Varken Gemini eller DeepSeek svarade.** Kontrollera dina API-nycklar."
-            # Ingen DeepSeek-nyckel – visa Geminis fel direkt
+            # Ingen DeepSeek-nyckel - visa Geminis fel direkt
             return result or "⚠️ **Gemini ej tillgänglig.** Kontrollera GEMINI_API_KEY i Streamlit Secrets."
         return result
     else:
         result = _deepseek_call(messages, system_prompt, max_tokens, temperature)
-        # Symmetrisk fallback: om DeepSeek misslyckas (tomt, ⚠️ eller ❌ – t.ex.
+        # Symmetrisk fallback: om DeepSeek misslyckas (tomt, ⚠️ eller ❌ - t.ex.
         # 402 slut på saldo, 429 rate-limit) prova Gemini om nyckel finns.
         # Tidigare saknades denna riktning helt trots att CLAUDE.md anger
         # Gemini som fallback när DeepSeek failar.
@@ -573,7 +573,7 @@ def _ai_call(messages: list, system_prompt: str = "",
                                           temperature, use_grounding=use_grounding)
                 if gem_result and not gem_result.startswith("⚠️"):
                     ds_reason = result if result else "tomt svar"
-                    return gem_result + f"\n\n---\n*ℹ️ DeepSeek ej tillgänglig ({ds_reason[:60]}) – svar från Gemini (fallback)*"
+                    return gem_result + f"\n\n---\n*ℹ️ DeepSeek ej tillgänglig ({ds_reason[:60]}) - svar från Gemini (fallback)*"
         return result
 
 
@@ -829,7 +829,7 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None,
 
     # Gemini Search Grounding: Aktiveras vid Djup/Extra djup om inga nyheter hittades.
     # Gemini söker då automatiskt på Google under inference för att komplettera analysen.
-    # Gratis upp till 50 queries/dag — täcker normalt 5-20 djupanalyser per dag.
+    # Gratis upp till 50 queries/dag -- täcker normalt 5-20 djupanalyser per dag.
     _use_grounding = (
         not news_lines
         and depth in ("Djup", "Extra djup")
@@ -973,7 +973,7 @@ def ai_chat(question: str, context: str = "", force_refresh: bool = False,
     """
     user_message = question
     if context:
-        # News sections should NOT be in a JSON code block — use plain text
+        # News sections should NOT be in a JSON code block -- use plain text
         if "Färska nyheter:" in context:
             # Split: scan data vs news
             parts = context.split("\n\nFärska nyheter:", 1)
@@ -1019,7 +1019,7 @@ def generate_weekly_ai_analysis(scored_df: pd.DataFrame, regime_info: dict,
                                  depth: str = "Normal") -> str:
     """
     Skapa AI-analyssektion för veckorapporten.
-    Veckoanalys ar en "heavy" uppgift – anvander DeepSeek i hybrid-lage.
+    Veckoanalys ar en "heavy" uppgift - anvander DeepSeek i hybrid-lage.
 
     Args:
         scored_df: DataFrame med scandata
@@ -1400,7 +1400,7 @@ def generate_market_summary(df: pd.DataFrame = None, sc_df: pd.DataFrame = None,
 Analysera datan och inkludera:
 1. Marknadsregim och övergripande sentiment
 2. Sektor- och breddsanalys (vilka sektorer leder, bredd mm)
-3. Starka kontra svaga aktier – mönster i faktorscorer
+3. Starka kontra svaga aktier - mönster i faktorscorer
 4. Konkreta takeaways för investeraren
 
 Skriv på svenska, använd emojis. 150-300 ord beroende på datatillgång.""" + _depth_system_prompt_addon(depth),
@@ -1414,7 +1414,7 @@ Skriv på svenska, använd emojis. 150-300 ord beroende på datatillgång.""" + 
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 11. VALIDERING – Testa API-nyckeln
+# 11. VALIDERING - Testa API-nyckeln
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_api_key(provider: str = "auto") -> dict:
@@ -1510,16 +1510,6 @@ def _test_gemini_key() -> dict:
             return {"status": "warning", "message": f"⚠️ Gemini svarade med status {resp.status_code}: {body}"}
     except Exception as e:
         return {"status": "error", "message": f"❌ Kunde inte nå Gemini: {e}"}
-
-
-def test_all_keys() -> dict:
-    """Testa båda API-nycklarna och returnera status för båda."""
-    deepseek_status = _test_deepseek_key()
-    gemini_status = _test_gemini_key()
-    return {
-        "deepseek": deepseek_status,
-        "gemini": gemini_status,
-    }
 
 
 def clear_cache():

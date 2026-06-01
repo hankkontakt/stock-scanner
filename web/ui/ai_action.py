@@ -1,5 +1,5 @@
 """
-ai_action.py — AI-djupväljare vid användningsstället.
+ai_action.py -- AI-djupväljare vid användningsstället.
 
 Ersätter den globala djup-väljaren i sidofältet. Istället väljer användaren djup
 DIREKT där AI ska köras, via en liten segmented_control bredvid kör-knappen.
@@ -24,7 +24,7 @@ def depth_selector(key: str, default: str = "Normal", label: str = "AI-djup") ->
     try:
         choice = st.segmented_control(
             label, DEPTHS, default=default, key=f"depth_{key}",
-            help="Snabb = kort & billigt · Normal = standard · Djup/Extra djup = "
+            help="Snabb = kort & billigt * Normal = standard * Djup/Extra djup = "
                  "mer kontext och längre analys (långsammare).",
         )
         return choice or default

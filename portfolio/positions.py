@@ -266,7 +266,7 @@ def generate_performance_report(current_prices: dict = None) -> str:
     """
     Skapar en performance-rapport.
 
-    current_prices: {ticker: current_price} – om None hämtas via yfinance
+    current_prices: {ticker: current_price} - om None hämtas via yfinance
     """
     txs      = load_transactions()
     holdings = calc_current_holdings()
@@ -312,17 +312,17 @@ def generate_performance_report(current_prices: dict = None) -> str:
                     days  = (date.today() - first).days
                     hold_str = f"{days}d" if days < 365 else f"{days//365}y {(days%365)//30}m"
                 except Exception:
-                    hold_str = "—"
+                    hold_str = "--"
             else:
-                hold_str = "—"
+                hold_str = "--"
 
             if mkt_val:
                 total_value += mkt_val
             total_cost += h["total_cost"]
 
-            pnl_s     = f"{'+' if pnl >= 0 else ''}{pnl:,.0f}" if pnl is not None else "—"
-            pnl_pct_s = f"{'+' if pnl_pct >= 0 else ''}{pnl_pct:.1f}%" if pnl_pct is not None else "—"
-            curr_s    = f"{curr_price:,.2f}" if curr_price else "—"
+            pnl_s     = f"{'+' if pnl >= 0 else ''}{pnl:,.0f}" if pnl is not None else "--"
+            pnl_pct_s = f"{'+' if pnl_pct >= 0 else ''}{pnl_pct:.1f}%" if pnl_pct is not None else "--"
+            curr_s    = f"{curr_price:,.2f}" if curr_price else "--"
 
             lines.append(
                 f"| `{ticker}` | {h['shares']:.2f} | {h['avg_cost']:,.2f} | "
@@ -349,7 +349,7 @@ def generate_performance_report(current_prices: dict = None) -> str:
 
         lines.append(f"**Totalt realiserat P&L:** "
                      f"**{'+' if total_real >= 0 else ''}{total_real:,.0f}**  ")
-        lines.append(f"**Vinstaffärer:** {total_wins} st ({win_rate:.0f}%) · "
+        lines.append(f"**Vinstaffärer:** {total_wins} st ({win_rate:.0f}%) * "
                      f"**Förlustaffärer:** {total_loss} st\n")
 
         lines.append("| Datum | Ticker | Antal | Sälj-kurs | P&L | P&L % |")

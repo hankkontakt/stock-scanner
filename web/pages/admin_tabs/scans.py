@@ -1,4 +1,4 @@
-"""admin/scans.py – Starta scan tab for admin page."""
+"""admin/scans.py - Starta scan tab for admin page."""
 import streamlit as st
 
 from web.pages.admin import _trigger_targeted_refresh, _get_github_token, _get_st_secret

@@ -85,7 +85,7 @@ def fetch_all_prices(tickers: list, years: int = 4) -> pd.DataFrame:
     min_rows = 252 * years * 0.7
     prices = prices.dropna(axis=1, thresh=int(min_rows))
     
-    print(f"  ✓ Prisdata hämtad: {len(prices.columns)}/{len(tickers)} aktier × {len(prices)} dagar ({failed} misslyckades)")
+    print(f"  ✓ Prisdata hämtad: {len(prices.columns)}/{len(tickers)} aktier x {len(prices)} dagar ({failed} misslyckades)")
     return prices
 
 
@@ -104,7 +104,7 @@ def score_at_date(prices: pd.DataFrame, date: pd.Timestamp) -> pd.Series:
     - 3m momentum  (20%)
     - Avstånd från 52v-high (10%)
     """
-    # Historisk data fram till (men INTE inkl.) det aktuella datumet – undviker look-ahead bias
+    # Historisk data fram till (men INTE inkl.) det aktuella datumet - undviker look-ahead bias
     hist = prices[prices.index < date].copy()
 
     if len(hist) < 63:  # Minst 3 månader data
@@ -182,7 +182,7 @@ def run_backtest(
     if prices.empty:
         return {}
 
-    # Hämta benchmark – säkerställ att bench_prices alltid är en 1D Series
+    # Hämta benchmark - säkerställ att bench_prices alltid är en 1D Series
     # (nya yfinance-versioner returnerar MultiIndex-DataFrame för "Close")
     bench_data = yf.download(benchmark, period=f"{years+1}y", auto_adjust=True, progress=False)
     bench_prices = None
@@ -221,7 +221,7 @@ def run_backtest(
         if not valid:
             continue
 
-        # Mät avkastning date_now → date_next
+        # Mät avkastning date_now -> date_next
         try:
             # Hitta närmaste handelsdag
             avail_now  = prices.index[prices.index >= date_now][0]
@@ -246,7 +246,7 @@ def run_backtest(
 
             portfolio_returns.append(ret)
 
-            # Benchmark-avkastning – initieras till None för att undvika NameError
+            # Benchmark-avkastning - initieras till None för att undvika NameError
             bench_ret = None
             if bench_prices is not None:
                 try:
@@ -271,7 +271,7 @@ def run_backtest(
             continue
 
     if not portfolio_returns:
-        print("  ❌ Inga resultat – försök med fler aktier eller kortare period")
+        print("  ❌ Inga resultat - försök med fler aktier eller kortare period")
         return {"perioder": 0, "period_details": []}
 
     # Beräkna statistik
@@ -287,7 +287,7 @@ def run_backtest(
     ann_port  = (1 + cum_port)  ** (1 / n_years) - 1 if n_years > 0 else 0
     ann_bench = (1 + cum_bench) ** (1 / n_years) - 1 if (cum_bench is not None and n_years > 0) else None
 
-    # Sharpe ratio – subtraherar riskfri ränta (~4 % per år = 0.33 %/mån)
+    # Sharpe ratio - subtraherar riskfri ränta (~4 % per år = 0.33 %/mån)
     rf_monthly = 0.04 / 12
     sharpe = ((port_arr.mean() - rf_monthly) / port_arr.std() * np.sqrt(12)) if port_arr.std() > 0 else 0
 
@@ -314,7 +314,7 @@ def run_backtest(
         "hit_rate_pct":         round(hit_rate * 100, 1) if hit_rate is not None else None,
         "max_drawdown_pct":     round(max_dd * 100, 1),
         "snitt_månadsret":      round(port_arr.mean() * 100, 2),
-        "period_details":       period_details,  # list of dicts — UI converts to DataFrame
+        "period_details":       period_details,  # list of dicts -- UI converts to DataFrame
     }
 
     return results
@@ -438,14 +438,14 @@ def run_walk_forward_backtest(
     verbose:       bool = True,
 ) -> dict:
     """
-    Walk-forward backtest – mer realistisk än standard-backtesten.
+    Walk-forward backtest - mer realistisk än standard-backtesten.
 
     Princip:
     Istället för att testa på samma data du tränat på, rullar du framåt:
 
-      [Train 2020-2022] → [Test Q1-Q2 2022]
-                          [Train 2020-Q2 2022] → [Test Q3-Q4 2022]
-                                                 [Train 2020-Q4 2022] → [Test Q1-Q2 2023]
+      [Train 2020-2022] -> [Test Q1-Q2 2022]
+                          [Train 2020-Q2 2022] -> [Test Q3-Q4 2022]
+                                                 [Train 2020-Q4 2022] -> [Test Q1-Q2 2023]
                                                                         ...
 
     Detta avslöjar om modellen faktiskt generaliserar till ny data,
@@ -485,7 +485,7 @@ def run_walk_forward_backtest(
 
     if len(test_starts) == 0:
         if verbose:
-            print("  ⚠ För kort period för walk-forward – minska train_months")
+            print("  ⚠ För kort period för walk-forward - minska train_months")
         return {}
 
     fold_results = []
@@ -496,7 +496,7 @@ def run_walk_forward_backtest(
             test_end = end_date
 
         if verbose:
-            print(f"  📊 Fold {fold_idx}: testar {test_start.date()} → {test_end.date()}")
+            print(f"  📊 Fold {fold_idx}: testar {test_start.date()} -> {test_end.date()}")
 
         # Skapa månadsvisa rebalanseringspunkter inom test-fönstret
         test_dates = pd.date_range(test_start, test_end, freq="ME")
@@ -549,7 +549,7 @@ def run_walk_forward_backtest(
 
             fold_results.append({
                 "fold":            fold_idx,
-                "period":          f"{test_start.date()} → {test_end.date()}",
+                "period":          f"{test_start.date()} -> {test_end.date()}",
                 "portfolio_ret":   round(cum_port * 100, 2),
                 "benchmark_ret":   round(cum_bench * 100, 2) if cum_bench is not None else None,
                 "alpha":           round((cum_port - (cum_bench or 0)) * 100, 2),
@@ -558,7 +558,7 @@ def run_walk_forward_backtest(
 
             if verbose:
                 alpha_txt = f"alpha {(cum_port-(cum_bench or 0))*100:+.1f}%" if cum_bench else ""
-                print(f"     → Port: {cum_port*100:+.1f}%, Bench: "
+                print(f"     -> Port: {cum_port*100:+.1f}%, Bench: "
                       f"{(cum_bench or 0)*100:+.1f}%, {alpha_txt}")
 
     if not fold_results:
@@ -626,7 +626,7 @@ def print_walk_forward_results(results: dict):
             print("\n  ✅ TOLKNING: Modellen är konsistent över tid och")
             print("     verkar generalisera till ny data. Lovande signal.")
         elif cons >= 40:
-            print("\n  ⚠️ TOLKNING: Modellen är blandad – fungerar i vissa")
+            print("\n  ⚠️ TOLKNING: Modellen är blandad - fungerar i vissa")
             print("     marknader men inte andra. Använd med försiktighet.")
         else:
             print("\n  ❌ TOLKNING: Modellen presterar dåligt out-of-sample.")
@@ -634,7 +634,7 @@ def print_walk_forward_results(results: dict):
 
 
 if __name__ == "__main__":
-    # När backtest.py körs direkt – kör båda backtesterna
+    # När backtest.py körs direkt - kör båda backtesterna
     import sys
     if "--walk-forward" in sys.argv or "--wf" in sys.argv:
         results = run_walk_forward_backtest()

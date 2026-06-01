@@ -1,10 +1,10 @@
 """
-ml_predictor.py — Kvant-ML-prediktor för stock-scanner.
+ml_predictor.py -- Kvant-ML-prediktor för stock-scanner.
 
 Gemensam kärnmodul som tränas på TVÅ separata datasets:
 
-    universe   →  models/ml_universe.pkl   (stora aktier, ~800 tickers)
-    smallcap   →  models/ml_smallcap.pkl   (svenska småbolag, ~280 tickers)
+    universe   ->  models/ml_universe.pkl   (stora aktier, ~800 tickers)
+    smallcap   ->  models/ml_smallcap.pkl   (svenska småbolag, ~280 tickers)
 
 Båda har samma kod-bas men separata modeller och separata paper-trading-lager.
 
@@ -17,8 +17,8 @@ Fundamenta exkluderas i nuläget pga point-in-time-utmaningar i backtest.
 Target: forward_return_30d (avkastning de kommande 30 kalenderdagarna).
 
 Output i daily_pipeline: två nya kolumner i scored DataFrame:
-    predicted_return  — modellens prediktion
-    ml_rank           — percentilrang inom universum (0-100, högre = bättre)
+    predicted_return  -- modellens prediktion
+    ml_rank           -- percentilrang inom universum (0-100, högre = bättre)
 """
 
 from __future__ import annotations
@@ -58,12 +58,12 @@ def _deflated_sharpe_ratio(observed_sharpe: float, num_trials: int,
     - Kort tidsserie (T)
 
     Formel:
-        DSR = Φ[ (SR·√(T-1) - E*) / √(1 - γ₃·SR + (γ₄-1)/4·SR²) ]
+        DSR = Φ[ (SR*√(T-1) - E*) / √(1 - γ₃*SR + (γ₄-1)/4*SR²) ]
 
     där:
         E* = E[max_n(SR⁰)]  =  förväntad maximal SR under nollhypotesen
-                            ≈  (1-γ)·Φ⁻¹(1-1/n) + γ·Φ⁻¹(1-1/(n·e))
-        γ  = Euler–Mascheroni ≈ 0.5772
+                            ≈  (1-γ)*Φ⁻¹(1-1/n) + γ*Φ⁻¹(1-1/(n*e))
+        γ  = Euler-Mascheroni ≈ 0.5772
         γ₃ = skewness,  γ₄ = excess kurtosis
 
     Returns:
@@ -78,7 +78,7 @@ def _deflated_sharpe_ratio(observed_sharpe: float, num_trials: int,
     try:
         from scipy.stats import norm as _norm
     except ImportError:
-        return 0.0  # Kan inte beräkna DSR utan scipy – returnera 0, inte SR
+        return 0.0  # Kan inte beräkna DSR utan scipy - returnera 0, inte SR
 
     EULER_MASCHERONI = 0.5772156649
 
@@ -144,12 +144,12 @@ TECH_FEATURES = [
 # som är en punkt-i-tid-snapshot). Dessa läggs till när fundamental data finns
 # tillgänglig i scored_df (d.v.s. efter att data_fetcher har körts).
 # OBS: Dessa ska INTE användas i historisk backtest där point-in-time
-# inte kan garanteras – enbart i live-inference.
+# inte kan garanteras - enbart i live-inference.
 FUNDA_FEATURES = [
     "fcf_yield_rank",        # EV-based FCF yield percentil (0-100)
     "piotroski_score",       # Piotroski F-Score (0-9)
     "insider_signal",        # 1 om insider executive buy, 0 annars
-    "insider_cluster",       # 1 om cluster buy (≥3 insiders), 0 annars
+    "insider_cluster",       # 1 om cluster buy (>=3 insiders), 0 annars
     "pe_forward_rank",       # Forward P/E percentil (inverterad: högre = lägre P/E)
     "de_rank",               # Debt/Equity percentil (inverterad: högre = lägre skuld)
     "momentum_rank",         # 12-mån momentum percentil
@@ -180,7 +180,7 @@ SMALL_SECTORS = {"Real Estate", "Utilities", "Energy"}
 MIN_SECTOR_ROWS = 2000
 
 # Halvlivstid för exponentiell tidsviktning i träning.
-# Data som är 2 år gammalt viktas till 50 %, 4 år → 25 %, COVID (6 år) → 12 %.
+# Data som är 2 år gammalt viktas till 50 %, 4 år -> 25 %, COVID (6 år) -> 12 %.
 SAMPLE_WEIGHT_HALFLIFE_YEARS: float = 2.0
 
 
@@ -221,7 +221,7 @@ def _macd_hist(close: pd.Series, fast: int = 12, slow: int = 26, sig: int = 9) -
 
 
 # ── 11 nya feature-hjälpfunktioner (commit 4871bc5 definierade features ──────
-# men glömde implementera hjälpfunktionerna → NameError fångades tyst → NaN).
+# men glömde implementera hjälpfunktionerna -> NameError fångades tyst -> NaN).
 
 def _log_return(close: pd.Series, days: int) -> float:
     """Logaritmisk avkastning över N dagar (mer normalfördelad än aritmetisk)."""
@@ -304,7 +304,7 @@ def _klinger_oscillator(close: pd.Series, volume: pd.Series | None,
     if volume is None or len(close) < slow + 1 or len(volume) < slow + 1:
         return float("nan")
     try:
-        # Volume Force = volym × riktning (1 om pris stiger, -1 om faller)
+        # Volume Force = volym x riktning (1 om pris stiger, -1 om faller)
         direction = close.diff().apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
         vf = volume * direction
         ema_fast = vf.ewm(span=fast, adjust=False).mean()
@@ -497,9 +497,9 @@ def _add_cross_sectional_target(df: pd.DataFrame) -> pd.DataFrame:
     Detta är den enskilt viktigaste förbättringen för en aktie-URVALS-modell:
     råa 30-dagars-avkastningar domineras av marknadsbreda rörelser (alla aktier
     rör sig ihop varje månad). Tekniska features kan inte förutsäga "var det en
-    bra månad för marknaden" → IC ≈ 0. Genom att subtrahera datumets medel­avkastning
+    bra månad för marknaden" -> IC ≈ 0. Genom att subtrahera datumets medel­avkastning
     tar vi bort marknadsfaktorn och låter modellen lära sig RELATIV styrka
-    ("slår denna aktie sina peers denna månad?") — vilket är exakt vad vi rankar på.
+    ("slår denna aktie sina peers denna månad?") -- vilket är exakt vad vi rankar på.
     """
     df = df.copy()
     date_mean = df.groupby("date")["forward_return_30d"].transform("mean")
@@ -558,7 +558,7 @@ def train_from_dataset(parquet_path: Path, universe: str) -> Optional[TrainedMod
 
     Args:
         parquet_path: Sökväg till träningsdata (skapad av build_ml_dataset.py)
-        universe: "universe" eller "smallcap" — används bara för metadata
+        universe: "universe" eller "smallcap" -- används bara för metadata
 
     Returns:
         TrainedModel eller None om datat var otillräckligt.
@@ -602,7 +602,7 @@ def train_from_dataset(parquet_path: Path, universe: str) -> Optional[TrainedMod
     X_te = test[TECH_FEATURES].fillna(0).values
     y_te = test["target_cs"].values
 
-    # Exponentiell tidsviktning — nyare data viktas högre.
+    # Exponentiell tidsviktning -- nyare data viktas högre.
     # Halvlivstid = SAMPLE_WEIGHT_HALFLIFE_YEARS (default 2 år).
     # COVID-data (~6 år gammalt) får ~12 % av vikten jämfört med dagens data.
     _today = datetime.date.today()
@@ -619,7 +619,7 @@ def train_from_dataset(parquet_path: Path, universe: str) -> Optional[TrainedMod
     pred_te = model.predict(X_te)
     mae = float(np.mean(np.abs(pred_te - y_te)))
 
-    # Per-datum-IC (meningsfull urvals-IC) — det vi faktiskt bryr oss om
+    # Per-datum-IC (meningsfull urvals-IC) -- det vi faktiskt bryr oss om
     ic = round(_per_date_ic(test["date"].values, pred_te, y_te), 4)
 
     # Poolad IC behålls som referens (mindre meningsfull men jämförbar med gammalt)
@@ -656,7 +656,7 @@ def train_from_dataset(parquet_path: Path, universe: str) -> Optional[TrainedMod
 
 def _cpcv_split(dates: pd.Series, n_splits: int = 6, embargo_pct: float = 0.01) -> list:
     """
-    Combinatorial Purged Cross-Validation (CPCV) — Lopez de Prado.
+    Combinatorial Purged Cross-Validation (CPCV) -- Lopez de Prado.
 
     Förhindrar dataleakage från överlappande 30-dagars forward returns:
       - Purging: träningsrader vars forward-fönster rör vid testperioden tas bort
@@ -672,7 +672,7 @@ def _cpcv_split(dates: pd.Series, n_splits: int = 6, embargo_pct: float = 0.01) 
     """
     n = len(dates)
     if n < 200:
-        return []  # För lite data – hoppa över CPCV
+        return []  # För lite data - hoppa över CPCV
 
     embargo_size = max(1, int(n * embargo_pct))
     fold_size    = n // n_splits
@@ -713,7 +713,7 @@ def train_with_cpcv(parquet_path: Optional[Path], universe: str,
     Args:
         parquet_path: Sökväg till träningsdata (ignoreras om df ges).
         universe: Etikett för modellen (universe/smallcap/sector_*).
-        df: Förfiltrerad DataFrame (används av sektor-träning) — om None läses parquet.
+        df: Förfiltrerad DataFrame (används av sektor-träning) -- om None läses parquet.
 
     Returns:
         TrainedModel med cpcv_avg_ic i test_metrics, eller None vid fel.
@@ -742,7 +742,7 @@ def train_with_cpcv(parquet_path: Optional[Path], universe: str,
 
     splits = _cpcv_split(df["date"])
     if not splits:
-        logger.warning("CPCV: för lite data – för få CPCV-folds, hoppar över denna modell")
+        logger.warning("CPCV: för lite data - för få CPCV-folds, hoppar över denna modell")
         return None
 
     all_ic     = []
@@ -800,10 +800,10 @@ def train_with_cpcv(parquet_path: Optional[Path], universe: str,
         ])
         if len(all_preds) > 50:
             excess_returns = all_actuals - np.mean(all_actuals)
-            # SR per period (30 dagar) – INTE annualiserad.
+            # SR per period (30 dagar) - INTE annualiserad.
             # DSR-formeln kräver att SR och T är på samma tidsskala:
-            #   T_obs = antal 30-dagarsperioder → sharpe_per_period passar.
-            #   Annualisering (×√12) skulle ge SR >> T-skalan och DSR ≈ 1.0 alltid.
+            #   T_obs = antal 30-dagarsperioder -> sharpe_per_period passar.
+            #   Annualisering (x√12) skulle ge SR >> T-skalan och DSR ≈ 1.0 alltid.
             sharpe_per_period = float(
                 np.mean(excess_returns) / (np.std(excess_returns) + 1e-10)
             )
@@ -811,7 +811,7 @@ def train_with_cpcv(parquet_path: Optional[Path], universe: str,
             sk = float(skew(excess_returns))
             ku = float(_kurt(excess_returns, fisher=True))  # Excess kurtosis
             T_obs = len(excess_returns)
-            # num_trials = folds × features (approximation of search space)
+            # num_trials = folds x features (approximation of search space)
             num_trials = len(splits) * len(TECH_FEATURES)
             dsr_value = round(_deflated_sharpe_ratio(
                 sharpe_per_period, num_trials, T_obs, sk, ku
@@ -879,24 +879,24 @@ def train_sector_models(parquet_path: Path, min_rows: int = MIN_SECTOR_ROWS) -> 
 
     df = pd.read_parquet(parquet_path)
     if "sector" not in df.columns:
-        logger.warning("Datasetet saknar 'sector'-kolumn — bygg om med uppdaterad "
+        logger.warning("Datasetet saknar 'sector'-kolumn -- bygg om med uppdaterad "
                        "build_ml_dataset.py. Hoppar över sektor-träning.")
         return {}
 
     results = {}
     for sector_name, model_key in SECTOR_MODELS.items():
         if sector_name in SMALL_SECTORS:
-            logger.info(f"  ⏭ {sector_name}: i SMALL_SECTORS → använder universe-fallback")
+            logger.info(f"  ⏭ {sector_name}: i SMALL_SECTORS -> använder universe-fallback")
             continue
         sector_df = df[df["sector"] == sector_name].copy()
         if len(sector_df) < min_rows:
-            logger.info(f"  ⏭ {sector_name}: {len(sector_df)} rader < {min_rows} → hoppar över")
+            logger.info(f"  ⏭ {sector_name}: {len(sector_df)} rader < {min_rows} -> hoppar över")
             continue
 
         logger.info(f"  🏋️  Tränar sektor-modell: {sector_name} ({model_key}, {len(sector_df)} rader)")
         trained = train_with_cpcv(None, model_key, df=sector_df)
         if trained is None:
-            logger.warning(f"  ⚠ {sector_name}: träning misslyckades — hoppar över")
+            logger.warning(f"  ⚠ {sector_name}: träning misslyckades -- hoppar över")
             continue
 
         save_model(trained, model_key)
@@ -911,7 +911,7 @@ def train_sector_models(parquet_path: Path, min_rows: int = MIN_SECTOR_ROWS) -> 
         }, indent=2))
         results[model_key] = trained.test_metrics
         logger.info(f"  ✅ {sector_name}: IC={trained.test_metrics.get('ic')}, "
-                    f"sparad → ml_{model_key}.pkl")
+                    f"sparad -> ml_{model_key}.pkl")
 
     logger.info(f"  📊 Sektor-modeller tränade: {len(results)}/{len(SECTOR_MODELS)}")
     return results
@@ -942,14 +942,14 @@ def load_model(universe: str) -> Optional[TrainedModel]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# INFERENCE — anropas från daily_pipeline
+# INFERENCE -- anropas från daily_pipeline
 # ══════════════════════════════════════════════════════════════════════════════
 
 def predict_returns(scored_df: pd.DataFrame, universe: str,
                     cache_dir: Optional[Path] = None) -> pd.DataFrame:
     """Lägger till predicted_return + ml_rank-kolumner till scored DataFrame.
 
-    Robust mot saknad modell — om ingen pickle finns, returneras df
+    Robust mot saknad modell -- om ingen pickle finns, returneras df
     oförändrad utan att krascha pipelinen.
 
     Hämtar features från OHLCV-cachen (samma cache som data_fetcher
@@ -1006,7 +1006,7 @@ def predict_returns(scored_df: pd.DataFrame, universe: str,
     result = scored_df.copy()
 
     # Identifiera rader där ALLA tekniska features var NaN innan fillna(0).
-    # Dessa aktier har ingen prishistorik i cachen — modellen predikterar
+    # Dessa aktier har ingen prishistorik i cachen -- modellen predikterar
     # ett artefaktvärde (~1.34) för all-zero-vektorer vilket är missvisande.
     # Sätt predicted_return = NaN för dessa rader.
     tech_cols_used = [c for c in model_wrapper.feature_cols if c in TECH_FEATURES]
@@ -1019,7 +1019,7 @@ def predict_returns(scored_df: pd.DataFrame, universe: str,
     preds_series[no_data_mask] = float("nan")
 
     result["predicted_return"] = preds_series
-    # ml_rank: rangordna bara rader med giltig prediktion (NaN → 0 i ranken)
+    # ml_rank: rangordna bara rader med giltig prediktion (NaN -> 0 i ranken)
     result["ml_rank"] = (
         result["predicted_return"]
         .rank(pct=True, ascending=True, na_option="keep")
@@ -1062,7 +1062,7 @@ def predict_returns_sector(
     # Ladda default-modell
     default_model = load_model(default_universe)
     if default_model is None:
-        logger.info(f"  ⚠ Ingen ML-modell hittad for {default_universe} — hoppar over sektor-prediktion")
+        logger.info(f"  ⚠ Ingen ML-modell hittad for {default_universe} -- hoppar over sektor-prediktion")
         return df
 
     # Bygg feature-matris från OHLCV-cache (gemensam for alla sektorer)
@@ -1090,7 +1090,7 @@ def predict_returns_sector(
             if not mask.any():
                 continue
             if sector_name in SMALL_SECTORS:
-                # For fa tickers — anvander default-modell istallet
+                # For fa tickers -- anvander default-modell istallet
                 continue
 
             sector_model = load_model(model_key)
@@ -1168,7 +1168,7 @@ def _load_features_from_cache(ticker: str, cache_dir: Path) -> dict:
     # som MD5-hashat filnamn. Vi söker efter ticker-specifika filer.
     # Fallback-strategi: om vi inte hittar i cachen, gör en kort yfinance-fetch.
     try:
-        # fetch_price_history returnerar en OHLCV DataFrame – det vi behöver för features.
+        # fetch_price_history returnerar en OHLCV DataFrame - det vi behöver för features.
         # (fetch_prices_only returnerar ett dict med färdiga nyckeltal, inte rådata.)
         from core.data_fetcher import fetch_price_history
         hist = fetch_price_history(ticker, period="1y")

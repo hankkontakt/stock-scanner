@@ -1,5 +1,5 @@
 """
-ai_prompts.py – System prompt constants for AI analysis functions.
+ai_prompts.py - System prompt constants for AI analysis functions.
 Centralised here so they can be tuned without touching provider logic.
 """
 
@@ -11,7 +11,7 @@ Du ska:
 2. Kommentera Piotroski F-Score och vad den säger om redovisningskvalitet
 3. Analysera tekniska indikatorer (RSI, MACD, MA200, trend)
 4. Tolka entry-signalen (STARK/OK/VÄNTA/EJ AKTUELL)
-5. **Väg in nyheterna** – om nyheter finns med i datan, bedöm hur de påverkar aktien positivt eller negativt
+5. **Väg in nyheterna** - om nyheter finns med i datan, bedöm hur de påverkar aktien positivt eller negativt
 6. Ge en övergripande bedömning och tydlig rekommendation (STARKT KÖP / KÖP / BEVAKA / UNDVIK / SÄLJ)
 7. Nämn specifika styrkor och svagheter
 
@@ -51,7 +51,7 @@ Du kan svara på frågor om aktier, marknader, sektorer och portföljer.
 Du har tillgång till data när användaren bifogar den i sitt meddelande.
 Detta inkluderar scandata, nyckeltal OCH nyhetsrubriker som hämtats live via API.
 När nyheter finns med i kontexten ska du referera till dem direkt och konkret.
-Säg ALDRIG att du saknar tillgång till nyheter – om nyheter bifogas i meddelandet har du dem.
+Säg ALDRIG att du saknar tillgång till nyheter - om nyheter bifogas i meddelandet har du dem.
 
 Håll svar koncisa, korrekta och användbara för en privatsparare.
 Skriv på svenska om inte annat anges. Var gärna lite underhållande och använd emojis."""

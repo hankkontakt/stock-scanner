@@ -1,4 +1,4 @@
-"""admin/holdings.py – Portfolj tab for admin page."""
+"""admin/holdings.py - Portfolj tab for admin page."""
 import json
 from datetime import date
 from pathlib import Path

@@ -98,7 +98,7 @@ def scan_logger(scan_type: str, verbose: bool = True):
 
         log_event(scan_type, "OK", details=meta)
         if verbose:
-            print(f"\n✅ Scan klar på {elapsed:.0f}s – loggad")
+            print(f"\n✅ Scan klar på {elapsed:.0f}s - loggad")
 
     except Exception as e:
         elapsed = round(time.time() - start_time, 1)
@@ -134,7 +134,7 @@ def auto_remediate(error: Exception, traceback_str: str) -> str:
     actions = []
     err_lower = str(error).lower() + traceback_str.lower()
 
-    # 1. Rate limit / Too Many Requests → rensa cache
+    # 1. Rate limit / Too Many Requests -> rensa cache
     if "429" in err_lower or "too many requests" in err_lower:
         cleared = clear_stale_cache(max_age_hours=0)  # Rensa all cache
         actions.append(f"Rensade {cleared} cache-filer pga rate limit")
@@ -159,9 +159,9 @@ def auto_remediate(error: Exception, traceback_str: str) -> str:
         cleared = clear_stale_cache(max_age_hours=0)
         actions.append(f"Rensade all cache pga minnesbrist ({cleared} filer)")
 
-    # 5. Import-fel → logga tydligt men gör inget automatiskt
+    # 5. Import-fel -> logga tydligt men gör inget automatiskt
     if "importerror" in err_lower or "modulenotfounderror" in err_lower:
-        actions.append("Import-fel – kontrollera requirements.txt")
+        actions.append("Import-fel - kontrollera requirements.txt")
 
     # 6. Generell åtgärd om inget specifikt hittades
     if not actions:
@@ -225,12 +225,12 @@ def build_log_section() -> str:
 
     for e in reversed(entries):
         ts      = e["timestamp"][:16].replace("T", " ")
-        stype   = e.get("scan_type", "—")
-        status  = e.get("status", "—")
+        stype   = e.get("scan_type", "--")
+        status  = e.get("status", "--")
         icon    = "✅" if status == "OK" else "❌" if status == "ERROR" else "⚠️"
-        n_scanned = e.get("details", {}).get("n_scored", "—")
-        elapsed   = e.get("details", {}).get("elapsed_seconds", "—")
-        elapsed_s = f"{elapsed}s" if isinstance(elapsed, (int, float)) else "—"
+        n_scanned = e.get("details", {}).get("n_scored", "--")
+        elapsed   = e.get("details", {}).get("elapsed_seconds", "--")
+        elapsed_s = f"{elapsed}s" if isinstance(elapsed, (int, float)) else "--"
 
         lines.append(f"| {ts} | {stype} | {icon} {status} | {n_scanned} | {elapsed_s} |")
 
@@ -254,4 +254,4 @@ def print_status_summary():
     if entries:
         last = entries[-1]
         ts   = last["timestamp"][:16].replace("T", " ")
-        print(f"   Senaste körning: {ts} – {last.get('status','?')}")
+        print(f"   Senaste körning: {ts} - {last.get('status','?')}")

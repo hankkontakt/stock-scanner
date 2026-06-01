@@ -1,4 +1,4 @@
-"""web/pages/overview.py – Sida 1: Översikt (cockpit).
+"""web/pages/overview.py - Sida 1: Översikt (cockpit).
 
 Omdesignad enligt UX-planen: en äkta dashboard på ~1,5 skärm istället för 10
 staplade sektioner. Visar nyckeltal + sammanfattande zoner med genvägar vidare;
@@ -22,7 +22,7 @@ from web.ui import tokens as t
 def _goto(page_title: str):
     """Tillfällig nav-brygga mot nuvarande session-state-navigation.
     Ersätts av st.page_link när navigationen skrivs om till st.navigation."""
-    if st.button(f"Visa allt  →", key=f"goto_{page_title}", use_container_width=True):
+    if st.button(f"Visa allt  ->", key=f"goto_{page_title}", use_container_width=True):
         st.session_state["nav_page"] = page_title
         st.rerun()
 
@@ -40,10 +40,10 @@ def _data_age_str() -> str:
 
 
 def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame = None):
-    page_header("Översikt", "home", subtitle=f"Marknadsöversikt · {_data_age_str()}")
+    page_header("Översikt", "home", subtitle=f"Marknadsöversikt * {_data_age_str()}")
 
     if (df is None or df.empty) and (sc_df is None or sc_df.empty):
-        empty_state("Aktiedata laddas in. Systemet uppdateras automatiskt varje vecka — "
+        empty_state("Aktiedata laddas in. Systemet uppdateras automatiskt varje vecka -- "
                     "kom tillbaka snart.", icon="fresh")
         return
 
@@ -65,19 +65,19 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
             {"label": "Snittpoäng", "value": f"{avg_score:.0f}",
              "help": "Genomsnittlig score. >60 = generellt stark marknad.",
              "value_color": t.score_color(avg_score)},
-            {"label": "Toppbolag", "value": str(top_row.get("ticker", "—")),
+            {"label": "Toppbolag", "value": str(top_row.get("ticker", "--")),
              "delta": f"{top_row.get('score_total', 0):.0f} poäng", "delta_kind": "pos",
              "help": "Högst rankade bolaget just nu.", "small": True},
         ])
 
     st.write("")
 
-    # ── Rad 2: Köp nu  ·  Portfölj-snapshot ──────────────────────────────────
+    # ── Rad 2: Köp nu  *  Portfölj-snapshot ──────────────────────────────────
     col_a, col_b = st.columns(2)
 
     with col_a:
         with st.container(border=True):
-            st.markdown("### Köp nu — starkaste signaler")
+            st.markdown("### Köp nu -- starkaste signaler")
             frames = [f for f in [df, sc_df]
                       if f is not None and not f.empty and "entry_signal" in f.columns]
             combined = (pd.concat(frames, ignore_index=True).drop_duplicates("ticker")
@@ -108,7 +108,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                     tk = str(h["ticker"]).upper()
                     sc = lookup.get(tk, {})
                     score = sc.get("score_total", 0) or 0
-                    entry = sc.get("entry_signal", "—")
+                    entry = sc.get("entry_signal", "--")
                     if score and (score < 45 or entry == "EJ AKTUELL"):
                         review.append({"Ticker": f"{flag_for_ticker(tk)} {tk}",
                                        "Score": round(score), "Signal": entry})
@@ -121,12 +121,12 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                 else:
                     st.caption("Inga innehav kräver översyn just nu. ✓")
             else:
-                empty_state("Ingen portfölj ännu — lägg till innehav.", icon="portfolio")
+                empty_state("Ingen portfölj ännu -- lägg till innehav.", icon="portfolio")
             _goto("💼 Portfölj")
 
     st.write("")
 
-    # ── Rad 3: Marknadsläge  ·  Kommande rapporter ───────────────────────────
+    # ── Rad 3: Marknadsläge  *  Kommande rapporter ───────────────────────────
     col_c, col_d = st.columns(2)
 
     with col_c:
@@ -145,7 +145,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                     sect = (df.groupby("sector")["score_total"].mean()
                             .sort_values(ascending=False).head(3))
                     st.caption("Starkaste sektorer (snittpoäng):")
-                    st.markdown(" · ".join(f"**{s}** {v:.0f}" for s, v in sect.items()))
+                    st.markdown(" * ".join(f"**{s}** {v:.0f}" for s, v in sect.items()))
             else:
                 empty_state("Ingen signaldata.", icon="info")
             _goto("🏭 Sektorrotation")

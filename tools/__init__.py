@@ -1,3 +1,3 @@
 """
-tools – Verktygsmoduler för underhåll och övervakning.
+tools - Verktygsmoduler för underhåll och övervakning.
 """

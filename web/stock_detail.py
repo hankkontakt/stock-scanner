@@ -1,5 +1,5 @@
 """
-stock_detail.py – MarketScan Stock Detail Panel
+stock_detail.py - MarketScan Stock Detail Panel
 ================================================
 En återanvändbar Streamlit-komponent som visar detaljerad information
 för en enskild aktie: prisgraf, nyckeltal, nyhetsflöde och AI-analys.
@@ -93,7 +93,7 @@ def _score_history(ticker: str) -> Optional[go.Figure]:
 # HJÄLPFUNKTIONER
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _safe_val(val, fmt: str = "num", default: str = "—"):
+def _safe_val(val, fmt: str = "num", default: str = "--"):
     """Returnera formaterat värde eller default om None/NaN."""
     if val is None:
         return default
@@ -236,7 +236,7 @@ def _price_chart(ticker: str, period: str = "1y") -> Optional[go.Figure]:
 
     # ── Layout ───────────────────────────────────────────────────────────
     fig.update_layout(
-        title=f"{ticker} – Prisutveckling ({PERIOD_OPTIONS.get(period, period)})",
+        title=f"{ticker} - Prisutveckling ({PERIOD_OPTIONS.get(period, period)})",
         template="plotly_dark",
         xaxis_rangeslider_visible=False,
         paper_bgcolor="#131722",
@@ -265,13 +265,13 @@ def _price_chart(ticker: str, period: str = "1y") -> Optional[go.Figure]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 _QUICK_CARD_HELP = {
-    "Score":     "Totalpoäng 0–100 från 8 faktorer: värdering, kvalitet, momentum, tillväxt, risk och storlek. 70+ = stark. 50–69 = neutral. Under 50 = svag.",
-    "Entry":     "Köpsignal: STARK = tydlig uppåtrörelse med stöd av volym. OK = måttlig signal. — = ingen signal. Klicka på aktien för mer detaljer.",
+    "Score":     "Totalpoäng 0-100 från 8 faktorer: värdering, kvalitet, momentum, tillväxt, risk och storlek. 70+ = stark. 50-69 = neutral. Under 50 = svag.",
+    "Entry":     "Köpsignal: STARK = tydlig uppåtrörelse med stöd av volym. OK = måttlig signal. -- = ingen signal. Klicka på aktien för mer detaljer.",
     "Trend":     "Teknisk trend: UPPTREND = aktien är över MA50 och MA200 (glidande medelvärden). NEDTREND = under MA200. Viktig för tajming.",
-    "RSI":       "Relative Strength Index (0–100). Mäter om aktien är överköpt eller översåld. Under 30 = översåld (möjligt köpläge). Över 70 = överköpt (försiktig).",
-    "P/E":       "Pris/Vinst (trailing). Hur många kronor du betalar per vinstkrona. Lägre = billigare relativt vinst. Normalt 10–20. Negativt = bolaget går med förlust.",
-    "ROE":       "Return on Equity — avkastning på eget kapital. Visar hur effektivt bolaget använder ägarnas pengar. Över 15% = bra. Över 25% = utmärkt.",
-    "Piotroski": "Piotroski F-Score (0–9). Nio nyckeltal för lönsamhet, skuldsättning och effektivitet. 7–9 = stark fundamenta. 4–6 = godkänd. 0–3 = svag.",
+    "RSI":       "Relative Strength Index (0-100). Mäter om aktien är överköpt eller översåld. Under 30 = översåld (möjligt köpläge). Över 70 = överköpt (försiktig).",
+    "P/E":       "Pris/Vinst (trailing). Hur många kronor du betalar per vinstkrona. Lägre = billigare relativt vinst. Normalt 10-20. Negativt = bolaget går med förlust.",
+    "ROE":       "Return on Equity -- avkastning på eget kapital. Visar hur effektivt bolaget använder ägarnas pengar. Över 15% = bra. Över 25% = utmärkt.",
+    "Piotroski": "Piotroski F-Score (0-9). Nio nyckeltal för lönsamhet, skuldsättning och effektivitet. 7-9 = stark fundamenta. 4-6 = godkänd. 0-3 = svag.",
 }
 
 def _quick_data_cards(row: pd.Series):
@@ -311,15 +311,15 @@ def _render_dividend_analysis(row: pd.Series):
     yld_5y    = row.get("div_yield_5y_avg")
     score_div = row.get("score_dividend")
 
-    # ── Ingen utdelning → kort info ───────────────────────────────────────────
+    # ── Ingen utdelning -> kort info ───────────────────────────────────────────
     no_div = (yld is None or pd.isna(yld) or float(yld) == 0)
     if no_div and (div_rate is None or pd.isna(div_rate)):
         st.info("📭 Bolaget betalar ingen utdelning.")
         misc = {
             "Utdelningsscore": _safe_val(score_div, "dec0"),
-            "Sektor": str(row.get("sector", "—")),
-            "Industri": str(row.get("industry", "—")),
-            "Land": str(row.get("country", "—")),
+            "Sektor": str(row.get("sector", "--")),
+            "Industri": str(row.get("industry", "--")),
+            "Land": str(row.get("country", "--")),
         }
         st.dataframe(pd.DataFrame(misc.items(), columns=["Mått", "Värde"]),
                      use_container_width=True, hide_index=True)
@@ -327,13 +327,13 @@ def _render_dividend_analysis(row: pd.Series):
 
     # ── KPI-kort ──────────────────────────────────────────────────────────────
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("💰 Direktavkastning", f"{float(yld)*100:.2f}%" if yld and not pd.isna(yld) else "—",
-              help="Årlig utdelning ÷ aktiekurs. 2–4% = normalt för stabila bolag. Mycket hög yield (>6–7%) kan vara en varningssignal om att kursen rasat eller utdelningen snart sänks.")
-    c2.metric("📊 5Y snittyield",    f"{float(yld_5y):.2f}%" if yld_5y and not pd.isna(yld_5y) else "—",
-              help="Genomsnittlig direktavkastning de senaste 5 åren. Jämför med dagens yield — om dagens är mycket högre kan det tyda på att aktien är nedtryckt eller utdelningen är hotad.")
-    c3.metric("💵 Utd/aktie (årl.)", f"{float(div_rate):.2f}" if div_rate and not pd.isna(div_rate) else "—",
+    c1.metric("💰 Direktavkastning", f"{float(yld)*100:.2f}%" if yld and not pd.isna(yld) else "--",
+              help="Årlig utdelning / aktiekurs. 2-4% = normalt för stabila bolag. Mycket hög yield (>6-7%) kan vara en varningssignal om att kursen rasat eller utdelningen snart sänks.")
+    c2.metric("📊 5Y snittyield",    f"{float(yld_5y):.2f}%" if yld_5y and not pd.isna(yld_5y) else "--",
+              help="Genomsnittlig direktavkastning de senaste 5 åren. Jämför med dagens yield -- om dagens är mycket högre kan det tyda på att aktien är nedtryckt eller utdelningen är hotad.")
+    c3.metric("💵 Utd/aktie (årl.)", f"{float(div_rate):.2f}" if div_rate and not pd.isna(div_rate) else "--",
               help="Total utdelning per aktie per år i bolagets rapportvaluta. Används för att beräkna din faktiska inkomst per aktie du äger.")
-    c4.metric("🎯 Utdelningsscore",  f"{float(score_div):.0f}/100" if score_div and not pd.isna(score_div) else "—",
+    c4.metric("🎯 Utdelningsscore",  f"{float(score_div):.0f}/100" if score_div and not pd.isna(score_div) else "--",
               help="Sammanvägt poäng för utdelningskvalitet: direktavkastning, payout ratio, FCF-täckning och historisk stabilitet. 70+ = hög kvalitet. Under 40 = försiktig.")
 
     # ── Säkerhetsbedömning ────────────────────────────────────────────────────
@@ -344,13 +344,13 @@ def _render_dividend_analysis(row: pd.Series):
     if pr and not pd.isna(pr):
         pr_f = float(pr) * 100
         if pr_f > 100:
-            pr_icon, pr_label = "🔴", f"{pr_f:.0f}% — Utdelningen överstiger vinsten! Hög risk."
+            pr_icon, pr_label = "🔴", f"{pr_f:.0f}% -- Utdelningen överstiger vinsten! Hög risk."
         elif pr_f > 80:
-            pr_icon, pr_label = "🟡", f"{pr_f:.0f}% — Ansträngd utdelningsandel, bevaka."
+            pr_icon, pr_label = "🟡", f"{pr_f:.0f}% -- Ansträngd utdelningsandel, bevaka."
         elif pr_f > 0:
-            pr_icon, pr_label = "🟢", f"{pr_f:.0f}% — Hållbar utdelningsandel."
+            pr_icon, pr_label = "🟢", f"{pr_f:.0f}% -- Hållbar utdelningsandel."
         else:
-            pr_icon, pr_label = "⚪", "—"
+            pr_icon, pr_label = "⚪", "--"
         safety_rows.append(("Payout Ratio (vinst)", f"{pr_icon} {pr_label}"))
 
     # FCF coverage
@@ -362,11 +362,11 @@ def _render_dividend_analysis(row: pd.Series):
                 fcf_cov = float(fcf) / total_div if total_div > 0 else None
                 if fcf_cov is not None:
                     if fcf_cov < 1.0:
-                        fcf_icon, fcf_label = "🔴", f"{fcf_cov:.1f}× — Fritt kassaflöde täcker EJ utdelningen."
+                        fcf_icon, fcf_label = "🔴", f"{fcf_cov:.1f}x -- Fritt kassaflöde täcker EJ utdelningen."
                     elif fcf_cov < 1.5:
-                        fcf_icon, fcf_label = "🟡", f"{fcf_cov:.1f}× — Liten marginal i kassaflödet."
+                        fcf_icon, fcf_label = "🟡", f"{fcf_cov:.1f}x -- Liten marginal i kassaflödet."
                     else:
-                        fcf_icon, fcf_label = "🟢", f"{fcf_cov:.1f}× — Utdelningen täcks väl av fritt kassaflöde."
+                        fcf_icon, fcf_label = "🟢", f"{fcf_cov:.1f}x -- Utdelningen täcks väl av fritt kassaflöde."
                     safety_rows.append(("FCF-täckning", f"{fcf_icon} {fcf_label}"))
         except Exception:
             pass
@@ -376,11 +376,11 @@ def _render_dividend_analysis(row: pd.Series):
         try:
             diff = (float(yld) * 100) - float(yld_5y)
             if diff > 1.5:
-                y_icon, y_label = "🟡", f"Yield {diff:+.1f}pp över 5-årssnitt — kan vara utdelningstrap eller pressad aktiekurs."
+                y_icon, y_label = "🟡", f"Yield {diff:+.1f}pp över 5-årssnitt -- kan vara utdelningstrap eller pressad aktiekurs."
             elif diff < -1.5:
-                y_icon, y_label = "🟢", f"Yield {diff:+.1f}pp under 5-årssnitt — aktien värderas relativt högt."
+                y_icon, y_label = "🟢", f"Yield {diff:+.1f}pp under 5-årssnitt -- aktien värderas relativt högt."
             else:
-                y_icon, y_label = "🟢", f"Yield nära 5-årssnitt ({float(yld_5y):.1f}%) — normalt historiskt läge."
+                y_icon, y_label = "🟢", f"Yield nära 5-årssnitt ({float(yld_5y):.1f}%) -- normalt historiskt läge."
             safety_rows.append(("Yield vs historik", f"{y_icon} {y_label}"))
         except Exception:
             pass
@@ -418,7 +418,7 @@ def _render_dividend_analysis(row: pd.Series):
                 else:
                     cagr_1y = cagr_3y = cagr_5y = None
 
-                # Färgkoda staplar — grön = tillväxt, röd = minskning
+                # Färgkoda staplar -- grön = tillväxt, röd = minskning
                 bar_colors = []
                 for i, a in enumerate(amounts):
                     if i == 0 or amounts[i-1] == 0:
@@ -445,17 +445,17 @@ def _render_dividend_analysis(row: pd.Series):
                 # Tillväxttakter
                 gr_cols = st.columns(3)
                 gr_cols[0].metric("Tillväxt 1Y",
-                    f"{cagr_1y:+.1f}%" if cagr_1y is not None else "—",
+                    f"{cagr_1y:+.1f}%" if cagr_1y is not None else "--",
                     delta_color="normal",
-                    help="Förändring i utdelning per aktie det senaste året. Positiv = utdelningen höjdes. 5–10% tillväxt per år = utmärkt utdelningsbolag.")
+                    help="Förändring i utdelning per aktie det senaste året. Positiv = utdelningen höjdes. 5-10% tillväxt per år = utmärkt utdelningsbolag.")
                 gr_cols[1].metric("Tillväxt 3Y (CAGR)",
-                    f"{cagr_3y:+.1f}%" if cagr_3y is not None else "—",
+                    f"{cagr_3y:+.1f}%" if cagr_3y is not None else "--",
                     delta_color="normal",
                     help="Genomsnittlig årlig utdelningstillväxt de senaste 3 åren (CAGR). Visar om bolaget konsekvent höjer utdelningen eller om det är ojämnt.")
                 gr_cols[2].metric("Tillväxt 5Y (CAGR)",
-                    f"{cagr_5y:+.1f}%" if cagr_5y is not None else "—",
+                    f"{cagr_5y:+.1f}%" if cagr_5y is not None else "--",
                     delta_color="normal",
-                    help="Genomsnittlig årlig utdelningstillväxt de senaste 5 åren. Långsiktig trend — utdelningsbolag med 5%+ CAGR under 5 år är attraktiva för passiv inkomst.")
+                    help="Genomsnittlig årlig utdelningstillväxt de senaste 5 åren. Långsiktig trend -- utdelningsbolag med 5%+ CAGR under 5 år är attraktiva för passiv inkomst.")
 
                 # Konsistens
                 n_years = len(amounts)
@@ -466,7 +466,7 @@ def _render_dividend_analysis(row: pd.Series):
                 elif consistency >= 50:
                     st.info(f"📊 Blandad utdelningshistorik {n_growing}/{n_years-1} år med tillväxt ({consistency:.0f}%)")
                 else:
-                    st.warning(f"⚠️ Ojämn utdelningshistorik — minskade {n_years-1-n_growing} av {n_years-1} år")
+                    st.warning(f"⚠️ Ojämn utdelningshistorik -- minskade {n_years-1-n_growing} av {n_years-1} år")
             else:
                 st.info("Ingen utdelningshistorik tillgänglig.")
         else:
@@ -476,9 +476,9 @@ def _render_dividend_analysis(row: pd.Series):
 
     # ── Övrigt ────────────────────────────────────────────────────────────────
     misc_data = {
-        "Sektor":  str(row.get("sector", "—")),
-        "Industri": str(row.get("industry", "—")),
-        "Land":    str(row.get("country", "—")),
+        "Sektor":  str(row.get("sector", "--")),
+        "Industri": str(row.get("industry", "--")),
+        "Land":    str(row.get("country", "--")),
     }
     st.dataframe(pd.DataFrame(misc_data.items(), columns=["Mått", "Värde"]),
                  use_container_width=True, hide_index=True)
@@ -498,21 +498,21 @@ def _detail_table(row: pd.Series):
         with tab_val:
             val_rows = [
                 ("P/E (trailing)", _safe_val(row.get("pe_trailing"), "dec1"),
-                 "Pris ÷ vinst per aktie (historisk). Lägre = billigare. 10–20 = normalt. Negativt = bolaget förlorar pengar."),
+                 "Pris / vinst per aktie (historisk). Lägre = billigare. 10-20 = normalt. Negativt = bolaget förlorar pengar."),
                 ("P/E (forward)", _safe_val(row.get("pe_forward"), "dec1"),
-                 "Pris ÷ förväntad framtida vinst. Om lägre än trailing P/E förväntas vinsttillväxt."),
+                 "Pris / förväntad framtida vinst. Om lägre än trailing P/E förväntas vinsttillväxt."),
                 ("P/B", _safe_val(row.get("price_to_book"), "dec2"),
-                 "Pris ÷ bokfört värde per aktie. Under 1.0 = handlas under substansvärde. Bankaktier har ofta lågt P/B."),
+                 "Pris / bokfört värde per aktie. Under 1.0 = handlas under substansvärde. Bankaktier har ofta lågt P/B."),
                 ("P/S", _safe_val(row.get("price_to_sales"), "dec2"),
-                 "Pris ÷ omsättning per aktie. Lägre = billigare relativt försäljning. Bra för förlustbolag utan vinst."),
+                 "Pris / omsättning per aktie. Lägre = billigare relativt försäljning. Bra för förlustbolag utan vinst."),
                 ("EV/EBITDA", _safe_val(row.get("ev_to_ebitda"), "dec1"),
-                 "Företagsvärde ÷ rörelseresultat före avskrivningar. Under 10 = relativt billigt. Används för att jämföra bolag med olika skuldsättning."),
+                 "Företagsvärde / rörelseresultat före avskrivningar. Under 10 = relativt billigt. Används för att jämföra bolag med olika skuldsättning."),
                 ("EV/Revenue", _safe_val(row.get("ev_to_revenue"), "dec2"),
-                 "Företagsvärde ÷ omsättning. Bra för att jämföra tillväxtbolag utan vinst. Under 2 = lågt."),
+                 "Företagsvärde / omsättning. Bra för att jämföra tillväxtbolag utan vinst. Under 2 = lågt."),
                 ("PEG Ratio", _safe_val(row.get("peg_ratio"), "dec2"),
-                 "P/E ÷ förväntad vinsttillväxt. Under 1.0 = aktien kan vara undervärderad relativt sin tillväxt. Populariserad av Peter Lynch."),
+                 "P/E / förväntad vinsttillväxt. Under 1.0 = aktien kan vara undervärderad relativt sin tillväxt. Populariserad av Peter Lynch."),
                 ("Värderingsscore", _safe_val(row.get("score_value"), "dec0"),
-                 "Systemets sammanvägda värderingspoäng 0–100 baserat på ovanstående nyckeltal. Högt = relativt billig aktie."),
+                 "Systemets sammanvägda värderingspoäng 0-100 baserat på ovanstående nyckeltal. Högt = relativt billig aktie."),
             ]
             st.dataframe(
                 pd.DataFrame(val_rows, columns=["Mått", "Värde", "ℹ️ Förklaring"]),
@@ -523,21 +523,21 @@ def _detail_table(row: pd.Series):
         with tab_qual:
             qual_rows = [
                 ("ROE", _safe_val(row.get("roe"), "pct"),
-                 "Return on Equity — avkastning på eget kapital. Visar hur effektivt bolaget tjänar pengar på ägarnas investering. 15%+ = bra, 25%+ = utmärkt."),
+                 "Return on Equity -- avkastning på eget kapital. Visar hur effektivt bolaget tjänar pengar på ägarnas investering. 15%+ = bra, 25%+ = utmärkt."),
                 ("ROA", _safe_val(row.get("roa"), "pct"),
-                 "Return on Assets — avkastning på totalt kapital. 5%+ = bra. Viktigt för kapitalintensiva branscher som tillverkning."),
+                 "Return on Assets -- avkastning på totalt kapital. 5%+ = bra. Viktigt för kapitalintensiva branscher som tillverkning."),
                 ("Bruttomarginal", _safe_val(row.get("gross_margin"), "pct"),
-                 "(Intäkter − kostnader för sålda varor) ÷ intäkter. Hög marginal = starkt prissättningsutrymme. Tech/pharma har ofta 60–80%."),
+                 "(Intäkter − kostnader för sålda varor) / intäkter. Hög marginal = starkt prissättningsutrymme. Tech/pharma har ofta 60-80%."),
                 ("Rörelsemarginal", _safe_val(row.get("operating_margin"), "pct"),
-                 "Rörelseresultat ÷ omsättning. Visar lönsamhet efter löner och drift men före räntor och skatt. 10%+ = bra."),
+                 "Rörelseresultat / omsättning. Visar lönsamhet efter löner och drift men före räntor och skatt. 10%+ = bra."),
                 ("Nettomarginal", _safe_val(row.get("profit_margin"), "pct"),
-                 "Nettovinst ÷ omsättning. Den slutliga vinsten per intäktskrona efter alla kostnader inklusive skatt och räntor."),
+                 "Nettovinst / omsättning. Den slutliga vinsten per intäktskrona efter alla kostnader inklusive skatt och räntor."),
                 ("FCF", _safe_val(row.get("free_cash_flow"), "dec0"),
-                 "Fritt kassaflöde — kassa som genereras efter investeringar. Positivt = bolaget genererar pengar. Används för utdelning, återköp eller tillväxt."),
+                 "Fritt kassaflöde -- kassa som genereras efter investeringar. Positivt = bolaget genererar pengar. Används för utdelning, återköp eller tillväxt."),
                 ("Piotroski F-Score", _safe_val(row.get("piotroski_f"), "ratio"),
-                 "9 binära nyckeltal för finansiell styrka: lönsamhet (4p), finansiering (3p), effektivitet (2p). 7–9 = stark. 0–2 = svag."),
+                 "9 binära nyckeltal för finansiell styrka: lönsamhet (4p), finansiering (3p), effektivitet (2p). 7-9 = stark. 0-2 = svag."),
                 ("Kvalitetsscore", _safe_val(row.get("score_quality"), "dec0"),
-                 "Systemets sammanvägda kvalitetspoäng 0–100 baserat på ovanstående. Högt = finansiellt starkt bolag."),
+                 "Systemets sammanvägda kvalitetspoäng 0-100 baserat på ovanstående. Högt = finansiellt starkt bolag."),
             ]
             st.dataframe(
                 pd.DataFrame(qual_rows, columns=["Mått", "Värde", "ℹ️ Förklaring"]),
@@ -548,23 +548,23 @@ def _detail_table(row: pd.Series):
         with tab_mom:
             mom_rows = [
                 ("1 månad", _safe_val(row.get("return_1m"), "pct_plus"),
-                 "Kursavkastning senaste månaden. Kortsiktigt momentum — positiv = aktien rört sig uppåt nyligen."),
+                 "Kursavkastning senaste månaden. Kortsiktigt momentum -- positiv = aktien rört sig uppåt nyligen."),
                 ("3 månader", _safe_val(row.get("return_3m"), "pct_plus"),
                  "Kursavkastning senaste 3 månaderna. Mellanlångt momentum. Viktig faktor för teknisk analys."),
                 ("6 månader", _safe_val(row.get("return_6m"), "pct_plus"),
                  "Kursavkastning senaste 6 månaderna. Stark 6m-avkastning = etablerad upptrend."),
                 ("12 månader", _safe_val(row.get("return_12m"), "pct_plus"),
-                 "Kursavkastning senaste 12 månaderna. Långsiktigt momentum — den starkaste prediktorn för fortsatt avkastning (momentum-faktor)."),
+                 "Kursavkastning senaste 12 månaderna. Långsiktigt momentum -- den starkaste prediktorn för fortsatt avkastning (momentum-faktor)."),
                 ("vs MA50", _safe_val(row.get("price_vs_ma50"), "pct_plus"),
                  "Hur mycket aktiekursen ligger över/under 50-dagars glidande medelvärde. Positiv = kurs över MA50 = teknisk styrka."),
                 ("vs MA200", _safe_val(row.get("price_vs_ma200"), "pct_plus"),
                  "Hur mycket kursen ligger över/under 200-dagars medelvärde. Positiv = långsiktig upptrend. Att ligga under MA200 kallas 'death cross'-zonen."),
                 ("RSI (14)", _safe_val(row.get("rsi_14"), "dec0"),
-                 "Relative Strength Index: 0–100. Under 30 = översåld (potentiellt köpläge). Över 70 = överköpt (potentiellt säljläge). 40–60 = neutral."),
-                ("MACD ovan signal", str(row.get("macd_above_signal", "—")),
+                 "Relative Strength Index: 0-100. Under 30 = översåld (potentiellt köpläge). Över 70 = överköpt (potentiellt säljläge). 40-60 = neutral."),
+                ("MACD ovan signal", str(row.get("macd_above_signal", "--")),
                  "Moving Average Convergence Divergence: True = momentum är uppåt (MACD-linjen är över signallinjen). False = nedåtmomentum."),
                 ("Momentumscore", _safe_val(row.get("score_momentum"), "dec0"),
-                 "Systemets sammanvägda momentumpoäng 0–100. Högt = aktien är i stark upptrend på kort och lång sikt."),
+                 "Systemets sammanvägda momentumpoäng 0-100. Högt = aktien är i stark upptrend på kort och lång sikt."),
             ]
             st.dataframe(
                 pd.DataFrame(mom_rows, columns=["Mått", "Värde", "ℹ️ Förklaring"]),
@@ -579,15 +579,15 @@ def _detail_table(row: pd.Series):
                 ("Volatilitet", _safe_val(row.get("volatility"), "pct"),
                  "Historisk prisvariabilitet (standardavvikelse av dagliga avkastningar). Hög volatilitet = aktien svänger mycket. Riskfyllt men även möjlighet."),
                 ("D/E", _safe_val(row.get("debt_to_equity"), "dec0"),
-                 "Skuld ÷ eget kapital. Mäter hur skuldsatt bolaget är. Under 1.0 = låg skuldsättning. Över 2.0 = hög hävstång — känsligare vid ränteuppgång."),
+                 "Skuld / eget kapital. Mäter hur skuldsatt bolaget är. Under 1.0 = låg skuldsättning. Över 2.0 = hög hävstång -- känsligare vid ränteuppgång."),
                 ("Current Ratio", _safe_val(row.get("current_ratio"), "dec2"),
-                 "Omsättningstillgångar ÷ kortfristiga skulder. Mäter kortsiktig betalningsförmåga. Över 1.5 = bra. Under 1.0 = kan ha problem att betala räkningar."),
+                 "Omsättningstillgångar / kortfristiga skulder. Mäter kortsiktig betalningsförmåga. Över 1.5 = bra. Under 1.0 = kan ha problem att betala räkningar."),
                 ("Quick Ratio", _safe_val(row.get("quick_ratio"), "dec2"),
                  "Som Current Ratio men exkluderar lager (som kan vara svårt att sälja snabbt). Över 1.0 = god likviditet."),
                 ("52v High", _safe_val(row.get("pct_from_52w_high"), "pct_plus"),
                  "Hur långt aktiekursen är från sin 52-veckorshöjning. −10% = 10% under toppnivån. Aktier nära 52v-high har ofta starkt momentum."),
                 ("Riskscore", _safe_val(row.get("score_risk"), "dec0"),
-                 "Systemets sammanvägda riskpoäng 0–100. Högt = låg risk (stabilt bolag med låg skuld och volatilitet). Lågt = hög risk."),
+                 "Systemets sammanvägda riskpoäng 0-100. Högt = låg risk (stabilt bolag med låg skuld och volatilitet). Lågt = hög risk."),
             ]
             st.dataframe(
                 pd.DataFrame(risk_rows, columns=["Mått", "Värde", "ℹ️ Förklaring"]),
@@ -605,7 +605,7 @@ def _detail_table(row: pd.Series):
 
 def _score_breakdown(row: pd.Series):
     """Visar en detaljerad breakdown av alla faktorscore och deras viktigaste
-    underliggande nyckeltal — 'Varför fick aktien denna poäng?'"""
+    underliggande nyckeltal -- 'Varför fick aktien denna poäng?'"""
 
     # Faktorer: (score-kolumn, label, emoji, [lista av (nyckeltal-kolumn, label, format)])
     FACTORS = [
@@ -653,24 +653,24 @@ def _score_breakdown(row: pd.Series):
         try:
             v = float(val)
             if pd.isna(v):
-                return "—"
+                return "--"
             if fmt.startswith("+"):
                 return f"{v:{fmt}}"
             return f"{v:{fmt}}"
         except Exception:
-            return "—"
+            return "--"
 
     def _score_color(s: float) -> str:
         if s >= 70: return "#00c853"
         if s >= 50: return "#ffc107"
         return "#f44336"
 
-    st.markdown("**🔬 Poängbrytning — varför fick aktien denna score?**")
+    st.markdown("**🔬 Poängbrytning -- varför fick aktien denna score?**")
 
     # Hämta regime-info för att visa om vikter är justerade
     regime = row.get("regime", "OSÄKER") if hasattr(row, "get") else "OSÄKER"
     if regime and regime != "OSÄKER":
-        st.caption(f"Marknadsregim: **{regime}** — vikter dynamiskt justerade")
+        st.caption(f"Marknadsregim: **{regime}** -- vikter dynamiskt justerade")
 
     total = row.get("score_total")
     if total is not None and not pd.isna(total):
@@ -698,7 +698,7 @@ def _score_breakdown(row: pd.Series):
                     pass
                 kpi_parts.append(f"{klabel}: {_fmt(val, kfmt)}")
 
-        kpi_str = " · ".join(kpi_parts) if kpi_parts else "Data saknas"
+        kpi_str = " * ".join(kpi_parts) if kpi_parts else "Data saknas"
         st.markdown(
             f"{emoji} **{label}** "
             f"<span style='color:{color};font-weight:bold'>{s:.0f}</span> "
@@ -776,7 +776,7 @@ def _news_feed(ticker: str, company_name: str = None):
         return
 
     for item in news[:10]:
-        title = item.get("headline") or item.get("title") or "—"
+        title = item.get("headline") or item.get("title") or "--"
         source = item.get("source", "?")
         date_raw = item.get("datetime") or item.get("publishedAt") or ""
         date_str = ""
@@ -1006,7 +1006,7 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame, company_na
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# HUVUDKOMPONENT – render_stock_detail
+# HUVUDKOMPONENT - render_stock_detail
 # ══════════════════════════════════════════════════════════════════════════════
 
 def render_stock_detail(
@@ -1036,9 +1036,9 @@ def render_stock_detail(
         company_name = str(row.get("name", "")).strip()
         industry_str = str(row.get("industry", "")).strip()
 
-    display_title = f"`{ticker}`" + (f" — {company_name}" if company_name else "")
+    display_title = f"`{ticker}`" + (f" -- {company_name}" if company_name else "")
     st.markdown(f"## 📈 {display_title}")
-    if industry_str and industry_str not in ("—", "nan", "None", ""):
+    if industry_str and industry_str not in ("--", "nan", "None", ""):
         st.caption(f"🏭 {industry_str}")
     st.markdown("---")
 

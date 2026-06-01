@@ -1,5 +1,5 @@
 """
-MarketScan Dashboard – Interaktiv börsanalys
+MarketScan Dashboard - Interaktiv börsanalys
 ============================================
 Läser utdata från scan.py, smallcap/scanner.py och portfolio.py.
 
@@ -12,7 +12,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# ── Sökvägar – MÅSTE komma INNAN projekt-importer ────────────────────────────
+# ── Sökvägar - MÅSTE komma INNAN projekt-importer ────────────────────────────
 # Streamlit Cloud kör filen från web/-mappen; projektroten måste läggas till
 # explicit annars hittas inte core/, data_management/, portfolio/.
 ROOT       = Path(__file__).resolve().parent.parent
@@ -76,7 +76,7 @@ st.markdown("""
   /* ── Typsnitt: Inter ──────────────────────────────────────────────────────── */
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-  /* Sätt Inter på body — ärver till all text.
+  /* Sätt Inter på body -- ärver till all text.
      Vi undviker att sätta !important på span/div så att Streamlits
      ikonfonter (Material Symbols Rounded) i span-element inte krockar. */
   body,
@@ -87,14 +87,14 @@ st.markdown("""
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
   }
 
-  /* Explicit override på semantiska textelement (ej span — ikoner bor i span) */
+  /* Explicit override på semantiska textelement (ej span -- ikoner bor i span) */
   p, h1, h2, h3, h4, h5, h6,
   button, input, textarea, select, a, td, th, label, li {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
   }
   h1, h2, h3 { font-weight: 700 !important; letter-spacing: -0.02em !important; }
 
-  /* ── Sidövergång – döljer ghosting vid rerun ─────────────────────────────── */
+  /* ── Sidövergång - döljer ghosting vid rerun ─────────────────────────────── */
   /* Fade + subtil slide-up varje gång huvudinnehållet renderas om */
   [data-testid="stMainBlockContainer"] > div:first-child,
   [data-testid="block-container"] {
@@ -210,7 +210,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ── Nytt designsystem (web/ui) — kort, metrics, taggar, typografi ─────────────
+# ── Nytt designsystem (web/ui) -- kort, metrics, taggar, typografi ─────────────
 # Läggs ovanpå blocket ovan; ersätter det helt vid den kommande nav-omskrivningen.
 try:
     from web.ui.css import inject_global_css
@@ -248,7 +248,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             _hits = _search_ticker_yfinance(_search_val)
             if _hits:
                 for _h in _hits[:6]:
-                    if st.button(f"{_h['ticker']} — {_h['name'][:40]}", key=f"gs_{_h['ticker']}", use_container_width=True):
+                    if st.button(f"{_h['ticker']} -- {_h['name'][:40]}", key=f"gs_{_h['ticker']}", use_container_width=True):
                         st.session_state["nav_page"] = "🔍 Aktie-sök"
                         st.session_state["search_ticker"] = _h["ticker"]; st.session_state["selected_stock_ticker"] = ""; st.session_state["selected_stock_name"] = ""
                         try:
@@ -291,8 +291,8 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
 
         # Läs query_param "p" från URL:en.
         # st.query_params["p"] = key  i _navigate_to() sätter URL:en via pushState
-        # (Streamlit ≥1.31). Streamlit lyssnar på popstate och kör om scriptet med
-        # de nya query_params → tillbaka/framåt-knappen fungerar utan extra JS.
+        # (Streamlit >=1.31). Streamlit lyssnar på popstate och kör om scriptet med
+        # de nya query_params -> tillbaka/framåt-knappen fungerar utan extra JS.
         _qp = st.query_params.get_all("p")
         _qp_page = _qp[0] if _qp else None
         if _qp_page and _qp_page in _known_pages:
@@ -301,8 +301,8 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             st.session_state["nav_page"] = "📊 Översikt"
 
         def _navigate_to(page_title: str):
-            """Navigera till en sida – query_params skapar automatiskt
-            en historikentry i webbläsaren → tillbaka-knappen fungerar."""
+            """Navigera till en sida - query_params skapar automatiskt
+            en historikentry i webbläsaren -> tillbaka-knappen fungerar."""
             st.session_state["nav_page"] = page_title
             qp_key = _reverse_map.get(page_title, "overview")
             st.query_params["p"] = qp_key
@@ -314,7 +314,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                          icon=ic(icon_key) or None):
                 _navigate_to(nav_key)
 
-        # Översikt – alltid synlig överst
+        # Översikt - alltid synlig överst
         _nav_button("📊 Översikt", "Översikt", "home")
 
         # Sektioner enligt informationsarkitekturen (routing-nycklar oförändrade).
@@ -356,7 +356,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                 for nav_key, display, icon_key in pages:
                     _nav_button(nav_key, display, icon_key)
 
-        # Admin – bara synlig för admin-användaren
+        # Admin - bara synlig för admin-användaren
         if st.session_state.get("username", "admin") == "admin":
             if st.button("Admin", key="nav_admin", use_container_width=True):
                 _navigate_to("🔧 Admin")
@@ -389,7 +389,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                         "Dölj illikvida",
                         value=False,
                         key="ws_hide_illiquid",
-                        help="Döljer aktier med uppskattad dagsomsättning under $50k/dag (avg_volume × kurs × FX).",
+                        help="Döljer aktier med uppskattad dagsomsättning under $50k/dag (avg_volume x kurs x FX).",
                     )
                     st.markdown("---")
                     filters["only_swedish"] = st.checkbox(
@@ -462,7 +462,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                         filters["t_countries"] = []
 
         # ── AI-tjänst (provider) ─────────────────────────────────────────────
-        # AI-DJUP väljs inte längre globalt här — det väljs vid varje AI-åtgärd
+        # AI-DJUP väljs inte längre globalt här -- det väljs vid varje AI-åtgärd
         # (se web/ui/ai_action.py). Bara providern är global.
         with st.expander("AI-tjänst", expanded=False):
             ai_provider = st.selectbox(
@@ -485,19 +485,19 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                 _latest_scan_file = max(parquet_files, key=lambda f: f.stat().st_mtime)
             elif csv_files:
                 _latest_scan_file = max(csv_files, key=lambda f: f.stat().st_mtime)
-        _time_str = "—"
+        _time_str = "--"
         if _latest_scan_file:
             _mt = datetime.fromtimestamp(_latest_scan_file.stat().st_mtime)
             _tz = datetime.now().astimezone().tzinfo
             _time_str = _mt.astimezone(_tz).strftime("%Y-%m-%d %H:%M")
-        st.caption(f"🟢 {len(scan_dates) if scan_dates else 0} datum · Senast: {max(scan_dates) if scan_dates else '—'} [{_time_str}]")
+        st.caption(f"🟢 {len(scan_dates) if scan_dates else 0} datum * Senast: {max(scan_dates) if scan_dates else '--'} [{_time_str}]")
 
         # Data-färskhetsvarning: visa orange/röd banner om data är gammal
         if _latest_scan_file:
             from datetime import timedelta
             _age_hours = (datetime.now() - datetime.fromtimestamp(_latest_scan_file.stat().st_mtime)).total_seconds() / 3600
             if _age_hours > 72:
-                st.warning(f"⚠️ Scandata är **{_age_hours/24:.0f} dagar** gammal — senaste vecko­scan misslyckades troligen. Trigga manuellt via Admin → Kör scan.", icon="⚠️")
+                st.warning(f"⚠️ Scandata är **{_age_hours/24:.0f} dagar** gammal -- senaste vecko­scan misslyckades troligen. Trigga manuellt via Admin -> Kör scan.", icon="⚠️")
             elif _age_hours > 48:
                 st.info(f"ℹ️ Scandata är **{_age_hours:.0f}h** gammal. Nästa schema­lagda uppdatering sker snart.", icon="ℹ️")
 
@@ -584,14 +584,14 @@ Du (eller någon annan) begärde att återställa lösenordet för ditt MarketSc
 
 **[Klicka här för att välja nytt lösenord]({reset_url})**
 
-Länken är giltig i **1 timme**. Om du inte begärde detta kan du ignorera detta mail —
+Länken är giltig i **1 timme**. Om du inte begärde detta kan du ignorera detta mail --
 ditt konto är oförändrat.
 
 ---
-*MarketScan · Automatiskt utskick*
+*MarketScan * Automatiskt utskick*
 """
         return send_email(
-            subject="🔐 MarketScan – återställ lösenord",
+            subject="🔐 MarketScan - återställ lösenord",
             body_markdown=body,
             recipients=[to_email],
         )
@@ -624,7 +624,7 @@ def _update_user_password(username: str, new_hashed: str) -> bool:
                 break
         if not updated:
             # Användaren finns inte i filen (t.ex. admin som normalt är i secrets)
-            # – lägg till som override-post
+            # - lägg till som override-post
             data.setdefault("users", []).append({
                 "username": uname_lower,
                 "name": username,
@@ -636,7 +636,7 @@ def _update_user_password(username: str, new_hashed: str) -> bool:
             })
         content = _j.dumps(data, indent=2, ensure_ascii=False)
         path.write_text(content, encoding="utf-8")
-        # Committa till GitHub — annars försvinner lösenordsbytet vid nästa
+        # Committa till GitHub -- annars försvinner lösenordsbytet vid nästa
         # Streamlit Cloud-omstart och användaren låses ute / får tillbaka gammalt lösen.
         try:
             from web.pages.admin import _get_github_token, _github_commit_file
@@ -657,8 +657,8 @@ def _handle_password_reset_flow() -> bool:
     Kontrollerar om URL:en innehåller en reset_token och hanterar i så fall
     hela lösenordsåterställningssidan.
 
-    Returnerar True om sidan tas över (token hittades i URL) → anroparen ska stopa appen.
-    Returnerar False om ingen token finns i URL → normal inloggning fortsätter.
+    Returnerar True om sidan tas över (token hittades i URL) -> anroparen ska stopa appen.
+    Returnerar False om ingen token finns i URL -> normal inloggning fortsätter.
     """
     from datetime import datetime, timezone
 
@@ -728,7 +728,7 @@ def _handle_password_reset_flow() -> bool:
             elif pw1 != pw2:
                 st.error("Lösenorden matchar inte.")
             else:
-                # Hasha lösenordet — prova olika API-varianter beroende på version
+                # Hasha lösenordet -- prova olika API-varianter beroende på version
                 new_hash = None
                 try:
                     import streamlit_authenticator as stauth
@@ -808,7 +808,7 @@ def _load_managed_users() -> dict:
     Ignorerar inaktiva användare.
 
     OBS: Admin-posten i filen (om den finns) används som lösenords-override
-    efter en lysenordsåterställning — den slås samman ÖVER secrets-värdet.
+    efter en lysenordsåterställning -- den slås samman ÖVER secrets-värdet.
     """
     try:
         import json as _json
@@ -838,16 +838,16 @@ def _run_auth() -> bool:
     """Hanterar inloggning med streamlit-authenticator (cookie-baserade sessioner).
 
     Flöde:
-    1. Om credentials INTE är konfigurerade i secrets → öppen åtkomst (lokal körning)
+    1. Om credentials INTE är konfigurerade i secrets -> öppen åtkomst (lokal körning)
     2. Admin-credentials läses från Streamlit Secrets
     3. Övriga användare läses från data/users_config.json (hanteras via admin-sidan)
-    4. Om redan inloggad via cookie → True direkt
-    5. Annars → visa inloggningsformulär
+    4. Om redan inloggad via cookie -> True direkt
+    5. Annars -> visa inloggningsformulär
 
     Sätter session_state["username"] efter lyckad inloggning.
     """
     if not _has_credentials_configured():
-        # Lokal körning utan secrets – öppen åtkomst, sätt admin som default-användare
+        # Lokal körning utan secrets - öppen åtkomst, sätt admin som default-användare
         if not st.session_state.get("username"):
             st.session_state["username"] = "admin"
         return True
@@ -888,7 +888,7 @@ def _run_auth() -> bool:
         cookie_expiry_days=int(cookie_cfg.get("expiry_days", 30)),
     )
 
-    # Om URL har reset_token → visa lösenordsåterställning istället för inloggning
+    # Om URL har reset_token -> visa lösenordsåterställning istället för inloggning
     if _handle_password_reset_flow():
         return False
 
@@ -955,7 +955,7 @@ def _run_auth() -> bool:
         return True
     elif status is False:
         st.error("❌ Fel användarnamn eller lösenord")
-    # status is None → väntar på input
+    # status is None -> väntar på input
     return False
 
 
@@ -1002,7 +1002,7 @@ def main():
     # Initiera session_state med defaults
     _init_session_state()
 
-    # Global inloggning – körs innan allt annat
+    # Global inloggning - körs innan allt annat
     if not _run_auth():
         st.stop()
 

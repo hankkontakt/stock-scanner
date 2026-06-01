@@ -1,5 +1,5 @@
 """
-train_ml.py — Tränar ML-modell från träningsdataset.
+train_ml.py -- Tränar ML-modell från träningsdataset.
 
 Använd:
     python -m scripts.train_ml --universe universe
@@ -47,7 +47,7 @@ def train(universe: str, parquet_path: Path | None = None, use_cpcv: bool = True
         logger.info(f"🏋️  Tränar {universe}-modell med CPCV (Combinatorial Purged CV) från {parquet_path}")
         # CPCV ger ärligare validering: purge=30d + embargo för att undvika
         # att framtida return-data läcker in i träningsfold.
-        # Tidigare användes train_from_dataset (enkel tidssplit) → optimistiska metrics.
+        # Tidigare användes train_from_dataset (enkel tidssplit) -> optimistiska metrics.
         trained = train_with_cpcv(parquet_path, universe)
     else:
         logger.info(f"🏋️  Tränar {universe}-modell (enkel tidssplit) från {parquet_path}")

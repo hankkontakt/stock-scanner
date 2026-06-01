@@ -1,7 +1,7 @@
 """
 app.py
 ======
-Portfolio Manager – öppnas i webbläsaren på http://localhost:5001
+Portfolio Manager - öppnas i webbläsaren på http://localhost:5001
 
 Starta med:  python app.py
 Stäng med:   Ctrl+C i terminalen
@@ -106,7 +106,7 @@ def sync_watchlist_to_github():
     from pathlib import Path as _P
     wl_path = _P(config.WATCHLIST_FILE)
     if not wl_path.exists():
-        return True, "Tom bevakningslista – inget att synka"
+        return True, "Tom bevakningslista - inget att synka"
     json_content = wl_path.read_text(encoding="utf-8")
     encrypted    = _encrypt_secret(pk_data["key"], json_content)
 
@@ -297,7 +297,7 @@ def add_holding():
 
     holdings = load_holdings()
 
-    # Kolla om tickern redan finns – uppdatera då istället
+    # Kolla om tickern redan finns - uppdatera då istället
     for h in holdings:
         if h["ticker"] == ticker:
             h["shares"]     = shares
@@ -423,7 +423,7 @@ def import_avanza_preview():
     content = request.files['file'].read().decode('utf-8-sig')
     rows = parse_avanza_csv(content)
     if not rows:
-        return jsonify({"error": "Kunde inte läsa filen – kontrollera att det är en Avanza-export"}), 400
+        return jsonify({"error": "Kunde inte läsa filen - kontrollera att det är en Avanza-export"}), 400
 
     results = []
     for row in rows:

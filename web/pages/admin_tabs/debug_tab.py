@@ -1,4 +1,4 @@
-"""admin/debug_tab.py – Sheetning tab for admin page."""
+"""admin/debug_tab.py - Sheetning tab for admin page."""
 import json
 import time
 from datetime import datetime

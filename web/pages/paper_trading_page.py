@@ -1,4 +1,4 @@
-"""web/pages/paper_trading_page.py – Sida 13: Paper Trading"""
+"""web/pages/paper_trading_page.py - Sida 13: Paper Trading"""
 
 import pandas as pd
 import plotly.express as px
@@ -18,10 +18,10 @@ def _compute_equity_data(trades: list) -> "dict | None":
     Compute portfolio equity from raw trades list.
 
     Returns:
-        initial_capital  – total capital deployed (sum of trade capitals)
-        current_equity   – current total value (unrealised + realised)
-        total_return_pct – (current / initial - 1) × 100
-        equity_curve     – list of {"week": str, "equity": float} sorted by week
+        initial_capital  - total capital deployed (sum of trade capitals)
+        current_equity   - current total value (unrealised + realised)
+        total_return_pct - (current / initial - 1) x 100
+        equity_curve     - list of {"week": str, "equity": float} sorted by week
     """
     if not trades:
         return None
@@ -69,7 +69,7 @@ def _compute_equity_data(trades: list) -> "dict | None":
 # ──────────────────────────────────────────────────────────────────────────────
 
 def page_paper_trading():
-    """Paper Trading Dashboard – track record, equity-kurva och positioner."""
+    """Paper Trading Dashboard - track record, equity-kurva och positioner."""
     from portfolio.paper_trading import (
         _load, TRADES_FILE,
         update_prices, calc_statistics,
@@ -79,15 +79,15 @@ def page_paper_trading():
     from web.utils import _active_data_dir
     from pathlib import Path
 
-    st.title("📄 Paper Trading – Track Record")
+    st.title("📄 Paper Trading - Track Record")
 
-    # Ladda trades från användarens katalog (admin → data/, övriga → data/users/{username}/)
+    # Ladda trades från användarens katalog (admin -> data/, övriga -> data/users/{username}/)
     user_dir = _active_data_dir()
     user_trades_file = user_dir / "paper_trades.json"
     trades_all = _load(user_trades_file)
 
     if not trades_all:
-        st.info("Inga trades registrerade ännu. Systemet öppnar automatiskt positioner varje vecka baserat på de starkaste aktierna — kom tillbaka på måndag för att se de första positionerna.")
+        st.info("Inga trades registrerade ännu. Systemet öppnar automatiskt positioner varje vecka baserat på de starkaste aktierna -- kom tillbaka på måndag för att se de första positionerna.")
         return
 
     # ── Universum-filter ────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ def page_paper_trading():
                 st.success(f"✅ {result['updated']} uppdaterade, {result['closed']} stängda")
                 st.rerun()
     with col_status:
-        st.caption(f"Öppna: {len(open_t)} · Stängda: {len(closed_t)} · Totalt: {len(trades)}")
+        st.caption(f"Öppna: {len(open_t)} * Stängda: {len(closed_t)} * Totalt: {len(trades)}")
 
     st.markdown("---")
 
@@ -134,7 +134,7 @@ def page_paper_trading():
         eq_kr  = equity_data["current_equity"]
         ret_pct = equity_data["total_return_pct"]
         hit_rate = stats.get("win_rate_pct")
-        hit_str  = f"{hit_rate:.0f}%" if hit_rate is not None else "—"
+        hit_str  = f"{hit_rate:.0f}%" if hit_rate is not None else "--"
 
         kpi_row([
             ("Equity",           f"{eq_kr:,.0f} kr",          f"Insatt: {equity_data['initial_capital']:,.0f} kr",
@@ -187,7 +187,7 @@ def page_paper_trading():
             line=dict(color="#64748b", width=1.5, dash="dash"),
         ))
         fig_eq.update_layout(
-            title="Equity curve – Paper Trading",
+            title="Equity curve - Paper Trading",
             template="plotly_dark",
             paper_bgcolor="#131722",
             plot_bgcolor="#1e2230",
@@ -203,7 +203,7 @@ def page_paper_trading():
     st.markdown("---")
 
     # ══════════════════════════════════════════════════════════════════════════
-    # ÖPPNA POSITIONER – summary metrics + tabell
+    # ÖPPNA POSITIONER - summary metrics + tabell
     # ══════════════════════════════════════════════════════════════════════════
     if open_pos:
         pnls        = [t.get("pnl_pct", 0) or 0 for t in open_pos]
@@ -232,13 +232,13 @@ def page_paper_trading():
                 trail = t.get("trailing_stop")
                 rows.append({
                     "Ticker": t["ticker"],
-                    "Vecka":  t.get("week", "—"),
+                    "Vecka":  t.get("week", "--"),
                     "Köp":    f"{t['buy_price']:.2f}",
                     "Senast": f"{t.get('current_price', 0):.2f}",
                     "P&L %":  f"{pnl:+.1f}%",
-                    "SL":     f"{sl:.2f}" if sl else "—",
-                    "TP":     f"{tp:.2f}" if tp else "—",
-                    "Trail":  f"{trail:.2f}" if trail else "—",
+                    "SL":     f"{sl:.2f}" if sl else "--",
+                    "TP":     f"{tp:.2f}" if tp else "--",
+                    "Trail":  f"{trail:.2f}" if trail else "--",
                     "DCA":    t.get("dca_count", 0),
                 })
             clickable_stock_table(
@@ -254,20 +254,20 @@ def page_paper_trading():
     # ══════════════════════════════════════════════════════════════════════════
     with st.expander(f"✅ Stängda positioner ({len(closed)})", expanded=False):
         if not closed:
-            st.caption("Inga stängda positioner ännu — positioner hålls i upp till 30 dagar innan de stängs.")
+            st.caption("Inga stängda positioner ännu -- positioner hålls i upp till 30 dagar innan de stängs.")
         else:
             rows_c = []
             for t in sorted(closed, key=lambda x: x.get("sell_date", ""), reverse=True)[:50]:
                 pnl    = t.get("pnl_pct", 0) or 0
-                reason = t.get("exit_reason", "—") or "—"
+                reason = t.get("exit_reason", "--") or "--"
                 rows_c.append({
                     "Ticker": t["ticker"],
-                    "Vecka":  t.get("week", "—"),
+                    "Vecka":  t.get("week", "--"),
                     "Köp":    f"{t['buy_price']:.2f}",
                     "Sälj":   f"{t.get('sell_price', 0):.2f}",
                     "P&L %":  f"{pnl:+.1f}%",
                     "Exit":   reason.replace("_", " "),
-                    "Datum":  t.get("sell_date", "—"),
+                    "Datum":  t.get("sell_date", "--"),
                 })
             clickable_stock_table(
                 pd.DataFrame(rows_c),
@@ -278,7 +278,7 @@ def page_paper_trading():
             )
 
     # ══════════════════════════════════════════════════════════════════════════
-    # STATISTIK OCH DIAGRAM – visas när det finns stängda positioner
+    # STATISTIK OCH DIAGRAM - visas när det finns stängda positioner
     # ══════════════════════════════════════════════════════════════════════════
     if "n_trades" in stats:
         st.markdown("---")
@@ -296,7 +296,7 @@ def page_paper_trading():
             ("Median",         f"{median_pnl:+.1f}%",  None, None),
             ("Win rate",       f"{win_rate:.0f}%",      ">50% = lönsamt",
              "Andel vinnande trades av alla stängda."),
-            ("Sharpe (år)",    f"{sharpe:.2f}" if sharpe else "—", None,
+            ("Sharpe (år)",    f"{sharpe:.2f}" if sharpe else "--", None,
              "Riskjusterad årsavkastning. >1.0 = bra."),
             ("Stängda trades", str(stats["n_trades"]), None, None),
         ])
@@ -306,11 +306,11 @@ def page_paper_trading():
         # Bästa / sämsta
         col_b, col_w, col_dca = st.columns(3)
         with col_b:
-            best_t = best.get("ticker", "—")
+            best_t = best.get("ticker", "--")
             best_p = best.get("pnl_pct", 0)
             st.metric("🏆 Bästa trade", best_t, f"{best_p:+.1f}%")
         with col_w:
-            worst_t = worst.get("ticker", "—")
+            worst_t = worst.get("ticker", "--")
             worst_p = worst.get("pnl_pct", 0)
             st.metric("💀 Sämsta trade", worst_t, f"{worst_p:+.1f}%")
         with col_dca:
@@ -432,4 +432,4 @@ def page_paper_trading():
         with col_d1:
             st.metric("DCA-köp utförda", dca_count)
         with col_d2:
-            st.metric("Snitt P&L efter DCA", f"{dca_avg:+.1f}%" if dca_avg else "—")
+            st.metric("Snitt P&L efter DCA", f"{dca_avg:+.1f}%" if dca_avg else "--")

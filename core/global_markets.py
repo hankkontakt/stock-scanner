@@ -1,5 +1,5 @@
 """
-global_markets.py – Hämta globala börsindex via yfinance
+global_markets.py - Hämta globala börsindex via yfinance
 =======================================================
 Ger aktuell data för 15+ världsindex som används i morgon-
 och kvällsrapporterna för att ge en global marknadsöverblick.
@@ -36,7 +36,7 @@ GLOBAL_INDEXES = [
     ("^VIX",   "📊 VIX (rädsleindex)"),
 ]
 
-# Map ticker → display name
+# Map ticker -> display name
 INDEX_NAMES = {t: n for t, n in GLOBAL_INDEXES}
 
 # Lista med tickers
@@ -193,7 +193,7 @@ def format_index_summary(indices: dict, max_items: int = 15) -> str:
         elif close is not None:
             parts.append(f"{name} {close:,.0f}")
 
-    return " · ".join(parts)
+    return " * ".join(parts)
 
 
 def format_index_summary_short(indices: dict) -> str:
@@ -266,11 +266,11 @@ def get_global_market_narrative(indices: dict) -> str:
     if vix:
         vix_val = vix.get("close", 0)
         if vix_val < 15:
-            parts.append("VIX låg – marknaden är lugn 😌")
+            parts.append("VIX låg - marknaden är lugn 😌")
         elif vix_val < 25:
-            parts.append("VIX måttlig – normal marknadsoro 😐")
+            parts.append("VIX måttlig - normal marknadsoro 😐")
         else:
-            parts.append(f"VIX förhöjd ({vix_val}) – marknadsoro! 😰")
+            parts.append(f"VIX förhöjd ({vix_val}) - marknadsoro! 😰")
 
     narrative = "Blandat på världsmarknaderna. " if not parts else ""
     return narrative + ". ".join(parts) + "."

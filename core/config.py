@@ -16,7 +16,7 @@ _BLACKLIST_FILE = _CONFIG_DIR / "data" / "blacklist.json"
 
 def _load_blacklist_set() -> set:
     """Laddar data/blacklist.json och returnerar set av blacklistade tickers.
-    Undviker cirkulär import av core.filters — läser filen direkt.
+    Undviker cirkulär import av core.filters -- läser filen direkt.
     Returnerar tom set vid fel så universe-load aldrig kraschar.
     """
     try:
@@ -35,8 +35,8 @@ def _load_universe():
 
     Fångar ALLA fel (inte bara FileNotFoundError): en trasig/halvskriven
     universe.json (merge-konflikt, avbruten commit) kastar annars
-    JSONDecodeError vid import av config.py → hela appen OCH alla pipelines
-    kraschar. Graciös fallback till {} → tom UNIVERSE → pipeline laddar
+    JSONDecodeError vid import av config.py -> hela appen OCH alla pipelines
+    kraschar. Graciös fallback till {} -> tom UNIVERSE -> pipeline laddar
     senaste cache istället för att braka.
     """
     try:
@@ -47,7 +47,7 @@ def _load_universe():
     except (json.JSONDecodeError, ValueError, OSError) as e:
         import sys
         print(f"⚠ KRITISKT: data/universe.json kunde inte läsas ({e}). "
-              f"Använder tom universe – kontrollera filen!", file=sys.stderr)
+              f"Använder tom universe - kontrollera filen!", file=sys.stderr)
         return {}
 
 _UNIVERSE_DATA  = _load_universe()
@@ -84,14 +84,14 @@ SMALLCAP_TICKERS = (
 
 # ════════════════ FAKTORVIKTER ════════════════
 FACTOR_WEIGHTS = {
-    "value":          0.2134,  # 0.22 × 0.97
-    "quality":        0.1746,  # 0.18 × 0.97
-    "momentum":       0.1746,  # 0.18 × 0.97
-    "growth":         0.1261,  # 0.13 × 0.97
-    "risk":           0.0873,  # 0.09 × 0.97
-    "size":           0.0485,  # 0.05 × 0.97
-    "dividend":       0.0485,  # 0.05 × 0.97
-    "sentiment":      0.0770,  # 0.10 × 0.97, minskat 2% for options_flow
+    "value":          0.2134,  # 0.22 x 0.97
+    "quality":        0.1746,  # 0.18 x 0.97
+    "momentum":       0.1746,  # 0.18 x 0.97
+    "growth":         0.1261,  # 0.13 x 0.97
+    "risk":           0.0873,  # 0.09 x 0.97
+    "size":           0.0485,  # 0.05 x 0.97
+    "dividend":       0.0485,  # 0.05 x 0.97
+    "sentiment":      0.0770,  # 0.10 x 0.97, minskat 2% for options_flow
     "short_interest": 0.0300,  # Låg blankning = positivt signal
     "options_flow":   0.0200,  # Options flow (put/call ratio)
 }
@@ -101,7 +101,7 @@ FACTOR_WEIGHTS = {
 assert abs(sum(FACTOR_WEIGHTS.values()) - 1.0) < 0.001
 
 # ════════════════ SCORING-LÄGE ════════════════
-# "sector_neutral" → sektor-relativ scoring (fundamentals demeanas per sektor +
+# "sector_neutral" -> sektor-relativ scoring (fundamentals demeanas per sektor +
 # sektor-specifika faktorvikter). Default eftersom en bank ska jämföras med banker,
 # inte med tech. Sätt till "" för gammalt globalt beteende.
 SCORE_MODE = "sector_neutral"
@@ -211,13 +211,13 @@ BENCHMARK_LABEL  = "OMXS30"
 SMALLCAP_CONFIG = {
 
     # ── Hårda filter (bolag som inte uppfyller dessa stryks innan scoring) ───
-    "min_daily_turnover_sek":  150_000,         # Daglig omsättning ≥ 150k SEK (sänkt från 500k för bredare täckning)
-    "min_market_cap_sek":      20_000_000,      # Börsvärde ≥ 20 MSEK (sänkt från 30 MSEK)
-    "max_market_cap_sek":      10_000_000_000,  # Börsvärde ≤ 10 GSEK (annars mid/large cap)
+    "min_daily_turnover_sek":  150_000,         # Daglig omsättning >= 150k SEK (sänkt från 500k för bredare täckning)
+    "min_market_cap_sek":      20_000_000,      # Börsvärde >= 20 MSEK (sänkt från 30 MSEK)
+    "max_market_cap_sek":      10_000_000_000,  # Börsvärde <= 10 GSEK (annars mid/large cap)
     "max_debt_to_equity":      300,             # D/E > 300 % = skuldfälla
     "min_current_ratio":       0.5,             # CR < 0.5 = akut likviditetskris
-    "min_cash_runway_months":  6,               # Kassan måste räcka ≥ 6 månader (sänkt från 12; många saknar kassadata)
-    "max_piotroski_skip":      2,               # F-Score ≤ 2 = eliminera helt
+    "min_cash_runway_months":  6,               # Kassan måste räcka >= 6 månader (sänkt från 12; många saknar kassadata)
+    "max_piotroski_skip":      2,               # F-Score <= 2 = eliminera helt
     "max_dilution_pct":        0.20,            # Aktieantal +20 % på 1 år = röd flagga
 
     # ── Scoringvikter (8 faktorer, summerar till 1.0) ─────────────────────────
@@ -281,17 +281,6 @@ def add_custom_to_universe(ticker: str, name: str = "") -> bool:
     _save_custom_universe(custom)
     return True
 
-def remove_custom_from_universe(ticker: str) -> bool:
-    """Tar bort en ticker ur universumscannerns custom-lista."""
-    ticker = ticker.strip().upper()
-    custom = load_custom_universe()
-    new = [c for c in custom if c["ticker"] != ticker]
-    if len(new) == len(custom):
-        return False
-    _save_custom_universe(new)
-    return True
-
-# ── Scoring-config override (sätts via admin-UI, sparas i data/scoring_config.json) ──
 import json as _json
 _SCORING_CONFIG_FILE = Path(__file__).parent.parent / "data" / "scoring_config.json"
 try:

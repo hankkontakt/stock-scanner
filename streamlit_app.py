@@ -4,11 +4,11 @@ streamlit_app.py (root-shim)
 Streamlit Cloud konfigurerades ursprungligen med 'streamlit_app.py' som main-fil,
 men efter projektomstruktureringen flyttades den riktiga appen till
 'web/streamlit_app.py'. Streamlit Cloud erbjuder inte längre möjlighet att
-ändra main-fil via Settings → den måste finnas på den ursprungliga sökvägen.
+ändra main-fil via Settings -> den måste finnas på den ursprungliga sökvägen.
 
 Den här shim-filen finns kvar i roten och kör web/streamlit_app.py med
 korrekt __file__-kontext så att alla relativa sökvägar i den riktiga filen
-fungerar (ROOT = Path(__file__).resolve().parent.parent → projektroten).
+fungerar (ROOT = Path(__file__).resolve().parent.parent -> projektroten).
 """
 
 from pathlib import Path

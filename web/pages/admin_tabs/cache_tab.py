@@ -1,4 +1,4 @@
-"""admin/cache_tab.py – Cache and AI log tabs for admin page."""
+"""admin/cache_tab.py - Cache and AI log tabs for admin page."""
 import json
 import time
 from datetime import datetime

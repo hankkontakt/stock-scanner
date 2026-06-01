@@ -1,9 +1,9 @@
 """
-backtest_snapshots.py — Point-in-time-korrekt backtest
+backtest_snapshots.py -- Point-in-time-korrekt backtest
 ======================================================
 Backtestas mot faktiska scored_universe-snapshots som committas av CI-pipelinen.
 Till skillnad från backtest.py (som rekonstruerar scoring på historisk prisdata)
-använder denna modul de *riktiga* score-rekommendationerna vid varje tidpunkt —
+använder denna modul de *riktiga* score-rekommendationerna vid varje tidpunkt --
 inget look-ahead bias, inga rekonstruerade fundamental-poäng.
 
 Begränsning: kräver att snapshots finns (byggs upp löpande av CI).
@@ -39,7 +39,7 @@ def save_snapshot(scored_df: pd.DataFrame, date_str: str | None = None) -> bool:
     """
     Sparar en tunn snapshot av dagens scoring för framtida backtest.
 
-    Sparar bara de kolumner som krävs för backtesting — håller filstorleken liten.
+    Sparar bara de kolumner som krävs för backtesting -- håller filstorleken liten.
     Anropas av daily_pipeline.py efter score_universe() vid weekly-körning.
 
     Returns True om snapshoten sparades, False om den redan existerade.
@@ -253,13 +253,13 @@ def run_snapshot_backtest(
         return {
             "error": (
                 f"Bara {len(snapshots)} snapshot(s) tillgängliga. "
-                f"Backtesten byggs upp löpande — kör vecko­scanen regelbundet."
+                f"Backtesten byggs upp löpande -- kör vecko­scanen regelbundet."
             ),
             "n_snapshots": len(snapshots),
         }
 
     if verbose:
-        print(f"  Backtestas mot {len(snapshots)} snapshots ({snapshots[0]} → {snapshots[-1]})")
+        print(f"  Backtestas mot {len(snapshots)} snapshots ({snapshots[0]} -> {snapshots[-1]})")
         print(f"  Topp-{top_n}, håll {holding_days} dagar, benchmark={benchmark}")
 
     price_cache: dict = {}
@@ -365,7 +365,7 @@ def run_snapshot_backtest(
 # 4. A/B-TEST AV FAKTORVIKTER
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Faktorscore-kolumner → viktnyckel (matchar config.FACTOR_WEIGHTS)
+# Faktorscore-kolumner -> viktnyckel (matchar config.FACTOR_WEIGHTS)
 _FACTOR_SCORE_COLS = {
     "score_value":          "value",
     "score_quality":        "quality",
@@ -448,7 +448,7 @@ def ab_test_weights(
     """
     A/B-testar två faktorviktuppsättningar mot historiska snapshots.
 
-    Insikt: snapshots lagrar redan per-faktor-poäng → vi kan omvikta dem med
+    Insikt: snapshots lagrar redan per-faktor-poäng -> vi kan omvikta dem med
     olika viktuppsättningar och mäta vilken topp-N-portfölj som presterat bäst,
     UTAN att hämta om någon scoring-data. Endast priser hämtas (delad cache).
 
@@ -462,10 +462,10 @@ def ab_test_weights(
     """
     snapshots = list_snapshots()
     if len(snapshots) < 3:
-        return {"error": f"Bara {len(snapshots)} snapshots — behöver ≥3 för A/B-test.",
+        return {"error": f"Bara {len(snapshots)} snapshots -- behöver >=3 för A/B-test.",
                 "n_snapshots": len(snapshots)}
 
-    price_cache: dict = {}  # Delad cache → priserna hämtas bara en gång för båda
+    price_cache: dict = {}  # Delad cache -> priserna hämtas bara en gång för båda
     res_a = _backtest_with_weights(weights_a, top_n, holding_days, price_cache)
     res_b = _backtest_with_weights(weights_b, top_n, holding_days, price_cache)
 

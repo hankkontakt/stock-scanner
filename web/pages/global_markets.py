@@ -1,4 +1,4 @@
-"""web/pages/global_markets.py – Sida 11: Globala marknader"""
+"""web/pages/global_markets.py - Sida 11: Globala marknader"""
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -10,7 +10,7 @@ from core import config
 
 
 def page_global_markets():
-    """Globala marknader – index, valutor, räntor och nyheter."""
+    """Globala marknader - index, valutor, räntor och nyheter."""
     st.title("🌍 Globala marknader")
     st.caption("Realtidsdata för globala index, valutor, räntor och marknadsnyheter.")
 
@@ -36,13 +36,13 @@ def page_global_markets():
                                 rows.append({
                                     "Region": region,
                                     "Index": d.get("name", k),
-                                    "Senast": f"{d.get('close', 0):,.0f}" if d.get("close") else "—",
+                                    "Senast": f"{d.get('close', 0):,.0f}" if d.get("close") else "--",
                                     "Förändring": f"{'🟢' if chg >= 0 else '🔴'} {chg:+.2f}%",
                                 })
                     if rows:
                         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
                                      height=min(500, len(rows) * 37 + 40))
-                        st.caption("Källa: yfinance · uppdateras varje sidladdning")
+                        st.caption("Källa: yfinance * uppdateras varje sidladdning")
                     else:
                         st.info("Inga indexdata tillgängliga just nu.")
                 else:
@@ -117,7 +117,7 @@ def page_global_markets():
                             icon = "🔴" if age < 6 else "🟡" if age < 24 else "⚪"
                             url = a.get("url", "")
                             title = f"[{a['headline']}]({url})" if url else a["headline"]
-                            st.markdown(f"{icon} {title}  \n*{a.get('source','?')} · {a.get('datetime_str','—')}*")
+                            st.markdown(f"{icon} {title}  \n*{a.get('source','?')} * {a.get('datetime_str','--')}*")
                             st.divider()
                     else:
                         st.info("Inga svenska nyheter just nu.")
@@ -129,7 +129,7 @@ def page_global_markets():
                             icon = "🔴" if age < 6 else "🟡" if age < 24 else "⚪"
                             url = a.get("url", "")
                             title = f"[{a['headline']}]({url})" if url else a["headline"]
-                            st.markdown(f"{icon} {title}  \n*{a.get('source','?')} · {a.get('datetime_str','—')}*")
+                            st.markdown(f"{icon} {title}  \n*{a.get('source','?')} * {a.get('datetime_str','--')}*")
                             st.divider()
                     else:
                         if _fh_key:
@@ -137,8 +137,8 @@ def page_global_markets():
                         else:
                             st.warning(
                                 "**FINNHUB_API_KEY saknas.** "
-                                "Lägg till nyckeln under **Streamlit Cloud → App settings → Secrets** "
-                                "(inte GitHub Secrets — de är separata). "
+                                "Lägg till nyckeln under **Streamlit Cloud -> App settings -> Secrets** "
+                                "(inte GitHub Secrets -- de är separata). "
                                 "Format: `FINNHUB_API_KEY = \"din_nyckel\"`"
                             )
             except Exception as e:

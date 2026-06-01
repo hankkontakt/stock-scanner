@@ -1,4 +1,4 @@
-"""web/pages/ai_page.py – Sida 6: AI Dashboard"""
+"""web/pages/ai_page.py - Sida 6: AI Dashboard"""
 
 import re
 from datetime import datetime, date
@@ -38,8 +38,8 @@ def _ai_section_footer():
 
 
 def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
-    """AI Dashboard – alla AI-funktioner samlade."""
-    st.title("🤖 AI – MarketScan Intelligence")
+    """AI Dashboard - alla AI-funktioner samlade."""
+    st.title("🤖 AI - MarketScan Intelligence")
 
     provider = _get_provider()
     api_key = config.DEEPSEEK_API_KEY or config.GEMINI_API_KEY
@@ -167,7 +167,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
     # ── Flik 2: One-click Stock Analysis (Feature 2b) ───────────────────────
     with tab_stock:
         st.subheader("📈 AI-aktieanalys")
-        st.caption("Välj en aktie för djupgående AI-analys av alla faktorer – inklusive färska nyheter.")
+        st.caption("Välj en aktie för djupgående AI-analys av alla faktorer - inklusive färska nyheter.")
 
         if not df.empty and "ticker" in df.columns:
             tickers = sorted(df["ticker"].tolist())
@@ -192,7 +192,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                             pass
 
                         depth = _get_depth()
-                        # Kolla om användaren äger tickern – skicka i så fall position till AI
+                        # Kolla om användaren äger tickern - skicka i så fall position till AI
                         user_pos = None
                         if holdings is not None and not holdings.empty and sel_ticker in holdings["ticker"].values:
                             h_row = holdings[holdings["ticker"] == sel_ticker].iloc[0]
@@ -260,11 +260,11 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                         if fetched_news:
                             with st.expander(f"📋 Källnyheter ({len(fetched_news)} artiklar)", expanded=False):
                                 for n in fetched_news[:8]:
-                                    title = n.get("headline", n.get("title", "—"))
+                                    title = n.get("headline", n.get("title", "--"))
                                     src = n.get("source", "?")
                                     age = n.get("age_hours")
-                                    age_str = f" · {age:.0f}h sedan" if age is not None else ""
-                                    st.markdown(f"- **{title}** — *{src}*{age_str}")
+                                    age_str = f" * {age:.0f}h sedan" if age is not None else ""
+                                    st.markdown(f"- **{title}** -- *{src}*{age_str}")
                     except Exception as e:
                         st.error(f"❌ Analys misslyckades: {e}")
 
@@ -276,21 +276,21 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                     st.caption("📋 Snabbdata")
                     cc1, cc2, cc3, cc4, cc5 = st.columns(5)
                     with cc1:
-                        st.metric("Score", f"{r.get('score_total', '—'):.0f}/100" if not pd.isna(r.get('score_total')) else "—")
+                        st.metric("Score", f"{r.get('score_total', '--'):.0f}/100" if not pd.isna(r.get('score_total')) else "--")
                     with cc2:
-                        st.metric("Entry", r.get("entry_signal", "—"))
+                        st.metric("Entry", r.get("entry_signal", "--"))
                     with cc3:
-                        st.metric("Trend", r.get("trend_signal", "—"))
+                        st.metric("Trend", r.get("trend_signal", "--"))
                     with cc4:
-                        st.metric("RSI", f"{r.get('rsi_14', '—'):.0f}" if not pd.isna(r.get('rsi_14', '—')) else "—")
+                        st.metric("RSI", f"{r.get('rsi_14', '--'):.0f}" if not pd.isna(r.get('rsi_14', '--')) else "--")
                     with cc5:
-                        st.metric("Piotroski", f"{r.get('piotroski_f', '—')}/9" if not pd.isna(r.get('piotroski_f', '—')) else "—")
+                        st.metric("Piotroski", f"{r.get('piotroski_f', '--')}/9" if not pd.isna(r.get('piotroski_f', '--')) else "--")
         else:
             st.info("Ingen scandata tillgänglig för aktieval.")
 
     # ── Flik 3: Compare Two Stocks (Feature 2c) ────────────────────────────
     with tab_compare:
-        st.subheader("🔄 AI-jämförelse – två aktier")
+        st.subheader("🔄 AI-jämförelse - två aktier")
         st.caption("Jämför två aktier sida vid sida med AI-analys.")
 
         if not df.empty and "ticker" in df.columns:
@@ -337,7 +337,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                             va = f"{va:.1f}" if isinstance(va, float) else va
                         if vb is not None and not pd.isna(vb):
                             vb = f"{vb:.1f}" if isinstance(vb, float) else vb
-                        cmp_data.append({"Mått": label, ticker_a: va if va is not None else "—", ticker_b: vb if vb is not None else "—"})
+                        cmp_data.append({"Mått": label, ticker_a: va if va is not None else "--", ticker_b: vb if vb is not None else "--"})
                     st.dataframe(pd.DataFrame(cmp_data), use_container_width=True, hide_index=True)
         else:
             st.info("Ingen scandata tillgänglig för jämförelse.")
@@ -387,7 +387,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
 
     # ── Flik 5: AI Chat (adaptiv med historik) ─────────────────────────────
     with tab_chat:
-        st.subheader("AI-chatt – fraga MarketScan AI")
+        st.subheader("AI-chatt - fraga MarketScan AI")
         st.caption("Stall fragor om marknaden, aktier, strategier. Skriv t.ex. 'sok bland 50 basta' for att fa mer data.",
                    unsafe_allow_html=True)
 
@@ -513,7 +513,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
 
                 def _ret_str(val, max_pct=150):
                     """Smart return formatter: auto-detects decimal vs % storage.
-                    Values with abs < 1 are treated as decimals (×100).
+                    Values with abs < 1 are treated as decimals (x100).
                     Values with abs >= 1 are treated as already in %.
                     Clips anything beyond ±max_pct as likely corrupt data.
                     """
@@ -623,7 +623,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                     elif sc_lu is not None and t in sc_lu.index:
                         holding_cards.append(_stock_card(sc_lu.loc[t].to_dict(), sc_score_col))
                     else:
-                        # Not in any scan — fetch live from yfinance
+                        # Not in any scan -- fetch live from yfinance
                         holding_cards.append(_live_card_fallback(t))
 
                 context_parts.append(
@@ -637,7 +637,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
             is_weekend = "HELG" if now.weekday() >= 5 else "BÖRSDAG"
             context_parts.append(f"Datum: {now.strftime('%Y-%m-%d')} ({day_name}, {is_weekend})")
 
-            # ── Auto-detect tickers → fetch live news ──────────────────────
+            # ── Auto-detect tickers -> fetch live news ──────────────────────
             news_context_parts = []
             prompt_upper = prompt.upper()
 
@@ -662,18 +662,18 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                     mentioned_tickers.append(t)
 
             # 2. Known tickers from scan (full ticker or base part).
-            # Guard: only match if base is ≥3 chars — prevents single-letter tickers
+            # Guard: only match if base is >=3 chars -- prevents single-letter tickers
             # like "V" (Visa), "D" (Dominion), "T" (AT&T) from matching as substrings
             # of common Swedish words ("VAD", "AKTIER", etc.)
             for t in all_known:
                 base = t.split(".")[0].upper()
                 if len(base) < 3:
-                    continue  # skip 1-2 char tickers – too many false positives
+                    continue  # skip 1-2 char tickers - too many false positives
                 if t.upper() in prompt_upper or re.search(rf'\b{re.escape(base)}\b', prompt_upper):
                     if t not in mentioned_tickers:
                         mentioned_tickers.append(t)
 
-            # 3. News keywords trigger → also grab top-scored ticker if no specific one found
+            # 3. News keywords trigger -> also grab top-scored ticker if no specific one found
             news_keywords = {"NYHETER", "NYHET", "NYHETSLÄGE", "NEWS", "RUBRIK",
                              "RAPPORT", "VD", "CEO", "PRESSRELEASE", "FÖRVÄRV"}
             wants_news = bool(news_keywords & set(re.findall(r'\b\w+\b', prompt_upper)))
@@ -682,11 +682,11 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
 
             if mentioned_tickers or wants_news:
                 fetch_for = mentioned_tickers or []
-                # If no specific ticker but user asks about news → use top scored ticker
+                # If no specific ticker but user asks about news -> use top scored ticker
                 if not fetch_for and wants_news and not df.empty and "score_total" in df.columns:
                     fetch_for = [df.nlargest(1, "score_total").iloc[0]["ticker"]]
 
-                # Build ticker → company name lookup from both scored DataFrames
+                # Build ticker -> company name lookup from both scored DataFrames
                 name_lookup: dict[str, str] = {}
                 for _sdf in (df, sc_df):
                     if not _sdf.empty and "ticker" in _sdf.columns and "name" in _sdf.columns:
@@ -724,7 +724,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 spinner_msg = "AI analyserar..."
                 if news_context_parts:
                     tickers_fetched = ", ".join(p.split(":\n")[0] for p in news_context_parts)
-                    spinner_msg = f"Hämtade nyheter för {tickers_fetched} – AI analyserar..."
+                    spinner_msg = f"Hämtade nyheter för {tickers_fetched} - AI analyserar..."
                 with st.spinner(spinner_msg):
                     try:
                         depth = _get_depth()
@@ -790,9 +790,9 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                 sc = score_lu.get(t, {})
                 rows.append({
                     "Ticker": t,
-                    "Score": sc.get("score_total", "—"),
-                    "Entry": sc.get("entry_signal", "—"),
-                    "Trend": sc.get("trend_signal", "—"),
+                    "Score": sc.get("score_total", "--"),
+                    "Entry": sc.get("entry_signal", "--"),
+                    "Trend": sc.get("trend_signal", "--"),
                 })
             if rows:
                 clickable_stock_table(pd.DataFrame(rows), ticker_col="Ticker", context_df=df,
@@ -813,7 +813,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
         if news_search.strip():
             news_hits = _search_ticker_yfinance(news_search.strip())
             if news_hits:
-                news_options = {f"{h['ticker']} — {h['name'][:50]}": h for h in news_hits}
+                news_options = {f"{h['ticker']} -- {h['name'][:50]}": h for h in news_hits}
                 news_label = st.selectbox("Välj från sökresultat", list(news_options.keys()),
                                           key="ai_news_ticker_select")
                 news_ticker = news_options[news_label]["ticker"]
@@ -874,15 +874,15 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                             st.markdown("---")
                             st.caption(f"📋 {len(fetched)} nyheter hämtade (senaste 7 dagar)")
                             for n in fetched[:10]:
-                                title = n.get("headline", n.get("title", "—"))
+                                title = n.get("headline", n.get("title", "--"))
                                 src = n.get("source", "?")
                                 age = n.get("age_hours")
-                                age_str = f" · {age:.0f}h sedan" if age is not None else ""
+                                age_str = f" * {age:.0f}h sedan" if age is not None else ""
                                 url = n.get("url", "")
                                 if url:
-                                    st.markdown(f"- [{title}]({url}) — *{src}*{age_str}")
+                                    st.markdown(f"- [{title}]({url}) -- *{src}*{age_str}")
                                 else:
-                                    st.markdown(f"- **{title}** — *{src}*{age_str}")
+                                    st.markdown(f"- **{title}** -- *{src}*{age_str}")
                         else:
                             st.warning(
                                 f"⚠️ Inga nyheter hittades för **{news_ticker}**. "
@@ -900,13 +900,13 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                     raw_news = fetch_company_news(news_ticker, days_back=3, company_name=_raw_name) or []
                     if raw_news:
                         for n in raw_news[:8]:
-                            title = n.get("headline", n.get("title", "—"))
+                            title = n.get("headline", n.get("title", "--"))
                             src = n.get("source", "?")
                             url = n.get("url", "")
                             if url:
-                                st.markdown(f"- [{title}]({url}) — *{src}*")
+                                st.markdown(f"- [{title}]({url}) -- *{src}*")
                             else:
-                                st.markdown(f"- {title} — *{src}*")
+                                st.markdown(f"- {title} -- *{src}*")
                     else:
                         st.caption("Inga nyheter hittade för senaste 3 dagar.")
                 except Exception:

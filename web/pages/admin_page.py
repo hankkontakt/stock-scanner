@@ -1,4 +1,4 @@
-"""admin_page.py – Admin Streamlit-sida (tab-navigering).
+"""admin_page.py - Admin Streamlit-sida (tab-navigering).
 Varje tabs rendering finns i separata moduler under admin/.
 
 Delade datatjanstfunktioner finns i admin.py (oforandrade).
@@ -38,7 +38,7 @@ def _load_scan_log() -> list:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def page_admin():
-    """Admin-sida – kraver losenord."""
+    """Admin-sida - kraver losenord."""
     if not _check_admin_access():
         if st.session_state.get("admin_authenticated", False):
             if st.button("Logga ut fran admin", key="btn_admin_logout"):
@@ -46,7 +46,7 @@ def page_admin():
                 st.rerun()
         return
 
-    st.title("Admin – Hantera portfolj, bevakning & scannar")
+    st.title("Admin - Hantera portfolj, bevakning & scannar")
 
     # Import av alla tab-moduler
     from web.pages.admin_tabs.overview import render as _overview

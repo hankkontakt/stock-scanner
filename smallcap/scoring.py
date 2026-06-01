@@ -1,15 +1,15 @@
 """
-scoring.py – Poängmodell optimerad för svenska småbolag.
+scoring.py - Poängmodell optimerad för svenska småbolag.
 
 8 faktorer, totalt 100 poäng:
-  Insider-ägarskap & aktivitet   18%  – skin in the game
-  Free Cash Flow-yield           16%  – äkta pengar, inte earnings
-  Piotroski F-Score              15%  – finansiell hälsa (akademiskt bevisad)
-  Tillväxt (intäkter/vinst)      13%  – småbolag måste växa
-  Balansräkning                  12%  – skuldsättning + likviditet
-  Värdering (EV/EBITDA, P/B)     12%  – betala inte för dyrt
-  Momentum (6/12 månaders return) 9%  – "discovery phase" – trender håller längre i small cap
-  Handelslikviditet               5%  – kan du faktiskt köpa/sälja?
+  Insider-ägarskap & aktivitet   18%  - skin in the game
+  Free Cash Flow-yield           16%  - äkta pengar, inte earnings
+  Piotroski F-Score              15%  - finansiell hälsa (akademiskt bevisad)
+  Tillväxt (intäkter/vinst)      13%  - småbolag måste växa
+  Balansräkning                  12%  - skuldsättning + likviditet
+  Värdering (EV/EBITDA, P/B)     12%  - betala inte för dyrt
+  Momentum (6/12 månaders return) 9%  - "discovery phase" - trender håller längre i small cap
+  Handelslikviditet               5%  - kan du faktiskt köpa/sälja?
 
 Bonusar (kan inte överstiga 100 totalt):
   +5  Nettokassa (cash > total skuld)
@@ -40,7 +40,7 @@ def _load_weights() -> dict:
         from core import config
         w = config.SMALLCAP_CONFIG.get("scoring_weights", {})
         if w and abs(sum(w.values()) - 1.0) < 0.01:
-            # Mappa "value" → "valuation" om config använder kortformen
+            # Mappa "value" -> "valuation" om config använder kortformen
             return {("valuation" if k == "value" else k): v for k, v in w.items()}
     except (ImportError, AttributeError):
         pass
@@ -73,9 +73,9 @@ def _winsorize(series: pd.Series, lower: float = 0.05, upper: float = 0.95) -> p
 
 def _percentile_score(series: pd.Series, ascending: bool = True) -> pd.Series:
     """
-    Konverterar en rådata-serie till percentilpoäng 0–100.
-    ascending=True → höga värden ger höga poäng
-    ascending=False → låga värden ger höga poäng (t.ex. låg skuld = bra)
+    Konverterar en rådata-serie till percentilpoäng 0-100.
+    ascending=True -> höga värden ger höga poäng
+    ascending=False -> låga värden ger höga poäng (t.ex. låg skuld = bra)
     """
     clean = _winsorize(series.fillna(series.median()))
     rank  = clean.rank(pct=True, ascending=ascending, na_option="bottom")
@@ -83,7 +83,7 @@ def _percentile_score(series: pd.Series, ascending: bool = True) -> pd.Series:
 
 
 # ══════════════════════════════════════════════════════════════
-# FAKTORBERÄKNINGAR (varje returnerar en pd.Series 0–100)
+# FAKTORBERÄKNINGAR (varje returnerar en pd.Series 0-100)
 # ══════════════════════════════════════════════════════════════
 
 def _score_insider(df: pd.DataFrame) -> pd.Series:
@@ -109,7 +109,7 @@ def _score_insider(df: pd.DataFrame) -> pd.Series:
 
     # Faktor 2: Netto köpvolym (35% av insiderpoängen)
     net_buy = df.get("insider_net_buy_6m", pd.Series(0, index=df.index)).fillna(0)
-    # Använd log-skala för att hantera enorma variationer (1K → 10M SEK)
+    # Använd log-skala för att hantera enorma variationer (1K -> 10M SEK)
     net_buy_abs = net_buy.abs()
     net_buy_log = np.sign(net_buy) * np.log1p(net_buy_abs)
     net_buy_score = _percentile_score(net_buy_log)
@@ -157,9 +157,9 @@ def _score_fcf_yield(df: pd.DataFrame) -> pd.Series:
 
 def _score_piotroski(df: pd.DataFrame) -> pd.Series:
     """
-    Piotroski F-Score (0–9). Beräknas av piotroski.py om tillgängligt.
+    Piotroski F-Score (0-9). Beräknas av piotroski.py om tillgängligt.
     Annars används kolumnen piotroski_score om den redan finns i df.
-    Mapping: 7-9 → 100p, 4-6 → 50p, 0-3 → 10p
+    Mapping: 7-9 -> 100p, 4-6 -> 50p, 0-3 -> 10p
     """
     score_map = {0: 5, 1: 5, 2: 10, 3: 15, 4: 40, 5: 55, 6: 70, 7: 85, 8: 95, 9: 100}
 
@@ -223,7 +223,7 @@ def _score_valuation(df: pd.DataFrame) -> pd.Series:
 def _score_momentum(df: pd.DataFrame) -> pd.Series:
     """
     Momentumpoäng: 12-månaders avkastning viktas tyngst.
-    Småbolag har längre "discovery phase" – momentum håller 9-18m.
+    Småbolag har längre "discovery phase" - momentum håller 9-18m.
     """
     r12 = df.get("return_12m", pd.Series(np.nan, index=df.index)).fillna(0)
     r6  = df.get("return_6m",  pd.Series(np.nan, index=df.index)).fillna(0)
@@ -234,8 +234,8 @@ def _score_momentum(df: pd.DataFrame) -> pd.Series:
 
 def _score_liquidity(df: pd.DataFrame) -> pd.Series:
     """
-    Likviditetspoäng: genomsnittlig handelsvolym × pris ≈ daglig omsättning i SEK.
-    Viktigt för småbolag – illikvida aktier kan inte säljas i stress.
+    Likviditetspoäng: genomsnittlig handelsvolym x pris ≈ daglig omsättning i SEK.
+    Viktigt för småbolag - illikvida aktier kan inte säljas i stress.
     """
     vol   = df.get("avg_volume",    pd.Series(np.nan, index=df.index)).fillna(0)
     price = df.get("current_price", pd.Series(np.nan, index=df.index)).fillna(0)
@@ -299,7 +299,7 @@ def score_universe(df: pd.DataFrame) -> pd.DataFrame:
     Returnerar df med nya kolumner:
       sc_insider, sc_fcf, sc_piotroski, sc_growth, sc_balance,
       sc_valuation, sc_momentum, sc_liquidity,
-      sc_bonus, sc_penalty, sc_total (0–100+)
+      sc_bonus, sc_penalty, sc_total (0-100+)
 
     Rankad fallande på sc_total.
     """
@@ -315,7 +315,7 @@ def score_universe(df: pd.DataFrame) -> pd.DataFrame:
     out["sc_momentum"]   = _score_momentum(df)
     out["sc_liquidity"]  = _score_liquidity(df)
 
-    # Vägt sammansatt poäng (0–100 innan bonus/avdrag)
+    # Vägt sammansatt poäng (0-100 innan bonus/avdrag)
     out["sc_composite"] = (
         out["sc_insider"]   * FACTOR_WEIGHTS["insider"]   +
         out["sc_fcf"]       * FACTOR_WEIGHTS["fcf_yield"] +
@@ -335,7 +335,7 @@ def score_universe(df: pd.DataFrame) -> pd.DataFrame:
     # Rang
     out["sc_rank"] = out["sc_total"].rank(ascending=False, method="min").astype("Int64")
 
-    # Stjärnklassning: ★★★★★ (>80), ★★★★ (>65), ★★★ (>50), ★★ (>35), ★ (≤35)
+    # Stjärnklassning: ★★★★★ (>80), ★★★★ (>65), ★★★ (>50), ★★ (>35), ★ (<=35)
     out["sc_stars"] = out["sc_total"].apply(_stars)
 
     return out.sort_values("sc_total", ascending=False).reset_index(drop=True)

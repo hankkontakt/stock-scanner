@@ -34,7 +34,7 @@ def _rc(key, max_h):
         return None
     try:
         with open(p, "rb") as f: return pickle.load(f)
-    except: return None
+    except Exception: return None
 
 def _wc(key, data):
     try:
@@ -138,10 +138,10 @@ def analyze_concentration(holdings_analysis: pd.DataFrame,
 
     if max_sector_pct > 0.50:
         top_sector = max(sector_weights, key=sector_weights.get)
-        warnings.append(f"⚠ {max_sector_pct*100:.0f}% i {top_sector} – hög sektorrisk")
+        warnings.append(f"⚠ {max_sector_pct*100:.0f}% i {top_sector} - hög sektorrisk")
 
     if n_sectors < 3 and len(h) >= 4:
-        warnings.append(f"⚠ Endast {n_sectors} sektorer – låg diversifiering")
+        warnings.append(f"⚠ Endast {n_sectors} sektorer - låg diversifiering")
 
     return {
         "max_position_pct":   round(max_pos, 3),
@@ -215,7 +215,7 @@ def suggest_diversifiers(holdings: pd.DataFrame, scored: pd.DataFrame,
 # RELATIV STYRKA
 # ══════════════════════════════════════════════════════════════
 
-# Sektor → ETF-mappning (för att jämföra aktiens avkastning mot sektor)
+# Sektor -> ETF-mappning (för att jämföra aktiens avkastning mot sektor)
 SECTOR_ETFS = {
     "Technology":             "XLK",
     "Healthcare":             "XLV",
@@ -265,7 +265,7 @@ def add_relative_strength(scored: pd.DataFrame) -> pd.DataFrame:
     df["relative_strength"] = None
 
     if "return_3m" not in df.columns or "sector" not in df.columns:
-        df["rs_label"] = "—"
+        df["rs_label"] = "--"
         return df
 
     # Cacha sektor-avkastningar
@@ -290,7 +290,7 @@ def add_relative_strength(scored: pd.DataFrame) -> pd.DataFrame:
 
     # Label
     def lbl(r):
-        if r is None or pd.isna(r): return "—"
+        if r is None or pd.isna(r): return "--"
         if r > 0.05:    return "🟢 STARK"
         if r < -0.05:   return "🔴 SVAG"
         return "⚪ NORMAL"
@@ -309,7 +309,7 @@ def build_portfolio_analysis_section(holdings_analysis: pd.DataFrame,
     if holdings_analysis.empty:
         return ""
 
-    lines = ["\n## 🎯 Portföljanalys – risk & diversifiering\n"]
+    lines = ["\n## 🎯 Portföljanalys - risk & diversifiering\n"]
 
     # Koncentration
     conc = analyze_concentration(holdings_analysis, scored)
@@ -351,7 +351,7 @@ def build_portfolio_analysis_section(holdings_analysis: pd.DataFrame,
                     if ticker == col:
                         row_vals.append("**1.00**")
                     elif pd.isna(val):
-                        row_vals.append("—")
+                        row_vals.append("--")
                     elif val > 0.7:
                         row_vals.append(f"🔴 {val:.2f}")
                     elif val > 0.4:

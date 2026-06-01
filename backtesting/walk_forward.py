@@ -1,16 +1,16 @@
 """
 walk_forward.py
 ===============
-Walk-forward backtest – det enda backtest-sättet som inte fuskar.
+Walk-forward backtest - det enda backtest-sättet som inte fuskar.
 
 Problem med vanlig backtest:
   Du optimerar vikter på 2018-2024-data, testar på samma 2018-2024-data.
   Det är som att öva på facit. Modellen ser fantastisk ut men funkar inte live.
 
 Walk-forward:
-  Träna på 2018-2020 → Testa "blint" på 2021
-  Träna på 2018-2021 → Testa "blint" på 2022
-  Träna på 2018-2022 → Testa "blint" på 2023
+  Träna på 2018-2020 -> Testa "blint" på 2021
+  Träna på 2018-2021 -> Testa "blint" på 2022
+  Träna på 2018-2022 -> Testa "blint" på 2023
   ...
   Du ser om modellen faktiskt generaliserar.
 
@@ -100,7 +100,7 @@ def walk_forward_backtest(
 
         if verbose:
             print(f"  Fönster {window_idx}/{len(test_starts)}: "
-                  f"Testar {test_start.date()} → {test_end.date()} (out-of-sample)")
+                  f"Testar {test_start.date()} -> {test_end.date()} (out-of-sample)")
 
         # Månatliga rebalansering inom test-perioden
         rebalance_dates = pd.date_range(start=test_start, end=test_end, freq=REBALANCE_FREQ)
@@ -201,7 +201,7 @@ def walk_forward_backtest(
 
             if verbose:
                 bench_str = f", Bench: {bench_cum*100:+.1f}%" if bench_cum is not None else ""
-                print(f"     → Port: {port_cum*100:+.1f}%{bench_str}")
+                print(f"     -> Port: {port_cum*100:+.1f}%{bench_str}")
 
     # Sammanlagd statistik
     if not window_summaries:
@@ -239,7 +239,7 @@ def print_walk_forward_results(results: dict):
         return
 
     print("\n" + "═" * 64)
-    print("🎯 WALK-FORWARD BACKTEST – OUT-OF-SAMPLE RESULTAT")
+    print("🎯 WALK-FORWARD BACKTEST - OUT-OF-SAMPLE RESULTAT")
     print("═" * 64)
     print(f"  Antal fönster (1-årsperioder): {results['n_windows']}")
     print(f"  Snitt-avkastning portfölj:     {results['avg_port_return']:+.1f}%/år")
@@ -260,9 +260,9 @@ def print_walk_forward_results(results: dict):
         print("  " + "-" * 60)
         for _, row in results["windows"].iterrows():
             won = "✓" if row.get("beat_benchmark") else "✗"
-            bench = f"{row['bench_return']:+.1f}%" if row.get("bench_return") is not None else "—"
-            alpha = f"{row['alpha']:+.1f}%" if row.get("alpha") is not None else "—"
-            print(f"  {row['window']:<8} {row['test_start']} → {row['test_end']}  "
+            bench = f"{row['bench_return']:+.1f}%" if row.get("bench_return") is not None else "--"
+            alpha = f"{row['alpha']:+.1f}%" if row.get("alpha") is not None else "--"
+            print(f"  {row['window']:<8} {row['test_start']} -> {row['test_end']}  "
                   f"{row['port_return']:+.1f}% {bench:>8} {alpha:>8} {won:>5}")
 
     # Spara CSV

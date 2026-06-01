@@ -1,4 +1,4 @@
-"""web/pages/technical.py – Sida 5: Teknisk analys"""
+"""web/pages/technical.py - Sida 5: Teknisk analys"""
 
 import pandas as pd
 import plotly.express as px
@@ -83,7 +83,7 @@ def page_technical(df: pd.DataFrame, filters: dict):
         ("Visar",            f"{len(out)} / {len(df)}",  None,
          "Antal bolag som visas efter filter, av totalt antal i universumet."),
         ("UPPTREND",         f"{n_upptrend}",            None,
-         "Antal bolag i teknisk upptrend — aktiekursen är över MA50 och MA200 (glidande medelvärden). Många upptrend = bullish marknadsklimat."),
+         "Antal bolag i teknisk upptrend -- aktiekursen är över MA50 och MA200 (glidande medelvärden). Många upptrend = bullish marknadsklimat."),
         ("Över MA200",       f"{n_over_ma}",             None,
          "Antal bolag vars kurs är över 200-dagars glidande medelvärde. MA200 är det viktigaste långsiktiga trendmåttet. Under MA200 = potentiellt riskabelt."),
         ("Snitt RSI / >70",  f"{avg_rsi:.0f} / {n_overbought}", None,
@@ -99,9 +99,9 @@ Till skillnad från fundamental analys (som tittar på bolagets vinster och bala
 
 | Begrepp | Förklaring | Bra värde |
 |---|---|---|
-| **RSI** | Visar om en aktie stigit/sjunkit för snabbt (0–100) | 30–70 är normalt; <30 kan vara köpläge; >70 var försiktig |
+| **RSI** | Visar om en aktie stigit/sjunkit för snabbt (0-100) | 30-70 är normalt; <30 kan vara köpläge; >70 var försiktig |
 | **MA50 / MA200** | Glidande medelvärde (snittpris) senaste 50/200 dagar | Pris *över* MA200 = upptrend (positivt) |
-| **MACD** | Mäter momentum – om farten uppåt/nedåt ökar eller minskar | MACD över signallinjen = positivt momentum |
+| **MACD** | Mäter momentum - om farten uppåt/nedåt ökar eller minskar | MACD över signallinjen = positivt momentum |
 | **Bollinger-position (BB)** | Var priset befinner sig relativt sin normala prissvängning | 0 = vid nedre bandet (billigt), 1 = vid övre bandet (dyrt) |
 | **Trend** | UPPTREND = priset är över både MA50 och MA200 | UPPTREND är positivt; bättre riskmiljö |
 | **Entry-signal** | Systemets samlade bedömning av köptillfälle | STARK/OK = systemet ser ett bra läge |
@@ -137,7 +137,7 @@ Till skillnad från fundamental analys (som tittar på bolagets vinster och bala
                 td[c] = td[c].apply(lambda v: pct_fmt(v))
         clickable_stock_table(td, ticker_col="Ticker", context_df=out,
                               key="tech_main", height=600,
-                              column_help={"RSI": "Relativ styrka 0–100. >70 överköpt, <30 översålt.",
+                              column_help={"RSI": "Relativ styrka 0-100. >70 överköpt, <30 översålt.",
                                            "BB": "Bollinger-position: 0=nedre bandet (billigt), 1=övre (dyrt).",
                                            "MACD>sig.": "Sant = MACD över signallinjen (uppåtmomentum)."})
 
@@ -190,7 +190,7 @@ Till skillnad från fundamental analys (som tittar på bolagets vinster och bala
                            .head(10)).copy()
                 top_mom["return_12m"] = top_mom["return_12m"].apply(lambda v: pct_fmt(v))
                 top_mom["return_3m"]  = top_mom["return_3m"].apply(lambda v: pct_fmt(v)) \
-                    if "return_3m" in top_mom.columns else "—"
+                    if "return_3m" in top_mom.columns else "--"
                 top_mom = top_mom.rename(columns={
                     "ticker": "Ticker", "name": "Bolag",
                     "return_12m": "12m", "return_3m": "3m", "score_total": "Score"
@@ -205,7 +205,7 @@ Till skillnad från fundamental analys (som tittar på bolagets vinster och bala
                            .head(10)).copy()
                 bot_mom["return_12m"] = bot_mom["return_12m"].apply(lambda v: pct_fmt(v))
                 bot_mom["return_3m"]  = bot_mom["return_3m"].apply(lambda v: pct_fmt(v)) \
-                    if "return_3m" in bot_mom.columns else "—"
+                    if "return_3m" in bot_mom.columns else "--"
                 bot_mom = bot_mom.rename(columns={
                     "ticker": "Ticker", "name": "Bolag",
                     "return_12m": "12m", "return_3m": "3m", "score_total": "Score"
@@ -215,25 +215,25 @@ Till skillnad från fundamental analys (som tittar på bolagets vinster och bala
 
     with tab3:
         """MACD/RSI-diagram för vald aktie."""
-        st.subheader("📉 MACD & RSI – realtidsdiagram")
+        st.subheader("📉 MACD & RSI - realtidsdiagram")
 
         with st.expander("ℹ️ Vad är MACD och RSI? Klicka för förklaring", expanded=False):
             st.markdown("""
-### RSI – Relative Strength Index (Relativ styrkeindikator)
+### RSI - Relative Strength Index (Relativ styrkeindikator)
 RSI mäter om en aktie har stigit eller sjunkit **för snabbt** på kort tid (14 dagar).
 Värdet går alltid mellan **0 och 100**.
 
 | RSI-värde | Vad det betyder | Vad du ska tänka på |
 |---|---|---|
-| **Under 30** | Aktien har fallit kraftigt – kallas "översålt" | Kan vara ett köptillfälle, men kontrollera varför den fallit |
-| **30–70** | Normalt läge | Ingen extrem signal just nu |
-| **Över 70** | Aktien har stigit kraftigt – kallas "överköpt" | Kan vara dags att vara försiktig; priset kan korrigera |
+| **Under 30** | Aktien har fallit kraftigt - kallas "översålt" | Kan vara ett köptillfälle, men kontrollera varför den fallit |
+| **30-70** | Normalt läge | Ingen extrem signal just nu |
+| **Över 70** | Aktien har stigit kraftigt - kallas "överköpt" | Kan vara dags att vara försiktig; priset kan korrigera |
 
-**Tips för nybörjare:** RSI > 70 betyder inte att du *måste* sälja – en stark aktie kan hålla sig överköpt länge. Använd RSI som ett varningsklocka, inte ett absolut beslut.
+**Tips för nybörjare:** RSI > 70 betyder inte att du *måste* sälja - en stark aktie kan hålla sig överköpt länge. Använd RSI som ett varningsklocka, inte ett absolut beslut.
 
 ---
 
-### MACD – Moving Average Convergence/Divergence
+### MACD - Moving Average Convergence/Divergence
 MACD visar om en aktie befinner sig i ett **uppåt- eller nedåtgående momentum** genom att jämföra två glidande medelvärden (12 och 26 dagar).
 
 Diagrammet visar tre saker:
@@ -243,8 +243,8 @@ Diagrammet visar tre saker:
 
 | Signal | Vad det betyder |
 |---|---|
-| **MACD korsar uppåt över signallinjen** | Köpsignal – momentum vänder uppåt |
-| **MACD korsar nedåt under signallinjen** | Säljsignal – momentum vänder nedåt |
+| **MACD korsar uppåt över signallinjen** | Köpsignal - momentum vänder uppåt |
+| **MACD korsar nedåt under signallinjen** | Säljsignal - momentum vänder nedåt |
 | **Gröna histogram-staplar** | Positivt momentum (bull) |
 | **Röda histogram-staplar** | Negativt momentum (bear) |
 
@@ -325,7 +325,7 @@ Diagrammet visar tre saker:
 
                             fig_macd_rsi.update_layout(
                                 title=dict(
-                                    text=f"{tech_ticker} – MACD & RSI ({period})",
+                                    text=f"{tech_ticker} - MACD & RSI ({period})",
                                     font=dict(size=14),
                                 ),
                                 template="plotly_dark",
@@ -351,12 +351,12 @@ Diagrammet visar tre saker:
 
                             col_m1, col_m2, col_m3, col_m4 = st.columns(4)
                             with col_m1:
-                                st.metric("MACD", f"{macd_line.iloc[-1]:.3f}" if not macd_line.empty else "—")
+                                st.metric("MACD", f"{macd_line.iloc[-1]:.3f}" if not macd_line.empty else "--")
                             with col_m2:
-                                st.metric("Signal", f"{signal_line.iloc[-1]:.3f}" if not signal_line.empty else "—")
+                                st.metric("Signal", f"{signal_line.iloc[-1]:.3f}" if not signal_line.empty else "--")
                             with col_m3:
                                 rsi_val = rsi.iloc[-1] if not rsi.empty else float("nan")
-                                rsi_str = f"{rsi_val:.1f}" if not pd.isna(rsi_val) else "—"
+                                rsi_str = f"{rsi_val:.1f}" if not pd.isna(rsi_val) else "--"
                                 rsi_color = "🟢" if (not pd.isna(rsi_val) and 30 <= rsi_val <= 70) else ("🔴" if not pd.isna(rsi_val) else "⚪")
                                 st.metric("RSI (14)", f"{rsi_color} {rsi_str}")
                             with col_m4:

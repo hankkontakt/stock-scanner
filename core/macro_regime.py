@@ -4,15 +4,15 @@ macro_regime.py
 Detekterar marknadsregim (tjur/björn/osäker) och anpassar systemet därefter.
 
 Logik (kontinuerlig scoring, 0.0 = extremt björn, 1.0 = extremt tjur):
-  SPY vs MA200  (vikt 35%): -10% → 0.0, 0% → 0.5, +10% → 1.0
-  VIX           (vikt 25%): 30+ → 0.0, 22.5 → 0.5, 15 → 1.0
-  3m-momentum   (vikt 20%): -8% → 0.0, 0% → 0.5, +8% → 1.0
+  SPY vs MA200  (vikt 35%): -10% -> 0.0, 0% -> 0.5, +10% -> 1.0
+  VIX           (vikt 25%): 30+ -> 0.0, 22.5 -> 0.5, 15 -> 1.0
+  3m-momentum   (vikt 20%): -8% -> 0.0, 0% -> 0.5, +8% -> 1.0
   Marknadsbredd (vikt 10%): RSP/SPY-kvot vs 60-dagars snitt (bred vs smal uppgång)
   Yieldkurva    (vikt 10%): 10y−3m Treasury-spread (inverterad = varning)
 
-  composite >= 0.62 → TJUR
-  composite <= 0.38 → BJÖRN
-  annars           → OSÄKER
+  composite >= 0.62 -> TJUR
+  composite <= 0.38 -> BJÖRN
+  annars           -> OSÄKER
 
 I björnmarknad: höj kraven för KÖP-signal, ge mindre vikt till momentum.
 """
@@ -43,7 +43,7 @@ def _rc(key, max_h):
         return None
     try:
         with open(p, "rb") as f: return pickle.load(f)
-    except: return None
+    except Exception: return None
 
 def _wc(key, data):
     try:
@@ -124,7 +124,7 @@ def detect_regime() -> dict:
             if not t10.empty and not t3m.empty:
                 spread = float(t10["Close"].iloc[-1]) - float(t3m["Close"].iloc[-1])
                 result["yield_spread"] = spread
-                # +2% → 1.0 (normal), 0% → 0.5, -2% → 0.0 (kraftigt inverterad)
+                # +2% -> 1.0 (normal), 0% -> 0.5, -2% -> 0.0 (kraftigt inverterad)
                 yield_component = float(np.clip(0.5 + spread / 4, 0.0, 1.0))
         except Exception:
             pass
@@ -145,15 +145,15 @@ def detect_regime() -> dict:
                 ratio_now = ratio.iloc[-1]
                 credit_delta = (ratio_now / ratio_ma20 - 1) if ratio_ma20 else 0
                 result["credit_spread_delta"] = float(credit_delta)
-                # ±5% → 0.0-1.0: -5% = 0.0 (kreditstress), 0% = 0.5, +5% = 1.0 (risk-pa)
+                # ±5% -> 0.0-1.0: -5% = 0.0 (kreditstress), 0% = 0.5, +5% = 1.0 (risk-pa)
                 credit_component = float(np.clip(0.5 + credit_delta * 10, 0.0, 1.0))
         except Exception:
             pass
 
-        # --- Kontinuerlig scoring per signal (0.0–1.0) ---
-        spy_component = float(np.clip(0.5 + spy_vs_ma200 * 5,  0.0, 1.0))  # ±10% → ±0.5
-        vix_component = float(np.clip(1 - (vix_level - 15) / 15, 0.0, 1.0)) # 15→1.0, 30→0.0
-        mom_component = float(np.clip(0.5 + spy_3m * 6.25,    0.0, 1.0))  # ±8% → ±0.5
+        # --- Kontinuerlig scoring per signal (0.0-1.0) ---
+        spy_component = float(np.clip(0.5 + spy_vs_ma200 * 5,  0.0, 1.0))  # ±10% -> ±0.5
+        vix_component = float(np.clip(1 - (vix_level - 15) / 15, 0.0, 1.0)) # 15->1.0, 30->0.0
+        mom_component = float(np.clip(0.5 + spy_3m * 6.25,    0.0, 1.0))  # ±8% -> ±0.5
 
         composite = (
             spy_component     * 0.30 +  # Minskad från 0.35
@@ -183,16 +183,16 @@ def detect_regime() -> dict:
         if result["breadth_delta"] is not None:
             label = "bred uppgång" if result["breadth_delta"] > 0.02 else \
                     "koncentrerad (megabolag)" if result["breadth_delta"] < -0.02 else "neutral bredd"
-            result["notes"].append(f"Marknadsbredd (RSP/SPY): {result['breadth_delta']*100:+.1f}% → {label}")
+            result["notes"].append(f"Marknadsbredd (RSP/SPY): {result['breadth_delta']*100:+.1f}% -> {label}")
         if result["yield_spread"] is not None:
             inv = " ⚠ INVERTERAD" if result["yield_spread"] < 0 else ""
             result["notes"].append(f"Yieldkurva (10y−3m): {result['yield_spread']:+.2f}%{inv}")
         if vix_level > 32:
-            result["notes"].append("⚠ VIX > 32 – panik-nivå")
+            result["notes"].append("⚠ VIX > 32 - panik-nivå")
         if result.get("credit_spread_delta") is not None:
             credit_label = "risk-pa (HYG stiger)" if result["credit_spread_delta"] > 0.02 else \
                            "risk-av (HYG faller)" if result["credit_spread_delta"] < -0.02 else "neutral kreditmarknad"
-            result["notes"].append(f"Kreditspread (HYG/TLT): {result['credit_spread_delta']*100:+.1f}% → {credit_label}")
+            result["notes"].append(f"Kreditspread (HYG/TLT): {result['credit_spread_delta']*100:+.1f}% -> {credit_label}")
 
         _wc("regime", result)
         return result
@@ -202,103 +202,3 @@ def detect_regime() -> dict:
         return result
 
 
-def adjusted_weights(base_weights: dict, regime: str) -> dict:
-    """Justerar faktorvikter baserat på marknadsregim."""
-    w = base_weights.copy()
-
-    if regime == "BJÖRN":
-        adjustments = {"quality": +0.08, "risk": +0.05, "dividend": +0.02,
-                       "momentum": -0.07, "growth": -0.05, "value": -0.03}
-    elif regime == "TJUR":
-        adjustments = {"momentum": +0.03, "growth": +0.02, "value": -0.02, "dividend": -0.03}
-    else:
-        adjustments = {}
-
-    for factor, adj in adjustments.items():
-        if factor in w:
-            w[factor] = max(0.0, w[factor] + adj)
-
-    total = sum(w.values())
-    if total > 0:
-        w = {k: v / total for k, v in w.items()}
-
-    return w
-
-
-def adjusted_thresholds(regime: str) -> dict:
-    """Returnerar threshold-justeringar baserat på regim."""
-    if regime == "BJÖRN":
-        return {"min_score_for_buy": 75, "min_confidence": "HÖG", "max_top_n": 10}
-    elif regime == "TJUR":
-        return {"min_score_for_buy": 60, "min_confidence": "MEDEL", "max_top_n": 50}
-    else:
-        return {"min_score_for_buy": 67, "min_confidence": "MEDEL", "max_top_n": 30}
-
-
-def apply_regime_to_scored(scored: pd.DataFrame, regime_info: dict) -> pd.DataFrame:
-    """
-    Applicerar regim-justeringar på scored DataFrame.
-    I björnmarknad: höjer krav för KÖP, dämpar entry-signaler.
-    """
-    df = scored.copy()
-    regime = regime_info.get("regime", "OSÄKER")
-
-    if regime == "BJÖRN" and "entry_signal" in df.columns:
-        # Endast aktier med score >= 75 OCH HÖG konfidens får STARK
-        thr = adjusted_thresholds(regime)
-        min_score = thr["min_score_for_buy"]
-
-        def downgrade(row):
-            signal = row.get("entry_signal", "")
-            score  = row.get("score_total", 0) or 0
-            conf   = row.get("confidence_label", "")
-            if signal == "STARK" and (score < min_score or conf != "HÖG"):
-                return "VÄNTA"  # Nedgradera i björnmarknad
-            return signal
-
-        df["entry_signal"] = df.apply(downgrade, axis=1)
-
-    return df
-
-
-def build_regime_section(regime_info: dict, macro: dict = None) -> str:
-    """Markdown-sektion för rapporten. Andra parametern är för kompatibilitet."""
-    if not regime_info:
-        return ""
-
-    emoji = {"TJUR": "🐂", "BJÖRN": "🐻", "OSÄKER": "❓"}.get(regime_info["regime"], "")
-
-    lines = [f"\n## {emoji} Marknadsregim: **{regime_info['regime']}**\n"]
-    lines.append(f"_Konfidens: {regime_info['confidence']*100:.0f}%_  ")
-    lines.append(f"_Per: {regime_info.get('as_of', '?')}_\n")
-
-    lines.append("| Indikator | Värde |")
-    lines.append("|-----------|-------|")
-    if regime_info.get("spy_vs_ma200") is not None:
-        lines.append(f"| SPY vs MA200 | {regime_info['spy_vs_ma200']*100:+.1f}% |")
-    if regime_info.get("vix_level") is not None:
-        lines.append(f"| VIX | {regime_info['vix_level']:.1f} |")
-    if regime_info.get("spy_3m_return") is not None:
-        lines.append(f"| SPY 3-mån | {regime_info['spy_3m_return']*100:+.1f}% |")
-    if regime_info.get("breadth_delta") is not None:
-        lines.append(f"| Marknadsbredd (RSP/SPY) | {regime_info['breadth_delta']*100:+.1f}% |")
-    if regime_info.get("yield_spread") is not None:
-        inv = " ⚠" if regime_info["yield_spread"] < 0 else ""
-        lines.append(f"| Yieldkurva (10y−3m) | {regime_info['yield_spread']:+.2f}%{inv} |")
-    if regime_info.get("credit_spread_delta") is not None:
-        lines.append(f"| Kreditspread (HYG/TLT) | {regime_info['credit_spread_delta']*100:+.1f}% |")
-    if regime_info.get("composite") is not None:
-        lines.append(f"| Sammansatt signal | {regime_info['composite']:.2f} / 1.00 |")
-
-    if regime_info.get("notes"):
-        lines.append("\n**Anmärkningar:**")
-        for n in regime_info["notes"]:
-            lines.append(f"- {n}")
-
-    # Konsekvens för rekommendationer
-    if regime_info["regime"] == "BJÖRN":
-        lines.append("\n⚠ **Björnmarknads-läge aktivt:** Kraven för KÖP-signal är höjda. Endast aktier med score ≥ 75 OCH HÖG konfidens får STARK entry.")
-    elif regime_info["regime"] == "TJUR":
-        lines.append("\n✅ **Tjurmarknad:** Standardvikter används. Momentum-faktorn har lätt förhöjd vikt.")
-
-    return "\n".join(lines)

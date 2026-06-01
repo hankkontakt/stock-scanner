@@ -1,4 +1,4 @@
-"""web/pages/admin.py – Admin-sida + delade filhanteringsfunktioner"""
+"""web/pages/admin.py - Admin-sida + delade filhanteringsfunktioner"""
 
 import json
 import os
@@ -105,7 +105,7 @@ def _get_github_token() -> str:
 
 def _save_holdings_df(df: pd.DataFrame) -> bool:
     """Spara holdings.csv lokalt och committa till GitHub för Streamlit Cloud-persistens.
-    Sparar i användarens katalog (admin → data/, övriga → data/users/{username}/).
+    Sparar i användarens katalog (admin -> data/, övriga -> data/users/{username}/).
     GitHub-commit görs bara för admin (den globala data/holdings.csv speglas i repot)."""
     from web.utils import _active_data_dir
     user_dir = _active_data_dir()
@@ -120,7 +120,7 @@ def _save_holdings_df(df: pd.DataFrame) -> bool:
         if token:
             ok = _github_commit_file("data/holdings.csv", csv_content, token)
             if not ok:
-                st.warning("⚠️ Kunde inte synka till GitHub – ändringen kan försvinna vid omstart.")
+                st.warning("⚠️ Kunde inte synka till GitHub - ändringen kan försvinna vid omstart.")
     return True
 
 
@@ -130,7 +130,7 @@ def _save_watchlist_data(items: list, previous_tickers: list | None = None):
     (data/users/{username}/watchlist.json) så att pipeline kan nå datan.
 
     Nya tickers som inte redan fanns i filen läggs automatiskt till i
-    custom_universe.json och committas till GitHub direkt — inga manuella
+    custom_universe.json och committas till GitHub direkt -- inga manuella
     steg behövs för att en bevakning ska dyka upp i nästa scan.
     """
     from web.utils import _active_data_dir
@@ -194,7 +194,7 @@ def _save_watchlist_data(items: list, previous_tickers: list | None = None):
             if added_to_cu:
                 if _trigger_targeted_refresh(added_to_cu):
                     st.toast(
-                        f"⏳ Hämtar data för {', '.join(added_to_cu)} — "
+                        f"⏳ Hämtar data för {', '.join(added_to_cu)} -- "
                         "klart om ~2 min",
                         icon="🔄",
                     )
@@ -282,7 +282,7 @@ def validate_ticker(ticker: str) -> tuple[bool, str]:
         if pat in t:
             return False, f"'{ticker}' är ett fond-/index­namn, inte en giltig börsticker."
 
-    # För lång ticker → troligen ett namn, inte en symbol
+    # För lång ticker -> troligen ett namn, inte en symbol
     if len(t) > 20:
         return False, f"'{ticker}' är för lång för att vara en ticker (max 20 tecken)."
 
@@ -298,7 +298,7 @@ def _check_admin_access() -> bool:
     username = st.session_state.get("username", "")
 
     # Om ingen autentisering är aktiv (lokal körning utan credentials-secret)
-    # → kontrollera gammal ADMIN_PASSWORD-logik som fallback
+    # -> kontrollera gammal ADMIN_PASSWORD-logik som fallback
     if not username:
         admin_pw = ""
         try:
@@ -308,10 +308,10 @@ def _check_admin_access() -> bool:
         if not admin_pw:
             admin_pw = os.getenv("ADMIN_PASSWORD", "")
         if not admin_pw:
-            return True  # Lokal körning utan lösenord → öppet
+            return True  # Lokal körning utan lösenord -> öppet
         if st.session_state.get("admin_authenticated", False):
             return True
-        st.title("🔒 Admin – Lösenordsskyddad sida")
+        st.title("🔒 Admin - Lösenordsskyddad sida")
         st.info("Logga in med admin-kontot för att se den här sidan.")
         return False
 
@@ -319,7 +319,7 @@ def _check_admin_access() -> bool:
     if username == "admin":
         return True
 
-    st.error("⛔ Åtkomst nekad – endast admin kan se den här sidan.")
+    st.error("⛔ Åtkomst nekad - endast admin kan se den här sidan.")
     st.stop()
     return False
 
@@ -350,7 +350,7 @@ def _trigger_gh_workflow(token: str, owner: str, repo: str,
 def _trigger_targeted_refresh(tickers: list[str]) -> bool:
     """
     Starta en targeted-refresh av specifika tickers via GitHub Actions.
-    Tyst – inga st.success/st.error-meddelanden (används vid automatiska triggers).
+    Tyst - inga st.success/st.error-meddelanden (används vid automatiska triggers).
     Returnerar True om requesten skickades, annars False.
     """
     if not tickers:

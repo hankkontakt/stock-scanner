@@ -1,4 +1,4 @@
-"""web/pages/settings_page.py – Användarinställningar (e-post, notiser)"""
+"""web/pages/settings_page.py - Användarinställningar (e-post, notiser)"""
 
 import streamlit as st
 
@@ -107,7 +107,7 @@ def page_settings():
                 })
 
             ok = save_subscribers(subscribers)
-            # Committa till GitHub — KRITISKT för att överleva Streamlit Cloud-omstarter.
+            # Committa till GitHub -- KRITISKT för att överleva Streamlit Cloud-omstarter.
             # Streamlit Cloud har ephemeral filsystem; utan GitHub-commit försvinner datan.
             gh_ok = False
             try:
@@ -124,13 +124,13 @@ def page_settings():
                     )
                 else:
                     st.warning(
-                        "⚠️ **GITHUB_TOKEN saknas i Streamlit Secrets** – din e-post sparades "
+                        "⚠️ **GITHUB_TOKEN saknas i Streamlit Secrets** - din e-post sparades "
                         "lokalt men *försvinner* nästa gång appen startar om. "
                         "Lägg till en GitHub Personal Access Token (PAT med `repo`-behörighet) "
-                        "som `GITHUB_TOKEN` i Streamlit Cloud → Settings → Secrets."
+                        "som `GITHUB_TOKEN` i Streamlit Cloud -> Settings -> Secrets."
                     )
             except Exception as gh_err:
-                st.warning(f"⚠️ GitHub-commit misslyckades ({gh_err}) – e-post sparad lokalt men kan försvinna vid omstart.")
+                st.warning(f"⚠️ GitHub-commit misslyckades ({gh_err}) - e-post sparad lokalt men kan försvinna vid omstart.")
 
             if ok:
                 if gh_ok:

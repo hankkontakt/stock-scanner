@@ -858,18 +858,14 @@ def fetch_company_news(ticker: str, days_back: int = 7, company_name: str = None
 
     Returnerar [{headline, source, url, datetime_str, age_hours}] nyast först.
     """
-    import os
-    api_key = os.getenv("FINNHUB_API_KEY", "")
+    from core import config as _cfg
+    
 
     # Resolve company name if not provided – try yfinance first (cached separately)
     if not company_name:
         company_name = _resolve_company_name(ticker)
 
     # 1. Finnhub
-    finnhub_results = fetch_news(ticker, api_key, days=days_back) if api_key else []
-    if bust_cache and finnhub_results:
-        # Bytte precis cache — hamta om
-        pass
 
     # 2. Google News svenska
     search_term = company_name.strip() if company_name and company_name.strip() else _google_search_term(ticker)

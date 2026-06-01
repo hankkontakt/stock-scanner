@@ -1,17 +1,17 @@
 """
-insider.py – Insiderdata för svenska småbolag.
+insider.py - Insiderdata för svenska småbolag.
 
 Datakällor (i prioritetsordning):
-  1. yfinance insider_transactions  – köp/sälj sista 12m per ticker
-  2. Finansinspektionen (FI) REST-API – marknadssok.fi.se
+  1. yfinance insider_transactions  - köp/sälj sista 12m per ticker
+  2. Finansinspektionen (FI) REST-API - marknadssok.fi.se
      Offentlig endpoint, ingen nyckel, men rate-limit ~10 req/s.
 
 Nyckelkolumner som returneras (per ticker):
-  insider_pct         – andel aktier ägda av insiders (0.0–1.0)
-  insider_net_buy_6m  – netto SEK köpt/sålt av insiders senaste 6m
-  insider_buy_count   – antal unika köptransaktioner senaste 6m
-  insider_sell_count  – antal unika säljtransaktioner senaste 6m
-  insider_signal      – "BUY" | "SELL" | "NEUTRAL" | "N/A"
+  insider_pct         - andel aktier ägda av insiders (0.0-1.0)
+  insider_net_buy_6m  - netto SEK köpt/sålt av insiders senaste 6m
+  insider_buy_count   - antal unika köptransaktioner senaste 6m
+  insider_sell_count  - antal unika säljtransaktioner senaste 6m
+  insider_signal      - "BUY" | "SELL" | "NEUTRAL" | "N/A"
 """
 
 import time
@@ -44,7 +44,7 @@ _FI_HEADERS  = {
     "User-Agent":  "StockScanner/1.0 (henth642@student.liu.se)",
     "Accept":      "application/json",
 }
-_FI_DELAY_S  = 0.15   # 150ms mellan anrop → ~6 req/s (under limit)
+_FI_DELAY_S  = 0.15   # 150ms mellan anrop -> ~6 req/s (under limit)
 
 
 def _cache_path(ticker: str) -> Path:
@@ -102,7 +102,7 @@ def _yf_insider_transactions(ticker: str) -> pd.DataFrame:
 
 
 def _yf_insider_pct(ticker: str) -> float:
-    """Hämtar heldPercentInsiders (0.0–1.0) via yfinance info."""
+    """Hämtar heldPercentInsiders (0.0-1.0) via yfinance info."""
     if not _YF_AVAILABLE:
         return float("nan")
     try:
@@ -154,10 +154,10 @@ def _fi_fetch_transactions(isin: str, days_back: int = 180) -> pd.DataFrame:
 def _aggregate_insider(txn: pd.DataFrame, months: int = 6) -> dict:
     """
     Aggregerar transaktioner till nyckeltal:
-      net_buy_sek  – netto köp minus sälj i SEK
-      buy_count    – antal köptransaktioner
-      sell_count   – antal säljtransaktioner
-      signal       – "BUY" | "SELL" | "NEUTRAL"
+      net_buy_sek  - netto köp minus sälj i SEK
+      buy_count    - antal köptransaktioner
+      sell_count   - antal säljtransaktioner
+      signal       - "BUY" | "SELL" | "NEUTRAL"
     """
     if txn.empty:
         return {"net_buy_sek": 0, "buy_count": 0, "sell_count": 0, "signal": "N/A"}
@@ -261,7 +261,7 @@ def merge_insider_data(df: pd.DataFrame, insider_df: pd.DataFrame) -> pd.DataFra
 
     OBS: Droppar kolumner som redan finns i insider_df från df innan merge
     för att undvika _x/_y-suffix (pandas beteende vid kollidering).
-    insider_df:s värden är primärkällan – de härrör från en dedikerad
+    insider_df:s värden är primärkällan - de härrör från en dedikerad
     hämtning och är mer tillförlitliga.
     """
     if insider_df is None or insider_df.empty:
@@ -298,14 +298,14 @@ def get_insider_summary(df: pd.DataFrame, top_n: int = 5) -> str:
             pct  = f"{r.get('insider_pct', 0)*100:.0f}%" if pd.notna(r.get("insider_pct")) else "?"
             nkp  = r.get("insider_net_buy_6m", 0) or 0
             cnt  = int(r.get("insider_buy_count", 0) or 0)
-            lines.append(f"  • **{r['ticker']}** — {cnt} köp, "
+            lines.append(f"  • **{r['ticker']}** -- {cnt} köp, "
                          f"netto {nkp:+,.0f} SEK, insider äger {pct}")
 
     if not sellers.empty:
         lines.append("\n**Tickers med säljtryck från insiders:**")
         for _, r in sellers.iterrows():
             cnt = int(r.get("insider_sell_count", 0) or 0)
-            lines.append(f"  • **{r['ticker']}** — {cnt} sälj (varningssignal)")
+            lines.append(f"  • **{r['ticker']}** -- {cnt} sälj (varningssignal)")
 
     if not lines:
         lines.append("_Inga tydliga insidersignaler hittades._")

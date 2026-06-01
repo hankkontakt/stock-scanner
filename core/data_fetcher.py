@@ -60,7 +60,7 @@ def _timeout_session_send(self, request, **kwargs):
     if kwargs.get("timeout") is None:
         kwargs["timeout"] = (3, 5)
     response = _original_session_send(self, request, **kwargs)
-    # Inspect status code to set thread-local flags – referenced later by
+    # Inspect status code to set thread-local flags - referenced later by
     # _fetch_single_ticker. The flags are initialised in _reset_rate_limit_flag().
     try:
         sc = getattr(response, "status_code", None)
@@ -104,12 +104,12 @@ try:
         return response
     _cf_req.Session.request = _patched_cf_request
 except Exception:
-    pass  # curl_cffi saknas – inget att patcha
+    pass  # curl_cffi saknas - inget att patcha
 
 _FX_CACHE = {}
 Path(config.CACHE_DIR).mkdir(parents=True, exist_ok=True)
 
-# Fundamentala fält som bara ändras vid kvartalsrapporter → 30 dagars cache
+# Fundamentala fält som bara ändras vid kvartalsrapporter -> 30 dagars cache
 _STATIC_FIELDS = frozenset({
     "longName", "shortName", "sector", "industry", "country", "currency",
     "sharesOutstanding", "floatShares",
@@ -194,7 +194,7 @@ class _RateLimitError(Exception):
 
 
 class _DelistedError(Exception):
-    """Raised when Yahoo Finance returns HTTP 404 – ticker is delisted/unknown."""
+    """Raised when Yahoo Finance returns HTTP 404 - ticker is delisted/unknown."""
     pass
 
 
@@ -318,16 +318,16 @@ def _retry(fn, *args, timeout_sec=12, **kwargs):
     som faktiskt kan lyckas vid nästa försök.
 
     Rate limit (429) = höjs som _RateLimitError för att skilja dem från
-    vanliga fel – fetch_universe_data kan då samla upp dem för pass-2-retry.
+    vanliga fel - fetch_universe_data kan då samla upp dem för pass-2-retry.
     """
     for attempt in range(config.MAX_RETRIES):
         try:
             return _with_timeout(fn, timeout_sec=timeout_sec)
         except TimeoutError:
-            raise   # Direkt vidare – ingen retry, ingen sleep
+            raise   # Direkt vidare - ingen retry, ingen sleep
         except Exception as e:
             err_str = str(e)
-            # Propagate rate limit immediately – no point retrying here
+            # Propagate rate limit immediately - no point retrying here
             if "429" in err_str or "Too Many Requests" in err_str.lower() or "rate limit" in err_str.lower():
                 raise _RateLimitError(err_str) from e
             if attempt < config.MAX_RETRIES - 1:
@@ -342,11 +342,11 @@ def fetch_stock_info(ticker: str) -> dict:
     Fetch fundamental info for a single stock.
 
     Tvådelad cache:
-      info_static:{ticker}  – CACHE_HOURS (720h/30 dagar)
+      info_static:{ticker}  - CACHE_HOURS (720h/30 dagar)
         Fält som bara ändras vid kvartalsrapporter: marginaler, tillväxt,
         skuldsättning, ägande, bolagsnamn/sektor.
 
-      info_dynamic:{ticker} – DYNAMIC_CACHE_HOURS (170h/7 dagar)
+      info_dynamic:{ticker} - DYNAMIC_CACHE_HOURS (170h/7 dagar)
         Fält som kan ändras av nyheter varje vecka: P/E, analytikermål,
         blankning, beta, volymsnitt, utdelning.
 
@@ -449,10 +449,10 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
                     if raw is not None and not raw.empty:
                         _FX_CACHE[fx_ticker] = raw
                     else:
-                        print(f"  ⚠ FX-data tom för {fx_ticker} – {ticker} behåller ursprungsvaluta")
+                        print(f"  ⚠ FX-data tom för {fx_ticker} - {ticker} behåller ursprungsvaluta")
                         _FX_CACHE[fx_ticker] = pd.Series(dtype=float)
                 except Exception as _fx_err:
-                    print(f"  ⚠ FX-fetch misslyckades ({fx_ticker}): {_fx_err} – {ticker} behåller ursprungsvaluta")
+                    print(f"  ⚠ FX-fetch misslyckades ({fx_ticker}): {_fx_err} - {ticker} behåller ursprungsvaluta")
                     _FX_CACHE[fx_ticker] = pd.Series(dtype=float)
 
             fx_hist = _FX_CACHE[fx_ticker]
@@ -463,7 +463,7 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
             fx_aligned = fx_hist.reindex(hist.index).ffill(limit=5).bfill(limit=5)
 
             # Fallback: om fx_aligned är tom, all-NaN, eller har partiell NaN
-            # (FX-fetch misslyckades eller lucka >5 dagar → ersätt kvarvarande NaN med 1.0
+            # (FX-fetch misslyckades eller lucka >5 dagar -> ersätt kvarvarande NaN med 1.0
             # så att prishistorik inte infekteras av NaN i RSI/MACD/return-beräkningar).
             if fx_aligned.empty or fx_aligned.isna().all():
                 fx_aligned = pd.Series(1.0, index=hist.index)
@@ -473,7 +473,7 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
             # Sanity check: orealistiska dag-till-dag-hopp tyder på datafel.
                 _ratio = (fx_aligned / fx_aligned.shift(1)).abs()
                 if (_ratio > 1.5).any() or (_ratio < 0.67).any():
-                    print(f"  ⚠ Misstänkt FX-hopp för {ticker} ({fx_ticker}) – hoppar konvertering")
+                    print(f"  ⚠ Misstänkt FX-hopp för {ticker} ({fx_ticker}) - hoppar konvertering")
                     fx_aligned = pd.Series(1.0, index=hist.index)
 
             # Multiplicera alla priskolumner med växelkursen
@@ -500,7 +500,7 @@ def _get_insider_signal(ticker: str) -> dict:
     """
     Analysera insiderhandel via yfinance (senaste 90 dagarna).
     Returnerar:
-        insider_cluster (bool): ≥3 olika insiders köper inom 30 dagar
+        insider_cluster (bool): >=3 olika insiders köper inom 30 dagar
         insider_executive_buy (bool): VD/CFO köper inom 90 dagar
     Cachas 24h för att inte spamma Yahoo.
     """
@@ -551,7 +551,7 @@ def _get_insider_signal(ticker: str) -> dict:
                 lambda t: any(e in t for e in exec_titles)
             ).any())
 
-        # Cluster: ≥3 distinkta insiders köper inom senaste 30 dagar
+        # Cluster: >=3 distinkta insiders köper inom senaste 30 dagar
         buys_30 = buys_90[buys_90["_date"] >= (now - pd.Timedelta(days=30))]
         name_col = next((c for c in buys_30.columns if "name" in c or "insider" in c), None)
         if name_col and not buys_30.empty:
@@ -562,7 +562,7 @@ def _get_insider_signal(ticker: str) -> dict:
             result["insider_recent_date"] = buys_90["_date"].max().isoformat()
 
     except Exception:
-        pass  # Säkert fallback – returnerar False/False
+        pass  # Säkert fallback - returnerar False/False
 
     # För svenska aktier: komplettera med Finansinspektionens insynsregister
     # (samma källa som Börsdata men gratis och offentlig data)
@@ -574,7 +574,7 @@ def _get_insider_signal(ticker: str) -> dict:
             if fi_result.get("insider_cluster") or fi_result.get("insider_executive_buy"):
                 result.update(fi_result)
         except Exception:
-            pass  # FI-modulen är valfri – failar tyst
+            pass  # FI-modulen är valfri - failar tyst
 
     _write_cache(cache_key, result)
     return result
@@ -625,7 +625,7 @@ def _get_fmp_fundamentals(ticker: str) -> dict:
 
     clean = ticker.split(".")[0]
     cache_key = f"fmp_fund:{clean}"
-    # Long cache (30 days) — fundamentals change slowly, free tier = 250 calls/day
+    # Long cache (30 days) -- fundamentals change slowly, free tier = 250 calls/day
     cached = _read_cache(cache_key, max_age_hours=720)
     if cached is not None:
         return cached
@@ -651,7 +651,7 @@ def _get_fmp_fundamentals(ticker: str) -> dict:
                     "fmp_earnings_yield":  km.get("earningsYieldTTM"),
                 }
     except Exception as e:
-        pass  # Silent fallback — FMP enrichment is optional
+        pass  # Silent fallback -- FMP enrichment is optional
 
     _write_cache(cache_key, result)
     return result
@@ -735,7 +735,7 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         # NEW: Earnings surprise (hur ofta slår bolaget estimat)
         "earnings_revision_rate": info.get("earningsForecastsGrowthRate"),
 
-        # Options flow signal (put/call ratio) — sätts nedan från extra_data
+        # Options flow signal (put/call ratio) -- sätts nedan från extra_data
         "options_flow_signal": None,
 
         # NEW: Omsättning och volym
@@ -744,29 +744,29 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         "volume_ratio":     None,  # Beräknas nedan från prishistorik
     }
 
-    # Prishistorik är alltid färsk (PRICE_CACHE_HOURS=24h) – använd den för
+    # Prishistorik är alltid färsk (PRICE_CACHE_HOURS=24h) - använd den för
     # marknadskänsliga värden som annars kan vara 7 dagar gamla i info-cachen.
     if not history.empty and len(history) > 20:
         close  = history["Close"]
         volume = history.get("Volume")
         current = float(close.iloc[-1])
 
-        # Aktuellt pris – alltid från färsk prishistorik
+        # Aktuellt pris - alltid från färsk prishistorik
         metrics["current_price"] = current
 
-        # 52-veckors high/low – beräkna från prishistorik (max 252 börsdagar)
+        # 52-veckors high/low - beräkna från prishistorik (max 252 börsdagar)
         tail = close.tail(252)
         high_series = history["High"].tail(252) if "High" in history.columns else tail
         low_series  = history["Low"].tail(252)  if "Low"  in history.columns else tail
         metrics["52_week_high"] = float(high_series.max())
         metrics["52_week_low"]  = float(low_series.min())
 
-        # Marknadsvärde: antal aktier (kvartalsdata, OK att cacha) × färskt pris
+        # Marknadsvärde: antal aktier (kvartalsdata, OK att cacha) x färskt pris
         shares = info.get("sharesOutstanding")
         if shares and shares > 0:
             metrics["market_cap"] = float(shares) * current
 
-        # Returns over different periods — stored as PERCENTAGE (e.g. 3.5 = 3.5%)
+        # Returns over different periods -- stored as PERCENTAGE (e.g. 3.5 = 3.5%)
         _r1m  = _safe_return(close, 21)
         _r3m  = _safe_return(close, 63)
         _r6m  = _safe_return(close, 126)
@@ -824,7 +824,7 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
 
     # ── FMP-berikningn: fyll luckor från yfinance med FMP key-metrics (TTM) ──
     # Körs bara om FMP_API_KEY är konfigurerat. Gratis-tier: 250 anrop/dag,
-    # 720h cache → ~33 anrop/dag för 1 000 aktier med 30-dagars rotation.
+    # 720h cache -> ~33 anrop/dag för 1 000 aktier med 30-dagars rotation.
     fmp_fund = _get_fmp_fundamentals(ticker)
     if fmp_fund:
         # Fyll bara om yfinance returnerade None/saknade värdet
@@ -880,7 +880,7 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
             continue
         coerced = _coerce_numeric(value)
         if coerced is None and value is not None:
-            pass  # Tyst — yfinance returnerar ofta "Infinity" eller liknande
+            pass  # Tyst -- yfinance returnerar ofta "Infinity" eller liknande
         metrics[key] = coerced
 
     return metrics
@@ -954,7 +954,7 @@ class _RateLimiter:
             self._last_call = time.monotonic()
 
 # Yahoo brukar tolerera ~8-10 anrop/sek över längre perioder.
-# Med 8 workers kör vi sammanlagt ~8 anrop/sek → säkert.
+# Med 8 workers kör vi sammanlagt ~8 anrop/sek -> säkert.
 _YAHOO_RATE_LIMITER = _RateLimiter(calls_per_sec=config.PARALLEL_WORKERS)
 
 # Rate-limit detection state
@@ -980,12 +980,12 @@ def _record_rate_limit_hit():
         _RATE_LIMIT_COUNTER["consecutive_429"] += 1
         _RATE_LIMIT_COUNTER["last_rate_limit_time"] = now
         if _RATE_LIMIT_COUNTER["consecutive_429"] >= _RATE_LIMIT_CLUSTER_THRESHOLD:
-            # Kluster av 429 → tvångspausa alla workers
+            # Kluster av 429 -> tvångspausa alla workers
             new_until = now + _RATE_LIMIT_PAUSE_SEC
             if new_until > _RATE_LIMIT_COUNTER["global_pause_until"]:
                 _RATE_LIMIT_COUNTER["global_pause_until"] = new_until
                 print(f"  ⏸  Rate-limit-kluster upptäckt ({_RATE_LIMIT_COUNTER['consecutive_429']} i rad) "
-                      f"– alla workers pausar {_RATE_LIMIT_PAUSE_SEC:.0f}s")
+                      f"- alla workers pausar {_RATE_LIMIT_PAUSE_SEC:.0f}s")
             # Återställ räknaren så vi inte triggar paus om och om igen
             _RATE_LIMIT_COUNTER["consecutive_429"] = 0
 
@@ -1010,8 +1010,8 @@ def _wait_if_globally_paused():
 def _is_rate_limited(failed_tickers_n: int, total_tickers: int) -> bool:
     """
     Detektera rate-limiting-mönster:
-    1. ≥3 tickers i rad misslyckas med TIMEOUT/ERROR → trolig rate-limit
-    2. ≥30% av tickers hittills har misslyckats → trolig rate-limit
+    1. >=3 tickers i rad misslyckas med TIMEOUT/ERROR -> trolig rate-limit
+    2. >=30% av tickers hittills har misslyckats -> trolig rate-limit
     """
     with _RATE_LIMIT_LOCK:
         consecutive = _RATE_LIMIT_COUNTER["consecutive_failures"]
@@ -1062,13 +1062,13 @@ def _fetch_single_ticker(
                 _record_rate_limit_hit()
                 return (ticker, None, "RATE_LIMITED")
             if _delisted_was_hit():
-                # Don't increment 429 counter for delisted – different problem
+                # Don't increment 429 counter for delisted - different problem
                 return (ticker, None, "DELISTED")
             with _RATE_LIMIT_LOCK:
                 _RATE_LIMIT_COUNTER["consecutive_failures"] += 1
             return (ticker, None, "FAILED")
 
-        # Success – reset all failure counters
+        # Success - reset all failure counters
         _record_success()
         metrics = extract_metrics(ticker, info, history)
         return (ticker, metrics, "OK")

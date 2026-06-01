@@ -1,4 +1,4 @@
-"""web/pages/portfolio.py – Sida 4: Portfölj"""
+"""web/pages/portfolio.py - Sida 4: Portfölj"""
 from __future__ import annotations  # gör alla annoteringar till strängar (Py-version-säkert)
 
 import datetime
@@ -62,7 +62,7 @@ def _save_konton(konton: dict):
     _KONTON_PATH.parent.mkdir(parents=True, exist_ok=True)
     content = json.dumps(konton, indent=2, ensure_ascii=False)
     _KONTON_PATH.write_text(content, encoding="utf-8")
-    # Committa till GitHub — Streamlit Cloud har ephemeral filsystem
+    # Committa till GitHub -- Streamlit Cloud har ephemeral filsystem
     try:
         from web.pages.admin import _get_github_token, _github_commit_file
         token = _get_github_token()
@@ -94,20 +94,20 @@ def _is_fund_holding(holding_typ: str, konto_name: str, ticker: str = "") -> boo
     """Avgör om ett enskilt innehav ska behandlas som fond (ingen scanneranalys).
 
     Prioritetsordning:
-    1. holding_typ är explicit satt (fond/fund/etf/certificate) → styr alltid
-    2. ticker innehåller mellanslag → troligen ett fondnamn sparat som ticker-nyckel
-    3. holding_typ är tomt → faller tillbaka på kontotypen
+    1. holding_typ är explicit satt (fond/fund/etf/certificate) -> styr alltid
+    2. ticker innehåller mellanslag -> troligen ett fondnamn sparat som ticker-nyckel
+    3. holding_typ är tomt -> faller tillbaka på kontotypen
     """
     if holding_typ in ("fond", "fund", "certificate"):
         return True
     if holding_typ == "etf":
-        return False   # ETF:er är börshandlade – full analys
+        return False   # ETF:er är börshandlade - full analys
     if holding_typ == "aktier":
         return False
     # Ticker med mellanslag = fondnamn sparat som nyckel (legacy-import utan typ)
     if ticker and " " in ticker:
         return True
-    # holding_typ är "" eller okänt → fall tillbaka på kontotypen
+    # holding_typ är "" eller okänt -> fall tillbaka på kontotypen
     return _is_fund_konto(konto_name)
 
 
@@ -120,8 +120,8 @@ def _calc_atr_stop(ticker: str, current_price: float, mult: float = 2.5) -> tupl
     """
     Beräknar ATR14-baserat stop-loss-nivå.
     Returnerar (stop_price, stop_pct_from_current) eller (None, None) vid fel.
-    ATR (Average True Range) mäter den typiska dagliga rörelsen — stop-loss sätts
-    2.5× ATR under nuvarande kurs, vilket ger tillräckligt utrymme för normal variation.
+    ATR (Average True Range) mäter den typiska dagliga rörelsen -- stop-loss sätts
+    2.5x ATR under nuvarande kurs, vilket ger tillräckligt utrymme för normal variation.
     """
     try:
         import yfinance as yf
@@ -148,9 +148,9 @@ def _calc_dividend_summary(holdings: pd.DataFrame, score_data: dict) -> dict:
     """
     Beräknar utdelningsöversikt för portföljen baserat på yfinance-data.
     Returnerar dict med:
-        total_annual_sek  — förväntad total årsutdelning i SEK
-        avg_yield_on_cost — snittavkastning på anskaffningsvärdet
-        per_holding       — lista med {ticker, annual_div, yield_on_cost}
+        total_annual_sek  -- förväntad total årsutdelning i SEK
+        avg_yield_on_cost -- snittavkastning på anskaffningsvärdet
+        per_holding       -- lista med {ticker, annual_div, yield_on_cost}
     Använder dividend_rate från yfinance info (annualiserad).
     """
     try:
@@ -168,7 +168,7 @@ def _calc_dividend_summary(holdings: pd.DataFrame, score_data: dict) -> dict:
         cost   = float(h.get("cost_basis", 0) or 0)
         if shares <= 0:
             continue
-        # Check score_data first (faster — already loaded)
+        # Check score_data first (faster -- already loaded)
         sc = score_data.get(ticker, {})
         div_rate = sc.get("dividend_rate") or sc.get("forward_annual_dividend_rate")
         if div_rate is None:
@@ -212,7 +212,7 @@ def _portfolio_excel_bytes(port_df: pd.DataFrame, rows: list, score_data: dict) 
         for r in rows:
             t = r["Ticker"]
             sc = score_data.get(t, {})
-            entry = sc.get("entry_signal", "—")
+            entry = sc.get("entry_signal", "--")
             score = sc.get("score_total", 0) or 0
             if score >= 70 and entry == "STARK":
                 rec = "Behåll / Köp mer"
@@ -225,7 +225,7 @@ def _portfolio_excel_bytes(port_df: pd.DataFrame, rows: list, score_data: dict) 
             rec_rows.append({
                 "Ticker": t, "Bolag": r.get("Bolag", ""),
                 "Score": score, "Signal": entry,
-                "Trend": sc.get("trend_signal", "—"),
+                "Trend": sc.get("trend_signal", "--"),
                 "Rekommendation": rec,
                 "Pris": sc.get("current_price", ""),
             })
@@ -325,12 +325,12 @@ def _upsert_holding(holdings: pd.DataFrame, ticker: str,
             added = add_custom_to_universe(ticker)
             if added:
                 st.session_state[f"scan_pending_{ticker}"] = True
-                # Trigga targeted refresh direkt – hämtar data inom ~2 min
+                # Trigga targeted refresh direkt - hämtar data inom ~2 min
                 try:
                     from web.pages.admin import _trigger_targeted_refresh
                     if _trigger_targeted_refresh([ticker]):
                         st.toast(
-                            f"⏳ Hämtar data för **{ticker}** — klart om ~2 min",
+                            f"⏳ Hämtar data för **{ticker}** -- klart om ~2 min",
                             icon="🔄",
                         )
                 except Exception:
@@ -352,7 +352,7 @@ def _show_scan_pending_notifications():
         n = len(pending)
         st.info(
             f"⏳ {tickers_str} {'har lagts' if n == 1 else 'har lagts'} till i din portfölj! "
-            "Detaljerad analys — som rekommendationer, score och signaler — "
+            "Detaljerad analys -- som rekommendationer, score och signaler -- "
             "uppdateras automatiskt inom några dagar när systemet kör sin nästa analys. "
             "Pris och grundläggande information visas redan nu."
         )
@@ -394,7 +394,7 @@ def _build_rows(holdings_view: pd.DataFrame, score_data: dict) -> list:
                 stored_mv = float(h.get("market_value") or 0)
                 if stored_mv > 0 and float(shares or 0) > 0:
                     price = stored_mv / float(shares)
-                # Steg 3: scandata-priset används redan via sc.get ovan — blir kvar om allt fallerat
+                # Steg 3: scandata-priset används redan via sc.get ovan -- blir kvar om allt fallerat
         if is_fund_acc:
             # Försök hämta live NAV via Yahoo Finance-sökning (cachat 1h)
             try:
@@ -418,17 +418,17 @@ def _build_rows(holdings_view: pd.DataFrame, score_data: dict) -> list:
             "Ticker":    t,
             "Konto":     konto,
             "Bolag":     sc.get("name", t)[:30],
-            "Sektor":    sc.get("sector", "—") if not is_fund_acc else "Fond",
+            "Sektor":    sc.get("sector", "--") if not is_fund_acc else "Fond",
             "Antal":     shares,
             "Inköpspris": cost,
-            "Pris nu":   f"{price:.2f}" if price else "—",
-            "P&L %":     f"{pnl_pct:+.1f}%" if pnl_pct is not None else "—",
-            "Marknadsvärde": f"{mv:,.0f}" if mv else "—",
+            "Pris nu":   f"{price:.2f}" if price else "--",
+            "P&L %":     f"{pnl_pct:+.1f}%" if pnl_pct is not None else "--",
+            "Marknadsvärde": f"{mv:,.0f}" if mv else "--",
             "Score":     sc.get("score_total") if not is_fund_acc else None,
-            "Entry":     sc.get("entry_signal", "—") if not is_fund_acc else "Fond",
-            "Trend":     sc.get("trend_signal", "—") if not is_fund_acc else "—",
+            "Entry":     sc.get("entry_signal", "--") if not is_fund_acc else "Fond",
+            "Trend":     sc.get("trend_signal", "--") if not is_fund_acc else "--",
             "Piotroski": sc.get("piotroski_f") if not is_fund_acc else None,
-            "RS":        sc.get("rs_label", "—") if not is_fund_acc else "—",
+            "RS":        sc.get("rs_label", "--") if not is_fund_acc else "--",
             "_is_fund":  is_fund_acc,
             "_pnl_pct":  pnl_pct,
             "_market_value": mv,
@@ -473,7 +473,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
     import streamlit.components.v1 as _sc1
 
     def _scroll_top():
-        """Scrolla till toppen av sidan – anropas överst i varje flik."""
+        """Scrolla till toppen av sidan - anropas överst i varje flik."""
         _sc1.html(
             "<script>"
             "try{"
@@ -494,7 +494,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
     ])
 
     # ══════════════════════════════════════════════════════════════════════
-    # FLIK 1 – AVANZA IMPORT
+    # FLIK 1 - AVANZA IMPORT
     # ══════════════════════════════════════════════════════════════════════
     with tab_avanza:
         _scroll_top()
@@ -515,31 +515,31 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
   <li>Scrolla ner till rubriken <strong style="color:#e8eaf0;">Exportera data</strong>
       <span style="color:#64748b;">(längst ner på sidan)</span></li>
   <li>Klicka på <strong style="color:#4c9be8;">Mitt innehav fördelat per konto</strong>
-      — filen <code>positioner.csv</code> laddas ner direkt</li>
-  <li>Ladda upp filen nedan — alla konton importeras på en gång</li>
+      -- filen <code>positioner.csv</code> laddas ner direkt</li>
+  <li>Ladda upp filen nedan -- alla konton importeras på en gång</li>
 </ol>
 
 <div style="background:#0f1a2e;border:1px solid #2d3250;border-radius:6px;
      padding:10px 14px;margin-bottom:10px;font-size:12px;color:#8892a4;line-height:1.8;">
   <strong style="color:#e8eaf0;">Vad filen innehåller:</strong> alla dina konton (ISK, KF, depåer) med
-  antal, inköpspris och ISIN — ingen manuell inmatning behövs.<br>
+  antal, inköpspris och ISIN -- ingen manuell inmatning behövs.<br>
   <strong style="color:#e8eaf0;">Fonder:</strong> importeras automatiskt utan scanner-analys.<br>
-  <span style="color:#f59e0b;">⚠ Välj <em>Mitt innehav fördelat per konto</em> — inte "Mitt sammanställda innehav".
+  <span style="color:#f59e0b;">⚠ Välj <em>Mitt innehav fördelat per konto</em> -- inte "Mitt sammanställda innehav".
   Den sammanställda varianten saknar kontouppdelning och fondklassificering.</span>
 </div>
 
 <div style="font-size:12px;color:#64748b;">
-  ⚠️ <strong>Mobilapp:</strong> Exportera-funktionen saknas i Avanza-appen — använd avanza.se på dator eller surfplatta.
+  ⚠️ <strong>Mobilapp:</strong> Exportera-funktionen saknas i Avanza-appen -- använd avanza.se på dator eller surfplatta.
 </div>
 </div>
 """, unsafe_allow_html=True)
 
         # ── Filuppladdning ──────────────────────────────────────────────────
         uploaded = st.file_uploader(
-            "📄 Portföljfil — Mitt innehav fördelat per konto (CSV)",
+            "📄 Portföljfil -- Mitt innehav fördelat per konto (CSV)",
             type=["csv"],
             key="avanza_csv_user",
-            help="Filen laddas inte upp till någon server – den läses direkt i din webbläsare.",
+            help="Filen laddas inte upp till någon server - den läses direkt i din webbläsare.",
         )
 
         # ── Historiska inköpskurser (valfri tilläggsfil) ─────────────────
@@ -550,15 +550,15 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
 <div style="font-size:12px;font-weight:700;color:#4ade80;text-transform:uppercase;
      letter-spacing:0.08em;margin-bottom:8px;">Fördelar med att ladda upp båda filerna</div>
 <ul style="margin:0;padding-left:16px;">
-  <li><strong style="color:#e8eaf0;">Rätt köpdatum i portföljcharten</strong> — varje aktie
+  <li><strong style="color:#e8eaf0;">Rätt köpdatum i portföljcharten</strong> -- varje aktie
       markeras med ett ▲ på datumet du faktiskt köpte den, inte importdagen.</li>
-  <li><strong style="color:#e8eaf0;">Korrekt P&L-tidslinje</strong> — avkastning räknas från
+  <li><strong style="color:#e8eaf0;">Korrekt P&L-tidslinje</strong> -- avkastning räknas från
       verklig inköpsdag, ger en rättvisande bild av hur länge du hållit varje position.</li>
-  <li><strong style="color:#e8eaf0;">Fungerar automatiskt</strong> — du behöver inte fylla i
+  <li><strong style="color:#e8eaf0;">Fungerar automatiskt</strong> -- du behöver inte fylla i
       datum manuellt; filen matchas mot dina innehav via ISIN.</li>
 </ul>
 <div style="margin-top:10px;font-size:12px;color:#64748b;">
-  Ladda ner: <strong>Min ekonomi → Analys → Exportera data →
+  Ladda ner: <strong>Min ekonomi -> Analys -> Exportera data ->
   "Historiska inköpskurser (GAV)"</strong>
 </div>
 </div>
@@ -567,7 +567,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                 "Historiska inköpskurser (CSV)",
                 type=["csv"],
                 key="avanza_inkopskurser",
-                help="Valfri — ger exakta köpdatum. Filen laddas inte upp till någon server.",
+                help="Valfri -- ger exakta köpdatum. Filen laddas inte upp till någon server.",
             )
 
         # Parsa inkopskurser om uppladdad
@@ -576,14 +576,14 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
             try:
                 inkopskurser_data = avanza_import.parse_inkopskurser_csv(uploaded_ink.getvalue())
                 if inkopskurser_data:
-                    st.success(f"✅ Historiska inköpskurser laddade — {len(inkopskurser_data)} ISIN-poster hittades.")
+                    st.success(f"✅ Historiska inköpskurser laddade -- {len(inkopskurser_data)} ISIN-poster hittades.")
                     # Knapp för att uppdatera köpdatum på befintliga innehav direkt
                     if not holdings.empty and st.button(
                         "📅 Uppdatera köpdatum på befintliga innehav",
                         key="btn_update_dates", use_container_width=True,
                         help="Matchar dina innehav mot inköpskurser-filen via ISIN och skriver in rätt köpdatum."
                     ):
-                        # Bygg ISIN→ticker-map från positioner-filen om tillgänglig
+                        # Bygg ISIN->ticker-map från positioner-filen om tillgänglig
                         isin_map: dict[str, str] = {}
                         if "isin" in holdings.columns:
                             for _, _hr in holdings.iterrows():
@@ -615,7 +615,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                             st.success(f"✅ Köpdatum uppdaterat för {n_updated} innehav.")
                             st.rerun()
                         else:
-                            st.info("Inga ISIN-matchningar hittades — importera positioner-filen en gång så att ISIN sparas, tryck sedan här.")
+                            st.info("Inga ISIN-matchningar hittades -- importera positioner-filen en gång så att ISIN sparas, tryck sedan här.")
                 else:
                     st.warning("Kunde inte läsa inköpskurser-filen. Kontrollera att det är rätt export.")
             except Exception:
@@ -658,7 +658,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                 if _n_new:     _parts.append(f"**{_n_new} nya**")
                 if _n_changed: _parts.append(f"**{_n_changed} ändrade**")
                 if _n_same:    _parts.append(f"{_n_same} oförändrade")
-                st.success("Hittade " + str(len(df_src)) + " innehav: " + (" · ".join(_parts) if _parts else str(len(df_src))) + ". Granska och bekräfta:")
+                st.success("Hittade " + str(len(df_src)) + " innehav: " + (" * ".join(_parts) if _parts else str(len(df_src))) + ". Granska och bekräfta:")
 
                 import_data = []
                 n_funds = n_certs = 0
@@ -679,9 +679,9 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                         row_status  = "changed"; status_color = "#f59e0b"
                         _dp = []
                         if abs(existing_vals[0] - new_shares) > 0.001:
-                            _dp.append(f"antal {existing_vals[0]:.0f}→{new_shares:.0f}")
+                            _dp.append(f"antal {existing_vals[0]:.0f}->{new_shares:.0f}")
                         if abs(existing_vals[1] - new_cost) > 0.001:
-                            _dp.append(f"pris {existing_vals[1]:.2f}→{new_cost:.2f}")
+                            _dp.append(f"pris {existing_vals[1]:.2f}->{new_cost:.2f}")
                         status_badge = "🔄 " + ", ".join(_dp); default_check = True
                     else:
                         row_status  = "same"; status_badge = "✓ Oförändrad"
@@ -725,7 +725,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                     })
 
                 if n_funds > 0:
-                    st.info(f"🏦 **{n_funds} fonder** hittades — behandlas utan scanner-signaler.")
+                    st.info(f"🏦 **{n_funds} fonder** hittades -- behandlas utan scanner-signaler.")
                 if n_certs > 0:
                     st.warning(f"⚠️ **{n_certs} certifikat/turbo/warrant** identifierades och är avbockade.")
                 return import_data
@@ -745,7 +745,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                         continue
                     is_fund_item = item.get("security_type") == "fund"
                     t = item["ticker"]
-                    # Fonder har inget yfinance-ticker — använd fondnamnet som nyckel
+                    # Fonder har inget yfinance-ticker -- använd fondnamnet som nyckel
                     if is_fund_item and not t:
                         t = str(item["row"].get("name") or item["row"].get("kortnamn") or "FOND").upper()[:30]
                     if not t:
@@ -771,7 +771,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
             try:
                 # ══════════════════════════════════════════════════════════
                 # FORMAT A: Nytt "positioner"-format (Kontonummer-kolumn)
-                # Min ekonomi → Analys → Exportera data → Mitt innehav per konto
+                # Min ekonomi -> Analys -> Exportera data -> Mitt innehav per konto
                 # ══════════════════════════════════════════════════════════
                 if _is_positioner:
                     positioner_data = avanza_import.parse_avanza_positioner_csv(raw_bytes)
@@ -967,7 +967,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                 st.caption(traceback.format_exc())
 
     # ══════════════════════════════════════════════════════════════════════
-    # FLIK 2 – SÖK & LÄGG TILL
+    # FLIK 2 - SÖK & LÄGG TILL
     # ══════════════════════════════════════════════════════════════════════
     with tab_search:
         _scroll_top()
@@ -982,7 +982,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                 hits = _search_ticker_yfinance(search_q)
             if hits:
                 options = {
-                    f"{h['ticker']}  —  {h.get('name','')[:35]}  ({h.get('exchange','')})": h
+                    f"{h['ticker']}  --  {h.get('name','')[:35]}  ({h.get('exchange','')})": h
                     for h in hits
                 }
                 chosen_label = st.selectbox("Välj aktie", list(options.keys()),
@@ -992,7 +992,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                 with st.container(border=True):
                     st.markdown(
                         f"**{chosen.get('name', chosen['ticker'])}**  "
-                        f"`{chosen['ticker']}`  ·  {chosen.get('exchange','')}"
+                        f"`{chosen['ticker']}`  *  {chosen.get('exchange','')}"
                     )
                     col_s, col_p, col_d = st.columns(3)
                     with col_s:
@@ -1029,7 +1029,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                 st.info("Inga resultat. Försök med tickern direkt, t.ex. `VOLV-B.ST`.")
 
     # ══════════════════════════════════════════════════════════════════════
-    # FLIK 3 – MANUELL INMATNING
+    # FLIK 3 - MANUELL INMATNING
     # ══════════════════════════════════════════════════════════════════════
     with tab_manual:
         _scroll_top()
@@ -1083,12 +1083,12 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                     st.rerun()
 
     # ══════════════════════════════════════════════════════════════════════
-    # FLIK 4 – TA BORT / REDIGERA
+    # FLIK 4 - TA BORT / REDIGERA
     # ══════════════════════════════════════════════════════════════════════
     with tab_remove:
         _scroll_top()
         if holdings.empty:
-            st.info("Portföljen är tom – ingenting att ta bort.")
+            st.info("Portföljen är tom - ingenting att ta bort.")
         else:
             # ── Rensa hela portföljen ────────────────────────────────────
             with st.expander("⚠️ Rensa hela portföljen"):
@@ -1113,7 +1113,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
             row = _sel_match.iloc[0]
 
             with st.container(border=True):
-                st.markdown(f"**{sel}** · {float(row['shares']):.0f} st · inköp {float(row['cost_basis']):.2f} kr/st")
+                st.markdown(f"**{sel}** * {float(row['shares']):.0f} st * inköp {float(row['cost_basis']):.2f} kr/st")
                 col_edit, col_del = st.columns(2)
 
                 with col_edit:
@@ -1234,7 +1234,7 @@ def _portfolio_stress_test(holdings: pd.DataFrame, score_data: dict, df: pd.Data
     display_stress = stress_df.copy()
     for col_name in scenarios.keys():
         display_stress[col_name] = display_stress[col_name].apply(
-            lambda x: f"{x:,.0f} kr" if pd.notna(x) else "—"
+            lambda x: f"{x:,.0f} kr" if pd.notna(x) else "--"
         )
 
     clickable_stock_table(display_stress, ticker_col="Ticker", context_df=df,
@@ -1244,7 +1244,7 @@ def _portfolio_stress_test(holdings: pd.DataFrame, score_data: dict, df: pd.Data
         st.caption(f"Portföljvärde: {total_value:,.0f} kr | Viktad beta: {weighted_beta:.2f}")
     if fund_tickers_used:
         st.info(
-            f"**Fondvärde:** {', '.join(fund_tickers_used)} visas till **inköpsvärde** (antal andelar × GAV) "
+            f"**Fondvärde:** {', '.join(fund_tickers_used)} visas till **inköpsvärde** (antal andelar x GAV) "
             f"eftersom fonder saknar realtidspriser via Yahoo Finance. "
             f"Det faktiska marknadsvärdet kan vara högre eller lägre."
         )
@@ -1359,7 +1359,7 @@ def _dividend_simulator(holdings: pd.DataFrame, score_data: dict, df: pd.DataFra
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame):
-    """Sub-tab: Översikt — KPI-rad, portföljvärde-chart, period-avkastning, innehav-tabell, sektorpaj, utdelningar."""
+    """Sub-tab: Översikt -- KPI-rad, portföljvärde-chart, period-avkastning, innehav-tabell, sektorpaj, utdelningar."""
     import streamlit.components.v1 as _sc1
     _sc1.html(
         "<script>try{var el=window.parent.document.querySelector('[data-testid=\"stMain\"]');"
@@ -1406,7 +1406,7 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
         ("TOTALT VÄRDE", f"{total_mv:,.0f} kr", None),
         ("TOTAL P&L", f"{total_pnl_kr:+,.0f} kr", f"{total_pnl_pct:+.1f}%"),
         ("BÄST / SÄMST",
-         f"+{max(pnl_vals):.1f}% / {min(pnl_vals):.1f}%" if pnl_vals else "—", None),
+         f"+{max(pnl_vals):.1f}% / {min(pnl_vals):.1f}%" if pnl_vals else "--", None),
     ])
 
     # ── Live-pris-uppdatering ────────────────────────────────────────────────
@@ -1427,7 +1427,7 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
             _age_h = (datetime.datetime.now() -
                       datetime.datetime.fromtimestamp(_os.path.getmtime(_scan_files[0]))).total_seconds() / 3600
             if _age_h > 48:
-                st.caption(f"⚠️ Scandata {_age_h/24:.0f} dagar gammal — klicka Uppdatera för live-priser")
+                st.caption(f"⚠️ Scandata {_age_h/24:.0f} dagar gammal -- klicka Uppdatera för live-priser")
             else:
                 st.caption(f"Priser från senaste scan ({_age_h:.0f}h sedan)")
 
@@ -1439,9 +1439,9 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
                 "Ticker":     r["Ticker"],
                 "Bolag":      (r.get("Bolag") or r["Ticker"])[:30],
                 "Antal":      r.get("Antal"),
-                "Inköpspris": f"{float(r['Inköpspris']):.2f}" if r.get("Inköpspris") else "—",
-                "Värde":      f"{r['_market_value']:,.0f} kr" if r.get("_market_value") else "—",
-                "P&L %":      f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), float) else "—",
+                "Inköpspris": f"{float(r['Inköpspris']):.2f}" if r.get("Inköpspris") else "--",
+                "Värde":      f"{r['_market_value']:,.0f} kr" if r.get("_market_value") else "--",
+                "P&L %":      f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), float) else "--",
                 "Konto":      r.get("Konto", ""),
             } for r in stock_rows_ov]
             clickable_stock_table(pd.DataFrame(stocks_detail), ticker_col="Ticker", context_df=df,
@@ -1450,11 +1450,11 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
             st.markdown("**Fonder**")
             funds_detail = [{
                 "Namn":            (r.get("Bolag") or r["Ticker"])[:35],
-                "Antal andelar":   f"{float(r['Antal']):.4f}" if r.get("Antal") else "—",
-                "GAV/andel (kr)":  f"{float(r['Inköpspris']):.2f}" if r.get("Inköpspris") else "—",
+                "Antal andelar":   f"{float(r['Antal']):.4f}" if r.get("Antal") else "--",
+                "GAV/andel (kr)":  f"{float(r['Inköpspris']):.2f}" if r.get("Inköpspris") else "--",
                 "Inköpsvärde":     f"{float(r['Inköpspris'] or 0)*float(r['Antal'] or 0):,.0f} kr",
-                "Marknadsvärde":   f"{r['_market_value']:,.0f} kr" if r.get("_market_value") else "—",
-                "P&L %":           f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), float) else "—",
+                "Marknadsvärde":   f"{r['_market_value']:,.0f} kr" if r.get("_market_value") else "--",
+                "P&L %":           f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), float) else "--",
                 "Konto":           r.get("Konto", ""),
             } for r in fund_rows_ov]
             st.dataframe(pd.DataFrame(funds_detail), use_container_width=True, hide_index=True)
@@ -1477,7 +1477,7 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
                "OMXS30 (^OMX)": "^OMX", "Världsindex (ACWI)": "ACWI"}
     benchmark_ticker = _bm_map.get(benchmark_lbl, "")
 
-    # Fondvärde-konstant — bara om toggle är på
+    # Fondvärde-konstant -- bara om toggle är på
     fund_constant = 0.0
     if include_funds and fund_rows_ov:
         for r in fund_rows_ov:
@@ -1525,12 +1525,12 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
     display_rows_stocks = []
     display_rows_funds  = []
     for r in rows:
-        pnl_str = f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), (int, float)) else "—"
+        pnl_str = f"{r['_pnl_pct']:+.1f}%" if isinstance(r.get("_pnl_pct"), (int, float)) else "--"
         entry = {
             "Ticker":  r.get("Ticker", ""),
             "Bolag":   (r.get("Bolag") or "")[:25],
             "P&L %":   pnl_str,
-            "Värde":   f"{r.get('_market_value', 0):,.0f} kr" if r.get("_market_value") else "—",
+            "Värde":   f"{r.get('_market_value', 0):,.0f} kr" if r.get("_market_value") else "--",
             "Konto":   r.get("Konto", ""),
             "_pnl":    r.get("_pnl_pct") or 0,
             "_is_fund": r.get("_is_fund", False),
@@ -1546,7 +1546,7 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
             clickable_stock_table(df_show, ticker_col="Ticker", context_df=df,
                                   key="pf_overview_main_table", caption="Klicka på en aktie för full analys.")
         if display_rows_funds:
-            st.caption(f"🏦 {len(display_rows_funds)} fond{'er' if len(display_rows_funds)>1 else ''} ingår — se detaljer i 📋 Visa alla innehav ovan eller i Analys-fliken")
+            st.caption(f"🏦 {len(display_rows_funds)} fond{'er' if len(display_rows_funds)>1 else ''} ingår -- se detaljer i 📋 Visa alla innehav ovan eller i Analys-fliken")
 
     with col_pie:
         stock_rows_only = [r for r in rows if not r.get("_is_fund")]
@@ -1599,7 +1599,7 @@ def _tab_overview(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFram
 
 
 def _tab_analys(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame):
-    """Sub-tab: Analys — rekommendationer, stresstest, utdelningssimulator, AI-chat."""
+    """Sub-tab: Analys -- rekommendationer, stresstest, utdelningssimulator, AI-chat."""
     import streamlit.components.v1 as _sc1
     _sc1.html(
         "<script>try{var el=window.parent.document.querySelector('[data-testid=\"stMain\"]');"
@@ -1622,9 +1622,9 @@ def _tab_analys(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame)
             t  = r["Ticker"]
             sc = score_data.get(t, {})
             if not sc:
-                st.markdown(f"⚪ **{t}** — Analys uppdateras inom kort")
+                st.markdown(f"⚪ **{t}** -- Analys uppdateras inom kort")
                 continue
-            entry  = sc.get("entry_signal", "—")
+            entry  = sc.get("entry_signal", "--")
             score  = sc.get("score_total", 0) or 0
             price_val = sc.get("current_price") or sc.get("close")
 
@@ -1640,8 +1640,8 @@ def _tab_analys(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame)
             with st.container(border=True):
                 c1, c2 = st.columns([3, 2])
                 with c1:
-                    st.markdown(f"**{icon} {t}** — {rec}")
-                    st.caption(f"Score: {score:.0f}  ·  Signal: {entry}  ·  Trend: {sc.get('trend_signal', '—')}")
+                    st.markdown(f"**{icon} {t}** -- {rec}")
+                    st.caption(f"Score: {score:.0f}  *  Signal: {entry}  *  Trend: {sc.get('trend_signal', '--')}")
                 with c2:
                     if _show_atr and price_val:
                         try:
@@ -1657,7 +1657,7 @@ def _tab_analys(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame)
                                 )
                             st.markdown(
                                 f"<span style='font-size:12px;color:#8892a4;'>📐 Föreslaget: "
-                                f"{pos_min:.0f}–{pos_max:.0f}% av portföljvärdet</span>",
+                                f"{pos_min:.0f}-{pos_max:.0f}% av portföljvärdet</span>",
                                 unsafe_allow_html=True,
                             )
                         except Exception:
@@ -1666,7 +1666,7 @@ def _tab_analys(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame)
     # ── Fonder P&L ───────────────────────────────────────────────────────────
     if fund_rows:
         st.markdown("### 🏦 Fonder")
-        st.caption("Fondinnehav analyseras inte med scanner-signaler — enbart värde och P&L visas.")
+        st.caption("Fondinnehav analyseras inte med scanner-signaler -- enbart värde och P&L visas.")
         for r in fund_rows:
             cost   = float(r.get("Inköpspris") or 0)
             antal  = float(r.get("Antal") or 0)
@@ -1680,21 +1680,21 @@ def _tab_analys(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame)
                 c1, c2, c3, c4 = st.columns([3, 2, 2, 2])
                 with c1:
                     st.markdown(f"🏦 **{name}**")
-                    st.caption(f"Konto: {r['Konto']}  ·  {antal:.4f} andelar  ·  GAV {cost:.2f} kr/andel")
+                    st.caption(f"Konto: {r['Konto']}  *  {antal:.4f} andelar  *  GAV {cost:.2f} kr/andel")
                 with c2:
                     st.markdown(
                         f'<div style="padding-top:4px"><div style="font-size:10px;color:#8892a4;letter-spacing:.08em;text-transform:uppercase">Inköpsvärde</div>'
-                        f'<div style="font-size:18px;font-weight:600;color:#e8eaf0">{inv:,.0f} kr</div></div>' if inv else "—",
+                        f'<div style="font-size:18px;font-weight:600;color:#e8eaf0">{inv:,.0f} kr</div></div>' if inv else "--",
                         unsafe_allow_html=True,
                     )
                 with c3:
                     st.markdown(
                         f'<div style="padding-top:4px"><div style="font-size:10px;color:#8892a4;letter-spacing:.08em;text-transform:uppercase">Marknadsvärde</div>'
-                        f'<div style="font-size:18px;font-weight:600;color:#e8eaf0">{mv:,.0f} kr</div></div>' if mv else "—",
+                        f'<div style="font-size:18px;font-weight:600;color:#e8eaf0">{mv:,.0f} kr</div></div>' if mv else "--",
                         unsafe_allow_html=True,
                     )
                 with c4:
-                    pnl_pct_str = f"{pnl_pct:+.1f}%" if pnl_pct is not None else "—"
+                    pnl_pct_str = f"{pnl_pct:+.1f}%" if pnl_pct is not None else "--"
                     pnl_kr_str  = f"{pnl_kr:+,.0f} kr" if pnl_kr is not None else ""
                     st.markdown(
                         f'<div style="padding-top:4px"><div style="font-size:10px;color:#8892a4;letter-spacing:.08em;text-transform:uppercase">P&L</div>'
@@ -1706,7 +1706,7 @@ def _tab_analys(holdings_view: pd.DataFrame, score_data: dict, df: pd.DataFrame)
     st.markdown("---")
 
     # ── Stresstest ───────────────────────────────────────────────────────────
-    with st.expander("📉 Stresstest — kraschscenarier"):
+    with st.expander("📉 Stresstest -- kraschscenarier"):
         _portfolio_stress_test(holdings_view, score_data, df=df)
 
     # ── Utdelningssimulator ──────────────────────────────────────────────────
@@ -1760,12 +1760,12 @@ def _portfolio_ai_chat(holdings_view: pd.DataFrame, score_data: dict, df: pd.Dat
         ctx_lines = ["## Din portfölj\n"]
         for r in rows:
             if r.get("_is_fund"):
-                ctx_lines.append(f"- **{r['Ticker']}** (fond) — {r.get('Antal',0):.0f} st à {r.get('Inköpspris',0):.2f} kr, P&L: {r.get('_pnl_pct','—')}")
+                ctx_lines.append(f"- **{r['Ticker']}** (fond) -- {r.get('Antal',0):.0f} st à {r.get('Inköpspris',0):.2f} kr, P&L: {r.get('_pnl_pct','--')}")
             else:
                 ctx_lines.append(
-                    f"- **{r['Ticker']}** ({r.get('Bolag','')}) — {r.get('Antal',0):.0f} st, "
-                    f"pris: {r.get('Pris nu','—')}, P&L: {r.get('_pnl_pct','—')}, "
-                    f"Score: {r.get('Score','—')}, Signal: {r.get('Entry','—')}"
+                    f"- **{r['Ticker']}** ({r.get('Bolag','')}) -- {r.get('Antal',0):.0f} st, "
+                    f"pris: {r.get('Pris nu','--')}, P&L: {r.get('_pnl_pct','--')}, "
+                    f"Score: {r.get('Score','--')}, Signal: {r.get('Entry','--')}"
                 )
         portfolio_context = "\n".join(ctx_lines)
 
@@ -1809,14 +1809,14 @@ Värdet går från **-1 till +1**:
 | Värde | Vad det betyder | Exempel |
 |---|---|---|
 | **+1.0** | Rör sig alltid i exakt samma riktning | Två aktier i samma bransch |
-| **+0.8 till +1.0** | Rör sig väldigt likt (hög korrelation) | ⚠️ Dålig diversifiering – om en faller, faller sannolikt den andra |
+| **+0.8 till +1.0** | Rör sig väldigt likt (hög korrelation) | ⚠️ Dålig diversifiering - om en faller, faller sannolikt den andra |
 | **0** | Rör sig helt oberoende av varandra | Idealiskt för diversifiering |
 | **-1.0** | Rör sig alltid i motsatt riktning | Kan användas som hedge |
 
 ### Vad ska du leta efter?
-- **Gröna celler (högt värde nära +1):** De aktier är för lika – hela portföljen faller om den sektorn går dåligt.
+- **Gröna celler (högt värde nära +1):** De aktier är för lika - hela portföljen faller om den sektorn går dåligt.
 - **Gula/vita celler (värde nära 0):** Bra! Dessa aktier är oberoende av varandra.
-- **Röda celler (negativt värde):** Dessa rör sig mot varandra – bra för riskspridning.
+- **Röda celler (negativt värde):** Dessa rör sig mot varandra - bra för riskspridning.
 
 **Tumregel:** Sträva efter att inga par har korrelation över **+0.80**. Har du bara tech-aktier är de ofta högt korrelerade.
 """)
@@ -1838,7 +1838,7 @@ Värdet går från **-1 till +1**:
             zmin=-1, zmax=1,
             text=corr_df.round(2).values,
             texttemplate="%{text}",
-            hovertemplate="%{y} × %{x}: %{z:.2f}<extra></extra>",
+            hovertemplate="%{y} x %{x}: %{z:.2f}<extra></extra>",
         ))
         fig.update_layout(
             template="plotly_dark",
@@ -1859,7 +1859,7 @@ Värdet går från **-1 till +1**:
         if high_corr:
             st.warning(
                 f"⚠️ **Hög korrelation (>0.80):** {', '.join(high_corr[:5])}. "
-                f"Dessa aktier rör sig nästan likadant — låg diversifiering."
+                f"Dessa aktier rör sig nästan likadant -- låg diversifiering."
             )
     else:
         st.caption("Korrelationsdata ej tillgänglig.")
@@ -1893,7 +1893,7 @@ Värdet går från **-1 till +1**:
         st.markdown("""
 **Portföljvikt** = hur stor andel av ditt totala kapital du har i en viss aktie.
 
-**Exempel:** Om du har 100 000 kr och 30 000 kr i Ericsson → Ericsson har **30% vikt**.
+**Exempel:** Om du har 100 000 kr och 30 000 kr i Ericsson -> Ericsson har **30% vikt**.
 
 ### Varför är det viktigt?
 En portfölj där en enda aktie utgör 50% av kapitalet är mycket riskabelt.
@@ -1901,16 +1901,16 @@ Om den aktien faller 50%, har du förlorat 25% av hela ditt kapital.
 
 ### Hur beräknas de föreslagna vikterna?
 Systemet använder en metod kallad **Black-Litterman** som kombinerar:
-1. **Marknadskapitalisering** – större bolag får naturligt lite mer vikt (som marknaden värderar dem)
-2. **Systemets score** – aktier med hög score premieras
+1. **Marknadskapitalisering** - större bolag får naturligt lite mer vikt (som marknaden värderar dem)
+2. **Systemets score** - aktier med hög score premieras
 
 Resultatet är en fördelning som är **balanserad och riskspridd**, med max 15% per aktie.
 
 ### Hur använder du tabellen?
 - **Nu (blå stapel):** din nuvarande andel i aktien
 - **Föreslaget (grön stapel):** vad systemet rekommenderar
-- Om en aktie har högt "Nu" men lågt "Föreslaget" → överväg att minska positionen
-- Om en aktie har lågt "Nu" men högt "Föreslaget" → överväg att öka
+- Om en aktie har högt "Nu" men lågt "Föreslaget" -> överväg att minska positionen
+- Om en aktie har lågt "Nu" men högt "Föreslaget" -> överväg att öka
 
 **Viktigt:** Det här är ett beslutsstöd, inte finansiell rådgivning. Gör alltid din egen bedömning.
 """)
@@ -1923,7 +1923,7 @@ Resultatet är en fördelning som är **balanserad och riskspridd**, med max 15%
                 # Korrekt anrop: bara scored_df, inget holdings-argument
                 weights_df = black_litterman_weights(relevant_df)
                 if weights_df is not None and not weights_df.empty:
-                    # Beräkna nuvarande vikter från holdings (shares × pris / totalt värde)
+                    # Beräkna nuvarande vikter från holdings (shares x pris / totalt värde)
                     h_prices = {}
                     for _, hr in holdings.iterrows():
                         t = str(hr.get("ticker", "")).upper()
@@ -2046,12 +2046,12 @@ def page_portfolio(df: pd.DataFrame = None, holdings: pd.DataFrame = None,
             wl_rows.append({
                 "Ticker":  t,
                 "Bolag":   item.get("name", sc.get("name", t))[:28],
-                "Sektor":  sc.get("sector", "—"),
-                "Tillagd": item.get("added", "—"),
+                "Sektor":  sc.get("sector", "--"),
+                "Tillagd": item.get("added", "--"),
                 "Score":   sc.get("score_total"),
                 "Entry":   sc.get("entry_signal", "Ej scannad"),
-                "Konf.":   sc.get("confidence_label", "—"),
-                "Trend":   sc.get("trend_signal", "—"),
+                "Konf.":   sc.get("confidence_label", "--"),
+                "Trend":   sc.get("trend_signal", "--"),
                 "P/E":     num_fmt(sc.get("pe_trailing")),
                 "P/B":     num_fmt(sc.get("price_to_book")),
                 "ROE":     pct_fmt(sc.get("roe")),
@@ -2070,7 +2070,7 @@ def page_portfolio(df: pd.DataFrame = None, holdings: pd.DataFrame = None,
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# SPLITTRADE SIDOR — Portfölj delas i 4 fokuserade vyer (UX-plan §5)
+# SPLITTRADE SIDOR -- Portfölj delas i 4 fokuserade vyer (UX-plan §5)
 # Varje sida återanvänder de befintliga flik-funktionerna men på egen yta så att
 # ingen enskild sida proppas full. page_portfolio() behålls bakåtkompatibelt.
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2083,12 +2083,12 @@ def _pf_context(df, sc_df):
 
 
 def page_portfolio_holdings(df=None, holdings=None, watchlist=None, sc_df=None):
-    """Innehav — positioner, värde, P&L, sektorfördelning."""
+    """Innehav -- positioner, värde, P&L, sektorfördelning."""
     page_header("Innehav", "holdings", "Dina positioner, värde och utveckling")
     _show_scan_pending_notifications()
     holdings, score_data = _pf_context(df, sc_df)
     if holdings.empty:
-        empty_state("Ingen portfölj ännu — gå till Hantera innehav för att lägga till.",
+        empty_state("Ingen portfölj ännu -- gå till Hantera innehav för att lägga till.",
                     icon="portfolio")
         return
     holdings_view, _ = _konto_filter_section(holdings)
@@ -2096,7 +2096,7 @@ def page_portfolio_holdings(df=None, holdings=None, watchlist=None, sc_df=None):
 
 
 def page_portfolio_analysis(df=None, holdings=None, watchlist=None, sc_df=None):
-    """Analys — risk, projektion, diversifiering."""
+    """Analys -- risk, projektion, diversifiering."""
     page_header("Portföljanalys", "analysis", "Risk, projektion och diversifiering")
     holdings, score_data = _pf_context(df, sc_df)
     if holdings.empty:
@@ -2107,7 +2107,7 @@ def page_portfolio_analysis(df=None, holdings=None, watchlist=None, sc_df=None):
 
 
 def page_portfolio_rebalance(df=None, holdings=None, watchlist=None, sc_df=None):
-    """Rebalansering — korrelationsmatris + Black-Litterman optimala vikter."""
+    """Rebalansering -- korrelationsmatris + Black-Litterman optimala vikter."""
     page_header("Rebalansering", "rebalance", "Korrelation och föreslagna portföljvikter")
     holdings, _ = _pf_context(df, sc_df)
     if holdings.empty:
@@ -2117,7 +2117,7 @@ def page_portfolio_rebalance(df=None, holdings=None, watchlist=None, sc_df=None)
 
 
 def page_portfolio_manage(df=None, holdings=None, watchlist=None, sc_df=None):
-    """Hantera innehav — lägg till, redigera, importera från Avanza."""
+    """Hantera innehav -- lägg till, redigera, importera från Avanza."""
     page_header("Hantera innehav", "manage", "Lägg till, redigera eller importera positioner")
     _manage_portfolio_section(load_portfolio())
     _show_scan_pending_notifications()

@@ -1,5 +1,5 @@
 """
-css.py — Global CSS byggd från designtokens.
+css.py -- Global CSS byggd från designtokens.
 
 EN källa för all global styling (ersätter det spridda CSS-blocket i
 streamlit_app.py + inline-styles i sidorna). Injiceras en gång i appstart via
@@ -47,7 +47,7 @@ h3 {{ font-size: {t.TYPE_BODY}px !important; font-weight: {t.WEIGHT_SEMI} !impor
 }}
 .ms-card:hover {{ border-color: {t.BORDER_HI}; box-shadow: {t.SHADOW_HOVER}; }}
 
-/* Streamlits bordered container → samma kortlook */
+/* Streamlits bordered container -> samma kortlook */
 div[data-testid="stVerticalBlockBorderWrapper"] {{
     background: {t.SURFACE};
     border-radius: {t.RADIUS}px;

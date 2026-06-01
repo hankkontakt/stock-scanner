@@ -1,5 +1,5 @@
 """
-black_litterman.py — Black-Litterman Portfolio Optimization Framework
+black_litterman.py -- Black-Litterman Portfolio Optimization Framework
 ============================================================
 Implements the Black-Litterman model for portfolio optimization,
 as recommended by the quantitative architecture review.
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ────────────────────────────────────────────────────────────────
 # Tau (τ): uncertainty scalar for the prior. Low = strong prior belief.
-# Standard range: 0.01–0.05. We use 0.025 as default.
+# Standard range: 0.01-0.05. We use 0.025 as default.
 TAU_DEFAULT = 0.025
 
 # Delta (δ (delta): risk aversion coefficient (market price of risk).
@@ -78,7 +78,7 @@ def _compute_implied_returns(market_caps: np.ndarray,
     """
     Compute implied equilibrium returns using reverse optimization.
 
-    Π = δ × Σ × w_mkt
+    Π = δ x Σ x w_mkt
 
     Where:
         Π = implied excess returns (N x 1)
@@ -108,7 +108,7 @@ def _ledoit_wolf_shrinkage(returns: np.ndarray) -> np.ndarray:
     Ledoit-Wolf shrinkage estimator for covariance matrix.
 
     Shrinks sample covariance toward a structured target (constant correlation).
-    This reduces estimation error — especially important when N >> with 1,000+ assets
+    This reduces estimation error -- especially important when N >> with 1,000+ assets
     and limited history.
 
     Args:
@@ -167,9 +167,9 @@ def _build_view_matrix(scored_df: pd.DataFrame,
 
     Returns:
         (P, Q, Omega) tuple:
-            P: Pick matrix (N x N) — identity for absolute views
-            Q: View vector (N,) — expected returns from scores
-            Omega: View uncertainty matrix (N x N) — diagonal, scaled by IC
+            P: Pick matrix (N x N) -- identity for absolute views
+            Q: View vector (N,) -- expected returns from scores
+            Omega: View uncertainty matrix (N x N) -- diagonal, scaled by IC
     """
     N = len(scored_df)
 
@@ -212,15 +212,15 @@ def black_litterman_weights(scored_df: pd.DataFrame,
     Compute Black-Litterman optimal portfolio weights.
 
     The model computes:
-        μ_posterior = [(τΣ)⁻¹ + P'Ω⁻¹P]⁻¹ × [(τΣ)⁻¹Π + P'Ω⁻¹Q]
+        μ_posterior = [(τΣ)⁻¹ + P'Ω⁻¹P]⁻¹ x [(τΣ)⁻¹Π + P'Ω⁻¹Q]
 
     Then optimal weights:
-        w* = (δΣ)⁻¹ × μ_posterior
+        w* = (δΣ)⁻¹ x μ_posterior
 
     Args:
         scored_df: DataFrame with columns [ticker, score_total, market_cap]
         historical_ic: IC value. If None, loaded from metrics file.
-        universe: "universe" or "smallcap" — for IC file lookup
+        universe: "universe" or "smallcap" -- for IC file lookup
         delta: Risk aversion coefficient
         tau: Prior uncertainty scalar
         max_weight: Maximum weight per position
@@ -289,7 +289,7 @@ def black_litterman_weights(scored_df: pd.DataFrame,
 
     # Fallback: identity covariance if estimation fails
     if cov_matrix is None:
-        cov_matrix = np.eye(N) * 0.04  # 20% annualized vol → 0.04 variance
+        cov_matrix = np.eye(N) * 0.04  # 20% annualized vol -> 0.04 variance
         logger.info("  BL: using identity covariance (fallback)")
 
     # ── 4. Compute implied equilibrium returns ─────────────────────
@@ -301,11 +301,11 @@ def black_litterman_weights(scored_df: pd.DataFrame,
     P, Q, Omega = _build_view_matrix(scored_df, ic=ic)
 
     # ── 6. Posterior expected returns (Black-Litterman formula) ────────
-    # μ_posterior = [(τΣ)⁻¹ + P'Ω⁻¹P]⁻¹ × [(τΣ)⁻¹Π + P'Ω⁻¹Q]
+    # μ_posterior = [(τΣ)⁻¹ + P'Ω⁻¹P]⁻¹ x [(τΣ)⁻¹Π + P'Ω⁻¹Q]
     try:
         tau_sigma_inv = np.linalg.inv(tau * cov_matrix)
 
-        # P'Ω⁻¹P — for identity P, this is just Ω⁻¹
+        # P'Ω⁻¹P -- for identity P, this is just Ω⁻¹
         omega_inv = np.linalg.inv(Omega)
 
         # Combine: posterior precision
@@ -317,7 +317,7 @@ def black_litterman_weights(scored_df: pd.DataFrame,
             tau_sigma_inv @ implied_returns + omega_inv @ Q
         )
     except np.linalg.LinAlgError as e:
-        logger.warning(f"  BL: matrix inversion failed: {e} — falling back to equal weight")
+        logger.warning(f"  BL: matrix inversion failed: {e} -- falling back to equal weight")
         weights = np.ones(N) / N
         result = scored_df[["ticker"]].copy()
         result["weight"] = weights
@@ -326,11 +326,11 @@ def black_litterman_weights(scored_df: pd.DataFrame,
         return result
 
     # ── 6. Optimal weights ─────────────────────────────────────────
-    # w* = (δΣ)⁻¹ × μ_posterior
+    # w* = (δΣ)⁻¹ x μ_posterior
     try:
         optimal_weights = np.linalg.solve(delta * cov_matrix, posterior_returns)
     except np.linalg.LinAlgError:
-        logger.warning("  BL: weight solve failed — using posterior returns directly")
+        logger.warning("  BL: weight solve failed -- using posterior returns directly")
         optimal_weights = posterior_returns
 
     # ── 7. Constraints ─────────────────────────────────────────────

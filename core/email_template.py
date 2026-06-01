@@ -3,7 +3,7 @@ email_template.py
 =================
 Gemensam email-engine för alla MarketScan-rapporter.
 
-Använder mistune (3.x) för markdown→HTML-konvertering istället för
+Använder mistune (3.x) för markdown->HTML-konvertering istället för
 handskriven parser, vilket ger:
   - Professionellare rendering (Github Flavored Markdown)
   - Mindre kod (~150 färre rader)
@@ -115,7 +115,7 @@ def build_personal_portfolio_section(username: str, scored_df=None) -> str:
     för inkludering i personaliserade e-postutskick.
 
     Args:
-        username: Inloggningsnamn (admin → data/, övriga → data/users/{username}/)
+        username: Inloggningsnamn (admin -> data/, övriga -> data/users/{username}/)
         scored_df: Senaste scorad DataFrame med kolumnerna ticker, close/current_price,
                    score_total, entry_signal. Används för att berika med aktuell data.
 
@@ -184,7 +184,7 @@ def build_personal_portfolio_section(username: str, scored_df=None) -> str:
             if sc.get("entry_signal"):
                 entry_str = f" | {sc['entry_signal']}"
             lines.append(
-                f"- **{ticker}** — {shares:.0f} st à {cost:.2f} kr"
+                f"- **{ticker}** -- {shares:.0f} st à {cost:.2f} kr"
                 f"{score_str}{entry_str}{pnl_str}"
             )
         lines.append("")
@@ -199,7 +199,7 @@ def build_personal_portfolio_section(username: str, scored_df=None) -> str:
             sc        = score_lu.get(ticker, {})
             score_str = f" | Score: {sc['score_total']:.0f}" if sc.get("score_total") is not None else ""
             entry_str = f" | {sc['entry_signal']}" if sc.get("entry_signal") else ""
-            notes_str = f" — {item['notes']}" if item.get("notes") else ""
+            notes_str = f" -- {item['notes']}" if item.get("notes") else ""
             lines.append(f"- **{ticker}**{score_str}{entry_str}{notes_str}")
 
     return "\n".join(lines)
@@ -454,7 +454,7 @@ def _build_html_document(body_html: str, subject: str = "", unsubscribe_url: str
             <td style="font-size:11px;color:{COLORS['muted']};line-height:1.5">
               Detta är en automatisk rapport från MarketScan. Informationen utgör inte finansiell rådgivning.
               <br>
-              Investeringar innebär risk – gör alltid din egen analys innan beslut.
+              Investeringar innebär risk - gör alltid din egen analys innan beslut.
             </td>
           </tr>
           <tr>
@@ -512,7 +512,7 @@ def build_alert_box(message: str, level: str = "warning") -> str:
 def build_pnl_cell(value_pct: Optional[float], bold: bool = True) -> str:
     """Bygger en P&L-cell med färg baserat på värde."""
     if value_pct is None:
-        return f'<span style="color:{COLORS["muted"]}">—</span>'
+        return f'<span style="color:{COLORS["muted"]}">--</span>'
     sign = "+" if value_pct >= 0 else ""
     color = COLORS["positive"] if value_pct >= 0 else COLORS["negative"]
     weight = "700" if bold else "400"
@@ -522,7 +522,7 @@ def build_pnl_cell(value_pct: Optional[float], bold: bool = True) -> str:
 def build_score_badge(score: Optional[float]) -> str:
     """Bygger en score-badge."""
     if score is None:
-        return f'<span style="color:{COLORS["muted"]}">—</span>'
+        return f'<span style="color:{COLORS["muted"]}">--</span>'
     color = COLORS["positive"] if score >= 70 else COLORS["warning"] if score >= 50 else COLORS["negative"]
     return f'<span style="color:{color};font-weight:600">{score:.0f}</span>'
 
@@ -613,7 +613,7 @@ def send_email(
     """
     sender, password, _ = _get_email_config()
     if not sender or not password:
-        print("  ⚠ Email ej konfigurerat – hoppar över utskick")
+        print("  ⚠ Email ej konfigurerat - hoppar över utskick")
         return False
 
     if recipients is not None:
@@ -653,7 +653,7 @@ def send_email(
     else:
         msg["To"] = sender
     
-    # List-Unsubscribe header – minskar spam-risk och krävs av många email-klienter
+    # List-Unsubscribe header - minskar spam-risk och krävs av många email-klienter
     if unsubscribe_url:
         msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
         msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"

@@ -3,17 +3,17 @@ extra_data.py
 =============
 Hämtar extra datakällor som ger starkare signaler:
 
-1. Insider-transaktioner  – faktiska köp/sälj från VD/styrelse
-2. Earnings surprise      – slår bolaget estimat konsekvent?
-3. Analytiker-revisioner  – förbättras eller försämras konsensus?
-4. Short Interest         – blankningsgrad (låg blankning = positivt)
-5. Seasonality            – säsongsmönster (stark månad = positivt)
-6. Options Flow           – puts/calls ratio (lågt P/C = bullish)
+1. Insider-transaktioner  - faktiska köp/sälj från VD/styrelse
+2. Earnings surprise      - slår bolaget estimat konsekvent?
+3. Analytiker-revisioner  - förbättras eller försämras konsensus?
+4. Short Interest         - blankningsgrad (låg blankning = positivt)
+5. Seasonality            - säsongsmönster (stark månad = positivt)
+6. Options Flow           - puts/calls ratio (lågt P/C = bullish)
 
-Alla returnerar ett signal-värde 0.0–1.0:
-  0.0–0.3 = negativt / bearish
-  0.4–0.6 = neutralt
-  0.7–1.0 = positivt / bullish
+Alla returnerar ett signal-värde 0.0-1.0:
+  0.0-0.3 = negativt / bearish
+  0.4-0.6 = neutralt
+  0.7-1.0 = positivt / bullish
 
 Cachelagrade separat (24-72h) för att inte överbelasta API:er.
 """
@@ -32,7 +32,7 @@ INSIDER_CACHE_H  = 48
 EARNINGS_CACHE_H = 72
 ANALYST_CACHE_H  = 24
 SHORT_CACHE_H    = 24
-SEASONALITY_CACHE_H = 720  # 30 dagar – säsongsmönster ändras långsamt
+SEASONALITY_CACHE_H = 720  # 30 dagar - säsongsmönster ändras långsamt
 OPTIONS_CACHE_H  = 24
 
 Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
@@ -51,7 +51,7 @@ def _rc(key: str, max_h: float):
         return None
     try:
         with open(p, "rb") as f: return pickle.load(f)
-    except: return None
+    except Exception: return None
 
 def _wc(key: str, data):
     try:
@@ -267,7 +267,7 @@ def fetch_analyst_revision_signal(ticker: str, finnhub_key: str = None) -> float
         rec_mean = info.get("recommendationMean") if info else None
 
         if rec_mean is not None:
-            # 1=Strong Buy→1.0, 3=Hold→0.5, 5=Strong Sell→0.0
+            # 1=Strong Buy->1.0, 3=Hold->0.5, 5=Strong Sell->0.0
             signal = round(1.0 - (float(rec_mean) - 1.0) / 4.0, 3)
             signal = max(0.0, min(1.0, signal))
 
@@ -347,7 +347,7 @@ def fetch_short_interest_signal(ticker: str, finnhub_key: str = None) -> float:
         except Exception:
             pass
 
-    # yfinance fallback – försök via info
+    # yfinance fallback - försök via info
     try:
         import yfinance as yf
         from core.data_fetcher import _with_timeout
@@ -536,11 +536,11 @@ def fetch_options_flow_signal(ticker: str) -> float:
         pc_ratio = put_oi / call_oi
 
         # Konvertera P/C-ratio till signal
-        # P/C < 0.5 = starkt bullish → signal 0.7-0.9
-        # P/C 0.5-0.8 = måttligt bullish → signal 0.6-0.7
-        # P/C 0.8-1.2 = neutral → signal 0.45-0.55
-        # P/C 1.2-2.0 = måttligt bearish → signal 0.3-0.45
-        # P/C > 2.0 = starkt bearish → signal 0.1-0.3
+        # P/C < 0.5 = starkt bullish -> signal 0.7-0.9
+        # P/C 0.5-0.8 = måttligt bullish -> signal 0.6-0.7
+        # P/C 0.8-1.2 = neutral -> signal 0.45-0.55
+        # P/C 1.2-2.0 = måttligt bearish -> signal 0.3-0.45
+        # P/C > 2.0 = starkt bearish -> signal 0.1-0.3
 
         if pc_ratio < 0.5:
             signal = round(0.7 + (0.5 - pc_ratio) / 0.5 * 0.2, 3)
@@ -565,53 +565,3 @@ def fetch_options_flow_signal(ticker: str) -> float:
 # BATCH-FUNKTION (kör alla 6 för hela universumet)
 # ══════════════════════════════════════════════════════════════
 
-def fetch_extra_data_batch(
-    tickers:      list,
-    finnhub_key:  str  = None,
-    verbose:      bool = True,
-) -> pd.DataFrame:
-    """
-    Hämtar alla extra signaler för alla tickers.
-    Returnerar DataFrame med kolumner:
-        ticker, insider_signal, earnings_signal, analyst_signal,
-        short_interest_signal, seasonality_signal, options_flow_signal,
-        extra_composite
-    """
-    rows = []
-    total = len(tickers)
-
-    for i, ticker in enumerate(tickers, 1):
-        if verbose and i % 20 == 0:
-            print(f"  Extra data: {i}/{total}...")
-
-        insider  = fetch_insider_signal(ticker)
-        earnings = fetch_earnings_surprise_signal(ticker)
-        analyst  = fetch_analyst_revision_signal(ticker, finnhub_key)
-        short    = fetch_short_interest_signal(ticker, finnhub_key)
-        season   = fetch_seasonality_signal(ticker)
-        options  = fetch_options_flow_signal(ticker)
-
-        # Kombinerad extra-signal (viktat snitt)
-        # Grundsignaler: 0.75, Nya signaler: 0.25 (lägre initial vikt tills bevisade)
-        composite_base = insider * 0.30 + earnings * 0.40 + analyst * 0.30
-        composite_new  = short * 0.40 + season * 0.35 + options * 0.25
-        composite      = composite_base * 0.75 + composite_new * 0.25
-
-        rows.append({
-            "ticker":                ticker,
-            "insider_signal":        insider,
-            "earnings_signal":       earnings,
-            "analyst_signal":        analyst,
-            "short_interest_signal": short,
-            "seasonality_signal":    season,
-            "options_flow_signal":   options,
-            "extra_composite":       round(composite, 3),
-        })
-
-    df = pd.DataFrame(rows)
-    if verbose:
-        high = (df["extra_composite"] > 0.65).sum()
-        low  = (df["extra_composite"] < 0.35).sum()
-        print(f"  ✓ Extra data klar: {high} bullish, {low} bearish, {total-high-low} neutrala")
-
-    return df

@@ -1,4 +1,4 @@
-"""Tester för core/ml_paper_trading.py — separat track record för ML."""
+"""Tester för core/ml_paper_trading.py -- separat track record för ML."""
 import json
 from pathlib import Path
 
@@ -38,7 +38,7 @@ def test_record_signals_idempotent_same_day():
     n1 = mlpt.record_daily_signals(df, universe="universe", top_n=2)
     n2 = mlpt.record_daily_signals(df, universe="universe", top_n=2)
     assert n1 == 2
-    assert n2 == 0  # Samma dag → ingen ny registrering
+    assert n2 == 0  # Samma dag -> ingen ny registrering
 
 
 def test_get_summary_empty():

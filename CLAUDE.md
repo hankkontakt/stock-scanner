@@ -20,7 +20,7 @@
 | Streamlit-app | `web/streamlit_app.py` |
 | Admin + debug | `web/pages/admin_page.py` |
 | Manuella kommandon | `docs/KOMMANDON.md` |
-| Tester | `tests/` (92 tests) |
+| Tester | `tests/` (99 tests, pytest) |
 
 ## Setup
 

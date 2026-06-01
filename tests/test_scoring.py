@@ -3,8 +3,8 @@ Test: scoring.py
 ================
 Testar alla faktorscorer, hjälpfunktioner och region-neutralisering.
 
-Dessa tester använder enbart syntetisk data — inga API-anrop eller filer.
-All scoring är pure functions (DataFrame → DataFrame/Series).
+Dessa tester använder enbart syntetisk data -- inga API-anrop eller filer.
+All scoring är pure functions (DataFrame -> DataFrame/Series).
 
 Kör med:
     pytest tests/test_scoring.py -v --tb=short
@@ -30,20 +30,20 @@ class TestHelpers:
     """Testar _assign_exchange_group, percentile_rank, winsorize m.fl."""
 
     def test_assign_exchange_group_us(self):
-        """US-tickers (inga suffix) → US."""
+        """US-tickers (inga suffix) -> US."""
         assert sc._assign_exchange_group("AAPL") == "US"
         assert sc._assign_exchange_group("MSFT") == "US"
         assert sc._assign_exchange_group("NVDA") == "US"
 
     def test_assign_exchange_group_nordic(self):
-        """Nordiska suffix → Nordic."""
+        """Nordiska suffix -> Nordic."""
         assert sc._assign_exchange_group("VOLV-B.ST") == "Nordic"
         assert sc._assign_exchange_group("NOVO-B.CO") == "Nordic"
         assert sc._assign_exchange_group("EQNR.OL") == "Nordic"
         assert sc._assign_exchange_group("NOKIA.HE") == "Nordic"
 
     def test_assign_exchange_group_europe(self):
-        """Europeiska suffix → Europe."""
+        """Europeiska suffix -> Europe."""
         assert sc._assign_exchange_group("SAP.DE") == "Europe"
         assert sc._assign_exchange_group("AIR.PA") == "Europe"
         assert sc._assign_exchange_group("ULVR.L") == "UK"
@@ -73,7 +73,7 @@ class TestHelpers:
         assert ranked.iloc[0] == ranked.max()
 
     def test_percentile_rank_all_equal(self):
-        """Alla lika värden → alla får samma rank."""
+        """Alla lika värden -> alla får samma rank."""
         s = pd.Series([5.0, 5.0, 5.0])
         ranked = sc.percentile_rank(s, ascending=True)
         assert ranked.nunique() == 1
@@ -86,7 +86,7 @@ class TestHelpers:
         assert wins.min() > -10_000
 
     def test_winsorize_all_nan(self):
-        """Alla NaN → returneras oförändrat."""
+        """Alla NaN -> returneras oförändrat."""
         s = pd.Series([np.nan, np.nan, np.nan])
         result = sc.winsorize(s)
         assert result.isna().all()
@@ -153,7 +153,7 @@ class TestExchangeGroups:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# FAKTORSCORER — kräver ≥5 rader pga MIN_VALID_OBSERVATIONS
+# FAKTORSCORER -- kräver >=5 rader pga MIN_VALID_OBSERVATIONS
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -204,14 +204,14 @@ class TestValueScore:
     """Testar calc_value_score inklusive FCF-flöde och fallback."""
 
     def test_value_score_with_fcf(self):
-        """FCF Yield + EV/EBITDA → rankad score."""
+        """FCF Yield + EV/EBITDA -> rankad score."""
         df = _FactorTestHelper._make_base()
         scores = sc.calc_value_score(df)
         assert scores.between(0, 100).all()
         assert scores.isna().sum() == 0
 
     def test_value_score_fallback_no_fcf(self):
-        """När FCF saknas → fallback till P/E/PB/PS."""
+        """När FCF saknas -> fallback till P/E/PB/PS."""
         df = _FactorTestHelper._make_base().drop(columns=["free_cash_flow", "enterprise_value"])
         scores = sc.calc_value_score(df)
         assert scores.between(0, 100).all()
@@ -221,11 +221,11 @@ class TestValueScore:
         """Lägre multiplar borde generellt ge högre value-score."""
         df = _FactorTestHelper._make_base()
         scores = sc.calc_value_score(df)
-        # T0 har lägst P/E, högst FCF → bör ha högst value score (ascending=False på P/E)
+        # T0 har lägst P/E, högst FCF -> bör ha högst value score (ascending=False på P/E)
         assert scores.iloc[0] > scores.iloc[-1]
 
     def test_value_score_all_missing_fcf_and_ev(self):
-        """All data saknas → neutral score (50)."""
+        """All data saknas -> neutral score (50)."""
         df = pd.DataFrame({
             "pe_forward": [np.nan, np.nan],
             "pe_trailing": [np.nan, np.nan],
@@ -241,14 +241,14 @@ class TestFcfYieldScore:
     """Testar calc_fcf_yield_score."""
 
     def test_fcf_yield_basic(self):
-        """Högre FCF/EV → högre score."""
+        """Högre FCF/EV -> högre score."""
         df = _FactorTestHelper._make_base()
         scores = sc.calc_fcf_yield_score(df)
         assert scores.between(0, 100).all()
         assert scores.notna().all()
 
     def test_fcf_yield_fallback_ev_approximation(self):
-        """När enterprise_value saknas → approximera från MC+debt-cash."""
+        """När enterprise_value saknas -> approximera från MC+debt-cash."""
         df = _FactorTestHelper._make_base().drop(columns=["enterprise_value"])
         df["total_debt"] = [500] * len(df)
         df["total_cash"] = [200] * len(df)
@@ -256,7 +256,7 @@ class TestFcfYieldScore:
         assert scores.notna().all()
 
     def test_fcf_yield_no_fcf_returns_neutral(self):
-        """free_cash_flow saknas → neutral."""
+        """free_cash_flow saknas -> neutral."""
         df = pd.DataFrame({"ticker": ["A"]})
         scores = sc.calc_fcf_yield_score(df)
         assert (scores == 50.0).all()
@@ -266,14 +266,14 @@ class TestQualityScore:
     """Testar calc_quality_score."""
 
     def test_quality_score_basic(self):
-        """Högre ROE/marginaler → högre quality score."""
+        """Högre ROE/marginaler -> högre quality score."""
         df = _FactorTestHelper._make_base()
         scores = sc.calc_quality_score(df)
         assert scores.between(0, 100).all()
         assert scores.iloc[0] > scores.iloc[-1]
 
     def test_quality_score_no_columns(self):
-        """Inga quality-kolumner → neutral."""
+        """Inga quality-kolumner -> neutral."""
         df = pd.DataFrame({"ticker": ["A", "B"]})
         assert (sc.calc_quality_score(df) == 50.0).all()
 
@@ -282,14 +282,14 @@ class TestMomentumScore:
     """Testar calc_momentum_score."""
 
     def test_momentum_basic(self):
-        """Högre avkastning → högre momentum score."""
+        """Högre avkastning -> högre momentum score."""
         df = _FactorTestHelper._make_base()
         scores = sc.calc_momentum_score(df)
         assert scores.between(0, 100).all()
         assert scores.iloc[0] > scores.iloc[-1]
 
     def test_momentum_no_data(self):
-        """Inga return-kolumner → neutral."""
+        """Inga return-kolumner -> neutral."""
         df = pd.DataFrame({"ticker": ["A", "B"]})
         assert (sc.calc_momentum_score(df) == 50.0).all()
 
@@ -298,14 +298,14 @@ class TestGrowthScore:
     """Testar calc_growth_score."""
 
     def test_growth_basic(self):
-        """Högre tillväxt → högre growth score."""
+        """Högre tillväxt -> högre growth score."""
         df = _FactorTestHelper._make_base()
         scores = sc.calc_growth_score(df)
         assert scores.between(0, 100).all()
         assert scores.iloc[0] > scores.iloc[-1]
 
     def test_growth_no_columns(self):
-        """Inga growth-kolumner → neutral."""
+        """Inga growth-kolumner -> neutral."""
         df = pd.DataFrame({"ticker": ["A"]})
         assert (sc.calc_growth_score(df) == 50.0).all()
 
@@ -314,21 +314,21 @@ class TestRiskScore:
     """Testar calc_risk_score."""
 
     def test_risk_basic(self):
-        """Lägre skuldsättning/volatilitet → högre risk score."""
+        """Lägre skuldsättning/volatilitet -> högre risk score."""
         df = _FactorTestHelper._make_base()
         scores = sc.calc_risk_score(df)
         assert scores.between(0, 100).all()
         assert scores.iloc[0] > scores.iloc[-1]
 
     def test_risk_negative_debt_handled(self):
-        """Negativ D/E (net cash) → hanteras utan fel."""
+        """Negativ D/E (net cash) -> hanteras utan fel."""
         df = _FactorTestHelper._make_base().copy()
         df["debt_to_equity"] = [-0.5, -0.3, 0.0, 0.5, 1.0, 2.0]
         scores = sc.calc_risk_score(df)
         assert scores.between(0, 100).all()
 
     def test_risk_no_columns(self):
-        """Inga risk-kolumner → neutral."""
+        """Inga risk-kolumner -> neutral."""
         df = pd.DataFrame({"ticker": ["A", "B"]})
         assert (sc.calc_risk_score(df) == 50.0).all()
 
@@ -337,7 +337,7 @@ class TestSizeScore:
     """Testar calc_size_score."""
 
     def test_smaller_is_higher(self):
-        """Mindre market cap → högre size score."""
+        """Mindre market cap -> högre size score."""
         df = _FactorTestHelper._make_base()
         scores = sc.calc_size_score(df)
         assert scores.between(0, 100).all()
@@ -345,7 +345,7 @@ class TestSizeScore:
         assert scores.iloc[-1] > scores.iloc[0]
 
     def test_size_no_market_cap(self):
-        """Inget market_cap → neutral."""
+        """Inget market_cap -> neutral."""
         df = pd.DataFrame({"ticker": ["A"]})
         assert (sc.calc_size_score(df) == 50.0).all()
 
@@ -354,14 +354,14 @@ class TestDividendScore:
     """Testar calc_dividend_score."""
 
     def test_dividend_basic(self):
-        """Högre yield → högre dividend score."""
+        """Högre yield -> högre dividend score."""
         df = _FactorTestHelper._make_base()
         scores = sc.calc_dividend_score(df)
         assert scores.between(0, 100).all()
         assert scores.iloc[0] > scores.iloc[-1]
 
     def test_dividend_no_data(self):
-        """Ingen dividend_yield → neutral."""
+        """Ingen dividend_yield -> neutral."""
         df = pd.DataFrame({"ticker": ["A"]})
         assert (sc.calc_dividend_score(df) == 50.0).all()
 
@@ -370,20 +370,20 @@ class TestSentimentScore:
     """Testar calc_sentiment_score."""
 
     def test_sentiment_basic(self):
-        """Positivt sentiment → högre score."""
+        """Positivt sentiment -> högre score."""
         df = _FactorTestHelper._make_base()
         scores = sc.calc_sentiment_score(df)
         assert scores.between(0, 100).all()
         assert scores.iloc[0] > scores.iloc[-1]
 
     def test_sentiment_no_data(self):
-        """sentiment_raw saknas → neutral (men insider-boost kan fortfarande verka)."""
+        """sentiment_raw saknas -> neutral (men insider-boost kan fortfarande verka)."""
         df = pd.DataFrame({"ticker": ["A", "B"]})
         scores = sc.calc_sentiment_score(df)
         assert (scores == 50.0).all()
 
     def test_sentiment_insider_boost(self):
-        """Insider executive buy → boost på +20 (cappad vid 95)."""
+        """Insider executive buy -> boost på +20 (cappad vid 95)."""
         df = _FactorTestHelper._make_base().copy()
         df["insider_executive_buy"] = [True, True, False, False, False, False]
         scores = sc.calc_sentiment_score(df)
@@ -391,7 +391,7 @@ class TestSentimentScore:
         assert scores.iloc[0] > scores.iloc[2]
 
     def test_sentiment_insider_cluster_boost(self):
-        """Cluster-köp → boost på +30 (cappad vid 98)."""
+        """Cluster-köp -> boost på +30 (cappad vid 98)."""
         df = _FactorTestHelper._make_base().copy()
         df["insider_cluster"] = [True, True, False, False, False, False]
         df["insider_executive_buy"] = [False] * len(df)
@@ -403,21 +403,21 @@ class TestInsiderDecay:
     """Testar _insider_decay_weight."""
 
     def test_insider_decay_fresh_full_weight(self):
-        """Ny insider (0 dagar) → weight = 1.0."""
+        """Ny insider (0 dagar) -> weight = 1.0."""
         df = pd.DataFrame({
             "insider_recent_date": [pd.Timestamp.now().strftime("%Y-%m-%d")],
         })
         assert sc._insider_decay_weight(df).iloc[0] == 1.0
 
     def test_insider_decay_old_zero_weight(self):
-        """Gammal insider (≥180 dagar) → weight = 0.0."""
+        """Gammal insider (>=180 dagar) -> weight = 0.0."""
         df = pd.DataFrame({
             "insider_recent_date": [(pd.Timestamp.now() - pd.Timedelta(days=200)).strftime("%Y-%m-%d")],
         })
         assert sc._insider_decay_weight(df).iloc[0] == 0.0
 
     def test_insider_decay_no_date_fallback(self):
-        """Inget datum → weight = 1.0 (bakåtkompatibelt)."""
+        """Inget datum -> weight = 1.0 (bakåtkompatibelt)."""
         df = pd.DataFrame({"ticker": ["A"]})
         assert sc._insider_decay_weight(df).iloc[0] == 1.0
 
@@ -428,7 +428,7 @@ class TestInsiderDecay:
 
 
 class TestScoreUniverse:
-    """Testar score_universe — hela pipeline-flödet."""
+    """Testar score_universe -- hela pipeline-flödet."""
 
     def test_score_universe_returns_expected_columns(self):
         """score_universe lägger till alla score-kolumner."""
@@ -468,7 +468,7 @@ class TestScoreUniverse:
         assert (total <= factor_max).all()
 
     def test_score_universe_rank_is_monotonic(self):
-        """Högre score_total → lägre rank (1 = bäst)."""
+        """Högre score_total -> lägre rank (1 = bäst)."""
         df = _FactorTestHelper._make_base()
         result = sc.score_universe(df)
         # Ta bort rader med NaN score_total (extremfallen kan få NaN)
@@ -498,7 +498,7 @@ class TestScoreUniverse:
         assert result.loc[result["ticker"] == "SAP.DE", "exchange_group"].iloc[0] == "Europe"
 
     def test_score_universe_missing_columns(self):
-        """DataFrame med minimal data → scores 0-100 med neutrala fallbacks."""
+        """DataFrame med minimal data -> scores 0-100 med neutrala fallbacks."""
         df = pd.DataFrame({
             "ticker": ["AAPL", "MSFT", "GOOG", "NVDA", "META", "TSLA"],
             "ev_to_ebitda": [15, 20, 18, 25, 12, 30],
@@ -596,7 +596,7 @@ class TestSectorRelativeScoring:
         assert abs(sum(bank_w.values()) - 1.0) < 1e-6  # normaliserad
 
     def test_get_sector_weights_unknown_sector_unchanged(self):
-        """Okänd sektor → basvikterna oförändrade."""
+        """Okänd sektor -> basvikterna oförändrade."""
         from core import config
         base = config.FACTOR_WEIGHTS
         assert sc.get_sector_weights("Nonexistent Sector", base) == base
@@ -623,7 +623,7 @@ class TestSectorRelativeScoring:
         df = pd.DataFrame(rows)
         out = sc.score_universe_sector_neutralized(df, regime="OSÄKER")
         bank_risk = out[out.sector == "Financial Services"]["score_risk"].mean()
-        # Bankerna har låg volatilitet/beta och sektor-normal skuld → risk-score ej kollektivt låg
+        # Bankerna har låg volatilitet/beta och sektor-normal skuld -> risk-score ej kollektivt låg
         assert bank_risk > 40, f"Banker straffas fortfarande för hävstång (risk={bank_risk:.0f})"
         assert out["score_total"].between(0, 100).all()
 

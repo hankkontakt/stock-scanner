@@ -1,12 +1,12 @@
 """
-history.py – Trendspårning mellan körningar.
+history.py - Trendspårning mellan körningar.
 
 Sparar senaste körningens totalpoäng per ticker och jämför med
 aktuell körning för att visa trendindikatorer i rapporten.
 
   ▲  = poäng ökat >2p sedan förra körning
   ▼  = poäng minskat >2p sedan förra körning
-  →  = stabil eller ny ticker
+  ->  = stabil eller ny ticker
   •  = ny ticker (saknas i historik)
 """
 
@@ -58,7 +58,7 @@ def arrow(ticker: str, current_score: float, prev: dict[str, float]) -> str:
     Returnerar trendpil baserat på poängförändring sedan förra körning.
       ▲  ökat >2p
       ▼  minskat >2p
-      →  stabilt
+      ->  stabilt
       •  ny ticker
     """
     if ticker not in prev:
@@ -68,7 +68,7 @@ def arrow(ticker: str, current_score: float, prev: dict[str, float]) -> str:
         return "▲"
     if delta < -_TREND_THRESH:
         return "▼"
-    return "→"
+    return "->"
 
 
 def delta_str(ticker: str, current_score: float, prev: dict[str, float]) -> str:
