@@ -2,8 +2,8 @@ name: 🚨 MarketScan News Alerts (Real-time)
 
 on:
   schedule:
-    # Var 30:e minut, vardagar 09:00-22:00 CET
-    - cron: "*/30 8-21 * * 1-5"
+    # Var 30:e minut, vardagar 09:00-22:00 sommar / 08:00-21:00 vinter (07-20 UTC)
+    - cron: "*/30 7-20 * * 1-5"
 
   workflow_dispatch:
 

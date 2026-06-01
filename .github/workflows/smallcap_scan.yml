@@ -1,9 +1,10 @@
-name: 🏆 Småbolagsskanner (Måndag morgon)
+name: 🏆 Småbolagsskanner (Tisdag morgon, fristående)
 
 on:
   schedule:
-    # Kör varje måndag kl 07:00 CET (06:00 UTC)
-    - cron: "0 6 * * 1"
+    # Kör varje tisdag kl 08:30 sommar / 07:30 vinter (06:30 UTC)
+    # Dagliga pipelinen kör redan smallcap måndag 09:15 — denna är ett extra pass
+    - cron: "30 6 * * 2"
 
   workflow_dispatch:
     inputs:
