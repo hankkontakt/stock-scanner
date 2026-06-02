@@ -20,7 +20,7 @@ from web.ui.screener_utils import (
     render_export_buttons as _tech_export,
 )
 from core import ai_analysis
-from core.country_flags import flag_for_ticker
+from core.country_flags import ticker_display as _ticker_display
 
 from core.suffix_map import COUNTRY_SUFFIXES as _TECH_COUNTRY_SUFFIX_MAP
 _TECH_NON_US_SUFFIXES = set(_TECH_COUNTRY_SUFFIX_MAP.values())
@@ -144,7 +144,7 @@ Till skillnad från fundamental analys (som tittar på bolagets vinster och bala
             "volatility", "beta", "pct_from_52w_high",
         ] if c in out.columns]
         td = out[tech_show].copy()
-        td["ticker"] = td["ticker"].apply(lambda t: f"{flag_for_ticker(t)} {t}")
+        td["ticker"] = td["ticker"].apply(_ticker_display)
         td = td.rename(columns={
             "rank": "#", "ticker": "Ticker", "name": "Bolag", "sector": "Sektor",
             "current_price": "Pris", "rsi_14": "RSI",

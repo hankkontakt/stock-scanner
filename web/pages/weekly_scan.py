@@ -23,7 +23,7 @@ from web.ui.screener_utils import (
     render_export_buttons as _ws_export,
     filter_changed_rows as _ws_filter_changed,
 )
-from core.country_flags import flag_for_ticker
+from core.country_flags import ticker_display as _ticker_display
 
 
 def _apply_weekly_filters(df: pd.DataFrame, filters: dict,
@@ -147,10 +147,10 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
     if "Ticker" in display.columns:
         # Lägg till varningsikon för illikvida aktier direkt i ticker-kolumnen
         _illiq = display.pop("low_liquidity") if "low_liquidity" in display.columns else None
-        display["Ticker"] = display["Ticker"].apply(lambda t: f"{flag_for_ticker(t)} {t}")
+        display["Ticker"] = display["Ticker"].apply(_ticker_display)
         if _illiq is not None:
             display["Ticker"] = display.apply(
-                lambda r: r["Ticker"] + " 💧" if _illiq.get(r.name, False) else r["Ticker"],
+                lambda r: r["Ticker"] + " [låg liq.]" if _illiq.get(r.name, False) else r["Ticker"],
                 axis=1,
             )
     display = display.rename(columns={
@@ -169,10 +169,10 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         "data_stale_days":   "_stale",
     })
 
-    # Lägg till staleness-ikon i Ticker-kolumnen (⏱ = data mer än 7 dagar gammal)
+    # Lägg till staleness-markering i Ticker-kolumnen (= data ärvd från förra scan)
     if "_stale" in display.columns:
         display["Ticker"] = display.apply(
-            lambda r: r["Ticker"] + " ⏱" if (r.get("_stale") or 0) > 0 else r["Ticker"],
+            lambda r: r["Ticker"] + " *" if (r.get("_stale") or 0) > 0 else r["Ticker"],
             axis=1,
         )
         display.drop(columns=["_stale"], inplace=True)

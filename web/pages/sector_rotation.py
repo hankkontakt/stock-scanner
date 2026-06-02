@@ -90,9 +90,9 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
         kpi_row([
             ("Sektorer totalt", len(trends), None,
              "Antal bevakade sektorer med tillgänglig ETF-data för trendanalys."),
-            ("🚀 STARK UPPTREND", strong_up, None,
+            ("Stark upptrend", strong_up, None,
              "Antal sektorer i stark teknisk upptrend baserat på ETF-momentum och glidande medelvärden. Fler = bredare bullish marknad."),
-            ("💀 STARK NEDTREND", strong_down, None,
+            ("Stark nedtrend", strong_down, None,
              "Antal sektorer i stark nedtrend. Undvik att köpa aktier i sektorer med stark nedtrend -- de drar ofta ned hela portföljsektorn."),
             ("📊 Sektorrotation", f"{strong_up - strong_down:+d}", None,
              "Skillnad mellan sektorer i upptrend minus nedtrend. Positivt = fler sektorer stiger. Negativt = marknaden roterar nedåt. ±3 eller mer = tydlig signal."),
@@ -154,14 +154,14 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
                 mom1m = data.get("momentum_1m")
                 above50  = data.get("above_ma50")
                 above200 = data.get("above_ma200")
-                ma_txt = ("✅ MA50 ✅ MA200" if above50 and above200
-                          else "✅ MA50 ❌ MA200" if above50
-                          else "❌ MA50 ✅ MA200" if above200
-                          else "❌ MA50 ❌ MA200")
+                ma_txt = ("MA50 ✓  MA200 ✓" if above50 and above200
+                          else "MA50 ✓  MA200 ✗" if above50
+                          else "MA50 ✗  MA200 ✓" if above200
+                          else "MA50 ✗  MA200 ✗")
                 rows.append({
                     "Sektor": sec,
                     "ETF": etf,
-                    "Signal": f"{'🟢' if 'UPPTREND' in sig else '🔴' if 'NEDTREND' in sig else '⚪'} {sig}",
+                    "Signal": f"{'↑' if 'UPPTREND' in sig else '↓' if 'NEDTREND' in sig else '—'} {sig}",
                     "1m": f"{mom1m:+.1f}%" if mom1m else "--",
                     "3m": f"{mom3m:+.1f}%" if mom3m else "--",
                     "Pris": f"{price:.2f}" if price else "--",

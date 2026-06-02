@@ -37,7 +37,7 @@ def page_global_markets():
                                     "Region": region,
                                     "Index": d.get("name", k),
                                     "Senast": f"{d.get('close', 0):,.0f}" if d.get("close") else "--",
-                                    "Förändring": f"{'🟢' if chg >= 0 else '🔴'} {chg:+.2f}%",
+                                    "Förändring": f"{'▲' if chg >= 0 else '▼'} {chg:+.2f}%",
                                 })
                     if rows:
                         try:
@@ -119,28 +119,31 @@ def page_global_markets():
                 swedish = fetch_swedish_market_news(max_articles=8)
                 global_n = fetch_global_market_news(_fh_key, max_articles=6)
 
+                def _age_label(age_h):
+                    if age_h < 6:   return f"{age_h:.0f}h sedan"
+                    if age_h < 24:  return f"{age_h:.0f}h sedan"
+                    return f"{age_h/24:.0f}d sedan"
+
                 c_se, c_gl = st.columns(2)
                 with c_se:
-                    st.subheader("🇸🇪 Svenska nyheter")
+                    st.subheader("Svenska nyheter")
                     if swedish:
                         for a in swedish:
                             age = a.get("age_hours", 999)
-                            icon = "🔴" if age < 6 else "🟡" if age < 24 else "⚪"
                             url = a.get("url", "")
                             title = f"[{a['headline']}]({url})" if url else a["headline"]
-                            st.markdown(f"{icon} {title}  \n*{a.get('source','?')} * {a.get('datetime_str','--')}*")
+                            st.markdown(f"{title}  \n*{a.get('source','?')} · {a.get('datetime_str', _age_label(age))}*")
                             st.divider()
                     else:
                         st.info("Inga svenska nyheter just nu.")
                 with c_gl:
-                    st.subheader("🌍 Globala nyheter")
+                    st.subheader("Globala nyheter")
                     if global_n:
                         for a in global_n:
                             age = a.get("age_hours", 999)
-                            icon = "🔴" if age < 6 else "🟡" if age < 24 else "⚪"
                             url = a.get("url", "")
                             title = f"[{a['headline']}]({url})" if url else a["headline"]
-                            st.markdown(f"{icon} {title}  \n*{a.get('source','?')} * {a.get('datetime_str','--')}*")
+                            st.markdown(f"{title}  \n*{a.get('source','?')} · {a.get('datetime_str', _age_label(age))}*")
                             st.divider()
                     else:
                         if _fh_key:

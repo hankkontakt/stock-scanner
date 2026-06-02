@@ -12,7 +12,7 @@ import streamlit as st
 
 from web.utils import load_watchlist, load_portfolio, _get_provider, REPORT_DIR
 from core import ai_analysis
-from core.country_flags import flag_for_ticker
+from core.country_flags import ticker_display
 
 from web.ui.components import page_header, metric_card, kpi_grid, panel, data_table, empty_state
 from web.ui.ai_action import ai_run_control
@@ -93,7 +93,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                 if not buy.empty:
                     show = buy[[c for c in ["ticker", "name", score_c, "sector"] if c in buy.columns]].copy()
                     show[score_c] = show[score_c].round(1)
-                    show["ticker"] = show["ticker"].apply(lambda x: f"{flag_for_ticker(x)} {x}")
+                    show["ticker"] = show["ticker"].apply(ticker_display)
                     show = show.rename(columns={"ticker": "Ticker", "name": "Bolag",
                                                 score_c: "Score", "sector": "Sektor"})
                     data_table(show, height=min(215, max(80, len(show) * 40 + 38)))
@@ -116,7 +116,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                     score = sc.get("score_total", 0) or 0
                     entry = sc.get("entry_signal", "--")
                     if score and (score < 45 or entry == "EJ AKTUELL"):
-                        review.append({"Ticker": f"{flag_for_ticker(tk)} {tk}",
+                        review.append({"Ticker": ticker_display(tk),
                                        "Score": round(score), "Signal": entry})
                 n_h = len(hlds)
                 metric_card("Innehav", f"{n_h}", small=True,
@@ -151,7 +151,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                     sect = (df.groupby("sector")["score_total"].mean()
                             .sort_values(ascending=False).head(3))
                     st.caption("Starkaste sektorer (snittpoäng):")
-                    st.markdown(" * ".join(f"**{s}** {v:.0f}" for s, v in sect.items()))
+                    st.markdown(" · ".join(f"**{s}** {v:.0f}" for s, v in sect.items()))
             else:
                 empty_state("Ingen signaldata.", icon="info")
             _goto("🏭 Sektorrotation")
@@ -166,7 +166,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                     cal = upcoming_in_top(df, top_n=50, days_ahead=14)
                     if cal is not None and not cal.empty:
                         c = cal[["earnings_date", "days_until", "ticker"]].head(6).copy()
-                        c["ticker"] = c["ticker"].apply(lambda x: f"{flag_for_ticker(x)} {x}")
+                        c["ticker"] = c["ticker"].apply(ticker_display)
                         c = c.rename(columns={"earnings_date": "Datum", "days_until": "Dagar", "ticker": "Ticker"})
                         data_table(c, height=215)
                     else:
@@ -176,6 +176,67 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
             else:
                 empty_state("Ladda scandata.", icon="info")
             _goto("🚨 Larm & Notiser")
+
+    # ── Rad 4: Universe-täckning  *  På väg upp ───────────────────────────────
+    st.write("")
+    col_e, col_f = st.columns(2)
+
+    with col_e:
+        with st.container(border=True):
+            st.markdown("### Universe-täckning")
+            try:
+                from web.utils import REPORT_DIR as _RD
+                from core import config as _cfg
+                _pq = sorted(Path(_RD).glob("scored_universe_*.parquet"), reverse=True)
+                if _pq:
+                    import pandas as _pd2
+                    _s = _pd2.read_parquet(_pq[0], columns=["ticker"]) if _pq else _pd2.DataFrame()
+                    _universe_n = len(set(t.upper() for t in _cfg.UNIVERSE))
+                    _scored_n   = len(_s)
+                    _cov_pct    = _scored_n / _universe_n * 100 if _universe_n else 0
+                    st.progress(min(1.0, _cov_pct / 100),
+                                text=f"**{_cov_pct:.0f}%** täckning — {_scored_n} av {_universe_n} aktier scannade")
+                    if _cov_pct < 60:
+                        st.caption("Låg täckning: Yahoo rate-limiting. Staleness-merge kompenserar automatiskt.")
+                    elif _cov_pct < 80:
+                        st.caption("Måttlig täckning. Staleness-merge fyller på saknade aktier.")
+                else:
+                    st.caption("Ingen parquet-fil hittad. Kör en weekly scan.")
+            except Exception:
+                st.caption("Täckningsdata ej tillgänglig.")
+
+    with col_f:
+        with st.container(border=True):
+            st.markdown("### På väg upp")
+            st.caption("Aktier nära köptröskel med positiv score-trend.")
+            if has_df and "score_delta_4w" in df.columns:
+                _rising = (df[(df["score_total"].between(48, 64)) &
+                              (df["score_delta_4w"].fillna(0) >= 5)]
+                           .sort_values("score_delta_4w", ascending=False)
+                           .head(5))
+                if not _rising.empty:
+                    _r = _rising[["ticker", "score_total", "score_delta_4w"]].copy()
+                    _r["score_total"]   = _r["score_total"].round(1)
+                    _r["score_delta_4w"] = _r["score_delta_4w"].apply(lambda x: f"+{x:.0f}")
+                    _r["ticker"] = _r["ticker"].apply(ticker_display)
+                    _r = _r.rename(columns={"ticker": "Ticker", "score_total": "Score", "score_delta_4w": "Förändring"})
+                    data_table(_r, height=min(215, max(80, len(_r) * 40 + 38)))
+                else:
+                    empty_state("Inga aktier nära köptröskel med uppåttrend just nu.", icon="info")
+            elif has_df:
+                _near = (df[df["score_total"].between(50, 64)]
+                         .sort_values("score_total", ascending=False).head(5))
+                if not _near.empty:
+                    _r2 = _near[["ticker", "score_total"]].copy()
+                    _r2["score_total"] = _r2["score_total"].round(1)
+                    _r2["ticker"] = _r2["ticker"].apply(ticker_display)
+                    _r2 = _r2.rename(columns={"ticker": "Ticker", "score_total": "Score"})
+                    data_table(_r2, height=min(215, max(80, len(_r2) * 40 + 38)))
+                else:
+                    empty_state("Ingen data.", icon="info")
+            else:
+                empty_state("Ingen scandata.", icon="info")
+            _goto("🔍 Veckoscanner")
 
     # ── AI-sammanfattning (infälld, djup väljs vid körning) ──────────────────
     st.write("")
