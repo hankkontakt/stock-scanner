@@ -513,7 +513,30 @@ def get_universe(market: str = "all") -> list:
     else:
         extra = [c["ticker"] for c in custom if c.get("segment") == market]
 
-    return list(dict.fromkeys(base + extra))
+    tickers = list(dict.fromkeys(base + extra))
+
+    # Filtrera bort blacklistade tickers (delistade/ogiltiga) så de inte
+    # misslyckas i varje småbolagsscan. Samma blacklist som huvudscannern.
+    blacklisted = _load_blacklist()
+    if blacklisted:
+        tickers = [t for t in tickers if t.upper() not in blacklisted]
+
+    return tickers
+
+
+def _load_blacklist() -> set:
+    """Laddar data/blacklist.json som ett set av uppercase-tickers. Tom vid fel."""
+    import json
+    from pathlib import Path
+    try:
+        bl_path = Path(__file__).resolve().parent.parent / "data" / "blacklist.json"
+        if bl_path.exists():
+            data = json.loads(bl_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return {k.upper() for k in data.keys()}
+    except Exception:
+        pass
+    return set()
 
 
 # ── Bransch-kategorier (uppdaterad med 30 nya bolag maj 2026) ─────────────────
