@@ -199,6 +199,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-02",
+      "ticker": "TEAM",
+      "name": "Atlassian Corporation",
+      "entry_price": 115.94999694824219,
+      "predicted_return": 0.3452732264995575,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-02",
+      "ticker": "ASAN",
+      "name": "Asana, Inc.",
+      "entry_price": 9.069999694824219,
+      "predicted_return": 0.32136139273643494,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-02",
+      "ticker": "RIOT",
+      "name": "Riot Platforms, Inc.",
+      "entry_price": 28.25,
+      "predicted_return": 0.3064832389354706,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-02",
+      "ticker": "MIGI",
+      "name": "Big Digital Energy Inc",
+      "entry_price": 7.304999828338623,
+      "predicted_return": 0.28266939520835876,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-02",
+      "ticker": "RGTI",
+      "name": "Rigetti Computing, Inc.",
+      "entry_price": 25.6299991607666,
+      "predicted_return": 0.27133190631866455,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-02",
+      "ticker": "ARBK",
+      "name": "Argo Blockchain plc",
+      "entry_price": 3.740000009536743,
+      "predicted_return": 0.26704075932502747,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-02",
+      "ticker": "012330.KS",
+      "name": "Hyundai Mobis Co.,Ltd",
+      "entry_price": 759000.0,
+      "predicted_return": 0.25286367535591125,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-02",
+      "ticker": "BITF",
+      "name": "Bitfarms Ltd",
+      "entry_price": 6.099999904632568,
+      "predicted_return": 0.24690783023834229,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-02",
+      "ticker": "FLNC",
+      "name": "Fluence Energy, Inc.",
+      "entry_price": 27.149999618530273,
+      "predicted_return": 0.22813859581947327,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-02",
+      "ticker": "2454.TW",
+      "name": "MediaTek Inc.",
+      "entry_price": 4525.0,
+      "predicted_return": 0.22085976600646973,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -211,6 +311,11 @@
       "date": "2026-06-01",
       "equity": 100000.0,
       "n_open": 20
+    },
+    {
+      "date": "2026-06-02",
+      "equity": 100000.0,
+      "n_open": 30
     }
   ]
 }

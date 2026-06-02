@@ -52,5 +52,23 @@
       "TAGM-B.ST",
       "DEDI.ST"
     ]
+  },
+  "2026-06-02": {
+    "capital": 100000,
+    "universe": "universe",
+    "n_picks": 10,
+    "benchmark_buy": 758.5399780273438,
+    "tickers": [
+      "NVDA",
+      "CRDO",
+      "AVGO",
+      "B3SA3.SA",
+      "WDC",
+      "STX",
+      "KO",
+      "LRCX",
+      "MNST",
+      "EXEL"
+    ]
   }
 }
