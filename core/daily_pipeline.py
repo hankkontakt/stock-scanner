@@ -1082,6 +1082,18 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             pipeline_success = True
             return
 
+        if mode == "retry_rate_limited":
+            result = run_retry_rate_limited(
+                max_passes=int(os.environ.get("RETRY_MAX_PASSES", "5")),
+                pass_delay_s=int(os.environ.get("RETRY_PASS_DELAY_S", "120")),
+            )
+            logger.info(
+                f"  ♻️ Retry klar: {result['n_succeeded']} lyckades, "
+                f"{result['n_still_pending']} kvar, {result['n_skipped']} delistade"
+            )
+            pipeline_success = True
+            return
+
         if mode == "portfolio_refresh":
             run_portfolio_refresh()
             pipeline_success = True
@@ -2161,6 +2173,225 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             save_health_snapshot()
         except Exception:
             pass
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RETRY RATE-LIMITED TICKERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+_RETRY_PENDING_PATH = DATA_DIR / "retry_pending.json"
+
+
+def _read_pending_tickers() -> tuple[list[str], int]:
+    """
+    Läs vilka tickers som väntar på retry.
+    Prio 1: retry_pending.json (state från föregående körning).
+    Prio 2: fetch_errors.json (senaste scans rate_limited_tickers).
+    Returnerar (tickers, pass_count).
+    """
+    # Prio 1: retry_pending.json
+    if _RETRY_PENDING_PATH.exists():
+        try:
+            data = json.loads(_RETRY_PENDING_PATH.read_text(encoding="utf-8"))
+            tickers = data.get("tickers", [])
+            pass_count = data.get("pass_count", 0)
+            created = data.get("created", "")
+            # Ignorera om filen är äldre än 7 dagar (kan vara från gammal veckoscan)
+            if created:
+                from datetime import datetime as _dt2
+                age_days = (datetime.now() - _dt2.fromisoformat(created)).days
+                if age_days > 7:
+                    logger.info(f"  retry_pending.json är {age_days} dagar gammal — ignoreras")
+                    _RETRY_PENDING_PATH.unlink(missing_ok=True)
+                    tickers = []
+            if tickers:
+                logger.info(f"  📋 retry_pending.json: {len(tickers)} tickers (pass {pass_count})")
+                return tickers, pass_count
+        except Exception as e:
+            logger.warning(f"  ⚠ retry_pending.json kunde inte läsas: {e}")
+
+    # Prio 2: fetch_errors.json senaste entry
+    errors_path = DATA_DIR / "fetch_errors.json"
+    if errors_path.exists():
+        try:
+            history = json.loads(errors_path.read_text(encoding="utf-8"))
+            if history:
+                latest = history[-1]
+                tickers = latest.get("rate_limited_tickers", [])
+                if tickers:
+                    logger.info(
+                        f"  📋 fetch_errors.json: {len(tickers)} rate-limitade tickers "
+                        f"från senaste scan ({latest.get('timestamp', '?')[:10]})"
+                    )
+                    return tickers, 0
+        except Exception as e:
+            logger.warning(f"  ⚠ fetch_errors.json kunde inte läsas: {e}")
+
+    return [], 0
+
+
+def _save_pending_tickers(tickers: list[str], pass_count: int, source_mode: str = "weekly") -> None:
+    """Spara återstående tickers till retry_pending.json. Raderar filen om listan är tom."""
+    if not tickers:
+        _RETRY_PENDING_PATH.unlink(missing_ok=True)
+        logger.info("  ✅ retry_pending.json raderad — inga kvarvarande tickers")
+        return
+    data = {
+        "created": datetime.now().isoformat(timespec="seconds"),
+        "source_mode": source_mode,
+        "pass_count": pass_count,
+        "n_tickers": len(tickers),
+        "tickers": sorted(tickers),
+    }
+    _RETRY_PENDING_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    logger.info(f"  💾 retry_pending.json: {len(tickers)} tickers kvar (pass {pass_count})")
+
+
+def _latest_rate_limited_in_batch(pending_set: set[str]) -> list[str]:
+    """
+    Läs rate_limited_tickers från senaste entry i fetch_errors.json
+    och filtrera till de som fanns i vår pending-mängd.
+    """
+    errors_path = DATA_DIR / "fetch_errors.json"
+    if not errors_path.exists():
+        return []
+    try:
+        history = json.loads(errors_path.read_text(encoding="utf-8"))
+        if history:
+            latest_rl = history[-1].get("rate_limited_tickers", [])
+            return [t for t in latest_rl if t.upper() in pending_set]
+    except Exception:
+        pass
+    return []
+
+
+def _load_blacklist_set() -> set[str]:
+    bl_path = DATA_DIR / "blacklist.json"
+    try:
+        return set(json.loads(bl_path.read_text(encoding="utf-8")).keys()) if bl_path.exists() else set()
+    except Exception:
+        return set()
+
+
+def run_retry_rate_limited(max_passes: int = 5, pass_delay_s: int = 120) -> dict:
+    """
+    Iterativ retry för rate-limitade tickers från senaste weekly/smallcap scan.
+
+    Varje yttre pass anropar run_targeted() (som internt kör pass1 + pass2 retry).
+    Tickers som fortfarande är rate-limitade efter pass2 sparas och retryars i
+    nästa yttre pass, med ökande fördröjning (120s, 240s, 360s...).
+
+    Avbrottskriterier:
+    - Alla tickers lyckades (tom pending-lista).
+    - En ticker blacklistas (genuint delistad/404) → hoppas över automatiskt.
+    - max_passes yttre pass körda utan att listan töms → sparar kvarvarande i
+      retry_pending.json och avslutar (nästa schemalagda körning plockar upp dem).
+
+    Args:
+        max_passes:    Max antal yttre pass i EN körning (varje pass = pass1+pass2 internt).
+        pass_delay_s:  Bas-fördröjning (s) mellan yttre pass; multipliceras med pass-numret.
+
+    Returns:
+        dict: passes_run, n_succeeded, n_still_pending, n_skipped
+    """
+    logger.info("\n" + "=" * 60)
+    logger.info("♻️  Retry rate-limitade tickers — iterativt till alla klarar sig")
+    logger.info("=" * 60)
+
+    pending, pass_count = _read_pending_tickers()
+
+    if not pending:
+        logger.info("  ✅ Inga rate-limitade tickers att retry:a — avslutar")
+        return {"passes_run": 0, "n_succeeded": 0, "n_still_pending": 0, "n_skipped": 0}
+
+    # Filtrera bort redan blacklistade (genuint delistade sedan senaste scan)
+    blacklist = _load_blacklist_set()
+    initial = len(pending)
+    pending = [t for t in pending if t.upper() not in blacklist]
+    n_skipped = initial - len(pending)
+    if n_skipped:
+        logger.info(f"  🚫 {n_skipped} tickers redan i blacklist — hoppas över")
+
+    if not pending:
+        logger.info("  ✅ Inga tickers kvar efter blacklist-filter")
+        _save_pending_tickers([], pass_count)
+        return {"passes_run": 0, "n_succeeded": 0, "n_still_pending": 0, "n_skipped": n_skipped}
+
+    logger.info(f"  📋 {len(pending)} tickers att försöka hämta (max {max_passes} pass)")
+
+    total_succeeded = 0
+    passes_run = 0
+
+    for pass_num in range(1, max_passes + 1):
+        if not pending:
+            break
+
+        passes_run = pass_num
+        pending_set = set(t.upper() for t in pending)
+
+        # Exponentiell fördröjning mellan yttre pass (hoppa över delay på pass 1)
+        if pass_num > 1:
+            delay = pass_delay_s * pass_num   # 240s, 360s, 480s...
+            logger.info(f"\n  ⏳ Pass {pass_num}: väntar {delay}s (Yahoo-begränsningar varierar över tid)...")
+            time.sleep(delay)
+
+        logger.info(f"\n  🔄 Yttre pass {pass_num}/{max_passes}: {len(pending)} tickers")
+
+        # Notera blacklist INNAN hämtning → identifiera nydelistade i detta pass
+        bl_before = _load_blacklist_set()
+
+        # Kör targeted fetch + re-score + merge (pass1 + pass2 sker inuti run_targeted)
+        try:
+            n_ok = run_targeted(pending)
+        except Exception as e:
+            logger.warning(f"  ⚠ run_targeted kastade undantag i pass {pass_num}: {e}")
+            n_ok = 0
+
+        # Vilka är fortfarande rate-limitade efter internt pass1+pass2?
+        still_rate_limited = _latest_rate_limited_in_batch(pending_set)
+
+        # Nydelistade = auto-blacklistade under detta pass
+        bl_after = _load_blacklist_set()
+        new_blacklisted = (bl_after - bl_before) & pending_set
+        n_skipped += len(new_blacklisted)
+
+        # Lyckade = alla pending minus kvarvarande rate-limited minus nydelistade
+        succeeded_this_pass = len(pending) - len(still_rate_limited) - len(new_blacklisted)
+        total_succeeded += max(0, succeeded_this_pass)
+
+        if new_blacklisted:
+            logger.info(
+                f"  🚫 {len(new_blacklisted)} nydelistade (auto-blacklistade): "
+                f"{', '.join(sorted(new_blacklisted)[:8])}"
+            )
+        if still_rate_limited:
+            sample = ', '.join(still_rate_limited[:8])
+            tail = '...' if len(still_rate_limited) > 8 else ''
+            logger.info(f"  ⚠ {len(still_rate_limited)} fortfarande rate-limitade: {sample}{tail}")
+
+        logger.info(
+            f"  ✅ Pass {pass_num} klart: {succeeded_this_pass} lyckades, "
+            f"{len(still_rate_limited)} kvar, {len(new_blacklisted)} delistade"
+        )
+
+        # Nästa iteration arbetar bara på de som fortfarande är rate-limitade
+        pending = still_rate_limited
+
+        # Spara kvarstående state (raderas automatiskt om pending är tom)
+        _save_pending_tickers(pending, pass_count + pass_num)
+
+    # Sammanfattning
+    logger.info(
+        f"\n  📊 Retry klar: {total_succeeded} lyckades, "
+        f"{len(pending)} kvar för nästa körning, {n_skipped} delistade, "
+        f"{passes_run}/{max_passes} pass körda"
+    )
+    return {
+        "passes_run":      passes_run,
+        "n_succeeded":     total_succeeded,
+        "n_still_pending": len(pending),
+        "n_skipped":       n_skipped,
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
