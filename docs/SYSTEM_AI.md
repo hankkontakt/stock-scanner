@@ -1110,6 +1110,27 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-02 — Admin-dashboardens "Senaste scan" frusen sedan 2026-05-15 (scan_log.json övergiven)
+
+**Symptom:** Admin → Översikt visade "Senaste scan: morning OK" trots att weekly-scans körts
+(och kraschat) i veckor. `data/scan_log.json` hade bara 6 entries, alla `morning`, senaste
+2026-05-15.
+
+**Rotorsak:** `run_pipeline()` (core/daily_pipeline.py) refaktorerades till `PipelineLogger`
+(skriver till `logs/`) men slutade anropa `log_event()`/`scan_logger()` som skriver till
+`data/scan_log.json`. Ingen scan-typ uppdaterade filen längre → dashboarden läste en
+övergiven fil. Weekly-krascher syntes aldrig (varken som ny scan eller som ERROR).
+
+**Fix:** `run_pipeline()` `finally`-block anropar nu `log_event(mode, "OK"/"ERROR", ...)` för
+VARJE körning (morning/evening/weekly/smallcap/targeted/refresh_missing/portfolio_refresh),
+med elapsed_seconds + felmeddelande vid krasch. `daily_scan.yml` committar redan `git add -A`,
+så scan_log.json synkas nu tillbaka till GitHub och Streamlit Cloud-dashboarden visar verklig
+status inkl. ERROR-rader.
+
+**Ej buggar (verifierat):** "Prenumeranter 0" = `email_subscribers.json` är genuint tom
+(`{"subscribers": []}`). "Bevakningar 0" lokalt = `watchlist.json` saknas lokalt (skapas på
+GitHub-runnern från `WATCHLIST_JSON`-secret, rad 83 i daily_scan.yml). Båda korrekta.
+
 ### 2026-06-02 — Universe-städning: delistade/felaktiga tickers korrigerade & blacklistade
 
 Efter audit-loggens 21 fetch-fel verifierades varje ticker mot yfinance + produktionens
