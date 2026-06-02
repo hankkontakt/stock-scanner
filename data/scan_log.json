@@ -110,5 +110,14 @@
       "scan_type": "weekly",
       "elapsed_seconds": 1299.8
     }
+  },
+  {
+    "timestamp": "2026-06-02T11:50:32",
+    "scan_type": "morning",
+    "status": "OK",
+    "details": {
+      "scan_type": "morning",
+      "elapsed_seconds": 536.1
+    }
   }
 ]
