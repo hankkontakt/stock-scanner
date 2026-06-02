@@ -71,7 +71,7 @@ def _apply_sc_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
 
 
 def page_smallcap(sc_df: pd.DataFrame, filters: dict):
-    st.title("🏦 Småbolag - svenska small/micro cap")
+    st.title("🏦 Småbolag")
 
     if sc_df.empty:
         st.warning("Småbolagsdata håller på att laddas in. Systemet uppdateras automatiskt varje måndag -- kom tillbaka då för de senaste analyserna.")
@@ -201,6 +201,10 @@ Systemet delar in bolagen i 1-5 stjärnor baserat på totalpoängen:
             for c in ["Dag%", "Vecka%", "6m%", "12m%"]:
                 if c in rank_disp.columns:
                     rank_disp[c] = rank_disp[c].apply(lambda v: pct_fmt(v))
+            # Dölj AI-kolumner om >80% NaN (ML-modell ej tränad)
+            for ai_col in ["AI 30d-ret", "AI rank"]:
+                if ai_col in rank_disp.columns and rank_disp[ai_col].isna().mean() > 0.8:
+                    rank_disp = rank_disp.drop(columns=[ai_col])
             if "AI 30d-ret" in rank_disp.columns and not rank_disp["AI 30d-ret"].isna().all():
                 rank_disp["AI 30d-ret"] = rank_disp["AI 30d-ret"] * 100
             col_cfg = {}
@@ -217,8 +221,9 @@ Systemet delar in bolagen i 1-5 stjärnor baserat på totalpoängen:
                     "AI 30d-ret", format="%.1f%%",
                     help="ML-modellens prediktion av avkastning kommande 30 dagar"
                 )
+            _sc_height = min(600, max(150, len(rank_disp) * 36 + 38))
             sc_event = st.dataframe(rank_disp, use_container_width=True, hide_index=True,
-                                    column_config=col_cfg, height=600,
+                                    column_config=col_cfg, height=_sc_height,
                                     on_select="rerun", selection_mode="single-row",
                                     key="sc_ranking_table")
 

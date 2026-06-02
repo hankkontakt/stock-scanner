@@ -226,13 +226,14 @@ men garanterar ingenting om framtiden.
 
         with tab3:
             pd_data = pd.DataFrame(result.get("period_details", []))
-            st.download_button(
-                "📥 Ladda ner CSV",
-                data=pd_data.to_csv(index=False) if not pd_data.empty else "",
-                file_name=f"backtest_{datetime.now():%Y-%m-%d}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
+            if not pd_data.empty:
+                st.download_button(
+                    "📥 Ladda ner CSV",
+                    data=pd_data.to_csv(index=False),
+                    file_name=f"backtest_{datetime.now():%Y-%m-%d}.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
             st.markdown("---")
             st.subheader("🤖 AI-analys av backtestresultaten")
 
@@ -390,6 +391,9 @@ men garanterar ingenting om framtiden.
                     value=float(round(_FW.get(k, 0.0), 3)), step=0.01,
                     key=f"ab_w_{k}",
                 )
+        _w_sum = sum(weights_b.values())
+        _w_color = "green" if abs(_w_sum - 1.0) < 0.01 else "red"
+        st.caption(f"Summa vikter B: :{_w_color}[{_w_sum:.3f}] (bör vara 1.0)")
         if st.button("⚖️ Kör A/B-test", key="btn_ab_test", type="primary"):
             from backtesting.backtest_snapshots import ab_test_weights
             with st.spinner("Backtestar båda viktseten..."):

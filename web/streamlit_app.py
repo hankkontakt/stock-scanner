@@ -261,8 +261,8 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
 
         # ── Searchable navigation filter ──────────────────────────────────────
         _nav_search = st.text_input(
-            "\U0001f50d Filter pages...",
-            placeholder="Type to filter...",
+            "\U0001f50d Filtrera sidor",
+            placeholder="Filtrera sidor…",
             key="nav_filter",
             label_visibility="collapsed",
         )
@@ -301,10 +301,10 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
         _current_page = st.session_state.get("nav_page", "\U0001f4ca Översikt")
         _is_pinned = _current_page in _pinned
         if st.button(
-            f"{'⭐' if _is_pinned else '☆'} {'Unpin' if _is_pinned else 'Pin'} current page",
+            f"{'⭐' if _is_pinned else '☆'} {'Avfäst sida' if _is_pinned else 'Fäst sida'}",
             key="nav_toggle_pin",
             use_container_width=True,
-            help="Pin this page to your favorites at the top of the sidebar.",
+            help="Fäst/avfäst sidan i favoriter högst upp i sidebaren.",
         ):
             if _is_pinned:
                 _pinned.remove(_current_page)
@@ -324,7 +324,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                 ("🔭 Universe Explorer","Universe Explorer", "explore"),
             ]),
             ("AKTIE", True, [
-                ("📈 Teknisk analys",   "Teknisk analys",    "technical"),
+                ("📉 Teknisk analys",   "Teknisk analys",    "technical"),
                 ("🔀 Stock Comparison","Stock Comparison",  "stock"),
                 ("📊 Options & Derivator", "Options & Derivator", "chart"),
                 ("⭐ Bevakningar",      "Bevakningar",       "watch"),
@@ -338,7 +338,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             ("SIMULERING", False, [
                 ("📄 Paper Trading",    "Paper Trading",     "paper"),
                 ("🤖 AI Paper Trading", "AI Paper Trading",  "simulation"),
-                ("📈 Backtesting",      "Backtesting",       "backtest"),
+                ("🧪 Backtesting",      "Backtesting",       "backtest"),
                 ("🔧 Strategy Builder", "Strategy Builder",   "strategy"),
             ]),
             ("AI & LARM", False, [
@@ -539,7 +539,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             _mt = datetime.fromtimestamp(_latest_scan_file.stat().st_mtime)
             _tz = datetime.now().astimezone().tzinfo
             _time_str = _mt.astimezone(_tz).strftime("%Y-%m-%d %H:%M")
-        st.caption(f"🟢 {len(scan_dates) if scan_dates else 0} datum * Senast: {max(scan_dates) if scan_dates else '--'} [{_time_str}]")
+        st.caption(f"🟢 {len(scan_dates) if scan_dates else 0} datum · Senast: {max(scan_dates) if scan_dates else '--'} [{_time_str}]")
 
         # Data-färskhetsvarning: visa orange/röd banner om data är gammal
         if _latest_scan_file:
