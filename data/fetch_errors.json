@@ -253,5 +253,137 @@
       }
     ],
     "delisted_tickers": []
+  },
+  {
+    "timestamp": "2026-06-02T21:13:49Z",
+    "total": 1211,
+    "n_ok": 1197,
+    "n_failed": 14,
+    "n_delisted": 0,
+    "n_rate_limited": 52,
+    "rate_limited_tickers": [
+      "STAN.L",
+      "GLEN.L",
+      "TTE.PA",
+      "KER.PA",
+      "DIM.PA",
+      "PRU.L",
+      "B3SA3.SA",
+      "HSBA.L",
+      "NNN",
+      "MC.PA",
+      "COLD",
+      "MNG.L",
+      "GGBR4.SA",
+      "EGIE3.SA",
+      "CFR.SW",
+      "RACE.MI",
+      "AAL.L",
+      "PETR4.SA",
+      "BBAS3.SA",
+      "III.L",
+      "JMAT.L",
+      "HICL.L",
+      "RIO.L",
+      "MONC.MI",
+      "ENGI.PA",
+      "WEGE3.SA",
+      "VIE.PA",
+      "ENI.MI",
+      "CSNA3.SA",
+      "RMS.PA",
+      "PHIA.AS",
+      "LLOY.L",
+      "AD.AS",
+      "LREN3.SA",
+      "ITSA4.SA",
+      "RENT3.SA",
+      "HEIA.AS",
+      "GIVN.SW",
+      "NWG.L",
+      "RNO.PA",
+      "LGEN.L",
+      "OR.PA",
+      "LSEG.L",
+      "STLAP.PA",
+      "BARC.L",
+      "AV.L",
+      "NESN.SW",
+      "SUZB3.SA",
+      "CMIG4.SA"
+    ],
+    "failed_tickers": [
+      {
+        "ticker": "EXAS",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "X",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "ALTM",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "RWI.L",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "6406.T",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "0011.HK",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "TATAMOTORS.NS",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "AZUL4.SA",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "EMBR3.SA",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "CENY.BR",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "CRAYN.OL",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "PHNX.L",
+        "status": "FAILED",
+        "pass": 2
+      },
+      {
+        "ticker": "BRFS3.SA",
+        "status": "FAILED",
+        "pass": 2
+      },
+      {
+        "ticker": "JBSS3.SA",
+        "status": "FAILED",
+        "pass": 2
+      }
+    ],
+    "delisted_tickers": []
   }
 ]
