@@ -1110,6 +1110,28 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-02 — Veckoscanner-sidan kraschade: StreamlitDuplicateElementKey 'ws_csv'
+
+**Symptom:** "Sidan Veckoscanner kunde inte laddas: There are multiple elements with the
+same key='ws_csv'."
+
+**Rotorsak:** `_main_ranking_table()` (web/pages/weekly_scan.py) anropas FLERA gånger per
+render i tab1 (full + paginerad, eller side-by-side klassisk+ML). `st.dataframe` använde rätt
+unik `table_key`, men `st.download_button` inuti funktionen hade hårdkodad `key="ws_csv"` →
+kollision vid andra anropet (rad 191). Dessutom använde rad 379/387/395 alla samma
+default-`table_key="main_ranking_table"` → latent dataframe-key-kollision i vissa
+branch-kombinationer (page_size=0).
+
+**Fix:**
+- `st.download_button` key härleds nu från table_key: `f"ws_csv_{table_key}"` (rad 196).
+- Rad 395 fick unik `table_key="main_ranking_table_full"`. Alla branch-kombinationer ger nu
+  unika nycklar (main_ranking_table / _ml / _paged / _full).
+
+**Öppen observation (ej åtgärdad — ändrar UX):** tab1 renderar ranking-tabellen TVÅ gånger per
+laddning — först block 375-387 (full/side-by-side), sedan block 389-395 (paginerad). Användaren
+ser alltså två rankingtabeller. Troligen refaktor-artefakt där pagineringen lades till utan att
+ta bort den ursprungliga full-renderingen. Bör röjas men kräver UX-beslut.
+
 ### 2026-06-02 — Admin-dashboardens "Senaste scan" frusen sedan 2026-05-15 (scan_log.json övergiven)
 
 **Symptom:** Admin → Översikt visade "Senaste scan: morning OK" trots att weekly-scans körts

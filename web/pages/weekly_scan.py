@@ -193,7 +193,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         data=csv_data,
         file_name=f"scanner_export_{datetime.now().strftime('%Y-%m-%d')}.csv",
         mime="text/csv",
-        key="ws_csv",
+        key=f"ws_csv_{table_key}",
     )
 
     if event and event.selection and event.selection.rows:
@@ -392,7 +392,7 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
         if _ws_page_size > 0:
             _main_ranking_table(_ws_paged, holdings, watchlist, table_key="main_ranking_table_paged")
         else:
-            _main_ranking_table(filt_df, holdings, watchlist)
+            _main_ranking_table(filt_df, holdings, watchlist, table_key="main_ranking_table_full")
 
         _ws_export(filt_df, filename_prefix="scanner_results", key="ws_rank_export")
         c1, c2 = st.columns(2)
