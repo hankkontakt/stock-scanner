@@ -1110,6 +1110,56 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-02 — Feat: Iterativ retry av rate-limitade tickers (Pass-3+)
+
+**Commit 5fbee15 — `core/daily_pipeline.py`, `.github/workflows/daily_scan.yml`**
+
+**Bakgrund:** Yahoo Finance rate-limiterar kroniskt samma ~60% av tickers varje veckoscan.
+Staleness-merge (14-dagars cap) löser täckningen kortsiktigt men inte grundproblemet.
+Denna fix lägger till en dedikerad retry-körning som körs automatiskt 4 timmar efter varje
+veckoscan/småbolagsscan och itererar tills alla tickers antingen lyckas eller bekräftas sakna data.
+
+**`run_retry_rate_limited(max_passes=5, pass_delay_s=120)` (`core/daily_pipeline.py` ~rad 2166):**
+- Läser pending-tickers från `data/retry_pending.json` (persistent state) ELLER
+  `data/fetch_errors.json["rate_limited_tickers"]` (senaste scans misslyckanden).
+- Filtrerar bort blacklistade tickers (genuint delistade — auto-blacklistas av `fetch_universe_data`).
+- Yttre loop (max `max_passes` gånger):
+  1. Anropar `run_targeted(pending)` — innehåller pass1 (8 workers) + pass2 (1 worker, 45s delay) internt.
+  2. Läser `fetch_errors.json` senaste entry för att identifiera fortfarande rate-limitade.
+  3. Nydelistade (auto-blacklistade i detta pass) exkluderas permanent.
+  4. Kvarvarande rate-limitade → nästa yttre pass med exponentiell fördröjning (240s, 360s, ...).
+- Sparar kvarvarande tickers i `data/retry_pending.json` om max_passes uppnås utan att listan töms.
+  Nästa schemalagda körning plockar upp där man slutade. Filen raderas när listan är tom.
+  Filen ignoreras om >7 dagar gammal (undviker att plocka upp en gammal scan).
+
+**Ny pipeline-mode `retry_rate_limited` i `run_pipeline()`:**
+- Konfigureras via env: `RETRY_MAX_PASSES` (default 5), `RETRY_PASS_DELAY_S` (default 120s).
+- Kan köras manuellt: `python -c "from core.daily_pipeline import run_pipeline; run_pipeline('retry_rate_limited')"`
+
+**GitHub Actions (`.github/workflows/daily_scan.yml`):**
+- Ny cron `"0 11 * * 6"` → lördag 13:00 CEST (4h efter veckoscan 09:00).
+- Ny cron `"0 11 * * 1"` → måndag 13:00 CEST (4h efter småbolagsscan 09:15).
+- `retry_rate_limited` tillagd som manuellt val i `workflow_dispatch`.
+- Timeout höjd 30 → 60 min (5 pass à ~10 min + delays).
+- **Buggfix:** smallcap-cron-detektion `"15 8 * * 1"` → `"15 7 * * 1"` (gamla värdet matchade aldrig — smallcap föll igenom till `else`-grenen och körde som morning).
+
+**Persistent state-fil `data/retry_pending.json`:**
+```json
+{
+  "created": "2026-06-07T09:45:00",
+  "source_mode": "weekly",
+  "pass_count": 3,
+  "n_tickers": 12,
+  "tickers": ["ABBV", "BAC", ...]
+}
+```
+
+**Hjälpfunktioner:**
+- `_read_pending_tickers()` — läser retry_pending.json eller fetch_errors.json.
+- `_save_pending_tickers()` — skriver/raderar retry_pending.json.
+- `_latest_rate_limited_in_batch(pending_set)` — filtrerar fetch_errors.json till relevant delmängd.
+- `_load_blacklist_set()` — återanvändbar helper för blacklist-set.
+
 ### 2026-06-02 — UX Makeover: Sprint 1–5 (text, emoji, professionalisering)
 
 **Sprints 1–5 genomförda (commits e2acc6d, d124018, 55a19f2):**
