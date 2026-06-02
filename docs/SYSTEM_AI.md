@@ -1110,6 +1110,38 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-02 — Universe-städning: delistade/felaktiga tickers korrigerade & blacklistade
+
+Efter audit-loggens 21 fetch-fel verifierades varje ticker mot yfinance + produktionens
+404-mönster ("Quote not found" = genuint fel, skilt från RATE_LIMITED).
+
+**Korrigerade felaktiga symboler** (`data/universe.json` — verifierade fungerande ersättare):
+- `SV.L` → `SVS.L` (Savills)
+- `CEMEX.MX` → `CEMEXCPO.MX`
+- `FEMSA.MX` → `FEMSAUBD.MX`
+- `PNE.DE` → `PNE3.DE` (PNE AG)
+- `DIC.DE` → `BRNK.DE` (DIC Asset omdöpt till Branicks Group)
+- `SQ` → `XYZ` (Block bytte ticker SQ→XYZ 2025)
+
+**Borttagna + blacklistade** (genuint 404/delistade, ingen giltig ersättare):
+- `TTE.DE` (dubblett — TotalEnergies finns som TTE.PA), `WKN.DE`, `QBY.DE`, `MRN.DE`,
+  `FMG.DE` (Fortescue finns som FMG.AX), `GOGL.OL` (Golden Ocean avlistad från Oslo),
+  `RAD` (Rite Aid konkurs/avlistad).
+- Universe: 1185 → 1178 unika tickers. Blacklist: 23 → 36 entries.
+
+**LÄMNADE ORÖRDA** (verifierat fungerande i produktionsloggen — tidiga 404 var transienta
+quoteSummary-hick, ej delisting): CHK, X, ALTM, SAND, HMED.ST, EXAS, 0011.HK, PHNX.L,
+TATAMOTORS.NS, BRFS3.SA, EMBR3.SA, AZUL4.SA, 6406.T. Hanteras av strike-systemet om de
+återkommer.
+
+**Smallcap-scannern läckte blacklistade tickers** (`smallcap/universe.py:get_universe`)
+- 6 redan-blacklistade tickers (ARISE.ST, BIOT.ST, FNOX.ST, IAR-B.ST, KDEV.ST, RESURS.ST)
+  fanns kvar i småbolagsuniversumet och misslyckades i VARJE småbolagsscan.
+- FIX: `get_universe` filtrerar nu mot `data/blacklist.json` (ny `_load_blacklist()`-helper),
+  samma blacklist som huvudscannern. Smallcap: 335 → 329 tickers. Framtida blacklistningar
+  exkluderas automatiskt även från småbolagsscannern.
+
+
 ### 2026-06-02 — Komplett bugg-audit av weekly + smallcap scan (förebyggande)
 
 Efter den fatala weekly-kraschen gjordes en heltäckande audit av båda scan-vägarna för
