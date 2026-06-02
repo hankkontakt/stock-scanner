@@ -1110,6 +1110,22 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-02 — UX Makeover: Sprint 1–5 (text, emoji, professionalisering)
+
+**Sprints 1–5 genomförda (commits e2acc6d, d124018, 55a19f2):**
+
+- **Sidebar:** "Type to filter…"→"Filtrera sidor…", Pin/Unpin→svenska, asterisk→·, ikoner avduplikerade (📈Backtesting→🧪, 📈Teknisk→📉)
+- **Översikt:** "STARK entry"→"STARK signal", Toppbolag visar bolagsnamn, `_data_age_str()` läser parquet, score-avrundning, 2 nya sektioner (Universe-täckning progress-bar + "På väg upp"-panel)
+- **Flag-fix:** Ny `ticker_display()` i `core/country_flags.py` returnerar `"SE · VOLV-B.ST"` istf. `"🇸🇪 VOLV-B.ST"` — ag-Grid renderade flag-emojis som "us"/"se" text. Alla web-tabeller migrerade.
+- **Emoji-reduktion:** 🔴🟢🟡🚀💀 borttagna från backtesting, sektorrotation, teknisk analys, globala marknader, paper trading. Ersatta med pilar (▲▼↑↓), tecken (✓✗) och ren text.
+- **Admin:** tab-namn med korrekta svenska accenter (Översikt, Portfölj, Användare, Felsökning), health-tab alla accenter fixade
+- **7 sidor:** migrerade från `st.title()` till `page_header()` för konsistent rubrik-layout
+- **Smallcap:** dynamisk höjd, NaN AI-kolumner döljs, subtitle korrigerad
+- **Globala marknader, Backtesting:** try/except kring height-parametrar, download-guard, A/B-viktssumma
+
+**Ny funktion `country_code_for_ticker(ticker) → str`** i `core/country_flags.py` — returnerar ISO-2 kod.
+**Ny funktion `ticker_display(ticker) → str`** i `core/country_flags.py` — returnerar `"SE · VOLV-B.ST"`.
+
 ### 2026-06-02 — Täckningsgap + Score-trender + Universe Audit
 
 **Rotorsak (täckningsgap):** `run_pipeline('weekly')` ersätter `scored_universe.parquet` varje körning

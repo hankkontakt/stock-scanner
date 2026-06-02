@@ -139,7 +139,7 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
             st.plotly_chart(fig_heat, use_container_width=True)
 
             # Förklaring
-            st.caption("🟢 100 = STARK UPPTREND * 🟡 75 = UPPTREND * ⚪ 50 = NEUTRAL * 🟠 25 = NEDTREND * 🔴 0 = STARK NEDTREND")
+            st.caption("100 = STARK UPPTREND · 75 = UPPTREND · 50 = NEUTRAL · 25 = NEDTREND · 0 = STARK NEDTREND")
         else:
             st.info("Hämtar sektor-ETF data... (kan ta några sekunder)")
 
@@ -178,7 +178,7 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
         if trends:
             col_a, col_b = st.columns(2)
             with col_a:
-                st.subheader("🚀 Starkast sektorer")
+                st.subheader("Starkast sektorer")
                 top_secs = sorted(trends.items(), key=lambda x: x[1].get("momentum_3m", 0), reverse=True)[:5]
                 for sec, data in top_secs:
                     mom = data.get("momentum_3m", 0)
