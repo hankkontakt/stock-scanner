@@ -430,10 +430,15 @@ def run_scan(
     # 10. E-post
     if send_mail:
         date_str = datetime.today().strftime("%d %b %Y")
-        top1     = scored.iloc[0]["ticker"] if not scored.empty else "--"
-        subject  = (f"📊 Småbolagsrapport {date_str} | "
-                    f"Toppbolag: {top1} | {scored.iloc[0]['sc_stars']} "
-                    f"{scored.iloc[0]['sc_total']:.0f}p")
+        if not scored.empty:
+            _r0      = scored.iloc[0]
+            _stars0  = _r0.get("sc_stars", "")
+            _tot0    = _r0.get("sc_total", float("nan"))
+            _tot0_s  = f"{_tot0:.0f}p" if isinstance(_tot0, (int, float)) and _tot0 == _tot0 else "--"
+            subject  = (f"📊 Småbolagsrapport {date_str} | "
+                        f"Toppbolag: {_r0.get('ticker','--')} | {_stars0} {_tot0_s}")
+        else:
+            subject = f"📊 Småbolagsrapport {date_str} | Inga bolag passerade filtren"
         send_email(subject, report)
 
     print(f"\n  Klar! {len(scored)} bolag rankade.\n")

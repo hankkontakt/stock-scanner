@@ -114,7 +114,13 @@ def format_factor_attribution_md(row: dict, compact: bool = True) -> str:
 
     def _score_bar(s: float) -> str:
         """Mini progress bar: ██░░░"""
-        n = min(10, max(0, int(s / 10)))
+        try:
+            sv = float(s)
+            if sv != sv:  # NaN
+                sv = 0.0
+        except (TypeError, ValueError):
+            sv = 0.0
+        n = min(10, max(0, int(sv / 10)))
         return "█" * n + "░" * (10 - n)
 
     parts = []
@@ -125,6 +131,8 @@ def format_factor_attribution_md(row: dict, compact: bool = True) -> str:
         try:
             s = float(s)
         except Exception:
+            continue
+        if s != s:  # NaN — hoppa över denna faktor helt
             continue
         if compact:
             kpi_vals = []
