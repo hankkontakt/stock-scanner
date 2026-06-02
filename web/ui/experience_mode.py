@@ -58,12 +58,12 @@ class InvestorExperience:
     @property
     def label(self) -> str:
         """Human-readable label for the current mode."""
-        return "Nyborjarlage" if self.is_beginner else "Expertlage"
+        return "Nybörjarläge" if self.is_beginner else "Expertläge"
 
     @property
     def opposite_label(self) -> str:
         """Label for the opposite mode (for toggle button)."""
-        return "Expertlage" if self.is_beginner else "Nyborjarlage"
+        return "Expertläge" if self.is_beginner else "Nybörjarläge"
 
     # ── Helper methods for conditional UI ────────────────────────────────────
 
@@ -88,36 +88,33 @@ class InvestorExperience:
         return [c for c in beginner_friendly if c in all_columns]
 
     def show_beginner_info(self, key: str = "") -> None:
-        """Show a beginner-friendly info box with explanations.
-
-        In expert mode, nothing is shown.
-        """
+        """Visa nybörjar-info om vi är i nybörjarläge. Inget visas i expertläge."""
         if not self.is_beginner:
             return
 
         beginner_tips = {
             "scan": (
-                "**Welcome to the Stock Scanner!** "
-                "This page lists stocks ranked by our scoring system. "
-                "A higher score (70+) means the stock looks more attractive "
-                "based on fundamentals, valuation, and momentum. "
-                "Use the filters in the sidebar to narrow down your search."
+                "**Välkommen till Veckoscannern!** "
+                "Sidan listar aktier rankade av systemet. "
+                "Högre score (70+) = aktien ser mer attraktiv ut baserat på "
+                "fundamenta, värdering och momentum. "
+                "Använd filtren i sidebaren för att avgränsa sökningen."
             ),
             "technical": (
-                "**Technical Analysis** helps you understand how a stock's "
-                "price moves. RSI below 30 can mean the stock is oversold "
-                "(potential buying opportunity), while above 70 means overbought "
-                "(be cautious). MA200 is the most important long-term trend indicator."
+                "**Teknisk analys** visar hur aktiens kurs rör sig. "
+                "RSI under 30 kan betyda att aktien är översåld (köpläge), "
+                "över 70 = köpt för mycket (var försiktig). "
+                "MA200 är den viktigaste långsiktiga trendindikatorn."
             ),
             "portfolio": (
-                "**Your Portfolio** shows the stocks you own. "
-                "Track performance, see allocation, and get rebalancing suggestions. "
-                "Green values are positive, red values are negative."
+                "**Din portfölj** visar aktier du äger. "
+                "Följ upp prestanda, se fördelning och få ombalanseringsförslag. "
+                "Gröna värden är positiva, röda är negativa."
             ),
             "ai": (
-                "**AI Analysis** uses machine learning to analyze stocks and markets. "
-                "Choose a stock and a depth level, then click 'Run AI Analysis'. "
-                "The deeper the analysis, the more comprehensive the result."
+                "**AI-analys** använder maskininlärning för att analysera aktier. "
+                "Välj en aktie och analysdjup, klicka sedan på 'Kör analys'. "
+                "Djupare analys ger mer heltäckande svar."
             ),
         }
 
@@ -141,18 +138,17 @@ class InvestorExperience:
         return True  # All other features are visible in both modes
 
     def render_toggle(self) -> None:
-        """Render a small toggle button in the sidebar footer."""
-        current = self.mode
-        target = "expert" if current == "beginner" else "beginner"
-        icon = ic("insights") if target == "expert" else ic("info")
+        """Rendera en liten toggle-knapp i sidebar-foten."""
+        target_label = self.opposite_label
+        icon = ic("insights") if self.is_beginner else ic("info")
 
         if st.button(
-            f"{icon} Switch to {target.capitalize()} Mode",
+            f"{icon} Byt till {target_label}",
             key="toggle_experience_mode",
             use_container_width=True,
             help=(
-                "Beginner mode: simplified view with fewer columns and more explanations. "
-                "Expert mode: full data, all columns, advanced filters."
+                "Nybörjarläge: förenklad vy med färre kolumner och mer förklaringar. "
+                "Expertläge: all data, alla kolumner, avancerade filter."
             ),
         ):
             self.toggle()

@@ -101,45 +101,54 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
     tab1, tab2, tab3, tab4 = st.tabs(["📊 Sektorstyrka", "📋 Momentum-tabell", "🏆 Topp/botten sektorer", "💡 Handelssignaler"])
 
     with tab1:
-        # Heatmap: sektor -> signaler
         if trends:
-            import math
-            sectors_list, signals_list, mom3m_list, n_stocks_list = [], [], [], []
+            # ── Treemap: sektorer som rektanglar (storlek = antal aktier, färg = momentum) ──
+            labels, parents, values, colors, hover_texts = [], [], [], [], []
+            sig_colors = {
+                "STARK UPPTREND": "#26c281",  # accent green
+                "UPPTREND":       "#4c9be8",  # accent blue
+                "NEUTRAL":        "#4a5568",  # muted grey
+                "NEDTREND":       "#c0622f",  # muted orange
+                "STARK NEDTREND": "#f0616d",  # accent red
+            }
             for sec, data in sorted(trends.items()):
-                sectors_list.append(sec)
-                sig = data.get("signal", "NEUTRAL")
-                sig_score = {"STARK UPPTREND": 4, "UPPTREND": 3, "NEUTRAL": 2, "NEDTREND": 1, "STARK NEDTREND": 0}.get(sig, 2)
-                signals_list.append(sig_score)
-                mom3m_list.append(data.get("momentum_3m", 0))
-                # Antal aktier i sektorn från scored_df
-                if df.empty or "sector" not in df.columns:
-                    n_stocks_list.append(0)
-                else:
-                    n_stocks_list.append(int((df["sector"] == sec).sum()))
+                sig     = data.get("signal", "NEUTRAL")
+                mom3m   = data.get("momentum_3m") or 0
+                n_stk   = int((df["sector"] == sec).sum()) if not df.empty and "sector" in df.columns else 1
+                mom1m   = data.get("momentum_1m") or 0
+                labels.append(sec)
+                parents.append("")
+                values.append(max(n_stk, 1))          # storlek = antal aktier, minst 1
+                colors.append(sig_colors.get(sig, "#4a5568"))
+                hover_texts.append(
+                    f"<b>{sec}</b><br>"
+                    f"Signal: {sig}<br>"
+                    f"3m: {mom3m:+.1f}%<br>"
+                    f"1m: {mom1m:+.1f}%<br>"
+                    f"Aktier: {n_stk}"
+                )
 
-            # Gauge chart (enklare: bar med färg)
-            fig_heat = go.Figure()
-            colors_h = ["#d50000" if s <= 1 else "#ff6d00" if s == 2 else "#ffd600" if s == 3 else "#00c853" for s in signals_list]
-            fig_heat.add_trace(go.Bar(
-                x=sectors_list, y=[s * 25 for s in signals_list],
-                marker_color=colors_h,
-                text=[f"{m:+.1f}%" if m else "--" for m in mom3m_list],
-                textposition="outside",
-                hovertemplate="<b>%{x}</b><br>Signalstyrka: %{y:.0f}%<br>3m-momentum: %{text}<br>Antal: %{customdata}<extra></extra>",
-                customdata=n_stocks_list,
+            fig_tree = go.Figure(go.Treemap(
+                labels=labels,
+                parents=parents,
+                values=values,
+                marker=dict(colors=colors, line=dict(width=2, color="#131722")),
+                texttemplate="<b>%{label}</b>",
+                hovertext=hover_texts,
+                hoverinfo="text",
+                textfont=dict(size=13, color="#e8eaf0"),
             ))
-            fig_heat.update_layout(
-                title="Sektorstyrka (0=stark nedtrend, 100=stark upptrend)",
+            fig_tree.update_layout(
                 template="plotly_dark",
-                paper_bgcolor="#131722", plot_bgcolor="#1e2230",
-                height=400, margin=dict(t=40, b=48, l=16, r=16),
-                yaxis=dict(range=[0, 110], showticklabels=False),
-                xaxis=dict(tickangle=-45),
+                paper_bgcolor="#131722",
+                height=440,
+                margin=dict(t=16, b=16, l=8, r=8),
             )
-            st.plotly_chart(fig_heat, use_container_width=True)
-
-            # Förklaring
-            st.caption("100 = STARK UPPTREND · 75 = UPPTREND · 50 = NEUTRAL · 25 = NEDTREND · 0 = STARK NEDTREND")
+            st.plotly_chart(fig_tree, use_container_width=True)
+            st.caption(
+                "Storlek = antal aktier i sektorn · "
+                "Färg: grön = upptrend  blå = mild upptrend  grå = neutral  röd = nedtrend"
+            )
         else:
             st.info("Hämtar sektor-ETF data... (kan ta några sekunder)")
 
@@ -184,7 +193,7 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
                     mom = data.get("momentum_3m", 0)
                     st.markdown(f"**{sec}** -- {mom:+.1f}%" if mom else f"**{sec}** -- --")
             with col_b:
-                st.subheader("📉 Svagast sektorer")
+                st.subheader("Svagast sektorer")
                 bot_secs = sorted(trends.items(), key=lambda x: x[1].get("momentum_3m", 0))[:5]
                 for sec, data in bot_secs:
                     mom = data.get("momentum_3m", 0)

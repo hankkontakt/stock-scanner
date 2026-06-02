@@ -421,10 +421,16 @@ div[data-testid="stSidebarContent"] .streamlit-expanderHeader {{
 @media (max-width: 1024px) {{
     .block-container {{
         padding-top: 1.8rem;
+        padding-left: 1.2rem !important;
+        padding-right: 1.2rem !important;
         max-width: 100%;
     }}
     [data-testid="column"] {{
-        min-width: 30% !important;
+        min-width: 28% !important;
+    }}
+    /* 4-kolumns KPI-rader → 2+2 på tablet */
+    [data-testid="stHorizontalBlock"] > [data-testid="column"]:nth-child(n+3) {{
+        margin-top: 0;
     }}
 }}
 
@@ -432,28 +438,51 @@ div[data-testid="stSidebarContent"] .streamlit-expanderHeader {{
    RESPONSIVE — MOBILE (max-width: 768px)
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {{
-    h1 {{ font-size: 22px !important; margin-bottom: 12px !important; }}
-    h2 {{ font-size: 18px !important; }}
-    h3 {{ font-size: 16px !important; }}
+    h1 {{ font-size: 20px !important; margin-bottom: 10px !important; }}
+    h2 {{ font-size: 17px !important; }}
+    h3 {{ font-size: 14px !important; }}
 
+    /* Tabeller: horisontell scroll på mobil */
     .stDataFrame {{ overflow-x: auto !important; }}
-    .stDataFrame table {{ min-width: 480px !important; }}
+    .stDataFrame table {{ min-width: 420px !important; }}
     .stDataFrame tbody td,
-    .stDataFrame thead th {{ font-size: 12px !important; padding: 6px 8px !important; }}
+    .stDataFrame thead th {{ font-size: 12px !important; padding: 5px 7px !important; }}
 
+    /* Touch-vänliga knappar */
     .stButton button {{ min-height: 44px !important; font-size: 14px !important; }}
 
+    /* 4-kolumns KPI-grid → 2 per rad på mobil */
     [data-testid="column"] {{
-        min-width: 45% !important;
+        min-width: 44% !important;
+        flex: 1 1 44% !important;
+    }}
+    [data-testid="stHorizontalBlock"] {{
+        flex-wrap: wrap !important;
+        gap: 8px !important;
     }}
 
+    /* KPI-kort kompaktare på mobil */
+    .ms-card.ms-metric {{ padding: 14px 16px !important; }}
+    .ms-metric .value {{ font-size: {t.TYPE_TITLE}px !important; }}
+    .ms-metric .value.sm {{ font-size: {t.TYPE_H2}px !important; }}
+    .ms-metric .label {{ font-size: 10px !important; }}
+
+    /* Plotly-grafer: full bredd */
+    .js-plotly-plot {{ width: 100% !important; }}
+
+    /* Formulär: förhindra zoom vid tap på iOS */
     input, select, textarea {{ font-size: 16px !important; }}
 
-    .ms-metric .value {{ font-size: {t.TYPE_TITLE}px; }}
+    /* Native Streamlit metric-kort */
+    [data-testid="stMetric"] {{ padding: 10px !important; }}
+    [data-testid="stMetricValue"] {{ font-size: 22px !important; }}
 
-    [data-testid="stMetric"] {{ padding: 12px !important; }}
-
-    [data-testid="stVerticalBlock"] > div[style*="gap"] {{ gap: 8px !important; }}
+    /* Minska sidmarginaler för mer utrymme */
+    .block-container {{
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+        padding-top: 1.2rem !important;
+    }}
 }}
 
 /* ═══════════════════════════════════════════════════════════════════════════

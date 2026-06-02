@@ -131,13 +131,25 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
     # ── Staleness-indikator: markera aktier med gammal data ─────────────────
     _has_stale = "data_stale_days" in show.columns and show["data_stale_days"].fillna(0).gt(0).any()
 
-    base_cols = [c for c in [
+    # ── Experience mode: nybörjarläge visar färre kolumner ───────────────────
+    try:
+        from web.ui.experience_mode import InvestorExperience as _Exp
+        _is_beginner = _Exp().is_beginner
+    except Exception:
+        _is_beginner = False
+
+    _all_cols = [
         "rank", "ticker", "name", "_status", "sector",
         "score_total", "_score_delta", "predicted_return", "ml_rank",
         "entry_signal", "confidence_label", "trend_signal",
         "delta_flag", "piotroski_f", "low_liquidity",
         "data_stale_days",
-    ] if c in show.columns]
+    ]
+    # Nybörjarläge: visa bara de viktigaste kolumnerna
+    _beginner_cols = ["rank", "ticker", "name", "sector", "score_total", "entry_signal", "trend_signal", "data_stale_days"]
+    _visible_cols  = _beginner_cols if _is_beginner else _all_cols
+
+    base_cols = [c for c in _visible_cols if c in show.columns]
 
     display = show[base_cols].copy()
     display = display.rename(columns={

@@ -276,36 +276,27 @@ def _get_depth() -> str:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def kpi_row(metrics: list):
-    """Custom HTML KPI-kort. metrics = [(label, value, delta[, help]), ...]"""
-    cols = st.columns(len(metrics))
-    for col, item in zip(cols, metrics):
-        label     = item[0]
-        value     = item[1]
-        delta     = item[2]
-        help_t    = item[3] if len(item) > 3 else None
+    """KPI-kort. Thin wrapper runt kpi_grid() för bakåtkompatibilitet.
 
-        delta_html = ""
-        if delta:
-            color = "#4caf50" if not str(delta).startswith("-") else "#ef5350"
-            delta_html = (
-                f'<div style="font-size:12px;color:{color};margin-top:5px;'
-                f'font-weight:500;">{delta}</div>'
-            )
-
-        title_attr = f'title="{help_t}"' if help_t else ""
-        col.markdown(
-            f'<div {title_attr} style="'
-            f'background:#1e2230;border:1px solid #2d3250;border-radius:10px;'
-            f'padding:18px 20px;cursor:default;">'
-            f'<div style="font-size:10px;font-weight:600;color:#8892a4;'
-            f'text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">'
-            f'{label}</div>'
-            f'<div style="font-size:26px;font-weight:700;color:#e8eaf0;line-height:1;">'
-            f'{value}</div>'
-            f'{delta_html}'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+    metrics = [(label, value, delta[, help]), ...]  — gammal tupel-form
+    """
+    try:
+        from web.ui.components import kpi_grid
+        kpi_grid([
+            {
+                "label": str(m[0]),
+                "value": str(m[1]),
+                "delta": str(m[2]) if len(m) > 2 and m[2] is not None else None,
+                "help":  m[3] if len(m) > 3 else None,
+            }
+            for m in metrics
+        ])
+    except Exception:
+        # Fallback: enkel inline-layout om kpi_grid inte är tillgänglig
+        cols = st.columns(len(metrics))
+        for col, item in zip(cols, metrics):
+            col.metric(label=str(item[0]), value=str(item[1]),
+                       delta=str(item[2]) if len(item) > 2 and item[2] else None)
 
 
 
