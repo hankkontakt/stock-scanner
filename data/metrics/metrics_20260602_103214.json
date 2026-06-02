@@ -1,0 +1,33 @@
+{
+  "pipeline_duration_seconds": {
+    "weekly": [
+      1299.7898235321045
+    ]
+  },
+  "fetch_duration_seconds": [
+    1203.6800096035004
+  ],
+  "scoring_duration_seconds": [],
+  "tickers_fetched_total": 1202,
+  "tickers_failed_total": 9,
+  "ai_calls_total": 6,
+  "ai_tokens_input_total": 10705,
+  "ai_tokens_output_total": 2549,
+  "email_sent_total": {
+    "weekly_summary": 1
+  },
+  "cache_hits_total": 0,
+  "cache_misses_total": 0,
+  "pipeline_success_total": {
+    "weekly": 1
+  },
+  "pipeline_failure_total": {},
+  "scoring_distribution": {
+    "0.5": null,
+    "0.75": null,
+    "0.9": null,
+    "0.95": null
+  },
+  "latest_scan_timestamp": 1780396334.6274867,
+  "exported_at": "2026-06-02T10:32:14.627544"
+}

@@ -148,5 +148,110 @@
       }
     ],
     "delisted_tickers": []
+  },
+  {
+    "timestamp": "2026-06-02T10:30:39Z",
+    "total": 1211,
+    "n_ok": 1202,
+    "n_failed": 9,
+    "n_delisted": 0,
+    "n_rate_limited": 47,
+    "rate_limited_tickers": [
+      "8031.T",
+      "8053.T",
+      "SMIN.L",
+      "4519.T",
+      "GAW.L",
+      "WEIR.L",
+      "TSCO.L",
+      "RILBA.CO",
+      "RR.L",
+      "SPX.L",
+      "9433.T",
+      "BA.L",
+      "4502.T",
+      "4507.T",
+      "6098.T",
+      "RTO.L",
+      "SPD.L",
+      "2914.T",
+      "4661.T",
+      "HUBB",
+      "IMI.L",
+      "7974.T",
+      "JD.L",
+      "MGGT.L",
+      "POWL",
+      "6861.T",
+      "8058.T",
+      "MOD",
+      "3382.T",
+      "4063.T",
+      "SBRY.L",
+      "FN",
+      "8002.T",
+      "ENS",
+      "VAIAS.HE",
+      "MKS.L",
+      "CCH.L",
+      "EXPN.L",
+      "9432.T",
+      "GKN.L",
+      "4568.T",
+      "4901.T",
+      "CRAYN.OL",
+      "COB.L",
+      "6594.T",
+      "CAMT",
+      "ABF.L"
+    ],
+    "failed_tickers": [
+      {
+        "ticker": "EXAS",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "PHNX.L",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "6406.T",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "0011.HK",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "TATAMOTORS.NS",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "BRFS3.SA",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "EMBR3.SA",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "AZUL4.SA",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "CENY.BR",
+        "status": "FAILED",
+        "pass": 1
+      }
+    ],
+    "delisted_tickers": []
   }
 ]

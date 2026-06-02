@@ -101,5 +101,14 @@
       "scan_type": "smallcap",
       "elapsed_seconds": 81.0
     }
+  },
+  {
+    "timestamp": "2026-06-02T10:32:14",
+    "scan_type": "weekly",
+    "status": "OK",
+    "details": {
+      "scan_type": "weekly",
+      "elapsed_seconds": 1299.8
+    }
   }
 ]
