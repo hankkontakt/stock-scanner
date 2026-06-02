@@ -11,8 +11,8 @@ from core import config
 
 def page_global_markets():
     """Globala marknader - index, valutor, räntor och nyheter."""
-    st.title("🌍 Globala marknader")
-    st.caption("Realtidsdata för globala index, valutor, räntor och marknadsnyheter.")
+    from web.ui.components import page_header
+    page_header("Globala marknader", "globe", subtitle="Realtidsdata för globala index, valutor, räntor och marknadsnyheter.")
 
     tab_idx, tab_fx, tab_rates, tab_news = st.tabs(
         ["📊 Index", "💱 Valutor", "📈 Räntor", "📰 Nyheter"]

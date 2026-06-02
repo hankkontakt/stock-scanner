@@ -27,7 +27,8 @@ _TECH_NON_US_SUFFIXES = set(_TECH_COUNTRY_SUFFIX_MAP.values())
 
 
 def page_technical(df: pd.DataFrame, filters: dict):
-    st.title("📈 Teknisk analys")
+    from web.ui.components import page_header
+    page_header("Teknisk analys", "technical", subtitle="Tekniska indikatorer, RSI, MA200 och trendanalys för alla bolag.")
 
     if df.empty:
         st.warning("Ingen scandata.")

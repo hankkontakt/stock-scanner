@@ -71,7 +71,8 @@ def _apply_sc_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
 
 
 def page_smallcap(sc_df: pd.DataFrame, filters: dict):
-    st.title("🏦 Småbolag")
+    from web.ui.components import page_header
+    page_header("Småbolag", "smallcap", subtitle="Nordiska & globala micro/small cap — ranked efter fundamenta, momentum och insider.")
 
     if sc_df.empty:
         st.warning("Småbolagsdata håller på att laddas in. Systemet uppdateras automatiskt varje måndag -- kom tillbaka då för de senaste analyserna.")

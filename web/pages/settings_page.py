@@ -30,7 +30,8 @@ def _get_user_email() -> str:
 
 
 def page_settings():
-    st.title("⚙️ Inställningar")
+    from web.ui.components import page_header
+    page_header("Inställningar", "settings", subtitle="E-postnotiser, notifikationer och kontouppgifter.")
     username = st.session_state.get("username", "")
 
     # ── E-postinställningar ───────────────────────────────────────────────────

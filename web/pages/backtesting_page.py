@@ -11,7 +11,8 @@ from web.ui.components import clickable_stock_table
 
 
 def page_backtesting():
-    st.title("📈 Backtesting")
+    from web.ui.components import page_header
+    page_header("Backtesting", "backtest", subtitle="Historisk simulering av momentum-strategin mot index.")
 
     with st.expander("ℹ️ Hur funkar backtesting? (klicka för att läsa)", expanded=False):
         st.markdown("""
