@@ -41,12 +41,9 @@ def _load_rotation_log() -> list:
 
 def page_universe_explorer(df=None):
     """Huvud-entrypoint för Universe Explorer-sidan."""
-    st.title("🔍 Universe Explorer")
-    st.caption(
-        "Automatiskt hittade aktiekandidater och rotationshistorik. "
-        "Kandidater granskas via 5-lagers quality gate (likviditet, fundamenta, kassaflöde, "
-        "bedrägeridetektering + AI-analys) innan de kan läggas till universum."
-    )
+    from web.ui.components import page_header
+    page_header("Universe Explorer", "explore",
+                subtitle="Automatiskt hittade aktiekandidater och rotationshistorik. Kandidater granskas via 5-lagers quality gate innan de läggs till universum.")
 
     cands_data  = _load_candidates()
     pending     = [c for c in cands_data.get("candidates", []) if c.get("status") == "pending"]

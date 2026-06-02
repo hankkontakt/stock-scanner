@@ -11,8 +11,8 @@ from web.ui.components import clickable_stock_table
 
 def page_sector_rotation(df: pd.DataFrame):
     """Sektorrotation - heatmap och momentum för alla sektorer."""
-    st.title("🏭 Sektorrotation")
-    st.caption("Analysera sektorstyrka, rotation och momentum. Data från sektor-ETFer via yfinance.")
+    from web.ui.components import page_header
+    page_header("Sektorrotation", "sector", subtitle="Analysera sektorstyrka, rotation och momentum. Data från sektor-ETFer via yfinance.")
 
     with st.expander("ℹ️ Vad är sektorrotation? -- Förklaring för nybörjare", expanded=False):
         st.markdown("""
@@ -98,7 +98,7 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
              "Skillnad mellan sektorer i upptrend minus nedtrend. Positivt = fler sektorer stiger. Negativt = marknaden roterar nedåt. ±3 eller mer = tydlig signal."),
         ])
 
-    tab1, tab2, tab3, tab4 = st.tabs(["🔥 Heatmap", "📋 Momentum-tabell", "🏆 Topp/botten sektorer", "💡 Handelssignaler"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Sektorstyrka", "📋 Momentum-tabell", "🏆 Topp/botten sektorer", "💡 Handelssignaler"])
 
     with tab1:
         # Heatmap: sektor -> signaler
@@ -280,14 +280,15 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
             else:
                 st.info(f"Blandad marknad -- {len(buy_sectors)} upp, {len(avoid_sectors)} ned, {len(neutral_sectors)} neutrala")
 
-    # AI-knapp
+    # AI-analys
     if trends:
         st.markdown("---")
-        if st.button("🤖 Analysera sektorrotation med AI", key="btn_sector_rotation_ai", use_container_width=True):
+        from web.ui.ai_action import ai_run_control
+        _run_ai, _ai_depth = ai_run_control("sr_sector", default="Normal", run_label="Analysera sektorrotation med AI")
+        if _run_ai:
             with st.spinner("Analyserar sektorrotation..."):
                 try:
                     provider = _get_provider()
-                    depth = _get_depth()
                     top = sorted(trends.items(), key=lambda x: x[1].get("momentum_3m", 0), reverse=True)[:3]
                     bot = sorted(trends.items(), key=lambda x: x[1].get("momentum_3m", 0))[:3]
                     context = {
@@ -297,7 +298,7 @@ En ETF som är ovanför **både MA50 och MA200** (✅✅) är i stark upptrend.
                     result = ai_analysis.ai_chat(
                         "Analysera sektorrotationen och ge rekommendationer för sektorallokering",
                         context=ai_analysis._safe_json(context, ensure_ascii=False),
-                        provider=provider, depth=depth,
+                        provider=provider, depth=_ai_depth,
                     )
                     with st.container(border=True):
                         st.markdown(result)
