@@ -954,6 +954,13 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     except Exception:
         pass
 
+    # ── Steg 5: Data-ålder-stämpel (för staleness-merge i weekly pipeline) ──────
+    # data_fetched_date = datumet då denna rad hämtades färskt från Yahoo.
+    # data_stale_days = 0 för nyligen hämtad data; > 0 för bevarad stale-data.
+    from datetime import date as _date
+    df["data_fetched_date"] = pd.Timestamp(_date.today())
+    df["data_stale_days"] = 0
+
     return df.sort_values("score_total", ascending=False).reset_index(drop=True)
 
 

@@ -1174,6 +1174,15 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             except Exception as _the:
                 logger.debug(f"  ufe0f ticker-health update hoppades over: {_the}")
 
+            # ── Ladda föregående veckas scored_universe för staleness-merge ──────────
+            # Sparas undan INNAN ny parquet skrivs; används efter scoring för att
+            # bevara tickers som rate-limiterades denna körning (täckningsgap-fix).
+            prev_scored_for_merge = _load_latest_scored("scored_universe_*.parquet")
+            if prev_scored_for_merge.empty:
+                prev_scored_for_merge = _load_latest_scored("scored_universe_*.csv")
+            if not prev_scored_for_merge.empty:
+                logger.info(f"  📂 Föregående scored_universe: {len(prev_scored_for_merge)} rader (staleness-bas)")
+
             if not raw_df.empty:
                 # Detektera marknadsregim for dynamiska vikter
                 # Detektera marknadsregim för dynamiska vikter
@@ -1216,6 +1225,70 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 logger.info(f"  ✅ Filter/signaler applicerade: {len(scored)} tickers")
             except Exception as _fe:
                 logger.warning(f"  ⚠ apply_all_filters misslyckades: {_fe}")
+
+            # ── Score-delta: hur mycket har score förändrats sedan förra veckan? ──────
+            # Körs INNAN staleness-merge så delta gäller nyligen hämtad data.
+            try:
+                if not prev_scored_for_merge.empty and "score_total" in prev_scored_for_merge.columns and not scored.empty:
+                    _prev_map = (
+                        prev_scored_for_merge
+                        .assign(_tu=prev_scored_for_merge["ticker"].str.upper())
+                        .set_index("_tu")["score_total"]
+                        .to_dict()
+                    )
+                    scored["score_prev"] = scored["ticker"].str.upper().map(_prev_map)
+                    scored["score_delta_4w"] = (scored["score_total"] - scored["score_prev"]).round(1)
+                    scored.drop(columns=["score_prev"], inplace=True, errors="ignore")
+                    n_improved = (scored["score_delta_4w"].fillna(0) >= 5).sum()
+                    n_declined = (scored["score_delta_4w"].fillna(0) <= -5).sum()
+                    logger.info(f"  📊 Score-delta: {n_improved} förbättrade (≥+5), {n_declined} försämrade (≤-5)")
+                elif "score_delta_4w" not in scored.columns:
+                    scored["score_delta_4w"] = float("nan")
+            except Exception as _de:
+                logger.warning(f"  ⚠ Score-delta hoppades över: {_de}")
+                if "score_delta_4w" not in scored.columns:
+                    scored["score_delta_4w"] = float("nan")
+
+            # ── Staleness-merge: bevara föregående scorade aktier som rate-limiterades ─
+            # Fixar täckningsgapet: ~40% → ~90%+ av universe representeras i parqueten.
+            # Stale-rader markeras med data_stale_days > 0 och visas med ⏱ i UI.
+            try:
+                if not prev_scored_for_merge.empty and "ticker" in prev_scored_for_merge.columns and not scored.empty:
+                    _today_ts = pd.Timestamp.today().normalize()
+                    _new_tickers = set(scored["ticker"].str.upper())
+                    _stale_mask = ~prev_scored_for_merge["ticker"].str.upper().isin(_new_tickers)
+                    _stale_rows = prev_scored_for_merge[_stale_mask].copy()
+
+                    if not _stale_rows.empty:
+                        # Beräkna ålder på befintlig data
+                        if "data_fetched_date" in _stale_rows.columns:
+                            _stale_rows["data_stale_days"] = (
+                                _today_ts - pd.to_datetime(_stale_rows["data_fetched_date"], errors="coerce")
+                            ).dt.days.fillna(7).clip(lower=0).astype(int)
+                        else:
+                            _stale_rows["data_stale_days"] = 7
+
+                        # Bara max 14 dagar gammal data
+                        _stale_rows = _stale_rows[_stale_rows["data_stale_days"] <= 14]
+
+                        if not _stale_rows.empty:
+                            # Stale-rader: score_delta = 0 (inga nya prisdata)
+                            _stale_rows["score_delta_4w"] = 0.0
+
+                            # Kolumnjustering — fyll saknade kolumner med NA
+                            for _col in scored.columns:
+                                if _col not in _stale_rows.columns:
+                                    _stale_rows[_col] = pd.NA
+                            _stale_rows = _stale_rows.reindex(columns=scored.columns)
+
+                            scored = pd.concat([scored, _stale_rows], ignore_index=True)
+                            logger.info(
+                                f"  📦 Staleness-merge: +{len(_stale_rows)} aktier bevarade "
+                                f"(täckning nu: {len(scored)}/{len(all_tickers)} = "
+                                f"{len(scored)/len(all_tickers)*100:.0f}%)"
+                            )
+            except Exception as _me:
+                logger.warning(f"  ⚠ Staleness-merge hoppades över: {_me}")
 
             csv_path = REPORT_DIR / f"scored_universe_{date_str}"
             _save_scored(scored, csv_path)
@@ -2088,6 +2161,96 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             save_health_snapshot()
         except Exception:
             pass
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# UNIVERSE AUDIT
+# ══════════════════════════════════════════════════════════════════════════════
+
+def run_universe_audit(min_snapshots: int = 2) -> dict:
+    """
+    Jämför universe.json mot alla tillgängliga scored_universe-parquet-snapshots.
+    Identifierar tickers som aldrig eller sällan lyckas hämtas.
+
+    Returnerar dict med:
+      never_appeared:    tickers aldrig i någon snapshot (genuint döda/404)
+      rarely_appeared:   tickers i < 33% av snapshots (kroniskt rate-limitade)
+      always_present:    tickers i >= 80% av snapshots (pålitliga)
+      n_snapshots:       antal snapshots som analyserades
+      coverage_pct:      % av universe som alltid finns
+
+    Sparar resultatet i data/universe_audit.json.
+    """
+    import glob as _glob
+
+    snapshot_files = sorted(
+        _glob.glob(str(REPORT_DIR / "scored_universe_*.parquet"))
+    )
+
+    if len(snapshot_files) < min_snapshots:
+        msg = f"Bara {len(snapshot_files)} snapshot(s) — behöver {min_snapshots} för meningsfull analys"
+        logger.warning(f"  run_universe_audit: {msg}")
+        result = {
+            "generated": datetime.now().isoformat(),
+            "error": msg,
+            "n_snapshots": len(snapshot_files),
+            "never_appeared": [],
+            "rarely_appeared": [],
+            "always_present": [],
+            "coverage_pct": 0,
+        }
+        _audit_path = DATA_DIR / "universe_audit.json"
+        _audit_path.write_text(
+            json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        return result
+
+    # Räkna förekomster per ticker
+    ticker_counts: dict[str, int] = {}
+    n_ok = 0
+    for fpath in snapshot_files:
+        try:
+            snap = pd.read_parquet(fpath, columns=["ticker"])
+            for t in snap["ticker"].str.upper().tolist():
+                ticker_counts[t] = ticker_counts.get(t, 0) + 1
+            n_ok += 1
+        except Exception as _e:
+            logger.debug(f"  audit: kunde inte läsa {fpath}: {_e}")
+
+    n_snaps = n_ok
+    universe_tickers = set(t.upper() for t in config.UNIVERSE)
+
+    never_appeared   = sorted(t for t in universe_tickers if ticker_counts.get(t, 0) == 0)
+    rarely_appeared  = sorted(
+        t for t in universe_tickers
+        if 0 < ticker_counts.get(t, 0) < n_snaps * 0.33
+    )
+    always_present   = sorted(
+        t for t in universe_tickers
+        if ticker_counts.get(t, 0) >= max(1, n_snaps * 0.80)
+    )
+    coverage_pct = round(len(always_present) / len(universe_tickers) * 100, 1) if universe_tickers else 0.0
+
+    result = {
+        "generated": datetime.now().isoformat(),
+        "n_snapshots": n_snaps,
+        "n_universe": len(universe_tickers),
+        "coverage_pct": coverage_pct,
+        "never_appeared": never_appeared,
+        "rarely_appeared": rarely_appeared,
+        "always_present": always_present,
+    }
+
+    _audit_path = DATA_DIR / "universe_audit.json"
+    _audit_path.write_text(
+        json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    logger.info(
+        f"  📋 Universe audit klar: {len(never_appeared)} aldrig, "
+        f"{len(rarely_appeared)} sällan, {len(always_present)} alltid "
+        f"({coverage_pct:.0f}% täckning) — {n_snaps} snapshots"
+    )
+    return result
 
 
 # ══════════════════════════════════════════════════════════════════════════════

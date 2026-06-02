@@ -71,6 +71,10 @@ def _apply_weekly_filters(df: pd.DataFrame, filters: dict,
     if filters.get("hide_illiquid") and "low_liquidity" in out.columns:
         out = out[~out["low_liquidity"].fillna(False)]
 
+    # Visa bara aktier vars score förbättrats ≥5 poäng sedan förra scanningen
+    if filters.get("only_improving") and "score_delta_4w" in out.columns:
+        out = out[out["score_delta_4w"].fillna(0) >= 5]
+
     from core.suffix_map import COUNTRY_SUFFIXES as _SUFFIX_MAP
     _ALL_NON_US = set(_SUFFIX_MAP.values())
     selected_countries = filters.get("countries", [])
@@ -106,11 +110,33 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
     show = df.copy()
     show["_status"] = show["ticker"].apply(_flag)
 
+    # ── Score-delta: konvertera numerisk till pil-ikon ──────────────────────
+    if "score_delta_4w" in show.columns:
+        def _delta_icon(d):
+            try:
+                d = float(d)
+                if d != d:  # NaN
+                    return "─"
+                if d >= 5:
+                    return f"▲ {d:+.0f}"
+                if d <= -5:
+                    return f"▼ {d:+.0f}"
+                return f"─ {d:+.0f}"
+            except Exception:
+                return "─"
+        show["_score_delta"] = show["score_delta_4w"].apply(_delta_icon)
+    else:
+        show["_score_delta"] = "─"
+
+    # ── Staleness-indikator: markera aktier med gammal data ─────────────────
+    _has_stale = "data_stale_days" in show.columns and show["data_stale_days"].fillna(0).gt(0).any()
+
     base_cols = [c for c in [
         "rank", "ticker", "name", "_status", "sector",
-        "score_total", "predicted_return", "ml_rank",
+        "score_total", "_score_delta", "predicted_return", "ml_rank",
         "entry_signal", "confidence_label", "trend_signal",
         "delta_flag", "piotroski_f", "low_liquidity",
+        "data_stale_days",
     ] if c in show.columns]
 
     display = show[base_cols].copy()
@@ -132,6 +158,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         "_status":           "Status",
         "sector":            "Sektor",
         "score_total":       "Score (klassisk)",
+        "_score_delta":      "Score Δ",
         "predicted_return":  "AI 30d-ret",
         "ml_rank":           "AI rank",
         "entry_signal":      "Entry",
@@ -139,17 +166,27 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         "trend_signal":      "Trend",
         "delta_flag":        "Δ",
         "piotroski_f":       "Piotroski",
+        "data_stale_days":   "_stale",
     })
+
+    # Lägg till staleness-ikon i Ticker-kolumnen (⏱ = data mer än 7 dagar gammal)
+    if "_stale" in display.columns:
+        display["Ticker"] = display.apply(
+            lambda r: r["Ticker"] + " ⏱" if (r.get("_stale") or 0) > 0 else r["Ticker"],
+            axis=1,
+        )
+        display.drop(columns=["_stale"], inplace=True)
 
     if "Rank" in display.columns:
         display["Rank"] = range(1, len(display) + 1)
 
     col_cfg = {
         "Rank": st.column_config.NumberColumn("Rank", help="Position i rankinglistan. Rank 1 = bäst poäng i det filtrerade urvalet.", format="%d"),
-        "Ticker": st.column_config.TextColumn("Ticker", help="Börsticker. 💧 = illikvid (uppskattad dagsomsättning < $50k/dag -- kan vara svår att handla utan hög spread)."),
+        "Ticker": st.column_config.TextColumn("Ticker", help="Börsticker. 💧 = illikvid (dagsomsättning < $50k). ⏱ = data från förra scan (Yahoo rate-limitad denna körning)."),
         "Bolag": st.column_config.TextColumn("Bolag", help="Bolagets fullständiga namn."),
         "Status": st.column_config.TextColumn("Status", help="💼 = du äger aktien * ⭐ = du bevakar den"),
         "Sektor": st.column_config.TextColumn("Sektor", help="Vilken bransch bolaget tillhör. Sektorrotation är viktigt -- starka sektorer presterar ofta bättre."),
+        "Score Δ": st.column_config.TextColumn("Score Δ", help="Förändring i totalscore sedan förra veckans scan. ▲ = förbättring ≥5p. ▼ = försämring ≥5p. ─ = oförändrad."),
         "Entry": st.column_config.TextColumn("Entry", help="Köpsignal baserad på momentum och volym. STARK = tydlig uppåtrörelse med hög konfidensgrad. OK = måttlig signal. --= ingen signal just nu."),
         "Konf.": st.column_config.TextColumn("Konf.", help="Konfidensnivå för entry-signalen. HÖG = starka indikatorer samstämmer. MEDEL = blandat. LÅG = svag signal."),
         "Trend": st.column_config.TextColumn("Trend", help="Teknisk trend baserad på MA50/MA200. UPPTREND = aktien är i positiv trend och över sina glidande medelvärden."),
@@ -366,6 +403,22 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
     # Show changes only
     if _ws_view_opts.get("show_changes_only"):
         filt_df = _ws_filter_changed(filt_df)
+
+    # ── Förbättrande aktier-filter (score_delta_4w >= +5) ─────────────────────
+    has_delta = "score_delta_4w" in filt_df.columns and filt_df["score_delta_4w"].notna().any()
+    _n_stale  = (filt_df.get("data_stale_days", 0) > 0).sum() if "data_stale_days" in filt_df.columns else 0
+    col_imp, col_stale_info = st.columns([3, 2])
+    with col_imp:
+        only_improving = st.checkbox(
+            "▲ Visa bara förbättrande aktier (score ≥ +5 sedan förra scan)",
+            key="ws_only_improving",
+            help="Filtrerar till aktier vars totalpoäng ökat med minst 5 poäng sedan förra veckans scan. Bra för att hitta aktier på väg mot köpsignal.",
+        ) if has_delta else False
+    with col_stale_info:
+        if _n_stale > 0:
+            st.caption(f"⏱ {_n_stale} aktier visas med data från förra scan (⏱ i Ticker = Yahoo rate-limitad)")
+    if only_improving and has_delta:
+        filt_df = filt_df[filt_df["score_delta_4w"].fillna(0) >= 5]
 
     tab1, tab2, tab3, tab4, tab_scorecard = st.tabs(
         ["📋 Ranking", "📊 Fundamental", "📈 Momentum & Teknisk", "🔬 Score-detalj", "📊 Signal Scorecard"]
