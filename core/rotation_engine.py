@@ -169,6 +169,7 @@ def rank_replacements(
     scored: Optional[pd.DataFrame] = None,
     top_n: int = 10,
     holdings_tickers: Optional[list[str]] = None,
+    exclude: Optional[set] = None,
 ) -> list[dict]:
     """
     Rankar de bästa ersättningskandidaterna för en borttagen ticker.
@@ -217,10 +218,15 @@ def rank_replacements(
     if not score_col:
         return []
 
+    # Tickers att exkludera: redan valda i samma rotationskörning (undviker att
+    # samma topp-kandidat föreslås som ersättare för ALLA utlösare)
+    exclude_set = set(exclude or set())
+
     # Filtrera pool
     pool = scored[
         (~scored["ticker"].isin(existing)) &
         (~scored["ticker"].isin(blacklisted)) &
+        (~scored["ticker"].isin(exclude_set)) &
         (scored[score_col] >= CANDIDATE_MIN_SCORE) &
         (scored["ticker"] != removed_ticker)
     ].copy()
@@ -397,8 +403,13 @@ def run_rotation(
     replacements = []
     executed = []
     total_added = 0
+    chosen_this_run: set[str] = set()  # Hindrar att samma kandidat väljs flera gånger
 
-    for trigger in triggers:
+    # Begränsa antalet utlösare vi faktiskt processar till max_replacements
+    # (annars körs en AI-fråga per utlösare även om vi bara kan addera ett fåtal)
+    triggers_to_process = triggers[:max_replacements]
+
+    for trigger in triggers_to_process:
         if total_added >= max_replacements:
             break
 
@@ -409,9 +420,10 @@ def run_rotation(
 
         logger.info(f"\n  Hanterar {removed_ticker} ({removed_reason})...")
 
-        # Ranka kandidater
+        # Ranka kandidater — exkludera redan valda så varje utlösare får en UNIK ersättare
         candidates = rank_replacements(
-            removed_ticker, removed_sector, scored=scored, top_n=10
+            removed_ticker, removed_sector, scored=scored, top_n=10,
+            exclude=chosen_this_run,
         )
 
         if not candidates:
@@ -432,6 +444,10 @@ def run_rotation(
             )
         if not chosen and candidates:
             chosen = candidates[0]
+
+        # Markera vald ticker så den inte föreslås igen för nästa utlösare
+        if chosen and chosen.get("ticker"):
+            chosen_this_run.add(chosen["ticker"])
 
         replacement_info = {
             "removed":        removed_ticker,

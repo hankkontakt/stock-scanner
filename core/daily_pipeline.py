@@ -659,6 +659,27 @@ def _cleanup_old_reports(max_days: int = 60) -> int:
     return removed
 
 
+def _looks_like_ticker(ticker: str) -> bool:
+    """
+    True om strängen ser ut som en giltig börsticker.
+
+    Filtrerar bort fondnamn och andra icke-tickers som annars
+    läggs till i custom_universe och misslyckas i varje scan
+    (t.ex. "LÄNSFÖRSÄKRINGAR GLOBAL INDEX" — en fond utan ticker).
+
+    Regler:
+      - Inte tom
+      - Inga mellanslag (tickers har aldrig mellanslag)
+      - Max 15 tecken (längsta riktiga tickers är ~12, t.ex. TLEVISACPO.MX)
+    """
+    if not ticker:
+        return False
+    t = str(ticker).strip()
+    if not t or " " in t or len(t) > 15:
+        return False
+    return True
+
+
 def _pre_scan_sync_universe():
     """
     Synkar portföljinnehav och bevakningslista till custom_universe.json
@@ -682,6 +703,9 @@ def _pre_scan_sync_universe():
 
     for ticker in all_candidates:
         if not ticker:
+            continue
+        if not _looks_like_ticker(ticker):
+            logger.info(f"  ⏭ Hoppar över icke-ticker (t.ex. fondnamn): {ticker!r}")
             continue
         if ticker in universe_set or ticker in existing:
             continue
@@ -1356,7 +1380,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             added = 0
             for _, h in holdings.iterrows():
                 t = str(h.get("ticker", "")).upper().strip()
-                if not t:
+                if not t or not _looks_like_ticker(t):
                     continue
                 if t in universe_tickers_set or t in custom_existing:
                     continue
@@ -1382,6 +1406,8 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 if not w:
                     continue
                 w_up = w.upper().strip()
+                if not _looks_like_ticker(w_up):
+                    continue
                 if w_up in universe_tickers_set_wl or w_up in custom_existing_wl:
                     continue
                 in_main_wl = any(w_up + sfx in universe_tickers_set_wl for sfx in (".ST", ".HE", ".CO", ".OL"))
@@ -1628,11 +1654,15 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                         f"- Score {t['score']:.0f} | {t['entry']} | {t['sector']}"
                     )
                     # Faktor-attribution: visa varför aktien rankas högt
-                    attr = format_factor_attribution_md(t, compact=True)
-                    if attr:
-                        for attr_line in attr.split("\n"):
-                            report_lines.append(f"     {attr_line}")
-                        report_lines.append("")
+                    # (defensivt: en formateringsbugg får aldrig krascha hela rapporten)
+                    try:
+                        attr = format_factor_attribution_md(t, compact=True)
+                        if attr:
+                            for attr_line in attr.split("\n"):
+                                report_lines.append(f"     {attr_line}")
+                            report_lines.append("")
+                    except Exception as _attr_e:
+                        logger.warning(f"  ⚠ Faktor-attribution hoppades över för {t.get('ticker','?')}: {_attr_e}")
 
             # ── Bottom-5 ─────────────────────────────────────────────────────
             if bottom_5:
@@ -1986,6 +2016,45 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         elapsed = time.time() - start_time
         logger.error(f"❌ Pipeline misslyckades efter {elapsed:.0f}s: {pipeline_error}")
         pl.log_error("pipeline", "PIPELINE_FAILED", str(pipeline_error)[:300])
+
+        # ── Skyddsnät: skicka en minimal fallback-rapport om ett sent fel ──────
+        # uppstår (t.ex. i rapportbygget) EFTER att scoring redan lyckats.
+        # Annars går 20+ min datahämtning förlorad och användaren får inget mail.
+        try:
+            _email_already_sent = 'email_sent' in locals() and email_sent
+            _scored_fallback = locals().get("scored")
+            if (not _email_already_sent
+                    and _scored_fallback is not None
+                    and not _scored_fallback.empty
+                    and "score_total" in _scored_fallback.columns):
+                _date = date.today().strftime("%Y-%m-%d")
+                _top = _scored_fallback.nlargest(10, "score_total")
+                _lines = [
+                    f"# ⚠️ MarketScan {mode} - ofullständig rapport ({_date})\n",
+                    "Scanningen slutfördes men rapportgenereringen kraschade. "
+                    "Här är de högst rankade aktierna från dagens scan ändå:\n",
+                ]
+                for _i, (_, _r) in enumerate(_top.iterrows(), 1):
+                    _tk = _r.get("ticker", "?")
+                    _sc = _r.get("score_total")
+                    _sc_s = f"{_sc:.0f}" if isinstance(_sc, (int, float)) and _sc == _sc else "--"
+                    _en = _r.get("entry_signal", "--")
+                    _lines.append(f"  {_i}. **{_tk}** — Score {_sc_s} | {_en}")
+                _lines.append(f"\n\n_Tekniskt fel: {str(pipeline_error)[:200]}_")
+                from core.email_template import send_email as _send
+                _send(
+                    subject=f"⚠️ MarketScan {mode} (ofullständig) - {_date}",
+                    body_markdown="\n".join(_lines),
+                    from_name="MarketScan",
+                    subscription_type={
+                        "morning": "morning_report", "evening": "evening_report",
+                        "weekly": "weekly_summary", "smallcap": "smallcap_report",
+                    }.get(mode, "weekly_summary"),
+                )
+                logger.info("  ✉ Fallback-rapport skickad trots pipeline-fel")
+        except Exception as _fb_e:
+            logger.warning(f"  ⚠ Fallback-rapport kunde inte skickas: {_fb_e}")
+
         raise
     finally:
         # ── Alltid spara metrik och loggar ──────────────────────────────────

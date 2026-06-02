@@ -1110,6 +1110,69 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-02 — Komplett bugg-audit av weekly + smallcap scan (förebyggande)
+
+Efter den fatala weekly-kraschen gjordes en heltäckande audit av båda scan-vägarna för
+att hitta fler latenta krascher. Fynd och åtgärder:
+
+**1. Rotation valde SAMMA ersättare för alla utlösare** (`core/rotation_engine.py`)
+- Loggen visade att CRDO valdes som ersättare för ALLA 14 utlösare, och 14 ocachade
+  AI-anrop (`force_refresh=True`) gjordes — ett per utlösare. `rank_replacements`
+  returnerade alltid samma globala topp-pool oavsett vilken ticker som togs bort, och
+  inget hindrade samma kandidat från att väljas om och om igen.
+- FIX: ny `exclude`-parameter i `rank_replacements`; `run_rotation` håller en
+  `chosen_this_run`-mängd och exkluderar redan valda → varje utlösare får en UNIK
+  ersättare. Antalet bearbetade utlösare cappas nu till `max_replacements` (default 5
+  i pipeline) → max 5 AI-anrop istället för 14.
+
+**2. Smallcap-scannern kraschade på tomt resultat i mail-ämnet** (`smallcap/scanner.py:433`)
+- `top1 = ... if not scored.empty else "--"` följdes av `scored.iloc[0]['sc_stars']`
+  UTAN guard → IndexError om `score_universe` returnerade tomt och `send_mail=True`.
+- FIX: hela ämnesraden byggs nu bara om `scored` är icke-tom; annars en neutral rubrik.
+
+**3. Defense-in-depth: fallback-mail vid sent pipeline-fel** (`core/daily_pipeline.py`)
+- Top-level `except` skickar nu en minimal topp-10-rapport om scoring lyckats men ett
+  senare steg kraschar (innan mail skickats). Förhindrar att 20+ min datahämtning +
+  mailet går förlorat vid framtida buggar.
+
+**Granskat och bedömt SÄKERT (inga ändringar):**
+- `core/scoring.py` — viktnormalisering (rad 288) och weighted-sum (rad 415) kan ej
+  dela med noll (positiva konstanta vikter; `if not components`-guard).
+- `smallcap/report.py` — all formatering går via `_fmt_val`/`_fmt_pct`/try-except;
+  NaN ger "--", aldrig krasch.
+- `core/piotroski.py` — alla `int(...)` opererar på boolska jämförelser (NaN→False→0).
+- Övriga `:.0f`/`:.1f` i weekly/smallcap-rapporterna får sina värden från `nlargest`
+  (icke-null) eller `.mean()` (NaN formateras till "nan", kraschar ej).
+
+
+### 2026-06-02 — KRITISK: weekly-scan kraschade i slutet (exit 1, inget mail skickades)
+
+**Rotorsak — NaN i faktor-attribution** (`core/pipeline_report.py:117` `_score_bar`)
+- Weekly-körningen hämtade all data (21 min), scorade 1198 tickers, körde rotation —
+  och kraschade sedan i rapportbygget med `ValueError: cannot convert float NaN to integer`.
+- `_score_bar(s)` gjorde `int(s / 10)` på en faktor-subscore som var NaN. Guarden i loopen
+  fångade `None` och icke-numeriskt men `float(NaN)` slank igenom. Triggades av FPH.NZ
+  (nyligen tillagd ticker utan fullständig faktordata) i topp-10.
+- FIX: `_score_bar` hanterar nu NaN→0 defensivt; loopen hoppar över NaN-faktorer (`if s != s: continue`).
+- DEFENSE-IN-DEPTH: anropet i `daily_pipeline.py` (weekly topp-10) wrappat i try/except så att
+  en formateringsbugg aldrig kan kasta bort 21 min arbete + mailet igen.
+
+**Data-kvalitet — fondnamn som ticker** (`core/daily_pipeline.py`, `data/custom_universe.json`)
+- "LÄNSFÖRSÄKRINGAR GLOBAL INDEX" (en fond, typ=fond i holdings.csv utan riktig ticker)
+  hade synkats in i custom_universe och misslyckades i VARJE scan (404), slösade API-anrop
+  och skräpade ner loggen.
+- FIX: ny `_looks_like_ticker()` (avvisar mellanslag / >15 tecken / tomt) används i alla tre
+  sync-loopar (`_pre_scan_sync_universe` + holdings- och watchlist-synk i run_pipeline).
+  Det stale fond-namnet borttaget ur custom_universe.json.
+
+**Kvarstående (icke-fatala) observationer från loggen → §16/§17:**
+- Rotation valde SAMMA ersättare (CRDO) för alla 14 utlösare — `rank_replacements` returnerar
+  global topp oavsett sektor. Se §17.
+- Stora RATE_LIMITED-kluster (~52 tickers) men Pass-2-retryn återhämtade alla. Ej fatalt.
+- Genuint delistade i universe som bör blacklistas: CHK, X (US Steel uppköpt), SQ (→XYZ),
+  RAD (Rite Aid), ALTM, SAND (US), div .L/.DE/.T-tickers. Se §16.
+
+
 ### 2026-06-02 — Delvis implementerade features fixade och kopplade in i main pipeline
 
 **#9 Monitoring: Prometheus-format fixat** (`core/monitoring/metrics.py:180-265`)
