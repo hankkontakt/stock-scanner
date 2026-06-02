@@ -70,5 +70,23 @@
       "MNST",
       "EXEL"
     ]
+  },
+  "2026-06-02_smallcap": {
+    "capital": 100000,
+    "universe": "smallcap",
+    "n_picks": 10,
+    "benchmark_buy": 758.5399780273438,
+    "tickers": [
+      "MAGI.ST",
+      "CTM.ST",
+      "MEKKO.HE",
+      "ALCA.ST",
+      "ADMCM.HE",
+      "ADTR.ST",
+      "UPSALE.ST",
+      "ENRO.ST",
+      "TAGM-B.ST",
+      "DEDI.ST"
+    ]
   }
 }

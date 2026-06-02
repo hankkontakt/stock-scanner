@@ -92,5 +92,14 @@
       "report_path": "reports/morning_2026-05-15.md",
       "elapsed_seconds": 4.7
     }
+  },
+  {
+    "timestamp": "2026-06-02T10:02:18",
+    "scan_type": "smallcap",
+    "status": "OK",
+    "details": {
+      "scan_type": "smallcap",
+      "elapsed_seconds": 81.0
+    }
   }
 ]
