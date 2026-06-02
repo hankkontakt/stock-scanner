@@ -208,12 +208,14 @@ def page_alerts_notices(df: pd.DataFrame):
     # Load yesterday's data for watchlist health check
     df_yesterday = _load_nth_latest_scored(n=2)
 
-    tab_pos, tab_movers, tab_events, tab_watchlist, tab_insider = st.tabs([
+    tab_pos, tab_movers, tab_events, tab_watchlist, tab_insider, tab_price_alerts, tab_channels = st.tabs([
         "⚡ Signaler & Larm",
         "🔥 Vad stack ut idag?",
         "📅 Kommande händelser",
         "⭐ Bevakningslista",
         "👔 Insynsköp",
+        "💰 Prislarm",
+        "📡 Larmkanaler",
     ])
 
     # ══════════════════════════════════════════════════════════════════════
@@ -862,3 +864,202 @@ Om aktien sedan stiger tvingas blankarna köpa tillbaka -> **short squeeze** -> 
                 st.info("Inga aktier med hög blankningsandel (>5%) i nuvarande scan")
         else:
             st.info("Short-data ej tillgänglig i nuvarande scan")
+
+    # ══════════════════════════════════════════════════════════════════════
+    # TAB 6 -- Prislarm (CRUD)
+    # ══════════════════════════════════════════════════════════════════════
+    with tab_price_alerts:
+        from core.price_alerts import PriceAlertManager, CONDITIONS
+        pa = PriceAlertManager()
+
+        st.subheader("💰 Prislarm")
+        with st.expander("ℹ️ Vad är prislarm?", expanded=False):
+            st.markdown("""
+        **Prislarm** låter dig få notiser när en aktie når ett visst pris eller uppfyller ett tekniskt villkor.
+
+        **Villkor:**
+        - **above** — Aktien når över ett målpris
+        - **below** — Aktien faller under ett målpris
+        - **crosses_ma50** — Aktien korsar sitt 50-dagars glidande medelvärde
+        - **crosses_ma200** — Aktien korsar sitt 200-dagars glidande medelvärde
+        - **rsi_above_70** — RSI över 70 (överköpt — potentiell säljsignal)
+        - **rsi_below_30** — RSI under 30 (översåld — potentiell köpsignal)
+        - **change_pct** — Kursrörelse över X % på en dag
+        - **volume_spike** — Volym över X gånger snittet
+        """)
+
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            ticker_input = st.text_input("Ticker", placeholder="t.ex. AAPL", key="pa_ticker").strip().upper()
+            condition = st.selectbox("Villkor", CONDITIONS, key="pa_condition")
+            target_price = st.number_input("Målvärde (pris/R%/multipel)", min_value=0.0, step=0.5, key="pa_target")
+            note = st.text_input("Anteckning (valfritt)", key="pa_note")
+            if st.button("➕ Skapa larm", type="primary", key="pa_create"):
+                if ticker_input:
+                    ok, msg = pa.set_alert(
+                        ticker=ticker_input,
+                        condition=condition,
+                        target_price=target_price if target_price > 0 else None,
+                        note=note,
+                    )
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.warning(msg)
+                else:
+                    st.warning("Ange en ticker")
+
+        with col2:
+            st.metric("Aktiva larm", pa.count_active())
+
+        # Lista aktiva larm
+        st.markdown("---")
+        st.subheader("Aktiva larm")
+        active = pa.get_active_alerts()
+        if active:
+            for i, alert in enumerate(active):
+                cols = st.columns([1, 2, 1.5, 1, 1, 0.5])
+                cols[0].markdown(f"**{alert['ticker']}**")
+                cols[1].markdown(f"*{alert['condition']}*")
+                target = alert.get("target_price")
+                cols[2].markdown(f"💰 {target:.2f}" if target else "—")
+                cols[3].markdown(f"_{alert.get('note', '')[:20]}_")
+                cols[4].markdown(f"<small>{alert['created'][:10]}</small>", unsafe_allow_html=True)
+                if cols[5].button("✕", key=f"pa_rm_{i}"):
+                    pa.remove_alert(i)
+                    st.rerun()
+        else:
+            st.info("Inga aktiva prislarm.")
+
+        # Trigger-historik
+        st.markdown("---")
+        st.subheader("Utlösta larm (senaste 30 dagarna)")
+        history = pa.get_triggered_history()
+        if history:
+            for h in history[:20]:
+                msg = h.get("triggered_message", "")
+                ts = h.get("triggered_at", "")[:16]
+                st.info(f"**{h['ticker']}** ({ts}): {msg}")
+        else:
+            st.info("Inga utlösta larm.")
+
+        if history:
+            if st.button("🗑️ Rensa utlösta larm", key="pa_clear"):
+                n = pa.clear_triggered()
+                st.success(f"{n} larm borttagna")
+                st.rerun()
+
+    # ══════════════════════════════════════════════════════════════════════
+    # TAB 7 -- Larmkanaler (Channel Status & Test)
+    # ══════════════════════════════════════════════════════════════════════
+    with tab_channels:
+        st.subheader("📡 Larmkanaler")
+        st.markdown("Hantera och testa dina anslutna larmkanaler.")
+
+        try:
+            from core.alert_engine import AlertEngine
+            engine = AlertEngine()
+            channel_status = engine.get_channel_status()
+
+            col1, col2 = st.columns(2)
+
+            channel_info = {
+                "telegram": {
+                    "name": "Telegram",
+                    "desc": "Skickar notiser via Telegram Bot API.",
+                    "emoji": "✈️",
+                    "setup": "Kräver TELEGRAM_BOT_TOKEN och TELEGRAM_CHAT_ID i .env",
+                },
+                "discord": {
+                    "name": "Discord",
+                    "desc": "Skickar till Discord via webhook.",
+                    "emoji": "💬",
+                    "setup": "Kräver DISCORD_WEBHOOK_URL i .env",
+                },
+                "sms": {
+                    "name": "SMS",
+                    "desc": "SMS via email-to-SMS-gateways.",
+                    "emoji": "📱",
+                    "setup": "Kräver SMS_GATEWAYS (JSON) och EMAIL-konfiguration i .env",
+                },
+                "push": {
+                    "name": "Push (ntfy.sh)",
+                    "desc": "Push-notifikationer via ntfy.sh (gratis).",
+                    "emoji": "🔔",
+                    "setup": "Kräver NTFY_TOPIC i .env",
+                },
+                "email": {
+                    "name": "Email",
+                    "desc": "E-post via Gmail SMTP.",
+                    "emoji": "✉️",
+                    "setup": "Kräver EMAIL_SENDER och EMAIL_PASSWORD i .env",
+                },
+            }
+
+            for i, (chan_id, info) in enumerate(channel_info.items()):
+                col = col1 if i % 2 == 0 else col2
+                status = channel_status.get(chan_id, False)
+                status_html = (
+                    f'<span style="color:#16a34a;font-weight:600">● Aktiv</span>'
+                    if status else
+                    f'<span style="color:#94a3b8">○ Inaktiv</span>'
+                )
+
+                with col:
+                    st.markdown(
+                        f'<div style="border:1px solid #e2e8f0;border-radius:8px;'
+                        f'padding:12px 14px;margin:6px 0;background:#ffffff">'
+                        f'<div style="font-size:15px;font-weight:600;margin-bottom:4px">'
+                        f'{info["emoji"]} {info["name"]} {status_html}</div>'
+                        f'<div style="font-size:12px;color:#64748b;margin-bottom:6px">{info["desc"]}</div>'
+                        f'<div style="font-size:11px;color:#94a3b8">{info["setup"]}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    test_key = f"test_{chan_id}"
+                    if st.button(f"🧪 Testa {info['name']}", key=test_key):
+                        with st.spinner(f"Skickar test till {info['name']}..."):
+                            result = engine.send_test(chan_id)
+                            if result.startswith("OK"):
+                                st.success(result)
+                            elif result.startswith("FEL"):
+                                st.error(result)
+                            else:
+                                st.info(result)
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+            # Telegram QR-kod (för att starta chat med bot)
+            if channel_status.get("telegram"):
+                st.markdown("---")
+                st.subheader("✈️ Telegram QR-kod")
+                bot_token = engine._get_config_val("TELEGRAM_BOT_TOKEN", "")
+                if bot_token:
+                    # Extrahera bot username från token (format: 123456:ABC-DEF)
+                    bot_id = bot_token.split(":")[0] if ":" in bot_token else ""
+                    if bot_id:
+                        bot_url = f"https://t.me/{bot_id}"  # Detta är inte rätt format
+                        # Korrekt: använd bot_token för att hämta bot_info via API
+                        try:
+                            import requests as req
+                            resp = req.get(
+                                f"https://api.telegram.org/bot{bot_token}/getMe",
+                                timeout=10,
+                            )
+                            if resp.ok:
+                                bot_username = resp.json().get("result", {}).get("username", "")
+                                if bot_username:
+                                    bot_url = f"https://t.me/{bot_username}"
+                                    st.markdown(
+                                        f"Starta chat med din bot: "
+                                        f"[t.me/{bot_username}]({bot_url})"
+                                    )
+                                    st.markdown(
+                                        f"Skicka `/start` till botten för att aktivera."
+                                    )
+                        except Exception:
+                            pass
+
+        except ImportError as e:
+            st.warning(f"AlertEngine kunde inte laddas: {e}")
+        except Exception as e:
+            st.error(f"Fel vid laddning av kanalstatus: {e}")

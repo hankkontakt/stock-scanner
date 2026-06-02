@@ -274,6 +274,18 @@ def _deepseek_call(messages: list, system_prompt: str = "",
             if resp.status_code == 200:
                 data = resp.json()
                 content = data["choices"][0]["message"]["content"]
+                # Record metrics
+                try:
+                    from core.monitoring.metrics import MetricsCollector
+                    mc = MetricsCollector()
+                    usage = data.get("usage", {})
+                    mc.record_ai_call(
+                        provider="deepseek",
+                        tokens_input=usage.get("prompt_tokens", 0),
+                        tokens_output=usage.get("completion_tokens", 0),
+                    )
+                except Exception:
+                    pass
                 return content
 
             # ❌ 401/403 - nyckelproblem, ge upp direkt
@@ -1520,3 +1532,243 @@ def clear_cache():
         AI_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         return "✅ AI-cache rensad!"
     return "ℹ️ Ingen cache att rensa."
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 12. STRUCTURED RESPONSE PARSING
+# ══════════════════════════════════════════════════════════════════════════════
+
+def parse_structured_response(raw_text: str, schema: dict = None) -> dict:
+    """Försök JSON-parsea ett AI-svar, med fallback till regex för nyckelfält.
+
+    Försöker i ordning:
+    1. Rakt JSON-parse (om hela svaret är JSON)
+    2. JSON-block inom ```json ... ```
+    3. JSON-block inom { ... }
+    4. Regex-extrahering av enskilda fält
+
+    Args:
+        raw_text: Rå text från AI-providern
+        schema: Valfritt JSON-schema för validering
+
+    Returns:
+        Dict med parsad data (minst {"raw_text": raw_text})
+    """
+    if not raw_text:
+        return {"raw_text": "", "error": "Tomt svar"}
+
+    result = {"raw_text": raw_text[:500]}  # Spara trunkerad råtext
+
+    # 1. Försök rakt JSON-parse
+    text = raw_text.strip()
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            result["parsed_json"] = parsed
+            result["method"] = "direct_json"
+            return {**result, **parsed}
+    except json.JSONDecodeError:
+        pass
+
+    # 2. JSON-block inom ```json ... ```
+    json_block_match = re.search(r'```(?:json)?\s*\n(.*?)\n```', text, re.DOTALL)
+    if json_block_match:
+        try:
+            parsed = json.loads(json_block_match.group(1))
+            if isinstance(parsed, dict):
+                result["parsed_json"] = parsed
+                result["method"] = "json_block"
+                return {**result, **parsed}
+        except json.JSONDecodeError:
+            pass
+
+    # 3. { ... } med regex
+    brace_match = re.search(r'\{[\s\S]*\}', text)
+    if brace_match:
+        try:
+            parsed = json.loads(brace_match.group(0))
+            if isinstance(parsed, dict):
+                result["parsed_json"] = parsed
+                result["method"] = "brace_extract"
+                return {**result, **parsed}
+        except json.JSONDecodeError:
+            pass
+
+    # 4. Regex-fallback: extrahera individuella fält
+    result["method"] = "regex_fallback"
+    result["recommendation"] = extract_recommendation(text)
+    result["confidence"] = extract_confidence(text)
+    result["target_price"] = extract_target_price(text)
+
+    return result
+
+
+def extract_recommendation(text: str) -> str:
+    """Hitta rekommendation i AI-texten.
+
+    Letar efter mönster som "STARKT KÖP", "KÖP", "BEVAKA", "UNDVIK", "SÄLJ"
+    i texten, med prioritet för starkare signaler.
+
+    Args:
+        text: AI-svar som text
+
+    Returns:
+        Rekommendation som sträng, eller "NEUTRAL" om ingen hittas
+    """
+    if not text:
+        return "NEUTRAL"
+
+    text_upper = text.upper()
+
+    # Prioriterad ordning: starkast först
+    patterns = [
+        (r'STARKT\s*K[OÖ]P', "STARKT KÖP"),
+        (r'STARK\s*K[OÖ]P', "STARKT KÖP"),
+        (r'S[ÄA]LJ', "SÄLJ"),        # Hanterar både SÄLJ och SALJ
+        (r'UNDVIK', "UNDVIK"),
+        (r'K[OÖ]P', "KÖP"),          # Hanterar både KÖP och KOP
+        (r'BEVAKA', "BEVAKA"),
+        (r'V[ÄA]NTA', "VÄNTA"),      # Hanterar både VÄNTA och VANTA
+        (r'NEUTRAL', "NEUTRAL"),
+        (r'H[OÖ]LD', "BEVAKA"),
+        (r'BUY', "KÖP"),
+        (r'SELL', "SÄLJ"),
+        (r'AVST[ÄA]', "VÄNTA"),      # Hanterar både AVSTÅ och AVSTA
+    ]
+
+    # Leta efter rekommendationsmarkörer som "REKOMMENDATION:" eller "Rekommendation:"
+    for marker in ["REKOMMENDATION:", "**REKOMMENDATION**", "**RECOMMENDATION**",
+                   "RECOMMENDATION:", "SLUTSATS:", "BEDÖMNING:"]:
+        if marker in text_upper:
+            after_marker = text_upper.split(marker, 1)[1][:100]
+            for pattern, rec in patterns:
+                if re.search(pattern, after_marker):
+                    return rec
+
+    # Sök i hela texten
+    for pattern, rec in patterns:
+        if re.search(pattern, text_upper):
+            return rec
+
+    return "NEUTRAL"
+
+
+def extract_confidence(text: str) -> float:
+    """Hitta förtroendenivå (0.0-1.0) i AI-texten.
+
+    Letar efter:
+    - "Konfidens: 85%" eller "Confidence: 85%"
+    - "Förtroende: hög" etc.
+    - Numeriska värden 0-1 eller 0-100
+
+    Args:
+        text: AI-svar som text
+
+    Returns:
+        Float 0.0-1.0, default 0.5 om ingen hittas
+    """
+    if not text:
+        return 0.5
+
+    text_upper = text.upper()
+
+    # Leta efter konfidens-markörer (hanterar både svenska och engelska, inkl. ASCII-fallback)
+    for marker in ["KONFIDENS:", "FORTRDENDE:", "CONFIDENCE:", "SAKERHET:", "SÄKERHET:",
+                   "**KONFIDENS**", "**CONFIDENCE**", "**SÄKERHET**"]:
+        if marker in text_upper:
+            after = text_upper.split(marker, 1)[1][:50]
+
+            # Procent: "85%"
+            pct_match = re.search(r'(\d{1,3})\s*%', after)
+            if pct_match:
+                return min(float(pct_match.group(1)) / 100, 1.0)
+
+            # Decimal: "0.85"
+            dec_match = re.search(r'(0\.\d+)', after)
+            if dec_match:
+                return min(float(dec_match.group(1)), 1.0)
+
+            # Textbaserad: "hög", "mycket hög", "låg" (O->Ö fallback for cp1252)
+            if "MYCKET H" in after and ("G" in after or "G" in after):
+                return 0.9
+            if "VERY HIGH" in after:
+                return 0.9
+            if after.strip().startswith("H") or "HIGH" in after:
+                return 0.8
+            if "MEDEL" in after or "MEDIUM" in after or "MODERATE" in after:
+                return 0.6
+            if "L" in after and ("G" in after or "G" in after):
+                return 0.3
+            if "LOW" in after:
+                return 0.3
+
+    # Sök på hela texten efter konfidensmönster (O: eller %)
+    # Hitta första procentvärdet i intervallet 50-100
+    pct_matches = re.findall(r'(\d{1,3})\s*%', text_upper)
+    for pct in pct_matches:
+        val = int(pct)
+        if 50 <= val <= 100:
+            return val / 100
+
+    # Leta efter "hög" eller "låg" i hela texten
+    if re.search(r'\bH[OÖ]G\b', text_upper):
+        return 0.8
+    if re.search(r'\bL[AÅ]G\b', text_upper):
+        return 0.3
+    if "MEDEL" in text_upper:
+        return 0.6
+
+    return 0.5  # Default
+
+
+def extract_target_price(text: str) -> Optional[float]:
+    """Hitta prismål i AI-texten.
+
+    Letar efter mönster som:
+    - "prismål: 245 kr" eller "target: $245"
+    - "kursmål 245"
+    - "$245" eller "245 kr" i närheten av "target" eller "mål"
+
+    Args:
+        text: AI-svar som text
+
+    Returns:
+        Float med prismål, eller None
+    """
+    if not text:
+        return None
+
+    # Normalisera svenska tecken till ASCII för robust matchning
+    text_normalized = text.upper()
+    text_normalized = text_normalized.replace('Å', 'A').replace('Ä', 'A').replace('Æ', 'AE').replace('Ö', 'O')
+
+    # Leta efter prismål-markörer (både med och utan svenska tecken)
+    markers = ["PRISMÅL:", "PRISMAL:", "KURSMÅL:", "KURSMAL:", "TARGET:", "MÅL:", "MAL:",
+               "**PRISMÅL**", "**PRISMAL**", "**KURSMÅL**", "**TARGET**",
+               "PRIS MÅL:", "TARGET PRIS:", "TARGET PRICE:"]
+    for marker in markers:
+        if marker in text_normalized:
+            after = text_normalized.split(marker, 1)[1][:50]
+            # Siffra (med eller utan decimal)
+            num_match = re.search(r'(\d{1,10}(?:[,.]\d{1,2})?)', after)
+            if num_match:
+                try:
+                    return float(num_match.group(1).replace(",", "."))
+                except ValueError:
+                    pass
+
+    # Sök efter "target $X" eller "mål X kr" i hela texten (utan svenska tecken för robusthet)
+    target_patterns = [
+        r'(?:target|mal|kursmal|prismal|prismål|kursmål|mål)\s*(?:price)?\s*(?::|av|pa|på|:|=)?\s*\$\s*(\d+(?:[,.]\d{1,2})?)',
+        r'(?:target|mal|kursmal|prismal|prismål|kursmål|mål)\s*(?:price)?\s*(?::|av|pa|på|:|=)?\s*(\d+(?:[,.]\d{1,2})?)\s*(?:kr|sek|usd|eur)',
+    ]
+
+    for pattern in target_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            try:
+                return float(match.group(1).replace(",", "."))
+            except ValueError:
+                pass
+
+    return None

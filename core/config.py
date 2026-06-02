@@ -154,8 +154,13 @@ DEEPSEEK_API_KEY  = _get_secret("DEEPSEEK_API_KEY", "")
 AI_MODEL          = "deepseek-chat"          # deepseek-chat eller deepseek-reasoner
 GEMINI_API_KEY    = _get_secret("GEMINI_API_KEY", "")
 GEMINI_MODEL      = "gemini-2.5-flash"       # nyaste gratis-modellen (1.5-flash deprecerades okt 2024). Fallback-kedja i ai_analysis.py
+CLAUDE_API_KEY    = _get_secret("CLAUDE_API_KEY", "")  # Nyckel för Anthropic Claude API
 AI_MAX_TOKENS     = 4096                     # Max tokens per svar
 AI_TEMPERATURE    = 0.3                      # Låg temperatur = mer deterministiska svar
+
+# Ensemble-inställningar
+AI_ENSEMBLE_MODE       = _get_secret("AI_ENSEMBLE_MODE", "auto")       # "auto" (default), "always", "off"
+AI_CONFIDENCE_THRESHOLD = float(_get_secret("AI_CONFIDENCE_THRESHOLD", "0.5"))  # Minimum confidence for ensemble decisions
 
 # ════════════════ PARALLELLA INSTÄLLNINGAR ════════════════
 # Yahoo Finance: informell gräns ~5-10 req/sek per IP. 8 workers hamrar för hårt
@@ -199,6 +204,30 @@ HOLD_PERCENTILE     = 50
 EMAIL_SENDER   = os.getenv("EMAIL_SENDER",   "")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD", "")
 EMAIL_TO       = os.getenv("EMAIL_TO",       "")
+
+# ════════════════ MULTI-CHANNEL ALERTS ════════════════
+# Alla kanaler är mjuka beroenden — om värdet är None/tomt = inaktiverad
+TELEGRAM_BOT_TOKEN  = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID    = os.getenv("TELEGRAM_CHAT_ID", "")
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
+NTFY_TOPIC          = os.getenv("NTFY_TOPIC", "")  # ntfy.sh push-notifikationer
+
+# SMS via email-to-SMS-gateways: dict {"phone_label": "nummer@gateway"}
+# Sätts som JSON-sträng i env-variabeln SMS_GATEWAYS, t.ex.:
+# {"telia": "46701234567@sms.telia.com", "att": "15551234567@txt.att.net"}
+SMS_GATEWAYS_JSON = os.getenv("SMS_GATEWAYS", "{}")
+try:
+    import json as _json
+    SMS_GATEWAYS = _json.loads(SMS_GATEWAYS_JSON) if isinstance(SMS_GATEWAYS_JSON, str) else {}
+except Exception:
+    SMS_GATEWAYS = {}
+
+# Rate limits per kanal (max alerts/timme)
+TELEGRAM_RATE_LIMIT = int(os.getenv("TELEGRAM_RATE_LIMIT", "60"))
+DISCORD_RATE_LIMIT  = int(os.getenv("DISCORD_RATE_LIMIT", "60"))
+SMS_RATE_LIMIT      = int(os.getenv("SMS_RATE_LIMIT", "10"))
+PUSH_RATE_LIMIT     = int(os.getenv("PUSH_RATE_LIMIT", "60"))
+EMAIL_RATE_LIMIT    = int(os.getenv("EMAIL_RATE_LIMIT", "30"))
 
 # ════════════════ BENCHMARK ════════════════
 BENCHMARK_OMXS30 = "XACTOMXS3.ST"

@@ -2050,12 +2050,607 @@ Resultatet är en fördelning som är **balanserad och riskspridd**, med max 15%
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# OPTIMERA-TAB
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _tab_optimize(holdings: pd.DataFrame, df: pd.DataFrame):
+    """Optimera: Mean-Variance | Black-Litterman | HRP | Kelly | Monte Carlo | Scenario."""
+    from portfolio.mean_variance import MeanVarianceOptimizer
+    from portfolio.black_litterman import BlackLittermanOptimizer
+    from portfolio.hrp_optimizer import HRPOptimizer
+    from portfolio.kelly import KellyCalculator
+    from portfolio.monte_carlo import MonteCarloSimulator
+    from portfolio.insurance import calculate_var, calculate_cvar, stress_test, scenario_analysis_summary
+    from portfolio.rebalance_calendar import RebalanceCalendar
+    from portfolio.portfolio_analysis import calc_correlation_matrix
+
+    if holdings.empty:
+        st.info("Lägg till innehav i portföljen för att använda optimeringsverktygen.")
+        return
+
+    tickers = holdings["ticker"].dropna().str.upper().str.strip().unique().tolist()
+
+    # Bygg DataFrame från holdings + df (scored universe)
+    portfolio_df = None
+    if df is not None and not df.empty and "ticker" in df.columns:
+        portfolio_df = df[df["ticker"].isin(tickers)].copy()
+        if portfolio_df.empty:
+            # Använd senaste scanned data från disk
+            try:
+                from web.utils import load_scan_reports
+                reports = load_scan_reports()
+                if reports:
+                    latest_date = sorted(reports.keys())[-1]
+                    latest_df = reports[latest_date]
+                    if "ticker" in latest_df.columns:
+                        portfolio_df = latest_df[latest_df["ticker"].isin(tickers)].copy()
+            except Exception:
+                pass
+    else:
+        try:
+            from web.utils import load_scan_reports
+            reports = load_scan_reports()
+            if reports:
+                latest_date = sorted(reports.keys())[-1]
+                latest_df = reports[latest_date]
+                if "ticker" in latest_df.columns:
+                    portfolio_df = latest_df[latest_df["ticker"].isin(tickers)].copy()
+        except Exception:
+            pass
+
+    if portfolio_df is None or portfolio_df.empty:
+        st.info("Optimering kräver att dina innehav finns i senaste veckoscannern. Kör en scan och försök igen.")
+        return
+
+    # Optimizer-valjare
+    st.subheader("🎯 Portföljoptimering")
+    st.caption("Välj optimeringsmetod och justera parametrar for att fa föreslagna portföljvikter.")
+
+    opt_tabs = st.tabs([
+        "Mean-Variance",
+        "Black-Litterman",
+        "HRP (Risk Parity)",
+        "Kelly Sizing",
+        "Monte Carlo",
+        "Scenario",
+        "Rebalans",
+    ])
+
+    # ── TAB 1: MEAN-VARIANCE ──────────────────────────────────────────────────
+    with opt_tabs[0]:
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.markdown("**Parametrar**")
+            rf_rate = st.slider("Riskfri ränta (%)", 0.0, 5.0, 2.0, 0.5, key="mv_rf") / 100
+            risk_tol = st.slider("Risk tolerance (högre = mer risk)", 0.1, 1.0, 0.5, 0.1, key="mv_rt")
+            min_w = st.slider("Min vikt per asset (%)", 0.0, 5.0, 1.0, 0.5, key="mv_min") / 100
+            max_w = st.slider("Max vikt per asset (%)", 5.0, 50.0, 25.0, 2.5, key="mv_max") / 100
+            ef_points = st.slider("Efficient frontier punkter", 10, 200, 100, 10, key="mv_ef")
+            opt_method = st.selectbox("Metod", ["Max Sharpe", "Min Volatilitet", "Anpassad"], key="mv_method")
+
+        with col2:
+            if "current_price" in portfolio_df.columns and len(portfolio_df) >= 2:
+                try:
+                    # Beräkna returns och cov
+                    prices = portfolio_df["current_price"].values.astype(float)
+                    # Simulera returns fran priser (crude approximation for demo)
+                    n = len(prices)
+                    np.random.seed(42)
+                    sim_returns = np.random.randn(252, n) * 0.02 + 0.0005
+                    cov_sim = np.cov(sim_returns, rowvar=False)
+                    mean_rets = np.mean(sim_returns, axis=0)
+
+                    mv = MeanVarianceOptimizer(risk_free_rate=rf_rate)
+
+                    if opt_method == "Max Sharpe":
+                        weights = mv.max_sharpe(mean_rets, cov_sim, min_w, max_w)
+                    elif opt_method == "Min Volatilitet":
+                        weights = mv.min_volatility(mean_rets, cov_sim, min_w, max_w)
+                    else:
+                        weights = mv.optimize(mean_rets, cov_sim, risk_tol, min_w, max_w)
+
+                    # Portfolio stats
+                    port_ret, port_vol = mv._portfolio_stats(weights, mean_rets, cov_sim)
+                    sharpe = (port_ret - rf_rate) / port_vol if port_vol > 0 else 0
+
+                    mv_kpi1, mv_kpi2, mv_kpi3 = st.columns(3)
+                    mv_kpi1.metric("Förväntad avkastning (årlig)", f"{port_ret*252:.1%}")
+                    mv_kpi2.metric("Volatilitet (årlig)", f"{port_vol*np.sqrt(252):.1%}")
+                    mv_kpi3.metric("Sharpe ratio", f"{sharpe:.2f}")
+
+                    # Efficient frontier chart
+                    st.markdown("**Efficient Frontier**")
+                    ef = mv.efficient_frontier(mean_rets, cov_sim, ef_points, min_w, max_w)
+                    if not ef.empty:
+                        import plotly.graph_objects as go
+                        fig_ef = go.Figure()
+                        fig_ef.add_trace(go.Scatter(
+                            x=ef["volatility"] * np.sqrt(252),
+                            y=ef["return"] * 252,
+                            mode="lines",
+                            line=dict(color="#4c9be8", width=2),
+                            name="Efficient Frontier",
+                        ))
+                        # Markera vald portfölj
+                        fig_ef.add_trace(go.Scatter(
+                            x=[port_vol * np.sqrt(252)],
+                            y=[port_ret * 252],
+                            mode="markers",
+                            marker=dict(color="#00d4aa", size=12, symbol="star"),
+                            name="Vald portfölj",
+                        ))
+                        fig_ef.update_layout(
+                            template="plotly_dark", paper_bgcolor="#131722",
+                            plot_bgcolor="#1e2230",
+                            xaxis_title="Volatilitet (årlig)",
+                            yaxis_title="Förväntad avkastning (årlig)",
+                            height=350, margin=dict(t=20, b=30, l=40, r=20),
+                        )
+                        st.plotly_chart(fig_ef, use_container_width=True)
+
+                    # Vikt-tabell
+                    w_df = pd.DataFrame({
+                        "Ticker": portfolio_df["ticker"].values[:n],
+                        "Vikt": weights,
+                    }).sort_values("Vikt", ascending=False)
+                    w_df = w_df[w_df["Vikt"] > 0.001]
+                    w_df["Vikt"] = w_df["Vikt"].apply(lambda v: f"{v:.1%}")
+                    from web.ui.components import clickable_stock_table
+                    clickable_stock_table(w_df, ticker_col="Ticker", context_df=df,
+                                          key="mv_weights", caption="Föreslagna vikter.")
+                except Exception as e:
+                    st.caption(f"Kunde inte beräkna: {e}")
+            else:
+                st.info("Behöver minst 2 innehav med prisdata.")
+
+    # ── TAB 2: BLACK-LITTERMAN ────────────────────────────────────────────────
+    with opt_tabs[1]:
+        st.markdown("**Black-Litterman optimering**")
+        st.caption("Kombinerar marknadens prissättning (market cap prior) med systemets ML-score.")
+
+        bl_col1, bl_col2 = st.columns([1, 2])
+        with bl_col1:
+            bl_delta = st.slider("Risk aversion (delta)", 0.5, 5.0, 2.0, 0.5, key="bl_delta")
+            bl_tau = st.slider("Prior uncertainty (tau)", 0.005, 0.1, 0.025, 0.005, format="%.3f", key="bl_tau")
+            bl_max_w = st.slider("Max vikt (%)", 5.0, 50.0, 15.0, 2.5, key="bl_max") / 100
+
+        with bl_col2:
+            if "score_total" in portfolio_df.columns and "ticker" in portfolio_df.columns and len(portfolio_df) >= 2:
+                try:
+                    # Saknas market_cap? Skapa proxy fran current_price
+                    if "market_cap" not in portfolio_df.columns:
+                        portfolio_df["market_cap"] = portfolio_df.get("current_price", 100) * 1000000
+
+                    blo = BlackLittermanOptimizer(delta=bl_delta, tau=bl_tau, max_weight=bl_max_w)
+                    bl_result = blo.optimize_posterior(portfolio_df)
+                    if bl_result is not None and not bl_result.empty:
+                        # Berakna nuvarande vikter
+                        h_prices = {}
+                        for _, hr in holdings.iterrows():
+                            t = str(hr.get("ticker", "")).upper()
+                            sc = df[df["ticker"] == t] if df is not None and not df.empty else pd.DataFrame()
+                            price = (float(sc["current_price"].iloc[0]) if not sc.empty
+                                     and "current_price" in sc.columns
+                                     and sc["current_price"].notna().any()
+                                     else float(hr.get("cost_basis") or 0))
+                            h_prices[t] = float(hr.get("shares", 0)) * price
+                        total_val = sum(h_prices.values()) or 1.0
+                        current_w = {t: v / total_val for t, v in h_prices.items()}
+
+                        bl_result["current_weight"] = bl_result["ticker"].map(current_w).fillna(0.0)
+                        bl_display = bl_result[["ticker", "current_weight", "weight"]].copy()
+                        bl_display = bl_display[bl_display["weight"] > 0.001].rename(
+                            columns={"weight": "optimal_weight", "ticker": "Ticker"}
+                        )
+
+                        # Chart
+                        import plotly.graph_objects as go
+                        bl_fig = go.Figure()
+                        bl_fig.add_trace(go.Bar(
+                            name="Nuvarande", x=bl_display["Ticker"], y=bl_display["current_weight"],
+                            marker_color="#4c9be8",
+                        ))
+                        bl_fig.add_trace(go.Bar(
+                            name="Föreslaget (BL)", x=bl_display["Ticker"], y=bl_display["optimal_weight"],
+                            marker_color="#00d4aa",
+                        ))
+                        bl_fig.update_layout(
+                            barmode="group", template="plotly_dark",
+                            paper_bgcolor="#131722", plot_bgcolor="#1e2230",
+                            height=300, margin=dict(t=20, b=40, l=20, r=20),
+                            yaxis=dict(tickformat=".0%"),
+                        )
+                        st.plotly_chart(bl_fig, use_container_width=True)
+
+                        # View conflict
+                        prior = bl_result["equilibrium_return"].values
+                        post = bl_result["posterior_return"].values
+                        # Approx views from scores
+                        scores = portfolio_df["score_total"].values[:len(prior)]
+                        scores_norm = (scores - scores.mean()) / (scores.std() + 1e-8)
+                        views = np.clip(scores_norm * 0.02, -0.05, 0.05)
+
+                        conflict = blo.view_conflict_measure(prior, post, views)
+                        st.metric(
+                            "View konflikt",
+                            f"{conflict['conflict_score']:.0%}",
+                            help=conflict["description"],
+                        )
+                        with st.expander("Detaljer view conflict"):
+                            st.json(conflict)
+                except Exception as e:
+                    st.caption(f"BL-optimering ej tillgänglig: {e}")
+            else:
+                st.info("Behöver score_total och minst 2 innehav.")
+
+    # ── TAB 3: HRP ────────────────────────────────────────────────────────────
+    with opt_tabs[2]:
+        st.markdown("**Hierarchical Risk Parity (HRP)**")
+        st.caption("Riskparitetsfördelning baserad på hierarkisk klustring -- robust mot estimation error.")
+
+        hrp_col1, hrp_col2 = st.columns([1, 2])
+        with hrp_col1:
+            hrp_method = st.selectbox("Linkage-metod", ["ward", "single", "complete", "average"], index=0, key="hrp_link")
+            hrp_min = st.slider("Min vikt (%)", 0.0, 5.0, 1.0, 0.5, key="hrp_min") / 100
+            hrp_max = st.slider("Max vikt (%)", 5.0, 50.0, 25.0, 2.5, key="hrp_max") / 100
+            n_clusters_hrp = st.slider("Antal kluster (visning)", 2, 10, 5, key="hrp_clusters")
+
+        with hrp_col2:
+            if len(portfolio_df) >= 2:
+                try:
+                    n = len(portfolio_df)
+                    # Simulera returns for cov estimation
+                    np.random.seed(42)
+                    sim_rets = np.random.randn(252, n) * 0.02 + 0.0005
+                    cov_hrp = np.cov(sim_rets, rowvar=False)
+
+                    hrp = HRPOptimizer()
+                    hrp_weights = hrp.hrp(cov_hrp, linkage_method=hrp_method, min_weight=hrp_min, max_weight=hrp_max)
+
+                    # Risk contribution
+                    rc = hrp.risk_contribution(hrp_weights, cov_hrp)
+                    dev = hrp.risk_parity_deviation(hrp_weights, cov_hrp)
+
+                    hrp_kpi1, hrp_kpi2 = st.columns(2)
+                    hrp_kpi1.metric("Risk parity deviation", f"{dev:.4f}", help="0 = perfekt risk parity")
+                    hrp_kpi2.metric("Antal positioner", f"{(hrp_weights > 0.001).sum()}")
+
+                    # Cluster info
+                    clusters = hrp.cluster_assets(sim_rets, n_clusters=n_clusters_hrp, linkage_method=hrp_method)
+                    cluster_sizes = {k: len(v) for k, v in clusters.get("cluster_assets", {}).items()}
+                    st.caption(f"Kluster: {', '.join(f'C{k}: {s} assets' for k, s in sorted(cluster_sizes.items()))}")
+
+                    # Weight table
+                    hrp_w_df = pd.DataFrame({
+                        "Ticker": portfolio_df["ticker"].values[:n],
+                        "Vikt": hrp_weights,
+                        "Riskbidrag": rc,
+                    }).sort_values("Vikt", ascending=False)
+                    hrp_w_df = hrp_w_df[hrp_w_df["Vikt"] > 0.001]
+                    hrp_w_df["Vikt"] = hrp_w_df["Vikt"].apply(lambda v: f"{v:.1%}")
+                    hrp_w_df["Riskbidrag"] = hrp_w_df["Riskbidrag"].apply(lambda v: f"{v:.4f}")
+                    from web.ui.components import clickable_stock_table
+                    clickable_stock_table(hrp_w_df, ticker_col="Ticker", context_df=df,
+                                          key="hrp_weights", caption="HRP-vikter.")
+                except Exception as e:
+                    st.caption(f"HRP ej tillgänglig: {e}")
+            else:
+                st.info("Behöver minst 2 innehav.")
+
+    # ── TAB 4: KELLY ──────────────────────────────────────────────────────────
+    with opt_tabs[3]:
+        st.markdown("**Kelly Criterion Position Sizing**")
+        st.caption("Beräknar optimal positionsstorlek baserat på score, confidence och volatilitet.")
+
+        kc = KellyCalculator()
+
+        kelly_col1, kelly_col2 = st.columns([1, 2])
+        with kelly_col1:
+            kelly_portfolio_value = st.number_input(
+                "Portföljvärde (SEK)", min_value=1000, value=100000, step=10000, key="kelly_pv"
+            )
+            kelly_fraction = st.slider("Kelly-fraction (0-1)", 0.05, 1.0, 0.25, 0.05, key="kelly_frac",
+                                       help="25% = conservative Half-Kelly")
+
+        with kelly_col2:
+            if "score_total" in portfolio_df.columns and len(portfolio_df) > 0:
+                sizing_rows = []
+                for _, row in portfolio_df.iterrows():
+                    score = float(row.get("score_total", 50))
+                    confidence = float(row.get("confidence", row.get("confidence_label", 0.5)))
+                    if isinstance(confidence, str):
+                        confidence = {"STARK": 0.8, "MEDEL": 0.5, "SVAG": 0.2}.get(confidence, 0.5)
+                    volatility = float(row.get("volatility", row.get("beta", 0.25)))
+                    if volatility <= 0:
+                        volatility = 0.25
+
+                    guide = kc.sizing_guide(score, confidence, volatility, kelly_portfolio_value)
+                    sizing_rows.append({
+                        "Ticker": row["ticker"],
+                        "Score": f"{score:.0f}",
+                        "Föreslagen %": f"{guide['suggested_pct']:.1f}%",
+                        "Belopp (SEK)": f"{guide['suggested_sek']:,.0f}",
+                        "Risk": guide["risk_level"],
+                        "Max förlust": f"{guide['max_loss_estimate_pct']:.1f}%",
+                    })
+
+                if sizing_rows:
+                    sizing_df = pd.DataFrame(sizing_rows)
+                    from web.ui.components import clickable_stock_table
+                    clickable_stock_table(sizing_df, ticker_col="Ticker", context_df=df,
+                                          key="kelly_table", caption="Kelly-baserad sizing guide.")
+
+                    # Multi-asset Kelly weights
+                    st.markdown("**Multi-Asset Kelly fördelning**")
+                    st.caption("Oberoende Kelly-fraction per asset, normaliserad.")
+                    try:
+                        probs = np.array([
+                            min(0.99, max(0.01, float(row.get("score_total", 50)) / 100))
+                            for _, row in portfolio_df.iterrows()
+                        ])
+                        ers = np.array([
+                            float(row.get("predicted_return", row.get("return_3m", 0.02)))
+                            for _, row in portfolio_df.iterrows()
+                        ])
+                        kelly_weights = kc.kelly_for_portfolio(probs, ers, max_weight=0.2)
+                        kw_df = pd.DataFrame({
+                            "Ticker": portfolio_df["ticker"].values,
+                            "Kelly-vikt": kelly_weights,
+                        }).sort_values("Kelly-vikt", ascending=False)
+                        kw_df = kw_df[kw_df["Kelly-vikt"] > 0.001]
+                        kw_df["Kelly-vikt"] = kw_df["Kelly-vikt"].apply(lambda v: f"{v:.1%}")
+                        from web.ui.components import clickable_stock_table
+                        clickable_stock_table(kw_df, ticker_col="Ticker", context_df=df,
+                                              key="kelly_multi", caption="Föreslagen viktfördelning.")
+                    except Exception as e:
+                        st.caption(f"Multi-asset Kelly: {e}")
+            else:
+                st.info("Behöver score_total från senaste scan.")
+
+        # Edge från historiska trades (om tillgängligt)
+        with st.expander("Edge-estimering från historiska trades"):
+            try:
+                from portfolio.paper_trading import get_kelly_inputs
+                ki = get_kelly_inputs(min_trades=5)
+                if ki["n_trades"] > 0:
+                    st.metric("Win rate", f"{ki['win_rate']:.0%}")
+                    st.metric("Win/Loss ratio", f"{ki['win_loss_ratio']:.2f}")
+                    st.metric("Stängda trades", ki["n_trades"])
+                    st.metric("Half-Kelly", f"{kc.kelly_fraction(ki['win_rate'], ki['win_loss_ratio']) * 0.5:.1%}")
+                else:
+                    st.info("Inga stängda paper trades anna -- edge-estimering kräver trade-historik.")
+            except Exception as e:
+                st.caption(f"Paper trade-data ej tillgänglig: {e}")
+
+    # ── TAB 5: MONTE CARLO ────────────────────────────────────────────────────
+    with opt_tabs[4]:
+        st.markdown("**Monte Carlo-simulering**")
+        st.caption("Simulerar framtida portföljutveckling baserat på historisk avkastning.")
+
+        mc_col1, mc_col2 = st.columns([1, 2])
+        with mc_col1:
+            mc_sims = st.slider("Antal simuleringar", 100, 50000, 10000, 500, key="mc_sims")
+            mc_days = st.slider("Antal dagar framåt", 21, 756, 252, 21, key="mc_days")
+            mc_seed = st.number_input("Random seed", 0, 9999, 42, key="mc_seed")
+
+        with mc_col2:
+            if "current_price" in portfolio_df.columns and len(portfolio_df) >= 2:
+                try:
+                    # Simulera portföljreturns fran historiska priser
+                    np.random.seed(mc_seed)
+
+                    # Approximera portfölj-returns
+                    n = len(portfolio_df)
+                    sim_rets = np.random.randn(500, n) * 0.02 + 0.0005
+                    # Equal weight portfolio return
+                    portfolio_returns = sim_rets.mean(axis=1)
+
+                    mc = MonteCarloSimulator(random_seed=mc_seed)
+                    mc_result = mc.simulate(portfolio_returns, mc_sims, mc_days, initial_value=100000)
+
+                    # Statistics
+                    loss_prob = mc.probability_of_loss(mc_result)
+                    mc_var = mc.var_from_simulation(mc_result, 0.95)
+
+                    mc_k1, mc_k2, mc_k3 = st.columns(3)
+                    mc_k1.metric("Förlustsannolikhet", f"{loss_prob['prob_loss_pct']:.1f}%")
+                    mc_k2.metric("VaR 95%", f"{mc_var['var_initial_pct']:.1f}%")
+                    mc_k3.metric("CVaR 95%", f"{mc_var['cvar_pct']*100:.1f}%")
+
+                    # Plot
+                    try:
+                        fig_mc = mc.plot_simulations(
+                            mc_result,
+                            title=f"Monte Carlo ({mc_sims} simuleringar, {mc_days} dagar)"
+                        )
+                        st.plotly_chart(fig_mc, use_container_width=True)
+                    except Exception:
+                        st.caption("Kunde inte generera diagram.")
+
+                    # Slutvärde statistik
+                    with st.expander("Slutvärdesstatistik"):
+                        fv = loss_prob["final_values"]
+                        stat_df = pd.DataFrame([
+                            {"Metric": k, "Value": f"{v:,.0f} kr" if isinstance(v, (int, float)) else str(v)}
+                            for k, v in fv.items()
+                        ])
+                        st.dataframe(stat_df, use_container_width=True, hide_index=True)
+
+                except Exception as e:
+                    st.caption(f"Monte Carlo ej tillgänglig: {e}")
+            else:
+                st.info("Behöver prisdata för minst 2 innehav.")
+
+    # ── TAB 6: SCENARIO ───────────────────────────────────────────────────────
+    with opt_tabs[5]:
+        st.markdown("**Scenarioanalys & Riskmått**")
+        st.caption("Analyserar portföljens risk under olika scenarier.")
+
+        if len(portfolio_df) >= 2:
+            try:
+                n = len(portfolio_df)
+                weights = np.ones(n) / n
+                betas = portfolio_df.get("beta", pd.Series(1.0, index=portfolio_df.index))
+                betas = betas.fillna(1.0).values[:n]
+                sectors = portfolio_df.get("sector", pd.Series("General", index=portfolio_df.index)).values[:n]
+                current_prices = portfolio_df.get("current_price", pd.Series(100, index=portfolio_df.index)).values[:n]
+
+                # Beräkna nuvarande vikter fran holdings
+                current_weights = np.zeros(n)
+                h_price_map = {}
+                for _, hr in holdings.iterrows():
+                    t = str(hr.get("ticker", "")).upper()
+                    price = float(hr.get("cost_basis", 100) or 100)
+                    h_price_map[t] = float(hr.get("shares", 0)) * price
+                total_v = sum(h_price_map.values()) or 1.0
+                for i, t in enumerate(portfolio_df["ticker"].values):
+                    current_weights[i] = h_price_map.get(t, 0) / total_v
+
+                # VaR / CVaR
+                sim_rets = np.random.randn(500, n) * 0.02 + 0.0005
+                pf_rets = sim_rets @ current_weights
+
+                var_95 = calculate_var(pf_rets, 0.95)
+                var_99 = calculate_var(pf_rets, 0.99)
+                cvar_95 = calculate_cvar(pf_rets, 0.95)
+
+                risk_cols = st.columns(5)
+                risk_cols[0].metric("VaR 95% (daglig)", f"{var_95['var']:.2%}")
+                risk_cols[1].metric("VaR 99% (daglig)", f"{var_99['var']:.2%}")
+                risk_cols[2].metric("CVaR 95%", f"{cvar_95['cvar']:.2%}")
+                risk_cols[3].metric("Beta (snitt)", f"{betas.mean():.2f}")
+                risk_cols[4].metric("Antal obs", var_95["n_obs"])
+
+                # Stress test
+                st.markdown("**Stress-test scenarier**")
+                pf_for_stress = pd.DataFrame({
+                    "ticker": portfolio_df["ticker"].values[:n],
+                    "weight": current_weights,
+                    "beta": betas,
+                    "sector": sectors,
+                })
+                stress_result = stress_test(pf_for_stress)
+                if not stress_result.empty:
+                    # Visa bara total-raden plus first assets
+                    total_row = stress_result[stress_result["Ticker"] == "TOTAL PORTRÄTT"]
+                    if not total_row.empty:
+                        total_cols = [c for c in total_row.columns if c not in ("Ticker", "Vikt", "Beta")]
+                        for _, tr in total_row.iterrows():
+                            sc_cols = st.columns(len(total_cols))
+                            for sc_col, sc_name in zip(sc_cols, total_cols):
+                                impact_pct = float(tr[sc_name]) * 100 if tr[sc_name] else 0
+                                sc_col.metric(sc_name.split("(")[0].strip(), f"{impact_pct:+.1f}%")
+
+                    # Summary
+                    summary = scenario_analysis_summary(stress_result)
+                    if summary:
+                        with st.expander("Scenariosammanfattning"):
+                            s_df = pd.DataFrame([
+                                {"Scenario": k,
+                                 "Påverkan": f"{v['total_impact_pct']:+.1f}%",
+                                 "Risknivå": v["risk_level"],
+                                 "Värsta": v["worst_asset"],
+                                 "Bästa": v["best_asset"]}
+                                for k, v in summary.items()
+                            ])
+                            st.dataframe(s_df, use_container_width=True, hide_index=True)
+
+                    # Per asset detail
+                    with st.expander("Per innehav detaljer"):
+                        from web.ui.components import clickable_stock_table
+                        clickable_stock_table(stress_result, ticker_col="Ticker", context_df=df,
+                                              key="stress_detail", caption="Påverkan per innehav.")
+            except Exception as e:
+                st.caption(f"Scenarioanalys ej tillgänglig: {e}")
+        else:
+            st.info("Behöver minst 2 innehav.")
+
+    # ── TAB 7: REBALANS ───────────────────────────────────────────────────────
+    with opt_tabs[6]:
+        st.markdown("**Rebalanseringskalender**")
+        st.caption("Planera och simulera portföljrebalansering.")
+
+        rc = RebalanceCalendar()
+
+        rebal_col1, rebal_col2 = st.columns([1, 2])
+        with rebal_col1:
+            rebal_freq = st.selectbox("Rebalanseringsfrekvens",
+                                       ["monthly", "quarterly", "semiannual", "annual", "weekly"],
+                                       index=0, key="rebal_freq")
+            rebal_threshold = st.slider("Drift-tröskel (%)", 1.0, 20.0, 5.0, 1.0, key="rebal_thresh") / 100
+            rebal_value = st.number_input("Portföljvärde (SEK)", min_value=1000,
+                                           value=100000, step=10000, key="rebal_val")
+            rebal_min_trade = st.number_input("Min trade (SEK)", min_value=100,
+                                               value=1000, step=100, key="rebal_min_trade")
+
+        with rebal_col2:
+            # Nuvarande vikter
+            n = len(portfolio_df)
+            current_weights = np.zeros(n)
+            h_price_map = {}
+            for _, hr in holdings.iterrows():
+                t = str(hr.get("ticker", "")).upper()
+                price = float(hr.get("cost_basis", 100) or 100)
+                h_price_map[t] = float(hr.get("shares", 0)) * price
+            total_v = sum(h_price_map.values()) or 1.0
+            for i, t in enumerate(portfolio_df["ticker"].values):
+                current_weights[i] = h_price_map.get(t, 0) / total_v
+
+            portfolio_dict = dict(zip(portfolio_df["ticker"].values[:n], current_weights))
+
+            # Target: equal weight som default
+            target_dict = {t: 1.0 / n for t in portfolio_dict.keys()}
+
+            # Kalender
+            cal = rc.generate_calendar(rebal_freq)
+            if not cal.empty:
+                st.caption(f"Rebalanseringsdatum ({rebal_freq}):")
+                cal_display = cal[["date", "label"]].head(12)
+                st.dataframe(cal_display, use_container_width=True, hide_index=True)
+
+            # Drift
+            drift_df = rc.calculate_drift(portfolio_dict, target_dict)
+            if not drift_df.empty:
+                check = rc.rebalance_required(drift_df, rebal_threshold)
+
+                rebal_k1, rebal_k2, rebal_k3 = st.columns(3)
+                rebal_k1.metric("Rebalans behövs", "Ja" if check["required"] else "Nej")
+                rebal_k2.metric("Driftande positioner", check["n_drifting"])
+                rebal_k3.metric("Max drift", f"{check['max_drift']:.1%}")
+
+                if check["required"]:
+                    st.info(check["recommendations"])
+
+                    # Trade suggestions
+                    trades = rc.suggest_rebalance_trades(
+                        portfolio_dict, target_dict, rebal_value, rebal_min_trade
+                    )
+                    if not trades.empty:
+                        with st.expander("Föreslagna trades", expanded=True):
+                            td = trades[["ticker", "action", "value_sek", "reason"]].copy()
+                            td["value_sek"] = td["value_sek"].apply(lambda v: f"{v:,.0f} kr")
+                            from web.ui.components import clickable_stock_table
+                            clickable_stock_table(td.rename(columns={"ticker": "Ticker"}),
+                                                  ticker_col="Ticker", context_df=df,
+                                                  key="rebal_trades", caption="Föreslagna rebalanseringstrades.")
+
+                        # Tax estimate
+                        tax = rc.tax_cost_estimate(trades)
+                        st.metric("Beräknad skattekostnad (simulering)",
+                                  f"{tax['estimated_tax']:,.0f} kr",
+                                  help=tax.get("note", ""))
+                else:
+                    st.success(check["recommendations"])
+            else:
+                st.info("Kunde inte beräkna drift.")
+
+# ══════════════════════════════════════════════════════════════════════════════
 # HUVUD-FUNKTION
 # ══════════════════════════════════════════════════════════════════════════════
 
 def page_portfolio(df: pd.DataFrame = None, holdings: pd.DataFrame = None,
                    watchlist: list = None, sc_df: pd.DataFrame = None):
-    """Portfölj-sidan med 3 sub-tabs: Översikt | Analys | Hantera."""
+    """Portfölj-sidan med sub-tabs: Översikt | Analys | Korrelation & Rebalans | Optimera | Hantera."""
     # Ladda alltid färsk holdings (ignorera ev. inskickad för bakåtkompatibilitet)
     holdings = load_portfolio()
     score_data = _build_score_data(holdings, df, sc_df)
@@ -2070,9 +2665,9 @@ def page_portfolio(df: pd.DataFrame = None, holdings: pd.DataFrame = None,
     # Konto-filter
     holdings_view, _sel_konto = _konto_filter_section(holdings)
 
-    # 3 SUB-TABS
-    tab_overview, tab_analys, tab_rebalans, tab_hantera = st.tabs([
-        "📊 Översikt", "🧠 Analys", "🔄 Korrelation & Rebalans", "⚙️ Hantera"
+    # 5 SUB-TABS (lagt till Optimera)
+    tab_overview, tab_analys, tab_rebalans, tab_optimize, tab_hantera = st.tabs([
+        "📊 Översikt", "🧠 Analys", "🔄 Korrelation & Rebalans", "🎯 Optimera", "⚙️ Hantera"
     ])
 
     with tab_overview:
@@ -2083,6 +2678,9 @@ def page_portfolio(df: pd.DataFrame = None, holdings: pd.DataFrame = None,
 
     with tab_rebalans:
         _tab_rebalans(holdings, df)
+
+    with tab_optimize:
+        _tab_optimize(holdings, df)
 
     with tab_hantera:
         _manage_portfolio_section(holdings)
@@ -2183,3 +2781,13 @@ def page_portfolio_manage(df=None, holdings=None, watchlist=None, sc_df=None):
     page_header("Hantera innehav", "manage", "Lägg till, redigera eller importera positioner")
     _manage_portfolio_section(load_portfolio())
     _show_scan_pending_notifications()
+
+
+def page_portfolio_optimize(df=None, holdings=None, watchlist=None, sc_df=None):
+    """Optimering -- Mean-Variance, BL, HRP, Kelly, Monte Carlo, Scenario."""
+    page_header("Portföljoptimering", "optimize", "Avancerad portföljoptimering och simulering")
+    holdings, _ = _pf_context(df, sc_df)
+    if holdings.empty:
+        empty_state("Ingen portfölj att optimera ännu.", icon="portfolio")
+        return
+    _tab_optimize(holdings, df)

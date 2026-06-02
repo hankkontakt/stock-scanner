@@ -866,6 +866,12 @@ def fetch_company_news(ticker: str, days_back: int = 7, company_name: str = None
         company_name = _resolve_company_name(ticker)
 
     # 1. Finnhub
+    finnhub_results = []
+    try:
+        if config.FINNHUB_API_KEY:
+            finnhub_results = fetch_finnhub_news(ticker, days_back=days_back)
+    except Exception:
+        pass
 
     # 2. Google News svenska
     search_term = company_name.strip() if company_name and company_name.strip() else _google_search_term(ticker)

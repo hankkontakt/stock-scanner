@@ -45,6 +45,39 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 INITIAL_EQUITY = 100_000.0
 HOLD_DAYS = 30  # Stäng position efter 30 dagar
 
+_DAILY_CHECK_INTERVAL = timedelta(hours=1)  # Kolla exit-villkor varje timme
+
+
+def _close_expired_positions(store: dict, today: date) -> int:
+    """Stäng positioner som passerat HOLD_DAYS.
+
+    Rensar dagar då portföljen inte aktivt handlats (helger/ledighet).
+    Returnerar antal stängda positioner.
+    """
+    closed = 0
+    for t in store.get("trades", []):
+        if t.get("exit_date") is not None:
+            continue
+        entry = t.get("date")
+        if not entry:
+            continue
+        try:
+            entry_date = datetime.strptime(entry, "%Y-%m-%d").date()
+        except (ValueError, TypeError):
+            continue
+
+        calendar_days = (today - entry_date).days
+        if calendar_days >= HOLD_DAYS:
+            # Stäng till dagens pris om tillgängligt, annars entry_price
+            close_price = t.get("current_price") or t.get("entry_price", 0)
+            exit_price = close_price if close_price > 0 else t["entry_price"]
+            realized = (exit_price / t["entry_price"]) - 1 if t["entry_price"] else 0
+            t["exit_date"] = today.strftime("%Y-%m-%d")
+            t["exit_price"] = exit_price
+            t["realized_return"] = round(realized, 6)
+            closed += 1
+    return closed
+
 
 def _store_path(universe: str) -> Path:
     return DATA_DIR / f"ml_paper_{universe}.json"
@@ -139,11 +172,29 @@ def record_daily_signals(scored_df: pd.DataFrame, universe: str,
 
 
 def _compute_equity(trades: list) -> float:
-    """Beräkna nuvarande equity förutsatt equal-weight allokering."""
-    realized = sum(t.get("realized_return", 0) or 0 for t in trades if t.get("exit_date"))
-    n_total = len(trades) or 1
-    # Equal-weight: varje stängd trade bidrar med realized_return / n_total av kapitalet
-    return round(INITIAL_EQUITY * (1 + realized / n_total), 2)
+    """Beräkna equity genom att compounda avkastning sekventiellt.
+
+    Varje stängd trade bidrar med (1 + realized_return) multiplikativt.
+    Öppna trades räknas inte (orealiserad avkastning ignoreras).
+    """
+    if not trades:
+        return INITIAL_EQUITY
+    closed = [t for t in trades if t.get("exit_date") and t.get("realized_return") is not None]
+    if not closed:
+        return INITIAL_EQUITY
+    # Equal-weight: varje trade får INITIAL_EQUITY / max(10, n_trades) i kapital
+    capital_per_trade = INITIAL_EQUITY / max(10, len(trades))
+    total_equity = INITIAL_EQUITY
+    for t in closed:
+        trade_pnl = capital_per_trade * t["realized_return"]
+        total_equity += trade_pnl
+    # Öppna trades mark-to-market (om current_price finns)
+    for t in trades:
+        if t.get("exit_date") is None and t.get("entry_price", 0) > 0:
+            current = t.get("current_price") or t["entry_price"]
+            unrealized = (current / t["entry_price"]) - 1
+            total_equity += capital_per_trade * unrealized
+    return round(total_equity, 2)
 
 
 def get_summary(universe: str) -> dict:

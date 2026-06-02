@@ -1,21 +1,23 @@
 """
 black_litterman.py -- Black-Litterman Portfolio Optimization Framework
-============================================================
-Implements the Black-Litterman model for portfolio optimization,
-as recommended by the quantitative architecture review.
+======================================================================
+Implements the Black-Litterman model for portfolio optimization.
 
 The Black-Litterman model:
-1. Uses market-cap-weighted equilibrium returns as a stable Bayesian prior (Π)
+1. Uses market-cap-weighted equilibrium returns as a stable Bayesian prior (Pi)
 2. Updates with the scanner's views (Q) weighted by rolling Information Coefficient (IC)
 3. Produces posterior expected returns that blend equilibrium with signal views
-4. Uses Ledoit-Wolf covariance shrinkage to stabilize Σ
-
-This replaces the simple equal-weighted top-N approach with mathematically
-optimal portfolio weights.
+4. Uses Ledoit-Wolf covariance shrinkage to stabilize Sigma
 
 Usage:
+    # Simple API (legacy)
     from portfolio.black_litterman import black_litterman_weights
     weights = black_litterman_weights(scored_df, historical_ic=0.05)
+
+    # Class-based API
+    from portfolio.black_litterman import BlackLittermanOptimizer
+    blo = BlackLittermanOptimizer()
+    weights = blo.optimize_posterior(scored_df)
 """
 
 import json
@@ -30,31 +32,14 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 # ── Constants ────────────────────────────────────────────────────────────────
-# Tau (τ): uncertainty scalar for the prior. Low = strong prior belief.
-# Standard range: 0.01-0.05. We use 0.025 as default.
-TAU_DEFAULT = 0.025
-
-# Delta (δ (delta): risk aversion coefficient (market price of risk).
-# Calculated as (expected market return - risk-free rate) / market variance.
-# Default 2.0 implies ~8% equity risk premium at 20% volatility.
-DELTA_DEFAULT = 2.0
-
-# Minimum historical IC to use views at all
-MIN_IC_THRESHOLD = 0.01
-
-# Cap on single position weight (prevents concentration)
-MAX_SINGLE_WEIGHT = 0.15
+TAU_DEFAULT = 0.025          # Prior uncertainty scalar
+DELTA_DEFAULT = 2.0          # Risk aversion coefficient
+MIN_IC_THRESHOLD = 0.01      # Minimum IC to use views
+MAX_SINGLE_WEIGHT = 0.15     # Max weight per position
 
 
 def _load_historical_ic(universe: str = "universe") -> dict:
-    """
-    Load rolling 12-month Spearman IC from ML model metrics file.
-
-    Returns dict with:
-        ic: float (Spearman rank correlation)
-        n_months: int (number of months in calculation)
-        rolling_ic: list (monthly IC values)
-    """
+    """Load rolling IC from ML model metrics file."""
     metrics_path = Path(__file__).parent.parent / "models" / f"ml_{universe}_metrics.json"
     if not metrics_path.exists():
         return {"ic": 0.0, "n_months": 0, "rolling_ic": []}
@@ -73,58 +58,27 @@ def _load_historical_ic(universe: str = "universe") -> dict:
 
 
 def _compute_implied_returns(market_caps: np.ndarray,
-                             covariance: np.ndarray,
-                             delta: float = DELTA_DEFAULT) -> np.ndarray:
+                              covariance: np.ndarray,
+                              delta: float = DELTA_DEFAULT) -> np.ndarray:
     """
     Compute implied equilibrium returns using reverse optimization.
-
-    Π = δ x Σ x w_mkt
-
-    Where:
-        Π = implied excess returns (N x 1)
-        δ = risk aversion coefficient
-        Σ = covariance matrix of excess returns (N x N)
-        w_mkt = market-cap weights (N x 1)
-
-    Args:
-        market_caps: Array of market capitalizations
-        covariance: Covariance matrix of returns (N x N)
-        delta: Risk aversion coefficient
-
-    Returns:
-        Implied equilibrium returns vector (N,)
+    Pi = delta x Sigma x w_mkt
     """
     total_mcap = np.sum(market_caps)
     if total_mcap <= 0:
         return np.zeros(len(market_caps))
-
     w_mkt = market_caps / total_mcap
     implied_returns = delta * covariance @ w_mkt
     return implied_returns
 
 
 def _ledoit_wolf_shrinkage(returns: np.ndarray) -> np.ndarray:
-    """
-    Ledoit-Wolf shrinkage estimator for covariance matrix.
-
-    Shrinks sample covariance toward a structured target (constant correlation).
-    This reduces estimation error -- especially important when N >> with 1,000+ assets
-    and limited history.
-
-    Args:
-        returns: T x N matrix of historical returns
-
-    Returns:
-        Shrunk covariance matrix (N x N)
-    """
+    """Ledoit-Wolf shrinkage estimator for covariance matrix."""
     T, N = returns.shape
     if T < 2:
         return np.cov(returns, rowvar=False) if N > 1 else np.array([[1.0]])
 
-    # Sample covariance
     sample_cov = np.cov(returns, rowvar=False)
-
-    # Constant correlation target
     volatilities = np.sqrt(np.diag(sample_cov))
     if np.any(volatilities == 0):
         return sample_cov
@@ -132,19 +86,15 @@ def _ledoit_wolf_shrinkage(returns: np.ndarray) -> np.ndarray:
     corr_matrix = sample_cov / np.outer(volatilities, volatilities)
     mean_corr = (np.sum(corr_matrix) - N) / (N * (N - 1))
     mean_corr = np.clip(mean_corr, -1.0, 1.0)
-
     target = np.outer(volatilities, volatilities) * mean_corr
     np.fill_diagonal(target, volatilities ** 2)
 
-    # Compute shrinkage intensity (pi - rho) / gamma
-    # Using the Ledoit-Wolf oracle approximating shrinkage constant
     returns_centered = returns - returns.mean(axis=0)
     var_sample = np.zeros((N, N))
     for t in range(T):
         var_sample += (np.outer(returns_centered[t], returns_centered[t]) - sample_cov) ** 2
     var_sample /= T
 
-    # Shrinkage intensity
     pi_hat = np.sum(var_sample)
     gamma_hat = np.sum((sample_cov - target) ** 2)
     shrinkage = max(0.0, min(1.0, (pi_hat / gamma_hat) / T if gamma_hat > 0 else 1.0))
@@ -153,209 +103,419 @@ def _ledoit_wolf_shrinkage(returns: np.ndarray) -> np.ndarray:
     return shrunk_cov
 
 
-def _build_view_matrix(scored_df: pd.DataFrame,
-                       ic: float = 0.05) -> tuple:
-    """
-    Build Black-Litterman views from the scanner's scores.
-
-    Views are absolute (not relative): each stock's expected return
-    is proportional to its normalized score.
-
-    Args:
-        scored_df: DataFrame with score_df with score_total column
-        ic: Historical Information Coefficient (determines view confidence)
-
-    Returns:
-        (P, Q, Omega) tuple:
-            P: Pick matrix (N x N) -- identity for absolute views
-            Q: View vector (N,) -- expected returns from scores
-            Omega: View uncertainty matrix (N x N) -- diagonal, scaled by IC
-    """
+def _build_view_matrix(scored_df: pd.DataFrame, ic: float = 0.05) -> tuple:
+    """Build BL views from scanner scores."""
     N = len(scored_df)
-
-    # Normalize scores to expected returns
-    # Map raw scores (0-100) to expected monthly expected returns (-5% to +5%)
     scores = scored_df["score_total"].values.astype(float)
     scores_norm = (scores - scores.mean()) / (scores.std() + 1e-8)
-    view_returns = np.clip(scores_norm * 0.02, -0.05, 0.05)  # ±5% cap
+    view_returns = np.clip(scores_norm * 0.02, -0.05, 0.05)
 
-    # Pick matrix: identity (absolute views on each asset)
     P = np.eye(N)
-
-    # Q: the views
     Q = view_returns
-
-    # Omega: uncertainty matrix
-    # Higher IC = lower uncertainty = tighter confidence
-    # Base uncertainty = TAU * diag(P @ Sigma @ P.T)
-    # We approximate with tau * |Q| / (IC + epsilon)
     tau = TAU_DEFAULT
     ic_eff = max(abs(ic), MIN_IC_THRESHOLD)
-
-    # View uncertainty proportional to inverse IC
     omega_diag = tau * np.ones(N) / ic_eff
-    # Scale by |view|: stronger views = higher absolute confidence
     omega_diag *= np.abs(Q) + 0.01
-
     Omega = np.diag(omega_diag)
-
     return P, Q, Omega
 
 
 def black_litterman_weights(scored_df: pd.DataFrame,
-                            historical_ic: Optional[float] = None,
-                            universe: str = "universe",
-                            delta: float = DELTA_DEFAULT,
-                            tau: float = TAU_DEFAULT,
-                            max_weight: float = MAX_SINGLE_WEIGHT) -> pd.DataFrame:
+                             historical_ic: Optional[float] = None,
+                             universe: str = "universe",
+                             delta: float = DELTA_DEFAULT,
+                             tau: float = TAU_DEFAULT,
+                             max_weight: float = MAX_SINGLE_WEIGHT) -> pd.DataFrame:
     """
-    Compute Black-Litterman optimal portfolio weights.
-
-    The model computes:
-        μ_posterior = [(τΣ)⁻¹ + P'Ω⁻¹P]⁻¹ x [(τΣ)⁻¹Π + P'Ω⁻¹Q]
-
-    Then optimal weights:
-        w* = (δΣ)⁻¹ x μ_posterior
+    Compute Black-Litterman optimal portfolio weights (legacy API).
 
     Args:
         scored_df: DataFrame with columns [ticker, score_total, market_cap]
         historical_ic: IC value. If None, loaded from metrics file.
-        universe: "universe" or "smallcap" -- for IC file lookup
+        universe: 'universe' or 'smallcap' -- for IC file lookup
         delta: Risk aversion coefficient
         tau: Prior uncertainty scalar
         max_weight: Maximum weight per position
 
     Returns:
         DataFrame with columns [ticker, weight, posterior_return, equilibrium_return]
-        Weights sum to 1.0 (fully invested).
     """
-    if scored_df.empty or "ticker" not in scored_df.columns:
-        logger.warning("Empty DataFrame passed to black_litterman_weights")
-        return pd.DataFrame(columns=["ticker", "weight"])
-
-    N = len(scored_df)
-    tickers = scored_df["ticker"].tolist()
-
-    # ── 1. Load or use IC ──────────────────────────────────────────
-    if historical_ic is None:
-        ic_data = _load_historical_ic(universe)
-        ic = ic_data["ic"]
-        logger.info(f"  BL: loaded IC={ic:.4f} from {universe} metrics")
-    else:
-        ic = historical_ic
-
-    # ── 2. Market cap prior ────────────────────────────────────────
-    market_caps = scored_df.get("market_cap",
-                                pd.Series(1.0 / N, index=scored_df.index))
-    market_caps = pd.to_numeric(market_caps, errors="coerce").fillna(1.0)
-
-    # If all market caps are the same or invalid, equal-weight prior
-    if market_caps.sum() <= 0:
-        market_caps = pd.Series(1.0 / N, index=scored_df.index)
-
-    # ── 3. Historical returns for covariance estimation ────────────
-    # If we have cached returns, use them. Otherwise, estimate from
-    # score volatility (crude approximation).
-    cov_matrix = None
-    try:
-        # Try to load historical returns from cache
-        from core.data_fetcher import fetch_price_history
-        # Sample a subset of tickers to build covariance (too many = unstable)
-        sample_n = min(N, 50)
-        sample_tickers = tickers[:sample_n]
-
-        returns_list = []
-        valid_tickers = []
-        for t in sample_tickers:
-            hist = fetch_price_history(t, period="6mo")
-            if hist is not None and not hist.empty and "Close" in hist.columns:
-                ret = hist["Close"].pct_change().dropna()
-                returns_list.append(ret)
-                valid_tickers.append(t)
-
-        if len(returns_list) >= 5:
-            returns_df = pd.concat(returns_list, axis=1, keys=valid_tickers)
-            returns_df = returns_df.dropna(how="any")
-            if len(returns_df) > 10:
-                cov_matrix = _ledoit_wolf_shrinkage(returns_df.values)
-                # If we have more assets than in sample, pad with identity
-                if N > sample_n:
-                    full_cov = np.eye(N) * np.median(np.diag(cov_matrix))
-                    full_cov[:sample_n, :sample_n] = cov_matrix
-                    cov_matrix = full_cov
-                logger.info(f"  BL: computed {sample_n}x{sample_n} shrunk covariance")
-    except Exception as e:
-        logger.debug(f"  BL: covariance estimation failed: {e}")
-
-    # Fallback: identity covariance if estimation fails
-    if cov_matrix is None:
-        cov_matrix = np.eye(N) * 0.04  # 20% annualized vol -> 0.04 variance
-        logger.info("  BL: using identity covariance (fallback)")
-
-    # ── 4. Compute implied equilibrium returns ─────────────────────
-    implied_returns = _compute_implied_returns(
-        market_caps.values, cov_matrix, delta
+    optimizer = BlackLittermanOptimizer(delta=delta, tau=tau, max_weight=max_weight)
+    result = optimizer.optimize_posterior(
+        scored_df, historical_ic=historical_ic, universe=universe
     )
+    return result
 
-    # ── 5. Build views ─────────────────────────────────────────────
-    P, Q, Omega = _build_view_matrix(scored_df, ic=ic)
 
-    # ── 6. Posterior expected returns (Black-Litterman formula) ────────
-    # μ_posterior = [(τΣ)⁻¹ + P'Ω⁻¹P]⁻¹ x [(τΣ)⁻¹Π + P'Ω⁻¹Q]
-    try:
-        tau_sigma_inv = np.linalg.inv(tau * cov_matrix)
+# ══════════════════════════════════════════════════════════════════════════════
+# NEW: BlackLittermanOptimizer class
+# ══════════════════════════════════════════════════════════════════════════════
 
-        # P'Ω⁻¹P -- for identity P, this is just Ω⁻¹
-        omega_inv = np.linalg.inv(Omega)
+class BlackLittermanOptimizer:
+    """
+    Black-Litterman Portfolio Optimizer.
 
-        # Combine: posterior precision
-        posterior_precision = tau_sigma_inv + omega_inv
-        posterior_cov = np.linalg.inv(posterior_precision)
+    Kombinerar market-cap prior med systematiska views (från ML-scoring)
+    för att producera posterior expected returns och optimala portföljvikter.
 
-        # Posterior mean
-        posterior_returns = posterior_cov @ (
-            tau_sigma_inv @ implied_returns + omega_inv @ Q
-        )
-    except np.linalg.LinAlgError as e:
-        logger.warning(f"  BL: matrix inversion failed: {e} -- falling back to equal weight")
-        weights = np.ones(N) / N
+    Användning:
+        blo = BlackLittermanOptimizer()
+        weights = blo.optimize_posterior(scored_df, historical_ic=0.08)
+    """
+
+    def __init__(self,
+                 delta: float = DELTA_DEFAULT,
+                 tau: float = TAU_DEFAULT,
+                 max_weight: float = MAX_SINGLE_WEIGHT,
+                 min_weight: float = 0.0,
+                 risk_free_rate: float = 0.02):
+        """
+        Args:
+            delta: Risk aversion coefficient (market price of risk)
+            tau: Prior uncertainty scalar (low = strong prior)
+            max_weight: Maximum weight per position
+            min_weight: Minimum weight per position (0 = long-only)
+            risk_free_rate: Risk-free rate for Sharpe calculations
+        """
+        self.delta = delta
+        self.tau = tau
+        self.max_weight = max_weight
+        self.min_weight = min_weight
+        self.risk_free_rate = risk_free_rate
+
+    # ── Huvud-optimering ───────────────────────────────────────────────────
+
+    def optimize_posterior(self,
+                            scored_df: pd.DataFrame,
+                            historical_ic: Optional[float] = None,
+                            universe: str = "universe") -> pd.DataFrame:
+        """
+        Full Black-Litterman optimering.
+
+        Steg:
+        1. Market cap prior (Pi)
+        2. Covariance estimation (Ledoit-Wolf)
+        3. View construction fran scores + IC
+        4. Posterior returns (Black-Litterman formula)
+        5. Optimal weights from posterior
+
+        Args:
+            scored_df: DataFrame med [ticker, score_total, market_cap]
+            historical_ic: Information Coefficient. None = ladda fran metrics file.
+            universe: 'universe' eller 'smallcap'
+
+        Returns:
+            DataFrame med [ticker, weight, posterior_return, equilibrium_return]
+            Vikter summerar till 1.0.
+        """
+        if scored_df is None or scored_df.empty or "ticker" not in scored_df.columns:
+            logger.warning("Empty eller ogiltig DataFrame")
+            return pd.DataFrame(columns=["ticker", "weight"])
+
+        N = len(scored_df)
+        tickers = scored_df["ticker"].tolist()
+
+        # 1. IC
+        ic = self._get_ic(historical_ic, universe)
+
+        # 2. Market cap prior
+        market_caps = self._get_market_caps(scored_df, N)
+
+        # 3. Covariance
+        cov_matrix = self._estimate_covariance(tickers, N)
+
+        # 4. Implied equilibrium returns (prior)
+        implied_returns = _compute_implied_returns(market_caps, cov_matrix, self.delta)
+
+        # 5. Build views
+        P, Q, Omega = _build_view_matrix(scored_df, ic=ic)
+
+        # 6. Posterior returns (Black-Litterman formula)
+        posterior_returns = self.posterior_returns(implied_returns, Q, Omega, cov_matrix, P)
+
+        if posterior_returns is None:
+            # Fallback
+            weights = np.ones(N) / N
+            result = scored_df[["ticker"]].copy()
+            result["weight"] = weights
+            result["posterior_return"] = 0.0
+            result["equilibrium_return"] = 0.0
+            return result
+
+        # 7. Optimal weights
+        optimal_weights = self._solve_weights(cov_matrix, posterior_returns)
+
+        # 8. Constraints
+        optimal_weights = np.maximum(optimal_weights, self.min_weight)
+        optimal_weights = np.minimum(optimal_weights, self.max_weight)
+        total_weight = optimal_weights.sum()
+        if total_weight > 0:
+            optimal_weights /= total_weight
+
+        # 9. Build result
         result = scored_df[["ticker"]].copy()
-        result["weight"] = weights
-        result["posterior_return"] = 0.0
-        result["equilibrium_return"] = 0.0
+        result["weight"] = np.round(optimal_weights, 6)
+        result["posterior_return"] = np.round(posterior_returns, 6)
+        result["equilibrium_return"] = np.round(implied_returns, 6)
+        result = result.sort_values("weight", ascending=False).reset_index(drop=True)
+
+        n_pos = (result["weight"] > 0).sum()
+        logger.info(
+            f"BL: {n_pos} positioner, top-1 weight={result['weight'].iloc[0]:.1%}, "
+            f"IC={ic:.3f}"
+        )
+
         return result
 
-    # ── 6. Optimal weights ─────────────────────────────────────────
-    # w* = (δΣ)⁻¹ x μ_posterior
-    try:
-        optimal_weights = np.linalg.solve(delta * cov_matrix, posterior_returns)
-    except np.linalg.LinAlgError:
-        logger.warning("  BL: weight solve failed -- using posterior returns directly")
-        optimal_weights = posterior_returns
+    # ── Hjälpmetoder ───────────────────────────────────────────────────────
 
-    # ── 7. Constraints ─────────────────────────────────────────────
-    # Long-only, max single position
-    optimal_weights = np.maximum(optimal_weights, 0)
-    optimal_weights = np.minimum(optimal_weights, max_weight)
-    total_weight = optimal_weights.sum()
-    if total_weight > 0:
-        optimal_weights /= total_weight  # Renormalize to sum to 1
+    def _get_ic(self, historical_ic: Optional[float], universe: str) -> float:
+        """Hämta IC från parameter eller metrics file."""
+        if historical_ic is not None:
+            return historical_ic
+        ic_data = _load_historical_ic(universe)
+        ic = ic_data["ic"]
+        logger.info(f"BL: loaded IC={ic:.4f} från {universe} metrics")
+        return ic
 
-    # ── 8. Build result ────────────────────────────────────────────
-    result = scored_df[["ticker"]].copy()
-    result["weight"] = np.round(optimal_weights, 6)
-    result["posterior_return"] = np.round(posterior_returns, 6)
-    result["equilibrium_return"] = np.round(implied_returns, 6)
+    @staticmethod
+    def _get_market_caps(scored_df: pd.DataFrame, N: int) -> np.ndarray:
+        """Extrahera market caps fran DataFrame."""
+        market_caps = scored_df.get("market_cap",
+                                     pd.Series(1.0 / N, index=scored_df.index))
+        market_caps = pd.to_numeric(market_caps, errors="coerce").fillna(1.0)
+        if market_caps.sum() <= 0:
+            market_caps = pd.Series(1.0 / N, index=scored_df.index)
+        return market_caps.values
 
-    # Sort by weight descending
-    result = result.sort_values("weight", ascending=False).reset_index(drop=True)
+    def _estimate_covariance(self, tickers: list, N: int) -> np.ndarray:
+        """Estimera kovariansmatris fran prishistorik."""
+        try:
+            from core.data_fetcher import fetch_price_history
+            sample_n = min(N, 50)
+            sample_tickers = tickers[:sample_n]
 
-    n_positions = (result["weight"] > 0).sum()
-    logger.info(f"  BL: {n_positions} positions, "
-                f"top-1 weight={result['weight'].iloc[0]:.1%}, "
-                f"IC={ic:.3f}")
+            returns_list = []
+            valid_tickers = []
+            for t in sample_tickers:
+                hist = fetch_price_history(t, period="6mo")
+                if hist is not None and not hist.empty and "Close" in hist.columns:
+                    ret = hist["Close"].pct_change().dropna()
+                    returns_list.append(ret)
+                    valid_tickers.append(t)
 
-    return result
+            if len(returns_list) >= 5:
+                returns_df = pd.concat(returns_list, axis=1, keys=valid_tickers)
+                returns_df = returns_df.dropna(how="any")
+                if len(returns_df) > 10:
+                    cov = _ledoit_wolf_shrinkage(returns_df.values)
+                    if N > sample_n:
+                        full_cov = np.eye(N) * np.median(np.diag(cov))
+                        full_cov[:sample_n, :sample_n] = cov
+                        cov = full_cov
+                    logger.info(f"BL: computed {sample_n}x{sample_n} Ledoit-Wolf cov")
+                    return cov
+        except Exception as e:
+            logger.debug(f"BL: covariance estimation failed: {e}")
+
+        # Fallback
+        logger.info("BL: using identity covariance (fallback)")
+        return np.eye(N) * 0.04
+
+    def _solve_weights(self, cov_matrix: np.ndarray,
+                       posterior_returns: np.ndarray) -> np.ndarray:
+        """Los optimala vikter: w* = (delta x Sigma)^(-1) x mu_posterior."""
+        try:
+            return np.linalg.solve(self.delta * cov_matrix, posterior_returns)
+        except np.linalg.LinAlgError:
+            logger.warning("BL: weight solve failed -- using posterior returns")
+            return posterior_returns
+
+    # ── Posterior Returns (Black-Litterman formula) ────────────────────────
+
+    def posterior_returns(self,
+                           prior: np.ndarray,
+                           views: np.ndarray,
+                           uncertainty: np.ndarray,
+                           cov_matrix: np.ndarray,
+                           P: Optional[np.ndarray] = None) -> Optional[np.ndarray]:
+        """
+        Beräknar posterior expected returns enligt Black-Litterman formula.
+
+        mu_posterior = [(tau x Sigma)^(-1) + P'Omega^(-1)P]^(-1)
+                       x [(tau x Sigma)^(-1) x Pi + P'Omega^(-1) x Q]
+
+        Args:
+            prior: Prior returns (Pi) -- equilibrium returns (N,)
+            views: View returns (Q) -- fran scores (N,)
+            uncertainty: View uncertainty matrix (Omega) -- diagonal (N x N)
+            cov_matrix: Covariance matrix (Sigma) (N x N)
+            P: Pick matrix (N x N). If None, uses identity.
+
+        Returns:
+            Posterior expected returns (N,) eller None vid fel.
+        """
+        if P is None:
+            P = np.eye(len(prior))
+
+        try:
+            tau = self.tau
+            tau_sigma_inv = np.linalg.inv(tau * cov_matrix)
+            omega_inv = np.linalg.inv(uncertainty)
+
+            posterior_precision = tau_sigma_inv + P.T @ omega_inv @ P
+            posterior_cov = np.linalg.inv(posterior_precision)
+
+            posterior_mean = posterior_cov @ (
+                tau_sigma_inv @ prior + P.T @ omega_inv @ views
+            )
+            return posterior_mean
+        except np.linalg.LinAlgError as e:
+            logger.warning(f"BL: posterior returns failed: {e}")
+            return None
+
+    # ── View Conflict Measure ──────────────────────────────────────────────
+
+    def view_conflict_measure(self,
+                               prior: np.ndarray,
+                               posterior: np.ndarray,
+                               views: np.ndarray) -> dict:
+        """
+        Mäter hur mycket views divergerar fran market prior.
+
+        Hog konflikt = hog osakerhet = signalerna gar emot marknaden.
+
+        Args:
+            prior: Prior (equilibrium) returns (N,)
+            posterior: Posterior returns (N,)
+            views: View returns (N,)
+
+        Returns:
+            dict med:
+                conflict_score: 0-1 (0 = perfekt alignment, 1 = maximal konflikt)
+                mean_abs_deviation: Genomsnittlig absolut avvikelse
+                n_conflicting: Antal assets dar view gar emot prior
+                view_pct: Andel assets med samma riktning som views
+                description: Textuell beskrivning
+        """
+        prior = np.asarray(prior, dtype=float)
+        posterior = np.asarray(posterior, dtype=float)
+        views = np.asarray(views, dtype=float)
+
+        n = len(prior)
+        if n == 0:
+            return {"conflict_score": 0.0, "description": "Ingen data"}
+
+        # Riktning: view vs prior
+        prior_sign = np.sign(prior)
+        view_sign = np.sign(views)
+        # 0-tolerans: returns exakt 0 raknas som neutral
+        prior_sign[np.abs(prior) < 1e-8] = 0
+        view_sign[np.abs(views) < 1e-8] = 0
+
+        # Konflikt: view och prior gar at olika hall
+        conflicting = (prior_sign * view_sign) < 0
+        n_conflicting = int(np.sum(conflicting))
+
+        # Genomsnittlig absolut avvikelse (posterior vs prior)
+        deviation = np.abs(posterior - prior)
+        mean_dev = float(np.mean(deviation))
+
+        # View alignment: andel dar view och prior har samma riktning
+        aligned = (prior_sign * view_sign) > 0
+        n_aligned = int(np.sum(aligned))
+        # Neutrala (där prior eller view ar 0) raknet som varken eller
+        active = n - int(np.sum(prior_sign == 0) + np.sum(view_sign == 0) -
+                         int(np.sum((prior_sign == 0) & (view_sign == 0))))
+        view_pct = n_aligned / active if active > 0 else 1.0
+
+        # Conflict score (0-1)
+        conflict_score = n_conflicting / max(n, 1)
+
+        # Beskrivning
+        if conflict_score > 0.5:
+            description = (
+                f"Hog konflikt: {n_conflicting}/{n} tillgangar har views "
+                f"som gar emot marknaden. Signalerna ar kontrariska."
+            )
+        elif conflict_score > 0.2:
+            description = (
+                f"Medel konflikt: {n_conflicting}/{n} tillgangar divergerar "
+                f"fran market prior."
+            )
+        else:
+            description = (
+                f"Lag konflikt: views alignerar val med marknaden "
+                f"({n_aligned}/{active} aktiva)."
+            )
+
+        return {
+            "conflict_score": round(conflict_score, 3),
+            "n_conflicting": n_conflicting,
+            "n_aligned": n_aligned,
+            "n_total": n,
+            "mean_abs_deviation": round(mean_dev, 6),
+            "view_alignment_pct": round(view_pct * 100, 1),
+            "description": description,
+        }
+
+    # ── Integration med Mean-Variance ──────────────────────────────────────
+
+    def optimize_with_mean_variance(self,
+                                     scored_df: pd.DataFrame,
+                                     historical_ic: Optional[float] = None,
+                                     universe: str = "universe",
+                                     risk_tolerance: float = 0.5) -> pd.DataFrame:
+        """
+        Kombinerar Black-Litterman posterior med Mean-Variance optimering.
+
+        1. Black-Litterman: prior + views -> posterior returns
+        2. Mean-Variance: optimera posterior returns med full constraints
+
+        Detta ger BLs estimeringsforbattring + MV flexibilitet.
+
+        Args:
+            scored_df: DataFrame med [ticker, score_total, market_cap]
+            historical_ic: Information Coefficient
+            universe: 'universe' eller 'smallcap'
+            risk_tolerance: Risk tolerance for MV (0=risk-averse, 1=risk-seeking)
+
+        Returns:
+            DataFrame med vikter
+        """
+        from portfolio.mean_variance import MeanVarianceOptimizer
+
+        # Steg 1: BL posterior
+        N = len(scored_df)
+        ic = self._get_ic(historical_ic, universe)
+        market_caps = self._get_market_caps(scored_df, N)
+        cov_matrix = self._estimate_covariance(scored_df["ticker"].tolist(), N)
+        implied_returns = _compute_implied_returns(market_caps, cov_matrix, self.delta)
+        P, Q, Omega = _build_view_matrix(scored_df, ic=ic)
+        posterior = self.posterior_returns(implied_returns, Q, Omega, cov_matrix, P)
+
+        if posterior is None:
+            return scored_df[["ticker"]].assign(
+                weight=1.0 / N,
+                posterior_return=0.0,
+                equilibrium_return=0.0,
+            )
+
+        # Steg 2: Mean-Variance optimering
+        mv = MeanVarianceOptimizer(risk_free_rate=self.risk_free_rate)
+        mv_weights = mv.optimize(
+            posterior,
+            cov_matrix,
+            risk_tolerance=risk_tolerance,
+            max_weight=self.max_weight,
+            min_weight=max(self.min_weight, 0.001),
+        )
+
+        result = scored_df[["ticker"]].copy()
+        result["weight"] = np.round(mv_weights, 6)
+        result["posterior_return"] = np.round(posterior, 6)
+        result["equilibrium_return"] = np.round(implied_returns, 6)
+        return result.sort_values("weight", ascending=False).reset_index(drop=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -365,38 +525,37 @@ def black_litterman_weights(scored_df: pd.DataFrame,
 if __name__ == "__main__":
     import sys
     from pathlib import Path
-
     logging.basicConfig(level=logging.INFO)
 
-    # Load latest scored CSV
     reports_dir = Path(__file__).parent.parent / "reports"
     csv_files = sorted(reports_dir.glob("scored_universe_*.csv"))
     if not csv_files:
-        print("No scored universe CSV found in reports/")
+        print("Inga scored universe CSV-filer hittades i reports/")
         sys.exit(1)
 
     latest = csv_files[-1]
-    print(f"\nBlack-Litterman Optimization")
-    print(f"  Input: {latest.name}")
     df = pd.read_csv(latest)
 
     if "ticker" not in df.columns:
-        print("  ✗ CSV missing 'ticker' column")
+        print("CSV saknar 'ticker'-kolumn")
         sys.exit(1)
 
-    print(f"  Tickers: {len(df)}")
-    print(f"  Running Black-Litterman...\n")
+    # Test 1: Legacy API
+    print(f"\nTestar legacy API...")
+    result1 = black_litterman_weights(df)
+    print(result1.head(10))
 
-    result = black_litterman_weights(df)
+    # Test 2: Class API
+    print(f"\nTestar BlackLittermanOptimizer klass...")
+    blo = BlackLittermanOptimizer()
+    result2 = blo.optimize_posterior(df)
+    print(result2.head(10))
 
-    print("\nTop 20 weights:")
-    print(f"  {'Ticker':<12} {'Weight':>8} {'Post. Ret':>10} {'Eq. Ret':>10}")
-    print(f"  {'-'*12} {'-'*8} {'-'*10} {'-'*10}")
-    for _, row in result.head(20).iterrows():
-        print(f"  {row['ticker']:<12} {row['weight']:>7.1%} "
-              f"{row['posterior_return']:>+9.4f} {row['equilibrium_return']:>+9.4f}")
-
-    # Save
-    out = reports_dir / f"bl_weights_{datetime.now().strftime('%Y-%m-%d')}.csv"
-    result.to_csv(out, index=False)
-    print(f"\n  Saved: {out.name}")
+    # Test 3: View conflict
+    N = min(10, len(df))
+    prior_sample = np.random.randn(N) * 0.02
+    post_sample = prior_sample + np.random.randn(N) * 0.01
+    views_sample = prior_sample + np.random.randn(N) * 0.03
+    conflict = blo.view_conflict_measure(prior_sample, post_sample, views_sample)
+    print(f"\nView conflict: {conflict['conflict_score']:.2f}")
+    print(conflict["description"])

@@ -902,6 +902,8 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
         3. Momentum hålls globalt (intentionellt -- cross-market relativ styrka är valid).
         4. Likviditetsflagg: low_liquidity=True om dagsomsättning < MIN_DAILY_TURNOVER_USD.
     """
+    import time as _time
+    _start = _time.time()
     df = df.copy()
 
     # ── Steg 1: Region-neutralisera fundamentala metrics ─────────────────────
@@ -934,6 +936,23 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     df["low_liquidity"] = (
         turnover.fillna(0) < MIN_DAILY_TURNOVER_USD
     ) | turnover.isna()
+
+    # ── Record metrics ────────────────────────────────────────────────────────
+    try:
+        from core.monitoring.metrics import MetricsCollector
+        mc = MetricsCollector()
+        mc.record_scoring_duration(_time.time() - _start)
+        if "score_total" in df.columns:
+            scores = df["score_total"].dropna()
+            if not scores.empty:
+                mc.record_scoring_distribution(
+                    p50=float(scores.quantile(0.5)),
+                    p75=float(scores.quantile(0.75)),
+                    p90=float(scores.quantile(0.9)),
+                    p95=float(scores.quantile(0.95)),
+                )
+    except Exception:
+        pass
 
     return df.sort_values("score_total", ascending=False).reset_index(drop=True)
 

@@ -668,6 +668,12 @@ def send_email(
         print(f"  ✉ Email skickat till {', '.join(recipients)}")
         for _r in recipients:
             _log_email_delivery(_r, subject, subscription_type or "direct", True)
+        # Record metrics
+        try:
+            from core.monitoring.metrics import MetricsCollector
+            MetricsCollector().record_email_sent(subscription_type or "direct")
+        except Exception:
+            pass
         return True
     except smtplib.SMTPAuthenticationError:
         print("  ❌ Email-autentisering misslyckades")
@@ -720,3 +726,208 @@ def send_failure_alert(workflow: str, run_id: str = "", repo: str = "") -> bool:
         from_name="MarketScan Alerts",
         subscription_type="failure_alerts",
     )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# MULTI-CHANNEL ALERT WRAPPER (sektion F)
+# ══════════════════════════════════════════════════════════════════════
+
+def send_multi_channel_alert(
+    subject: str,
+    body_md: str,
+    channels: Optional[list[str]] = None,
+) -> dict[str, bool]:
+    """Skicka en alert via flera kanaler via AlertEngine.
+
+    Detta är en wrapper som använder AlertEngine för att skicka
+    meddelanden till alla angivna kanaler (telegram, discord, email, push, sms).
+
+    Args:
+        subject: Ämnesrad / titel.
+        body_md: Markdown-formaterad body.
+        channels: Lista av kanaler. None = alla tillgängliga.
+
+    Returns:
+        Dict {kanalnamn: True/False}.
+    """
+    try:
+        from core.alert_engine import AlertEngine
+        engine = AlertEngine()
+        return engine.send_alert(
+            message_type="multi_channel",
+            message_data={
+                "message": body_md,
+                "title": subject,
+            },
+            channels=channels,
+            priority="MEDIUM",
+        )
+    except ImportError:
+        # Fallback: bara email
+        ok = send_email(subject=subject, body_markdown=body_md)
+        return {"email": ok}
+
+
+def send_test(channel: str) -> str:
+    """Skicka ett testmeddelande till en specifik kanal.
+
+    Args:
+        channel: "telegram", "discord", "sms", "push", "email"
+
+    Returns:
+        Statussträng.
+    """
+    if channel == "email":
+        ok = send_email(
+            subject="MarketScan Test",
+            body_markdown="Detta är ett test från MarketScan. Email-kanalen fungerar!",
+            from_name="MarketScan Test",
+        )
+        return "OK — testmail skickat" if ok else "FEL — kunde inte skicka"
+
+    try:
+        from core.alert_engine import AlertEngine
+        engine = AlertEngine()
+        return engine.send_test(channel)
+    except ImportError:
+        return "INTE TILLGÄNGLIG — AlertEngine ej tillgänglig"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ALERT DIGEST — daglig sammanfattning (sektion F)
+# ══════════════════════════════════════════════════════════════════════
+
+def build_digest_body(alerts: list[dict]) -> str:
+    """Bygg en HTML-body för daglig alert-sammanfattning.
+
+    Args:
+        alerts: Lista av alert-dicts med "message", "ticker", "type", "timestamp".
+
+    Returns:
+        HTML-sträng.
+    """
+    if not alerts:
+        return "<p style='color:#64748b'>Inga alerts idag.</p>"
+
+    html_parts: list[str] = []
+
+    grupperad: dict[str, list] = {}
+    for a in alerts:
+        typ = a.get("type", a.get("message_type", "övrigt"))
+        grupperad.setdefault(typ, []).append(a)
+
+    for typ, items in grupperad.items():
+        html_parts.append(build_section_header(f"{typ} ({len(items)})"))
+        for item in items:
+            msg = html.escape(str(item.get("message", "")))
+            ticker = html.escape(str(item.get("ticker", "")))
+            ts = html.escape(str(item.get("timestamp", ""))[:16])
+
+            alert_html = f"<strong>{ticker}</strong>: {msg}" if ticker else msg
+            html_parts.append(
+                f'<div style="padding:8px 12px;margin:4px 0;'
+                f'background:#f8fafc;border-radius:4px;font-size:13px">'
+                f'{alert_html}'
+                f'<span style="color:#94a3b8;font-size:11px;margin-left:8px">{ts}</span>'
+                f'</div>'
+            )
+
+    return "\n".join(html_parts)
+
+
+def send_digest_email(alerts: list[dict]) -> bool:
+    """Skicka en daglig sammanfattning av missade/lågprioriterade alerts.
+
+    Args:
+        alerts: Lista av alert-dicts.
+
+    Returns:
+        True om email skickades.
+    """
+    n_high = sum(1 for a in alerts if a.get("priority", "LOW").upper() == "HIGH")
+    n_medium = sum(1 for a in alerts if a.get("priority", "LOW").upper() == "MEDIUM")
+    n_low = sum(1 for a in alerts if a.get("priority", "LOW").upper() == "LOW")
+
+    subject = (
+        f"MarketScan AlertDigest {EN_DASH} "
+        f"{len(alerts)} händelser "
+        f"({n_high} hög, {n_medium} medel, {n_low} låg) "
+        f"{EN_DASH} {date.today().strftime('%d %b')}"
+    )
+
+    html_body = build_digest_body(alerts)
+    return send_email(
+        subject=subject,
+        body_html_extra=html_body,
+        from_name="MarketScan Digest",
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════
+# INLINE IMAGES (Plotly charts som embedded images, ej attachments)
+# ══════════════════════════════════════════════════════════════════════
+
+def embed_plotly_chart(fig, chart_id: str = "chart") -> str:
+    """Konvertera en Plotly-figur till en inline HTML-bild för email.
+
+    OBS: De flesta email-klienter (Gmail, Outlook) stöder inte
+    inline SVG. Istället genererar vi en statisk HTML-tabell/bildbeskrivning
+    som fallback. För full grafstöd hänvisas till webbappen.
+
+    Args:
+        fig: Plotly Figure-objekt.
+        chart_id: Unikt ID för referens.
+
+    Returns:
+        HTML-sträng med bildbeskrivning och länk.
+    """
+    try:
+        import plotly.io as pio
+        # Försök rendera som PNG base64 (kräver kaleido eller orca)
+        img_bytes = pio.to_image(fig, format="png", width=600, height=350, scale=1.5)
+        import base64
+        b64 = base64.b64encode(img_bytes).decode("utf-8")
+        return (
+            f'<div style="text-align:center;margin:12px 0">'
+            f'<img src="data:image/png;base64,{b64}" '
+            f'alt="{chart_id}" style="max-width:100%;border-radius:6px;'
+            f'border:1px solid {COLORS["border"]}" />'
+            f'</div>'
+        )
+    except Exception:
+        # Fallback: generera en HTML-tabell från figurens data
+        return _plotly_fallback_html(fig, chart_id)
+
+
+def _plotly_fallback_html(fig, chart_id: str) -> str:
+    """Generera en HTML-tabell som fallback när Plotly-bildrendering misslyckas."""
+    html_parts = [
+        f'<div style="padding:12px;background:#f8fafc;border-radius:6px;'
+        f'border:1px solid {COLORS["border"]};margin:12px 0;font-size:12px">'
+        f'<strong>📊 {chart_id}</strong>'
+    ]
+    try:
+        for trace in fig.data:
+            if hasattr(trace, "x") and hasattr(trace, "y") and trace.x and trace.y:
+                name = trace.name or "Serie"
+                html_parts.append(f"<div style='margin:8px 0'><em>{name}</em></div>")
+                html_parts.append(
+                    "<table style='border-collapse:collapse;width:100%;font-size:11px;"
+                    f"border:1px solid {COLORS['border']}'>"
+                )
+                html_parts.append(
+                    f"<tr><th style='padding:4px 8px;text-align:left'>Label</th>"
+                    f"<th style='padding:4px 8px;text-align:right'>Värde</th></tr>"
+                )
+                for i in range(min(len(trace.x), 10)):
+                    html_parts.append(
+                        f"<tr style='border-top:1px solid {COLORS['border']}'>"
+                        f"<td style='padding:3px 8px'>{trace.x[i]}</td>"
+                        f"<td style='padding:3px 8px;text-align:right'>{trace.y[i]:.2f}</td></tr>"
+                    )
+                html_parts.append("</table>")
+    except Exception:
+        html_parts.append("<p>Kunde inte rendera diagramdata.</p>")
+
+    html_parts.append("</div>")
+    return "\n".join(html_parts)

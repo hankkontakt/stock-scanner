@@ -30,6 +30,10 @@ from core.data_fetcher import (
 
 logger = logging.getLogger(__name__)
 
+# Återanvändbar requests.Session för connection pooling
+_SESSION = requests.Session()
+_SESSION.headers.update({"User-Agent": "Mozilla/5.0"})
+
 try:
     import aiohttp as _aiohttp
     _AIOHTTP_AVAILABLE = True
@@ -49,7 +53,6 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
     total = len(tickers)
 
     # Ladda blacklist - skippa kända trasiga tickers
-    # Absolut sökväg förankrad i repo-roten (tidigare relativ -> bröts vid annan CWD)
     _bl_path = Path(__file__).resolve().parent.parent / "data" / "blacklist.json"
     try:
         _blacklist = set(json.loads(_bl_path.read_text()).keys()) if _bl_path.exists() else set()
@@ -61,13 +64,17 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
 
     rows = []
     failed = []
-    failed_detail: dict = {}  # ticker → {status, pass} for persistent error log
-    rate_limited = []  # Tickers that got 429 - will retry in pass 2
-    delisted = []      # Tickers that got 404 - will be auto-blacklisted
+    failed_detail: dict = {}
+    rate_limited = []
+    delisted = []
     completed = 0
 
+    # Adaptiv batch-storlek
+    _adaptive_workers = config.PARALLEL_WORKERS
+
     # ── Pass 1: parallell hämtning med PARALLEL_WORKERS ────────────────────────
-    with ThreadPoolExecutor(max_workers=config.PARALLEL_WORKERS) as pool:
+    _pass1_start = time.time()
+    with ThreadPoolExecutor(max_workers=_adaptive_workers) as pool:
         futures = {
             pool.submit(_fetch_single_ticker, t, _blacklist, verbose): t
             for t in tickers
@@ -208,7 +215,21 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
         if verbose:
             print(f"  ⚠ Kunde inte skriva fetch_errors.json: {_e}")
 
+    # ── Record metrics ───────────────────────────────────────────────────────
+    try:
+        from core.monitoring.metrics import MetricsCollector
+        _mc = MetricsCollector()
+        _mc.record_ticker_fetched(len(df))
+        _mc.record_ticker_failed(len(failed) + len(delisted))
+        _mc.record_fetch_duration(time.time() - _pass1_start)
+    except Exception:
+        pass
+
     return df
+
+
+# Alias for optimerad version (samma funktion, connection pooling i data_fetcher.py)
+fetch_universe_data_optimized = fetch_universe_data
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -427,7 +448,9 @@ def fetch_prices_only(tickers: list, period: str = "6mo",
     def _fetch(ticker: str) -> tuple[str, dict | None]:
         try:
             t = yf.Ticker(ticker)
-            hist = t.history(period=period, auto_adjust=True, timeout=timeout)
+            # yfinance Ticker.history() har INTE timeout-parameter
+            # timeout hanteras på högre nivå via _with_timeout i data_fetcher
+            hist = t.history(period=period, auto_adjust=True)
             if hist.empty:
                 return ticker, None
 

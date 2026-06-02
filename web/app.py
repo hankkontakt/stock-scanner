@@ -1,7 +1,7 @@
 """
 app.py
 ======
-Portfolio Manager - öppnas i webbläsaren på http://localhost:5001
+Portfolio Manager + MarketScan REST API - öppnas i webbläsaren på http://localhost:5001
 
 Starta med:  python app.py
 Stäng med:   Ctrl+C i terminalen
@@ -11,6 +11,9 @@ Funktioner:
 - Lägg till/ta bort/redigera innehav
 - Se live-priser och P&L för hela portföljen
 - Sparar automatiskt till holdings.csv
+- REST API v1: /api/v1/ (scoring, portfolio, markets, etc.)
+- Webhook management endpoints
+- Swagger UI: /api/v1/docs
 """
 
 import base64
@@ -19,13 +22,14 @@ import io
 import os
 import threading
 import webbrowser
+from datetime import datetime
 from pathlib import Path
 
 import requests
 from nacl import encoding, public
 
 import yfinance as yf
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, g, jsonify, render_template, request, send_file
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
@@ -584,13 +588,271 @@ def export_holdings_excel():
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# HEALTH CHECK ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.route("/health")
+def health_full():
+    """Full health check — returnerar JSON med status för alla komponenter."""
+    try:
+        from core.monitoring.health import system_health_check
+        info = system_health_check()
+        http_status = 200 if info.get("status") == "healthy" else 503
+        return jsonify(info), http_status
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/health/live")
+def health_live():
+    """Liveness — returnerar 200 om appen lever."""
+    return jsonify({"status": "alive", "timestamp": __import__('datetime').datetime.now().isoformat()})
+
+
+@app.route("/health/ready")
+def health_ready():
+    """Readiness — 200 om alla API-nycklar finns."""
+    try:
+        from core.monitoring.health import _check_api_keys
+        keys = _check_api_keys()
+        all_ok = all(v == "ok" for v in keys.values())
+        return jsonify({"status": "ready" if all_ok else "not_ready", "api_keys": keys}), (200 if all_ok else 503)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route("/metrics")
+def health_metrics():
+    """Prometheus metrics (om installerat)."""
+    try:
+        from core.monitoring.metrics import MetricsCollector
+        mc = MetricsCollector()
+        return mc.get_prometheus_text(), 200, {"Content-Type": "text/plain; charset=utf-8"}
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/health/cache")
+def health_cache():
+    """Cache-status."""
+    try:
+        from core.cache_utils import CacheAnalytics
+        return jsonify(CacheAnalytics.to_dict())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/health/data")
+def health_data():
+    """Data coverage."""
+    try:
+        reports_dir = Path(__file__).resolve().parent.parent / "reports"
+        files = sorted(reports_dir.glob("scored_universe_*.parquet"), reverse=True)
+        if files:
+            df = pd.read_parquet(files[0])
+            from core.monitoring.health import check_data_coverage
+            coverage = check_data_coverage(df)
+            return jsonify(coverage)
+        return jsonify({"total_rows": 0, "coverage": "Ingen scored_universe-data tillgänglig"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/health/resources")
+def health_resources():
+    """Resource monitoring."""
+    try:
+        from core.monitoring.resources import track_disk_usage, get_data_growth_rate
+        return jsonify({
+            "disk": track_disk_usage(),
+            "growth": get_data_growth_rate(),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ══════════════════════════════════════════════════════════════════════════════════
+# MARKETSCAN REST API v1 - Blueprint, Middleware & Webhooks
+# ══════════════════════════════════════════════════════════════════════════════════
+
+# -- Import och registrera API v1 blueprint --
+try:
+    from web.api import api_v1
+    from web.api.docs import register_docs_routes
+
+    register_docs_routes(api_v1)
+    app.register_blueprint(api_v1)
+    _API_V1_REGISTERED = True
+    print("  [API] REST API v1 registrerad: /api/v1/")
+except Exception as e:
+    _API_V1_REGISTERED = False
+    print(f"  [API] Kunde inte registrera API v1: {e}")
+
+# -- Import webhook manager for endpoints --
+try:
+    from core.webhooks.webhook_manager import WebhookManager
+    _WEBHOOK_MANAGER = WebhookManager()
+except Exception as e:
+    _WEBHOOK_MANAGER = None
+    print(f"  [Webhook] Kunde inte ladda webhook manager: {e}")
+
+# -- CORS-stöd (try flask-cors first, fallback to manual headers) --
+try:
+    from flask_cors import CORS
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    _CORS_ENABLED = True
+except ImportError:
+    _CORS_ENABLED = False
+
+
+@app.after_request
+def add_security_and_rate_limit_headers(response):
+    """Lägg till CORS- och rate limit-headers på alla svar.
+
+    - CORS headers (om flask-cors ej installerat)
+    - Rate limit headers från API-auth
+    - Cache-Control for API-svar
+    """
+    # Manuell CORS om flask-cors inte är installerad
+    if not _CORS_ENABLED:
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type, X-API-Key, Authorization")
+        response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+
+    # Rate limit headers från require_api_key decorator
+    remaining = getattr(g, "rate_limit_remaining", None)
+    if remaining is not None:
+        response.headers["X-RateLimit-Limit"] = str(getattr(g, "rate_limit_limit", 100))
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = str(getattr(g, "rate_limit_reset", 0))
+
+    # Cache-Control for API-svar
+    if response.content_type and "application/json" in response.content_type:
+        response.headers.add("Cache-Control", "no-cache, no-store, must-revalidate")
+
+    return response
+
+
+@app.before_request
+def log_api_requests():
+    """Logga API-anrop (endast for /api/*)."""
+    if request.path.startswith("/api/"):
+        try:
+            from core import logger
+            logger.info(
+                "API %s %s from %s",
+                request.method,
+                request.path,
+                request.remote_addr or "unknown",
+            )
+        except Exception:
+            pass
+
+
+# ── Webhook Management Endpoints ─────────────────────────────────────────────────
+
+
+@app.route("/api/webhooks", methods=["GET"])
+def webhook_list():
+    """Lista alla registrerade webhooks."""
+    if _WEBHOOK_MANAGER is None:
+        return jsonify({"error": "Webhook-manager ej tillganglig"}), 503
+    webhooks = _WEBHOOK_MANAGER.list_webhooks()
+    stats = _WEBHOOK_MANAGER.get_webhook_stats()
+    return jsonify({"webhooks": webhooks, "stats": stats})
+
+
+@app.route("/api/webhooks", methods=["POST"])
+def webhook_register():
+    """Registrera en ny webhook."""
+    if _WEBHOOK_MANAGER is None:
+        return jsonify({"error": "Webhook-manager ej tillganglig"}), 503
+
+    data = request.get_json() or {}
+    url = data.get("url", "").strip()
+    events = data.get("events", [])
+    secret = data.get("secret", "")
+
+    if not url:
+        return jsonify({"error": "URL kravs"}), 400
+    if not events:
+        return jsonify({"error": "Minst ett event kravs"}), 400
+
+    webhook_id = _WEBHOOK_MANAGER.register_webhook(url, events, secret)
+    if webhook_id is None:
+        return jsonify({"error": "Ogiltig URL eller event"}), 400
+
+    return jsonify({"status": "created", "id": webhook_id}), 201
+
+
+@app.route("/api/webhooks/<webhook_id>", methods=["DELETE"])
+def webhook_unregister(webhook_id: str):
+    """Ta bort en webhook."""
+    if _WEBHOOK_MANAGER is None:
+        return jsonify({"error": "Webhook-manager ej tillganglig"}), 503
+
+    if not _WEBHOOK_MANAGER.unregister_webhook(webhook_id):
+        return jsonify({"error": "Webhook ej hittad"}), 404
+
+    return jsonify({"status": "removed", "id": webhook_id})
+
+
+@app.route("/api/webhooks/<webhook_id>/log", methods=["GET"])
+def webhook_log(webhook_id: str):
+    """Hamta leveranslogg for en webhook."""
+    if _WEBHOOK_MANAGER is None:
+        return jsonify({"error": "Webhook-manager ej tillganglig"}), 503
+
+    log = _WEBHOOK_MANAGER.get_delivery_log(webhook_id)
+    return jsonify({"deliveries": log})
+
+
+@app.route("/api/webhooks/test", methods=["POST"])
+def webhook_test():
+    """Testa en webhook-URL med ett test-event."""
+    if _WEBHOOK_MANAGER is None:
+        return jsonify({"error": "Webhook-manager ej tillganglig"}), 503
+
+    data = request.get_json() or {}
+    url = data.get("url", "").strip()
+
+    if not url:
+        return jsonify({"error": "URL kravs"}), 400
+
+    # Skapa en temporar webhook, trigga, ta bort
+    webhook_id = _WEBHOOK_MANAGER.register_webhook(url, ["scan.completed"], "test")
+    if not webhook_id:
+        return jsonify({"error": "Ogiltig URL"}), 400
+
+    webhook = _WEBHOOK_MANAGER.get_webhook(webhook_id)
+    result = _WEBHOOK_MANAGER.deliver_webhook(
+        webhook, "scan.completed",
+        {"test": True, "message": "Detta ar ett testmeddelande fran MarketScan"},
+    )
+    _WEBHOOK_MANAGER.unregister_webhook(webhook_id)
+    return jsonify({"result": result})
+
+
+@app.route("/api/webhooks/stats", methods=["GET"])
+def webhook_stats():
+    """Hamta webhook-statistik."""
+    if _WEBHOOK_MANAGER is None:
+        return jsonify({"error": "Webhook-manager ej tillganglig"}), 503
+    return jsonify(_WEBHOOK_MANAGER.get_webhook_stats())
+
+
 # ── Start ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     port = 5001
     url  = f"http://localhost:{port}"
     print(f"\n🚀 Portfolio Manager startar...")
-    print(f"   Öppna: {url}")
+    print(f"   Web UI:     {url}")
+    print(f"   API v1:     {url}/api/v1/")
+    print(f"   API Docs:   {url}/api/v1/docs")
+    print(f"   Swagger:    {url}/api/v1/swagger.json")
+    print(f"   Health:     {url}/api/v1/health")
     print(f"   Stoppa: Ctrl+C\n")
 
     # Öppna webbläsaren automatiskt efter 1.5s

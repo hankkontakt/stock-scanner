@@ -24,6 +24,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import requests
+
+# Återanvändbar requests.Session för connection pooling
+_SESSION = requests.Session()
+_SESSION.headers.update({"User-Agent": "Mozilla/5.0"})
+
 try:
     import aiohttp as _aiohttp
     _AIOHTTP_AVAILABLE = True
@@ -155,7 +161,7 @@ def _write_cache(key: str, data):
         print(f"  ⚠ Cache write failed: {e}")
 
 
-def _with_timeout(fn, timeout_sec=12):
+def _with_timeout(fn, timeout_sec=15):
     """
     Kör fn() i en daemon-tråd med hård tidsgräns.
 
@@ -254,12 +260,14 @@ _RATE_LIMIT_TLS = threading.local()
 def _is_delist_message(msg: str) -> bool:
     """Detect 404/delisted/unknown-symbol messages from yfinance output."""
     msg = msg.lower()
+    # Striktare mönster: kräver "possibly delisted" eller "no data found"
+    # eller citat om "not found" från yfinance. Undviker false positives
+    # där "404" eller "not found" dyker upp i HTTP-felmeddelanden.
     return (
         "possibly delisted" in msg
         or "no data found, symbol may be delisted" in msg
         or "quote not found for symbol" in msg
         or "no fundamentals data found for symbol" in msg
-        or "404" in msg and "not found" in msg
     )
 
 
@@ -471,10 +479,11 @@ def fetch_price_history(ticker: str, period: str = "1y") -> pd.DataFrame:
                 # Partiell NaN: ersätt med 1.0 för de få datapunkter som saknar FX
                 fx_aligned = fx_aligned.fillna(1.0)
             # Sanity check: orealistiska dag-till-dag-hopp tyder på datafel.
-                _ratio = (fx_aligned / fx_aligned.shift(1)).abs()
-                if (_ratio > 1.5).any() or (_ratio < 0.67).any():
-                    print(f"  ⚠ Misstänkt FX-hopp för {ticker} ({fx_ticker}) - hoppar konvertering")
-                    fx_aligned = pd.Series(1.0, index=hist.index)
+            # Körs ALLTID, inte bara vid NaN (buggfix: tidigare inuti elif-blocket)
+            _ratio = (fx_aligned / fx_aligned.shift(1)).abs()
+            if (_ratio > 1.5).any() or (_ratio < 0.67).any():
+                print(f"  ⚠ Misstänkt FX-hopp för {ticker} ({fx_ticker}) - hoppar konvertering")
+                fx_aligned = pd.Series(1.0, index=hist.index)
 
             # Multiplicera alla priskolumner med växelkursen
             for col in ["Open", "High", "Low", "Close"]:
