@@ -17,7 +17,7 @@ from web.ui.screener_utils import (
     render_export_buttons as _sc_export,
     filter_changed_rows as _sc_filter_changed,
 )
-from core.country_flags import flag_for_ticker
+from core.country_flags import ticker_display as _ticker_display
 
 
 from core.suffix_map import COUNTRY_SUFFIXES as _COUNTRY_SUFFIX_MAP
@@ -197,7 +197,7 @@ Systemet delar in bolagen i 1-5 stjärnor baserat på totalpoängen:
             rank_disp = rank_disp.rename(columns=rename)
             if "Ticker" in rank_disp.columns:
                 rank_disp["Ticker"] = rank_disp["Ticker"].apply(
-                    lambda t: f"{flag_for_ticker(t)} {t}"
+                    _ticker_display
                 )
             for c in ["Dag%", "Vecka%", "6m%", "12m%"]:
                 if c in rank_disp.columns:
@@ -283,7 +283,7 @@ Systemet delar in bolagen i 1-5 stjärnor baserat på totalpoängen:
                 "free_cash_flow", "total_cash",
             ] if c in filt.columns]
             kn = filt[key_cols].copy()
-            kn["ticker"] = kn["ticker"].apply(lambda t: f"{flag_for_ticker(t)} {t}")
+            kn["ticker"] = kn["ticker"].apply(_ticker_display)
             kn = kn.rename(columns={
                 "ticker": "Ticker", "sc_stars": "⭐",
                 "current_price": "Pris", "market_cap": "Mkap (USD)",
@@ -334,7 +334,7 @@ Systemet delar in bolagen i 1-5 stjärnor baserat på totalpoängen:
             }
             fact_cols = [c for c in sc_factor_map if c in filt.columns]
             fact = filt[["ticker"] + fact_cols].copy()
-            fact["ticker"] = fact["ticker"].apply(lambda t: f"{flag_for_ticker(t)} {t}")
+            fact["ticker"] = fact["ticker"].apply(_ticker_display)
             fact = fact.rename(columns={"ticker": "Ticker", **{c: sc_factor_map[c] for c in fact_cols}})
             col_cfg2 = {lbl: st.column_config.ProgressColumn(lbl, min_value=0, max_value=100, format="%.0f")
                         for lbl in sc_factor_map.values() if lbl in fact.columns}
@@ -375,7 +375,7 @@ baserat på hemlig information som inte är offentlig.
             ] if c in filt.columns]
             if ins_cols:
                 ins = filt[ins_cols].copy()
-                ins["ticker"] = ins["ticker"].apply(lambda t: f"{flag_for_ticker(t)} {t}")
+                ins["ticker"] = ins["ticker"].apply(_ticker_display)
                 ins = ins.rename(columns={
                     "ticker": "Ticker",
                     "insider_pct": "Insiders äger%",

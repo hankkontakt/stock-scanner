@@ -116,3 +116,56 @@ def name_for_ticker(ticker: str) -> str:
     return "USA"
 
 
+# suffix → ISO 2-bokstavs landskod (för tabell-display utan emoji)
+_SUFFIX_ISO: dict[str, str] = {
+    ".ST": "SE", ".CO": "DK", ".OL": "NO", ".HE": "FI",
+    ".L":  "GB", ".DE": "DE", ".PA": "FR", ".AS": "NL",
+    ".MI": "IT", ".MC": "ES", ".SW": "CH", ".VI": "AT",
+    ".WA": "PL", ".LS": "LU", ".BR": "BE", ".TO": "CA",
+    ".AX": "AU", ".NZ": "NZ", ".T":  "JP", ".TW": "TW",
+    ".KS": "KR", ".HK": "HK", ".NS": "IN", ".BO": "IN",
+    ".SI": "SG", ".KL": "MY", ".BK": "TH",
+    ".SS": "CN", ".SZ": "CN", ".SA": "BR", ".MX": "MX",
+}
+
+# ADR → ISO
+_ADR_ISO: dict[str, str] = {
+    "NVO": "DK", "SPOT": "SE",
+    "AZN": "GB", "BP": "GB", "UL": "GB", "BCS": "GB", "HSBC": "GB", "DEO": "GB", "ARM": "GB",
+    "NVS": "CH", "RHHBY": "CH", "NSRGY": "CH", "ABB": "CH",
+    "ADYEN": "NL", "FLUT": "IE",
+    "TM": "JP", "HMC": "JP", "SONY": "JP", "MUFG": "JP", "SMFG": "JP",
+    "BABA": "CN", "JD": "CN", "BIDU": "CN", "NIO": "CN", "LI": "CN", "XPEV": "CN",
+    "TCEHY": "CN", "PDD": "CN",
+    "INFY": "IN", "HDB": "IN",
+    "CPNG": "KR",
+    "SHOP": "CA", "RY": "CA", "TD": "CA", "BNS": "CA", "BMO": "CA",
+    "NU": "BR", "MELI": "AR",
+    "SE": "SG", "GRAB": "SG",
+}
+
+
+def country_code_for_ticker(ticker: str) -> str:
+    """Returnera ISO-2 landskod för en ticker (t.ex. 'SE', 'US', 'DE').
+
+    Används för ren text-display i tabeller där flag-emojis inte renderas.
+    """
+    t = _normalize_ticker(ticker)
+    for suffix, iso in _SUFFIX_ISO.items():
+        if t.endswith(suffix):
+            return iso
+    if t in _ADR_ISO:
+        return _ADR_ISO[t]
+    return "US"
+
+
+def ticker_display(ticker: str) -> str:
+    """Formaterar ticker för tabell-display: 'SE · VOLV-B.ST', 'US · NVDA'.
+
+    Undviker flag-emojis (renderas som text 'us'/'se' i ag-Grid).
+    Används istf. f'{flag_for_ticker(t)} {t}' i DataFrames.
+    """
+    code = country_code_for_ticker(ticker)
+    return f"{code} · {ticker}"
+
+
