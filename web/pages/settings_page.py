@@ -1,4 +1,4 @@
-"""web/pages/settings_page.py - Användarinställningar (e-post, notiser)"""
+"""web/pages/settings_page.py - Användarinställningar (e-post, notiser, språk)"""
 
 import streamlit as st
 
@@ -161,3 +161,43 @@ def page_settings():
                 st.warning("⏸️ Dina e-postnotiser är pausade.")
             else:
                 st.info("Du har inga aktiva prenumerationer just nu.")
+
+    st.divider()
+
+    # ── Språkinställningar ────────────────────────────────────────────────────
+    st.subheader("🌐 Språk / Language / Sprache")
+    st.caption(
+        "Välj visningsspråk för etiketter och mätvärden. "
+        "Ändringen gäller direkt för din session."
+    )
+
+    _LOCALE_OPTIONS: dict[str, str] = {
+        "sv": "🇸🇪 Svenska",
+        "en": "🇬🇧 English",
+        "de": "🇩🇪 Deutsch",
+    }
+    _current_locale = st.session_state.get("locale", "sv")
+    _locale_keys    = list(_LOCALE_OPTIONS.keys())
+
+    selected_locale = st.selectbox(
+        "Visningsspråk",
+        options=_locale_keys,
+        format_func=lambda x: _LOCALE_OPTIONS[x],
+        index=_locale_keys.index(_current_locale) if _current_locale in _locale_keys else 0,
+        key="locale_selector",
+        help="Styr hur etiketter, metriker och knappar visas i gränssnittet.",
+    )
+    if selected_locale != _current_locale:
+        st.session_state["locale"] = selected_locale
+        st.success(f"✅ Språk ändrat till {_LOCALE_OPTIONS[selected_locale]}. Sidan laddas om…")
+        st.rerun()
+
+    # Visa exempel med aktuell locale
+    try:
+        from web.ui.i18n_helper import t
+        st.caption(
+            f"Exempel: '{t('portfolio')}' · '{t('pe_ratio')}' · "
+            f"'{t('score_total')}' · '{t('run_scan')}'"
+        )
+    except Exception:
+        pass

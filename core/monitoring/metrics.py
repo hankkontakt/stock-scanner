@@ -178,62 +178,113 @@ class MetricsCollector:
             pass  # Non-blocking — aldrig krascha
 
     def get_prometheus_text(self) -> str:
-        """Generera Prometheus exposition-format (text)."""
+        """Generera Prometheus exposition-format (text/plain 0.0.4).
+
+        Alla histogramvärden representeras som summary (_sum + _count) för att
+        vara kompatibla med standard Prometheus-scrapers utan att kräva bucket-
+        konfiguration.  Varje metrisk har obligatoriska # HELP / # TYPE-rader.
+        """
         d = self.to_dict()
-        lines = ["# HELP pipeline_duration_seconds Pipeline duration per mode",
-                 "# TYPE pipeline_duration_seconds histogram"]
+        lines: list[str] = []
+
+        # ── Pipeline duration (_sum + _count per mode) ────────────────────────
+        lines += [
+            "# HELP pipeline_duration_seconds_sum Ackumulerad körtid per pipeline-mode (sekunder)",
+            "# TYPE pipeline_duration_seconds_sum gauge",
+        ]
         for mode, values in d.get("pipeline_duration_seconds", {}).items():
-            for v in values:
-                lines.append(f'pipeline_duration_seconds{{mode="{mode}"}} {v}')
+            total = sum(float(v) for v in values if v is not None)
+            lines.append(f'pipeline_duration_seconds_sum{{mode="{mode}"}} {total:.3f}')
 
-        lines.extend([
-            "# HELP fetch_duration_seconds Data fetch duration",
-            "# TYPE fetch_duration_seconds histogram",
-        ])
-        for v in d.get("fetch_duration_seconds", []):
-            lines.append(f"fetch_duration_seconds {v}")
+        lines += [
+            "# HELP pipeline_duration_seconds_count Antal pipeline-körningar per mode",
+            "# TYPE pipeline_duration_seconds_count counter",
+        ]
+        for mode, values in d.get("pipeline_duration_seconds", {}).items():
+            lines.append(f'pipeline_duration_seconds_count{{mode="{mode}"}} {len(values)}')
 
-        lines.extend([
-            "# HELP scoring_duration_seconds Scoring duration",
-            "# TYPE scoring_duration_seconds histogram",
-        ])
-        for v in d.get("scoring_duration_seconds", []):
-            lines.append(f"scoring_duration_seconds {v}")
+        # ── Fetch / scoring duration (sista värde som gauge) ──────────────────
+        fetch_vals = d.get("fetch_duration_seconds", [])
+        lines += [
+            "# HELP fetch_duration_seconds_last Senaste datahämtning-duration (sekunder)",
+            "# TYPE fetch_duration_seconds_last gauge",
+        ]
+        if fetch_vals:
+            lines.append(f"fetch_duration_seconds_last {float(fetch_vals[-1]):.3f}")
 
-        lines.append("# HELP tickers_fetched_total Total tickers fetched")
-        lines.append("# TYPE tickers_fetched_total counter")
-        lines.append(f"tickers_fetched_total {d.get('tickers_fetched_total', 0)}")
+        score_vals = d.get("scoring_duration_seconds", [])
+        lines += [
+            "# HELP scoring_duration_seconds_last Senaste scoring-duration (sekunder)",
+            "# TYPE scoring_duration_seconds_last gauge",
+        ]
+        if score_vals:
+            lines.append(f"scoring_duration_seconds_last {float(score_vals[-1]):.3f}")
 
-        lines.append("# HELP tickers_failed_total Total tickers that failed")
-        lines.append("# TYPE tickers_failed_total counter")
-        lines.append(f"tickers_failed_total {d.get('tickers_failed_total', 0)}")
+        # ── Ticker-räknare ────────────────────────────────────────────────────
+        lines += [
+            "# HELP tickers_fetched_total Totalt antal tickers som hämtades",
+            "# TYPE tickers_fetched_total counter",
+            f"tickers_fetched_total {d.get('tickers_fetched_total', 0)}",
+            "# HELP tickers_failed_total Totalt antal tickers med hämtningsfel",
+            "# TYPE tickers_failed_total counter",
+            f"tickers_failed_total {d.get('tickers_failed_total', 0)}",
+        ]
 
-        lines.append('# HELP ai_calls_total AI API calls')
-        lines.append('# TYPE ai_calls_total counter')
-        lines.append(f'ai_calls_total{{provider="deepseek"}} {d.get("ai_calls_total", 0)}')
+        # ── AI-räknare ────────────────────────────────────────────────────────
+        lines += [
+            "# HELP ai_calls_total Totalt antal AI API-anrop",
+            "# TYPE ai_calls_total counter",
+            f'ai_calls_total{{provider="deepseek"}} {d.get("ai_calls_total", 0)}',
+            "# HELP ai_tokens_total Totalt antal AI-tokens",
+            "# TYPE ai_tokens_total counter",
+            f'ai_tokens_total{{provider="deepseek",direction="input"}} {d.get("ai_tokens_input_total", 0)}',
+            f'ai_tokens_total{{provider="deepseek",direction="output"}} {d.get("ai_tokens_output_total", 0)}',
+        ]
 
-        lines.append('# HELP ai_tokens_total AI tokens consumed')
-        lines.append('# TYPE ai_tokens_total counter')
-        lines.append(f'ai_tokens_total{{provider="deepseek",direction="input"}} {d.get("ai_tokens_input_total", 0)}')
-        lines.append(f'ai_tokens_total{{provider="deepseek",direction="output"}} {d.get("ai_tokens_output_total", 0)}')
-
+        # ── E-poströknare ─────────────────────────────────────────────────────
+        lines += [
+            "# HELP email_sent_total Totalt antal skickade mail per typ",
+            "# TYPE email_sent_total counter",
+        ]
         for etype, count in d.get("email_sent_total", {}).items():
             lines.append(f'email_sent_total{{type="{etype}"}} {count}')
 
-        lines.append(f"cache_hits_total {d.get('cache_hits_total', 0)}")
-        lines.append(f"cache_misses_total {d.get('cache_misses_total', 0)}")
+        # ── Cache-räknare ─────────────────────────────────────────────────────
+        lines += [
+            "# HELP cache_hits_total Totalt antal cache-träffar",
+            "# TYPE cache_hits_total counter",
+            f"cache_hits_total {d.get('cache_hits_total', 0)}",
+            "# HELP cache_misses_total Totalt antal cache-missar",
+            "# TYPE cache_misses_total counter",
+            f"cache_misses_total {d.get('cache_misses_total', 0)}",
+        ]
 
+        # ── Pipeline success/failure ───────────────────────────────────────────
+        lines += [
+            "# HELP pipeline_runs_total Totalt antal pipeline-körningar per mode och status",
+            "# TYPE pipeline_runs_total counter",
+        ]
         for mode, count in d.get("pipeline_success_total", {}).items():
-            lines.append(f'pipeline_success_total{{mode="{mode}"}} {count}')
+            lines.append(f'pipeline_runs_total{{mode="{mode}",status="success"}} {count}')
         for mode, count in d.get("pipeline_failure_total", {}).items():
-            lines.append(f'pipeline_failure_total{{mode="{mode}"}} {count}')
+            lines.append(f'pipeline_runs_total{{mode="{mode}",status="failure"}} {count}')
 
+        # ── Score-distribution (percentil-gauges) ─────────────────────────────
+        lines += [
+            "# HELP score_distribution Score-percentil (0–100) för hela universums",
+            "# TYPE score_distribution gauge",
+        ]
         for quantile, value in d.get("scoring_distribution", {}).items():
             if value is not None:
-                lines.append(f'scoring_distribution{{quantile="{quantile}"}} {value}')
+                lines.append(f'score_distribution{{quantile="{quantile}"}} {float(value):.1f}')
 
+        # ── Senaste scan-tidsstämpel ───────────────────────────────────────────
+        lines += [
+            "# HELP latest_scan_timestamp Unix-tidsstämpel för senaste lyckade scan",
+            "# TYPE latest_scan_timestamp gauge",
+        ]
         ts = d.get("latest_scan_timestamp")
         if ts:
-            lines.append(f"latest_scan_timestamp {ts}")
+            lines.append(f"latest_scan_timestamp {float(ts):.0f}")
 
-        return "\n".join(lines)
+        return "\n".join(lines) + "\n"
