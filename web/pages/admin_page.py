@@ -65,9 +65,9 @@ def page_admin():
     from web.pages.admin_tabs.strikes_health import render as _strikes_health
 
     tabs = st.tabs([
-        "Oversikt",
+        "Översikt",
         "Bevakningslista",
-        "Portfolj",
+        "Portfölj",
         "Starta scan",
         "Avanza-import",
         "Universe Health",
@@ -75,12 +75,12 @@ def page_admin():
         "Strikes & Blacklist",
         "Datakvalitet",
         "E-post",
-        "Anvandare",
+        "Användare",
         "Konfiguration",
         "Cache",
         "AI-logg",
         "Larm",
-        "Felsokning",
+        "Felsökning",
     ])
 
     with tabs[0]:

@@ -99,8 +99,8 @@ def _render_coverage_dashboard():
 
 
 def render():
-    st.subheader("Universe Health - underhall av aktieuniversum")
-    st.caption("Upptack avnoterade/ogiltiga tickers, hantera svartlista och hitta nya aktier med AI.")
+    st.subheader("Universe Health · underhåll av aktieuniversum")
+    st.caption("Upptäck avnoterade/ogiltiga tickers, hantera svartlista och hitta nya aktier med AI.")
 
     # ── Täcknings-dashboard ────────────────────────────────────────────────────
     _render_coverage_dashboard()
@@ -122,18 +122,18 @@ def render():
         if blacklist:
             st.dataframe(pd.DataFrame(blacklist), use_container_width=True, hide_index=True)
             remove_bl = st.selectbox(
-                "Ta bort fran svartlistan",
+                "Ta bort från svartlistan",
                 [""] + [i.get("ticker", "") for i in blacklist],
                 key="bl_remove",
             )
             if remove_bl and st.button("Ta bort", key="btn_bl_remove"):
                 if remove_from_blacklist(remove_bl):
-                    st.success(f"`{remove_bl}` borttagen fran svartlistan!")
+                    st.success(f"`{remove_bl}` borttagen från svartlistan!")
                     st.rerun()
         else:
-            st.info("Svartlistan ar tom.")
+            st.info("Svartlistan är tom.")
 
-    with st.expander("Lagg till i svartlistan manuellt", expanded=False):
+    with st.expander("Lägg till i svartlistan manuellt", expanded=False):
         col_bl_t, col_bl_r = st.columns([2, 3])
         with col_bl_t:
             bl_ticker = st.text_input("Ticker", key="bl_add_ticker", max_chars=15,
@@ -141,7 +141,7 @@ def render():
         with col_bl_r:
             bl_reason = st.text_input("Anledning", key="bl_add_reason",
                                        placeholder="t.ex. avnoterad")
-        if st.button("Lagg till i svartlistan", key="btn_bl_add"):
+        if st.button("Lägg till i svartlistan", key="btn_bl_add"):
             if bl_ticker:
                 if add_to_blacklist(bl_ticker, bl_reason or "manuell"):
                     st.success(f"`{bl_ticker}` tillagd i svartlistan!")
@@ -152,11 +152,11 @@ def render():
                 st.warning("Ange en ticker.")
 
     st.markdown("---")
-    st.markdown("### Kor halsokontroll")
+    st.markdown("### Kör hälsokontroll")
     st.caption("Kontrollerar alla tickers i senaste scandatan mot yfinance.")
 
     health_provider = st.selectbox(
-        "AI-provider for nya aktieforslag",
+        "AI-provider för nya aktieförslag",
         ["auto", "deepseek", "gemini"],
         format_func=lambda k: {
             "auto": f"Auto ({config.AI_PROVIDER})",
@@ -166,18 +166,18 @@ def render():
         key="health_provider",
     )
 
-    if st.button("Kor halsokontroll", key="btn_health_check",
+    if st.button("Kör hälsokontroll", key="btn_health_check",
                  type="primary", use_container_width=True):
-        with st.spinner("Kor halsokontroll..."):
+        with st.spinner("Kör hälsokontroll..."):
             try:
                 reports = sorted(REPORT_DIR.glob("scored_universe_*.csv"), reverse=True)
                 if not reports:
-                    st.warning("Ingen scandata hittad. Kor en scan forst.")
+                    st.warning("Ingen scandata hittad. Kör en scan först.")
                 else:
                     df_health = pd.read_csv(reports[0], low_memory=False)
                     df_health.columns = df_health.columns.str.strip()
                     result = run_health_check(df=df_health, provider=health_provider)
-                    st.success("Halsokontroll klar!")
+                    st.success("Hälsokontroll klar!")
 
                     col_h1, col_h2, col_h3 = st.columns(3)
                     with col_h1:
@@ -185,7 +185,7 @@ def render():
                     with col_h2:
                         st.metric("Svartlistade", result.get("blacklist_count", 0))
                     with col_h3:
-                        st.metric("Nya AI-forslag", len(result.get("new_stocks", [])))
+                        st.metric("Nya AI-förslag", len(result.get("new_stocks", [])))
 
                     invalid = result.get("invalid_tickers", [])
                     if invalid:
@@ -194,31 +194,31 @@ def render():
                         inv_df = pd.DataFrame(invalid)
                         st.dataframe(inv_df, use_container_width=True, hide_index=True)
 
-                        st.markdown("### Ersattningsforslag")
+                        st.markdown("### Ersättningsförslag")
                         suggestions = result.get("suggestions", {})
                         for bad_ticker, replacements in suggestions.items():
-                            with st.expander(f"`{bad_ticker}` -> ersattningsforslag", expanded=True):
+                            with st.expander(f"`{bad_ticker}` → ersättningsförslag", expanded=True):
                                 if replacements:
                                     rep_df = pd.DataFrame(replacements)
                                     st.dataframe(rep_df, use_container_width=True, hide_index=True)
                                 else:
-                                    st.caption("Inga ersattningsforslag.")
+                                    st.caption("Inga ersättningsförslag.")
                     else:
                         st.success("Alla tickers verkar vara giltiga!")
 
                     new_stocks = result.get("new_stocks", [])
                     if new_stocks:
                         st.markdown("---")
-                        st.subheader("AI-forslag: nya intressanta aktier")
+                        st.subheader("AI-förslag: nya intressanta aktier")
                         for s in new_stocks:
                             ticker_s = s.get("ticker", "?")
                             name_s = s.get("name", "")
                             reason_s = s.get("reason", "")
                             with st.container(border=True):
-                                st.markdown(f"**{ticker_s}** -- {name_s}")
+                                st.markdown(f"**{ticker_s}** — {name_s}")
                                 st.caption(reason_s)
 
             except Exception as e:
-                st.error(f"Halsokontrollen misslyckades: {e}")
+                st.error(f"Hälsokontrollen misslyckades: {e}")
                 import traceback
                 st.code(traceback.format_exc())

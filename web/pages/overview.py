@@ -27,12 +27,15 @@ def _goto(page_title: str):
         st.rerun()
 
 
+@st.cache_data(ttl=300)
 def _data_age_str() -> str:
     """Hur färsk är scandatan?"""
-    files = sorted(Path(REPORT_DIR).glob("scored_universe_*.csv"), reverse=True)
+    import os
+    files = sorted(Path(REPORT_DIR).glob("scored_universe_*.parquet"), reverse=True)
+    if not files:
+        files = sorted(Path(REPORT_DIR).glob("scored_universe_*.csv"), reverse=True)
     if not files:
         return "ingen scandata"
-    import os
     age_h = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(files[0]))).total_seconds() / 3600
     if age_h < 36:
         return f"uppdaterad för {age_h:.0f}h sedan"
@@ -40,7 +43,7 @@ def _data_age_str() -> str:
 
 
 def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame = None):
-    page_header("Översikt", "home", subtitle=f"Marknadsöversikt * {_data_age_str()}")
+    page_header("Översikt", "home", subtitle=f"Marknadsöversikt · {_data_age_str()}")
 
     if (df is None or df.empty) and (sc_df is None or sc_df.empty):
         empty_state("Aktiedata laddas in. Systemet uppdateras automatiskt varje vecka -- "
@@ -59,13 +62,13 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
         kpi_grid([
             {"label": "Bolag i scan", "value": f"{len(df)}",
              "help": "Antal bolag i universumet just nu."},
-            {"label": "STARK entry", "value": f"{n_stark}",
+            {"label": "STARK signal", "value": f"{n_stark}",
              "help": "Bolag med systemets starkaste köpsignal (alla faktorer pekar upp).",
              "value_color": t.POS},
             {"label": "Snittpoäng", "value": f"{avg_score:.0f}",
              "help": "Genomsnittlig score. >60 = generellt stark marknad.",
              "value_color": t.score_color(avg_score)},
-            {"label": "Toppbolag", "value": str(top_row.get("ticker", "--")),
+            {"label": "Toppbolag", "value": str(top_row.get("name", top_row.get("ticker", "--")))[:22],
              "delta": f"{top_row.get('score_total', 0):.0f} poäng", "delta_kind": "pos",
              "help": "Högst rankade bolaget just nu.", "small": True},
         ])
@@ -89,10 +92,11 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                 buy = combined[combined["entry_signal"] == "STARK"].sort_values(score_c, ascending=False).head(5)
                 if not buy.empty:
                     show = buy[[c for c in ["ticker", "name", score_c, "sector"] if c in buy.columns]].copy()
+                    show[score_c] = show[score_c].round(1)
                     show["ticker"] = show["ticker"].apply(lambda x: f"{flag_for_ticker(x)} {x}")
                     show = show.rename(columns={"ticker": "Ticker", "name": "Bolag",
                                                 score_c: "Score", "sector": "Sektor"})
-                    data_table(show, height=215)
+                    data_table(show, height=min(215, max(80, len(show) * 40 + 38)))
                 else:
                     empty_state("Inga STARK-signaler just nu.", icon="info")
             else:

@@ -40,9 +40,12 @@ def page_global_markets():
                                     "Förändring": f"{'🟢' if chg >= 0 else '🔴'} {chg:+.2f}%",
                                 })
                     if rows:
-                        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
-                                     height=min(500, len(rows) * 37 + 40))
-                        st.caption("Källa: yfinance * uppdateras varje sidladdning")
+                        try:
+                            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True,
+                                         height=min(500, len(rows) * 37 + 40))
+                        except Exception:
+                            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                        st.caption("Källa: yfinance · uppdateras varje sidladdning")
                     else:
                         st.info("Inga indexdata tillgängliga just nu.")
                 else:
