@@ -15,7 +15,6 @@ def _render_coverage_dashboard():
     st.markdown("### 📊 Universum-täckning")
     st.caption("Hur stor andel av universe.json representeras i senaste scored_universe.parquet?")
 
-    # Ladda senaste parquet
     parquet_files = sorted(REPORT_DIR.glob("scored_universe_*.parquet"), reverse=True)
     if not parquet_files:
         st.warning("Ingen scored_universe.parquet hittad. Kör en weekly scan först.")
@@ -36,7 +35,6 @@ def _render_coverage_dashboard():
     missing          = universe_tickers - scored_tickers
     coverage_pct     = len(covered) / len(universe_tickers) * 100 if universe_tickers else 0
 
-    # Stale-data räkning
     n_stale = 0
     if "data_stale_days" in scored_df.columns:
         n_stale = int(scored_df["data_stale_days"].fillna(0).gt(0).sum())
@@ -45,65 +43,144 @@ def _render_coverage_dashboard():
     with col1:
         st.metric("Universe.json", len(universe_tickers))
     with col2:
-        delta_color = "normal" if coverage_pct >= 80 else "inverse"
         st.metric("Täckning", f"{coverage_pct:.0f}%", help="≥80% = bra. <60% = problem med Yahoo rate-limiting.")
     with col3:
         st.metric("Saknas i parquet", len(missing), help="Tickers i universe.json som inte finns i senaste scan-resultat.")
     with col4:
-        st.metric("Stale data (⏱)", n_stale, help="Aktier vars data är ärvd från förra scan (Yahoo rate-limitad).")
+        st.metric("Stale data", n_stale, help="Aktier vars data är ärvd från förra scan (Yahoo rate-limitad).")
 
     if coverage_pct < 60:
-        st.error(f"⚠️ Täckning {coverage_pct:.0f}% — under 60%. Många aktier saknas troligen p.g.a. Yahoo rate-limiting. "
-                 "Staleness-merge hjälper automatiskt efter nästa körning.")
+        st.error(f"Täckning {coverage_pct:.0f}% — under 60%. Många aktier saknas p.g.a. Yahoo rate-limiting. "
+                 "Staleness-merge och retry_rate_limited-körning hjälper.")
     elif coverage_pct < 80:
-        st.warning(f"⚠️ Täckning {coverage_pct:.0f}% — under 80%. Staleness-merge aktiveras automatiskt i weekly scan.")
+        st.warning(f"Täckning {coverage_pct:.0f}% — under 80%. Staleness-merge aktiveras automatiskt i weekly scan.")
     else:
-        st.success(f"✅ Täckning {coverage_pct:.0f}% — bra!")
+        st.success(f"Täckning {coverage_pct:.0f}% — bra!")
 
-    # Universe-audit (om filen finns)
+
+def _render_universe_audit():
+    """Separat synlig sektion för Universe Audit."""
+    st.markdown("---")
+    st.markdown("### 🔍 Universe Audit")
+    st.caption(
+        "Analyserar alla historiska parquet-snapshots och identifierar vilka tickers som "
+        "aldrig eller sällan lyckats hämtas — kandidater för borttagning ur universum."
+    )
+
     audit_path = DATA_DIR / "universe_audit.json"
+
+    # Visa senaste audit-resultat om de finns
     if audit_path.exists():
         try:
             audit = json.loads(audit_path.read_text(encoding="utf-8"))
-            with st.expander(f"📋 Senaste universe-audit ({audit.get('generated','?')[:10]})", expanded=False):
-                st.metric("Aldrig scorade", len(audit.get("never_appeared", [])),
-                          help="Tickers som aldrig dykt upp i någon historisk parquet — kandidater för borttagning.")
-                st.metric("Sällan scorade (<33% av scans)", len(audit.get("rarely_appeared", [])))
-                st.metric("Alltid scorade (≥80%)", len(audit.get("always_present", [])))
-                if audit.get("never_appeared"):
-                    st.caption("Tickers som aldrig scorats:")
-                    st.code(", ".join(audit["never_appeared"][:50]))
+            generated = audit.get("generated", "")[:10]
+            n_snapshots = audit.get("n_snapshots", "?")
+            never  = audit.get("never_appeared", [])
+            rarely = audit.get("rarely_appeared", [])
+            always = audit.get("always_present", [])
+
+            st.info(f"Senaste audit: **{generated}** · baserat på **{n_snapshots}** snapshots")
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Aldrig scorade", len(never),
+                      help="Tickers som aldrig dykt upp i någon historisk parquet. "
+                           "Troligen genuint döda (404) eller aldrig hämtade av Yahoo.")
+            c2.metric("Sällan scorade", len(rarely),
+                      help="Tickers i <33% av snapshots — kroniskt rate-limitade.")
+            c3.metric("Alltid scorade", len(always),
+                      help="Tickers i ≥80% av snapshots — pålitliga datakällor.")
+
+            if never:
+                with st.expander(f"Visa {len(never)} aldrig-scorade tickers", expanded=False):
+                    st.caption("Dessa tickers har aldrig dykt upp i någon scan-parquet. "
+                               "Kan vara genuint delistade, eller Yahoo har aldrig returnerat data för dem.")
+                    # Dela upp i kolumner för bättre läsbarhet
+                    chunk = 6
+                    rows = [never[i:i+chunk] for i in range(0, min(len(never), 120), chunk)]
+                    for row in rows:
+                        st.code("  ".join(row))
+                    if len(never) > 120:
+                        st.caption(f"... och {len(never) - 120} till.")
+
+            if rarely:
+                with st.expander(f"Visa {len(rarely)} sällan-scorade tickers", expanded=False):
+                    chunk = 6
+                    rows = [rarely[i:i+chunk] for i in range(0, min(len(rarely), 60), chunk)]
+                    for row in rows:
+                        st.code("  ".join(row))
+
+        except Exception as _e:
+            st.warning(f"Kunde inte läsa universe_audit.json: {_e}")
+    else:
+        st.info("Ingen audit körd ännu. Klicka på knappen nedan för att starta.")
+
+    # Visa retry_pending-status om filen finns
+    retry_path = DATA_DIR / "retry_pending.json"
+    if retry_path.exists():
+        try:
+            rp = json.loads(retry_path.read_text(encoding="utf-8"))
+            n_pending = rp.get("n_tickers", len(rp.get("tickers", [])))
+            pass_count = rp.get("pass_count", 0)
+            created = rp.get("created", "")[:16]
+            st.info(
+                f"♻️ **Retry pending:** {n_pending} tickers väntar på nästa retry-körning "
+                f"(pass {pass_count}, sparad {created}). "
+                "Nästa retry körs automatiskt via schema, eller starta manuellt nedan."
+            )
         except Exception:
             pass
 
-    # Kör audit-knapp
-    if st.button("🔍 Kör universe-audit nu", key="btn_run_universe_audit",
-                 help="Analyserar alla historiska parquets och identifierar tickers som aldrig lyckas hämtas."):
-        with st.spinner("Analyserar snapshots..."):
-            try:
-                from core.daily_pipeline import run_universe_audit
-                result = run_universe_audit(min_snapshots=1)
-                if "error" in result:
-                    st.warning(result["error"])
-                else:
+    # Knappar
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("Kör universe-audit nu", key="btn_run_universe_audit",
+                     use_container_width=True,
+                     help="Analyserar alla historiska parquets och identifierar tickers som aldrig lyckas hämtas."):
+            with st.spinner("Analyserar snapshots..."):
+                try:
+                    from core.daily_pipeline import run_universe_audit
+                    result = run_universe_audit(min_snapshots=1)
+                    if "error" in result:
+                        st.warning(result["error"])
+                    else:
+                        st.success(
+                            f"Audit klar! {len(result['never_appeared'])} aldrig, "
+                            f"{len(result['rarely_appeared'])} sällan, "
+                            f"{len(result['always_present'])} alltid "
+                            f"({result['coverage_pct']:.0f}% täckning, {result['n_snapshots']} snapshots)"
+                        )
+                        st.rerun()
+                except Exception as _ae:
+                    st.error(f"Audit misslyckades: {_ae}")
+
+    with col_b:
+        if st.button("Kör retry av rate-limitade nu", key="btn_run_retry_rl",
+                     use_container_width=True,
+                     help="Hämtar om tickers som rate-limitades i senaste scan. Kör flera pass tills alla klarar sig."):
+            with st.spinner("Kör retry... (kan ta några minuter)"):
+                try:
+                    from core.daily_pipeline import run_retry_rate_limited
+                    result = run_retry_rate_limited(max_passes=3, pass_delay_s=60)
                     st.success(
-                        f"✅ Audit klar! {len(result['never_appeared'])} aldrig, "
-                        f"{len(result['rarely_appeared'])} sällan, "
-                        f"{len(result['always_present'])} alltid ({result['coverage_pct']:.0f}% täckning)"
+                        f"Retry klar! {result['n_succeeded']} lyckades, "
+                        f"{result['n_still_pending']} kvar, "
+                        f"{result['n_skipped']} delistade, "
+                        f"{result['passes_run']} pass körda."
                     )
                     st.rerun()
-            except Exception as _ae:
-                st.error(f"Audit misslyckades: {_ae}")
-
-    st.markdown("---")
+                except Exception as _re:
+                    st.error(f"Retry misslyckades: {_re}")
 
 
 def render():
     st.subheader("Universe Health · underhåll av aktieuniversum")
-    st.caption("Upptäck avnoterade/ogiltiga tickers, hantera svartlista och hitta nya aktier med AI.")
+    st.caption("Täckning, audit, svartlista och hälsokontroll av aktieuniversumet.")
 
     # ── Täcknings-dashboard ────────────────────────────────────────────────────
     _render_coverage_dashboard()
+
+    # ── Universe Audit (tydlig egen sektion) ──────────────────────────────────
+    _render_universe_audit()
 
     try:
         from core.universe_health import (
