@@ -1317,6 +1317,33 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             except Exception as e:
                 logger.warning(f"  Rotation hoppades over: {e}")
 
+        # =========================================================================
+        # 1g. UNIVERSE DISCOVERY (weekly — hämtar nyhetsbaserade kandidater)
+        #     Kör en snabb nyhetsbaserad scan och sparar kandidater som pending.
+        #     Tung discovery (Finviz, ETF, AI) körs via GitHub Actions söndagar.
+        # =========================================================================
+        if mode == "weekly":
+            try:
+                _disc_dry_run = os.getenv("DISCOVERY_DRY_RUN", "true").lower() not in ("false", "0", "no")
+                from core.universe_manager import run_full_maintenance
+                disc_result = run_full_maintenance(
+                    sources=["news"],        # Snabb källa — Finviz/ETF/AI körs via GitHub Actions
+                    auto_add_threshold=0.88, # Konservativ: kräver HIGH-tier + ≥88% confidence
+                    auto_remove=False,       # Borttagning hanteras av admin-UI
+                    dry_run=_disc_dry_run,
+                    commit=False,            # Commit sker via dedikerat GitHub Actions-workflow
+                    ai_provider="auto",
+                    verbose=False,
+                )
+                n_added  = len(disc_result.get("auto_added", []))
+                n_new    = disc_result.get("candidates_new", 0)
+                logger.info(
+                    f"  Discovery: {n_new} nya pending-kandidater, "
+                    f"{n_added} auto-tillagda (dry_run={_disc_dry_run})"
+                )
+            except Exception as e:
+                logger.warning(f"  Universe discovery hoppades over: {e}")
+
         # Portfolj & watchlist
         holdings = _load_portfolio()
         watchlist_raw = _load_watchlist()

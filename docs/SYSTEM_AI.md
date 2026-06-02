@@ -1110,6 +1110,30 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-02 — Delvis implementerade features fixade och kopplade in i main pipeline
+
+**#9 Monitoring: Prometheus-format fixat** (`core/monitoring/metrics.py:180-265`)
+- `get_prometheus_text()` hade icke-standard format: histogram-metrik dumpades som
+  individuella samples utan `_sum`/`_count`, och `cache_hits_total`, `cache_misses_total`,
+  `email_sent_total` saknade `# HELP`/`# TYPE`-rader.
+- FIX: Alla histogram-metrik skrivs nu som gauge `_sum` + counter `_count` per mode.
+  Alla metrik har korrekt `# HELP`/`# TYPE`-header. Formatet är nu kompatibelt med
+  standard Prometheus-scrapers (text/plain 0.0.4).
+
+**#9 Monitoring: Universe Discovery kopplat till weekly pipeline** (`core/daily_pipeline.py:1319-1345`)
+- `run_full_maintenance()` anropades aldrig från pipeline — body kör bara via GitHub Actions
+  (söndagar). Nu körs ett snabbt nyhets-baserat discovery i sektion `1g` av weekly-mode:
+  `sources=["news"]`, `auto_add_threshold=0.88`, `dry_run` styrt av `DISCOVERY_DRY_RUN` env.
+  Tung discovery (Finviz/ETF/AI) körs fortfarande via dedikerat GH Actions-workflow söndagar.
+
+**#10 i18n: Kopplat till Streamlit-UI** (`web/pages/settings_page.py`, `web/ui/i18n_helper.py`)
+- `TranslationManager` + `core/i18n/{sv,en,de}.py` var implementerade men aldrig anslutna.
+- NY FIL `web/ui/i18n_helper.py`: `t(key)` convenience-funktion som läser
+  `st.session_state["locale"]` (default "sv") och oversätter via `TranslationManager`.
+- `settings_page.py`: ny "🌐 Språk"-sektion med `st.selectbox` för sv/en/de. Ändring
+  sparas i `st.session_state["locale"]` + omstart av sidan via `st.rerun()`.
+  Live-preview visar hur etiketter oversätts.
+
 ### 2026-06-02 — MASSIVE: 10 mega-projects initiated (hela systemet analyserat och ombyggt)
 
 **Full system analysis av alla 94 Python-filer (~35,000 lines) — 5 parallella AI-agenter:**
