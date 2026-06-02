@@ -116,7 +116,7 @@ men garanterar ingenting om framtiden.
              "Riskjusterad avkastning: (avkastning − riskfri ränta) / volatilitet. >1.0 = bra, >1.5 = mycket bra, >2.0 = utmärkt. Beräknas mot riskfri ränta ~4 %/år. Tar inte hänsyn till survivorship bias."),
             ("✅ Hit rate",           f"{result.get('hit_rate_pct', 0):.0f}%",            ">50 % slår index",
              "Andel månader som modellen slog benchmark. 50 % = kasta krona/klave. >55 % = bra. >60 % = mycket bra. Det viktigaste nyckeltalet -- påverkas minst av survivorship bias."),
-            ("💀 Max drawdown",       f"{result['max_drawdown_pct']:.1f}%",               None,
+            ("Max drawdown",          f"{result['max_drawdown_pct']:.1f}%",               None,
              "Värsta nedgång från toppnivå till bottennivå under testperioden. −20 % = portföljen tappade 20 % som värst innan den vände upp. Ju mer negativt, desto mer risk att du säljer i panik."),
         ])
 

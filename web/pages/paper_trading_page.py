@@ -215,8 +215,8 @@ def page_paper_trading():
             ("Öppna positioner",   str(len(open_pos)),          None, None),
             ("Snitt P&L (öppna)", f"{avg_pnl_open:+.1f}%",     None,
              "Genomsnittlig orealiserad avkastning för öppna positioner just nu."),
-            ("🟢 I vinst",         str(pnl_pos),                None, None),
-            ("🔴 Med förlust",     str(pnl_neg),                None, None),
+            ("I vinst",             str(pnl_pos),                None, None),
+            ("Med förlust",        str(pnl_neg),                None, None),
         ])
         st.markdown("")
 
@@ -312,7 +312,7 @@ def page_paper_trading():
         with col_w:
             worst_t = worst.get("ticker", "--")
             worst_p = worst.get("pnl_pct", 0)
-            st.metric("💀 Sämsta trade", worst_t, f"{worst_p:+.1f}%")
+            st.metric("Sämsta trade", worst_t, f"{worst_p:+.1f}%")
         with col_dca:
             dca_count = stats.get("dca_trades", 0)
             st.metric("DCA-köp", dca_count, help="Antal genomförda DCA-köp.")

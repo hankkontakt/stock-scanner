@@ -209,7 +209,7 @@ Till skillnad från fundamental analys (som tittar på bolagets vinster och bala
             st.markdown("---")
             col_a, col_b = st.columns(2)
             with col_a:
-                st.subheader("🚀 Starkast momentum (12m)")
+                st.subheader("Starkast momentum (12m)")
                 top_mom = (out[["ticker", "name", "return_12m", "return_3m", "score_total"]]
                            .dropna(subset=["return_12m"])
                            .sort_values("return_12m", ascending=False)
@@ -383,10 +383,10 @@ Diagrammet visar tre saker:
                             with col_m3:
                                 rsi_val = rsi.iloc[-1] if not rsi.empty else float("nan")
                                 rsi_str = f"{rsi_val:.1f}" if not pd.isna(rsi_val) else "--"
-                                rsi_color = "🟢" if (not pd.isna(rsi_val) and 30 <= rsi_val <= 70) else ("🔴" if not pd.isna(rsi_val) else "⚪")
-                                st.metric("RSI (14)", f"{rsi_color} {rsi_str}")
+                                rsi_zone = "OK" if (not pd.isna(rsi_val) and 30 <= rsi_val <= 70) else ("Extrem" if not pd.isna(rsi_val) else "--")
+                                st.metric("RSI (14)", f"{rsi_str} ({rsi_zone})")
                             with col_m4:
-                                macd_sig = "🟢 Bullish" if (not macd_line.empty and not signal_line.empty and macd_line.iloc[-1] > signal_line.iloc[-1]) else "🔴 Bearish"
+                                macd_sig = "Bullish" if (not macd_line.empty and not signal_line.empty and macd_line.iloc[-1] > signal_line.iloc[-1]) else "Bearish"
                                 st.metric("Signal", macd_sig)
 
                     except Exception as e:
