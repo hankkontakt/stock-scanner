@@ -2063,6 +2063,21 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 metrics.pipeline_end(mode, success=pipeline_success)
         except Exception:
             pass
+        # ── Logga scan-resultat till scan_log.json (admin-dashboardens källa) ──
+        # Utan detta fryser "Senaste scan" på dashboarden — alla scan-typer
+        # (morning/evening/weekly/smallcap) ska synas här, även krascher (ERROR).
+        try:
+            from core.logger import log_event
+            _elapsed = round(time.time() - start_time, 1)
+            _err = locals().get("pipeline_error")
+            log_event(
+                mode,
+                "OK" if pipeline_success else "ERROR",
+                details={"scan_type": mode, "elapsed_seconds": _elapsed},
+                error=(str(_err)[:300] if (not pipeline_success and _err) else None),
+            )
+        except Exception:
+            pass
         try:
             pl.save()
         except Exception:
