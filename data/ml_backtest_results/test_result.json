@@ -1,0 +1,194 @@
+{
+  "total_return": 1.6311,
+  "cagr": 0.3258,
+  "sharpe_ratio": 45.9883,
+  "max_drawdown": 0.0,
+  "win_rate": 1.0,
+  "avg_win": 0.024602,
+  "avg_loss": 0.0,
+  "profit_factor": 999.0,
+  "n_trades": 41,
+  "benchmark_return": 0.0,
+  "benchmark_cagr": 0.0,
+  "benchmark_sharpe": 0.0,
+  "benchmark_max_dd": 0.0,
+  "params": {
+    "top_n": 5,
+    "rebalance_freq": "ME",
+    "max_position_size": 1.0,
+    "transaction_cost_pct": 0.001,
+    "benchmark_ticker": null,
+    "n_rebalances": 42
+  },
+  "created_at": "2026-06-02T00:57:05.743790",
+  "equity_curve": [
+    {
+      "date": "2023-01-29",
+      "portfolio_value": 1.028086
+    },
+    {
+      "date": "2023-02-26",
+      "portfolio_value": 1.056979
+    },
+    {
+      "date": "2023-03-26",
+      "portfolio_value": 1.077328
+    },
+    {
+      "date": "2023-04-30",
+      "portfolio_value": 1.104635
+    },
+    {
+      "date": "2023-05-28",
+      "portfolio_value": 1.145171
+    },
+    {
+      "date": "2023-06-25",
+      "portfolio_value": 1.163567
+    },
+    {
+      "date": "2023-07-30",
+      "portfolio_value": 1.20044
+    },
+    {
+      "date": "2023-08-27",
+      "portfolio_value": 1.229075
+    },
+    {
+      "date": "2023-09-24",
+      "portfolio_value": 1.257961
+    },
+    {
+      "date": "2023-10-29",
+      "portfolio_value": 1.282756
+    },
+    {
+      "date": "2023-11-26",
+      "portfolio_value": 1.300393
+    },
+    {
+      "date": "2023-12-31",
+      "portfolio_value": 1.334456
+    },
+    {
+      "date": "2024-01-28",
+      "portfolio_value": 1.353846
+    },
+    {
+      "date": "2024-02-25",
+      "portfolio_value": 1.409033
+    },
+    {
+      "date": "2024-03-31",
+      "portfolio_value": 1.443075
+    },
+    {
+      "date": "2024-04-28",
+      "portfolio_value": 1.481863
+    },
+    {
+      "date": "2024-05-26",
+      "portfolio_value": 1.513681
+    },
+    {
+      "date": "2024-06-30",
+      "portfolio_value": 1.563749
+    },
+    {
+      "date": "2024-07-28",
+      "portfolio_value": 1.593075
+    },
+    {
+      "date": "2024-08-25",
+      "portfolio_value": 1.62844
+    },
+    {
+      "date": "2024-09-29",
+      "portfolio_value": 1.655716
+    },
+    {
+      "date": "2024-10-27",
+      "portfolio_value": 1.706414
+    },
+    {
+      "date": "2024-11-24",
+      "portfolio_value": 1.752127
+    },
+    {
+      "date": "2024-12-29",
+      "portfolio_value": 1.812387
+    },
+    {
+      "date": "2025-01-26",
+      "portfolio_value": 1.86449
+    },
+    {
+      "date": "2025-02-23",
+      "portfolio_value": 1.889603
+    },
+    {
+      "date": "2025-03-30",
+      "portfolio_value": 1.91622
+    },
+    {
+      "date": "2025-04-27",
+      "portfolio_value": 1.967697
+    },
+    {
+      "date": "2025-05-25",
+      "portfolio_value": 2.002936
+    },
+    {
+      "date": "2025-06-29",
+      "portfolio_value": 2.044066
+    },
+    {
+      "date": "2025-07-27",
+      "portfolio_value": 2.124141
+    },
+    {
+      "date": "2025-08-31",
+      "portfolio_value": 2.175333
+    },
+    {
+      "date": "2025-09-28",
+      "portfolio_value": 2.245807
+    },
+    {
+      "date": "2025-10-26",
+      "portfolio_value": 2.266398
+    },
+    {
+      "date": "2025-11-30",
+      "portfolio_value": 2.346584
+    },
+    {
+      "date": "2025-12-28",
+      "portfolio_value": 2.371811
+    },
+    {
+      "date": "2026-01-25",
+      "portfolio_value": 2.401124
+    },
+    {
+      "date": "2026-02-22",
+      "portfolio_value": 2.481125
+    },
+    {
+      "date": "2026-03-29",
+      "portfolio_value": 2.561524
+    },
+    {
+      "date": "2026-04-26",
+      "portfolio_value": 2.661953
+    },
+    {
+      "date": "2026-05-31",
+      "portfolio_value": 2.704986
+    },
+    {
+      "date": "2026-06-07",
+      "portfolio_value": 2.704986
+    }
+  ]
+}

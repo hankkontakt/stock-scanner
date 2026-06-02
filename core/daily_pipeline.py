@@ -93,7 +93,9 @@ def _save_scored(df: pd.DataFrame, path: Path):
     som saboterar Streamlit-dashboarden.
     """
     csv_path = path.with_suffix(".csv")
-    df.to_csv(csv_path, index=False)
+    csv_tmp = csv_path.with_suffix(".tmp.csv")
+    df.to_csv(csv_tmp, index=False)
+    csv_tmp.replace(csv_path)  # Atomisk: tmp → rename
     
     try:
         import pyarrow as pa
@@ -421,6 +423,119 @@ from core.pipeline_report import (
     format_factor_attribution_md,
 )
 from core.pipeline_alerts import _send_stark_alerts, _get_rec
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PIPELINE PERFORMANCE TRACKING
+# ══════════════════════════════════════════════════════════════════════════════
+
+import threading
+from collections import defaultdict, deque
+from contextlib import contextmanager
+
+_PERF_LOCK = threading.Lock()
+_PERF_HISTORY: dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
+
+
+@contextmanager
+def _timed_stage(name: str, plogger=None, **extra):
+    """
+    Context manager som mäter duration för en pipeline-stage.
+    Loggar via PipelineLogger om tillgängligt.
+
+    Användning:
+        with _timed_stage("fetch_data", plogger=pl) as ctx:
+            data = fetch_data()
+            ctx["rows_processed"] = len(data)
+    """
+    start = time.time()
+    meta: dict = {"name": name, "rows_processed": 0, "errors": 0}
+    if plogger:
+        plogger.start_stage(name)
+    try:
+        yield meta
+        elapsed_ms = (time.time() - start) * 1000
+        meta["duration_ms"] = round(elapsed_ms, 1)
+        if plogger:
+            plogger.end_stage(name)
+        _record_perf(name, meta)
+    except Exception as e:
+        elapsed_ms = (time.time() - start) * 1000
+        meta["duration_ms"] = round(elapsed_ms, 1)
+        meta["errors"] = meta.get("errors", 0) + 1
+        meta["error"] = str(e)[:100]
+        if plogger:
+            plogger.end_stage(name)
+            plogger.log_error("pipeline", f"STAGE_FAILED:{name}", str(e)[:200])
+        _record_perf(name, meta)
+        raise
+
+
+def _record_perf(stage: str, meta: dict):
+    """Spara en prestandamätpunkt i historiken."""
+    try:
+        entry = {
+            "timestamp": time.time(),
+            "stage": stage,
+            **meta,
+        }
+        with _PERF_LOCK:
+            _PERF_HISTORY[stage].append(entry)
+    except Exception:
+        pass
+
+
+def get_performance_summary(last_n: int = 10) -> pd.DataFrame:
+    """
+    Tabell över genomsnittlig duration per stage (senaste N körningar).
+    Returnerar DataFrame med stage, avg_duration_ms, total_calls, error_rate.
+    """
+    rows = []
+    with _PERF_LOCK:
+        for stage, entries in _PERF_HISTORY.items():
+            recent = list(entries)[-last_n:]
+            if not recent:
+                continue
+            durations = [e.get("duration_ms", 0) for e in recent if e.get("duration_ms")]
+            errors = sum(1 for e in recent if e.get("errors", 0) > 0)
+            avg_duration = sum(durations) / len(durations) if durations else 0
+            rows.append({
+                "stage": stage,
+                "avg_duration_ms": round(avg_duration, 1),
+                "total_calls": len(recent),
+                "errors": errors,
+                "error_rate_pct": round(errors / len(recent) * 100, 1) if recent else 0,
+            })
+    if not rows:
+        return pd.DataFrame(columns=["stage", "avg_duration_ms", "total_calls", "errors", "error_rate_pct"])
+    df = pd.DataFrame(rows)
+    return df.sort_values("avg_duration_ms", ascending=False).reset_index(drop=True)
+
+
+def get_slowest_stages(top_n: int = 5) -> list[dict]:
+    """
+    Hitta flaskhalsar — de långsammaste stage:en baserat på average duration.
+    """
+    df = get_performance_summary()
+    if df.empty:
+        return []
+    return df.head(top_n).to_dict("records")
+
+
+def get_performance_trend(stage_name: str, last_n: int = 20) -> list[dict]:
+    """
+    Hur har prestandan för en specifik stage ändrats?
+    Returnerar lista av dicts med index, duration_ms, timestamp.
+    """
+    with _PERF_LOCK:
+        entries = list(_PERF_HISTORY.get(stage_name, []))[-last_n:]
+    return [
+        {
+            "index": i,
+            "duration_ms": e.get("duration_ms", 0),
+            "timestamp": e.get("timestamp"),
+        }
+        for i, e in enumerate(entries)
+    ]
 
 # ══════════════════════════════════════════════════════════════════════════════
 # AI-PROMPTS
@@ -895,6 +1010,22 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
               | "refresh_missing" (letar upp + refreshar saknad data)
         force_refresh: Hoppa över cache, tvinga ny data
     """
+    # ── Initiera PipelineLogger och MetricsCollector ──────────────────────
+    from core.logger import PipelineLogger, rotate_old_logs
+    pl = PipelineLogger(mode=mode, verbose=True)
+    try:
+        from core.monitoring.metrics import MetricsCollector
+        metrics = MetricsCollector()
+        metrics.pipeline_start(mode)
+    except Exception:
+        metrics = None
+
+    # Log rotation (en gång per körning)
+    try:
+        rotate_old_logs(max_days=30)
+    except Exception:
+        pass
+
     start_time = time.time()
     date_str = date.today().strftime("%Y-%m-%d")
     day_name = datetime.now().strftime("%A")
@@ -906,123 +1037,131 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
     logger.info(f"🚀 MarketScan Pipeline - mode={mode} - {date_str}")
     logger.info(f"{'='*50}\n")
 
-    # ── Snabblägen som inte behöver hela pipeline-flödet ──────────────────
-    if mode == "targeted":
-        tickers_env = os.environ.get("TARGET_TICKERS", "")
-        tickers_list = [t.strip().upper() for t in tickers_env.split(",") if t.strip()]
-        if not tickers_list:
-            logger.warning("  ⚠ TARGET_TICKERS env var är tom - avbryter targeted-körning")
+    pipeline_success = False
+
+    try:
+        # ── Snabblägen som inte behöver hela pipeline-flödet ───────────────
+        if mode == "targeted":
+            tickers_env = os.environ.get("TARGET_TICKERS", "")
+            tickers_list = [t.strip().upper() for t in tickers_env.split(",") if t.strip()]
+            if not tickers_list:
+                logger.warning("  ⚠ TARGET_TICKERS env var är tom - avbryter targeted-körning")
+                pipeline_success = True
+                return
+            logger.info(f"  🎯 Targeted refresh: {', '.join(tickers_list)}")
+            run_targeted(tickers_list)
+            pipeline_success = True
             return
-        logger.info(f"  🎯 Targeted refresh: {', '.join(tickers_list)}")
-        run_targeted(tickers_list)
-        return
 
-    if mode == "refresh_missing":
-        run_refresh_missing()
-        return
+        if mode == "refresh_missing":
+            run_refresh_missing()
+            pipeline_success = True
+            return
 
-    if mode == "portfolio_refresh":
-        run_portfolio_refresh()
-        return
+        if mode == "portfolio_refresh":
+            run_portfolio_refresh()
+            pipeline_success = True
+            return
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 1. LADDA DATA
-    # ═══════════════════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════════════════
+        # 1. LADDA DATA
+        # ═══════════════════════════════════════════════════════════════════════
 
-    # Globala index (ALLTID)
-    logger.info("📡 Hämtar globala index...")
-    indices = fetch_global_indices()
-    narrative = get_global_market_narrative(indices)
-    short_summary = format_index_summary_short(indices)
-    vix = indices.get("^VIX", {}).get("close") if indices else None
-    logger.info(f"  {short_summary}")
+        # Globala index (ALLTID)
+        with _timed_stage("fetch_global_indices", plogger=pl):
+            logger.info("📡 Hämtar globala index...")
+            indices = fetch_global_indices()
+            narrative = get_global_market_narrative(indices)
+            short_summary = format_index_summary_short(indices)
+            vix = indices.get("^VIX", {}).get("close") if indices else None
+            logger.info(f"  {short_summary}")
 
-    # Scored universe
-    if mode in ("morning", "evening"):
-        scored = _load_latest_scored("scored_universe_*.parquet")
-        if scored.empty:
-            scored = _load_latest_scored("scored_universe_*.csv")
-        _ml_universe = "universe"
-    elif mode == "weekly":
-        # ── Full universe scan ────────────────────────────────────────────────
-        # Hämtar data för ALLA tickers i UNIVERSE + custom-lista,
-        # scorer dem och sparar ny scored_universe_*.csv.
-        # Körs ~2-3 min med 8 workers + 30-dagars fundamentalcache.
-        logger.info("🔄 Full universe scan - hämtar data för alla tickers...")
-        from core.macro_regime import detect_regime
+        # Scored universe
+        if mode in ("morning", "evening"):
+            scored = _load_latest_scored("scored_universe_*.parquet")
+            if scored.empty:
+                scored = _load_latest_scored("scored_universe_*.csv")
+            _ml_universe = "universe"
+        elif mode == "weekly":
+            # ── Full universe scan ────────────────────────────────────────────
+            # Hämtar data för ALLA tickers i UNIVERSE + custom-lista,
+            # scorer dem och sparar ny scored_universe_*.csv.
+            # Körs ~2-3 min med 8 workers + 30-dagars fundamentalcache.
+            logger.info("🔄 Full universe scan - hämtar data för alla tickers...")
+            from core.macro_regime import detect_regime
 
-        # ── Synka portfolio & bevakningslista till custom_universe FÖR SCAN ──
-        # Viktigt att detta sker INNAN all_tickers byggs, annars saknas
-        # nyligen tillagda tickers i denna scan (de hade annars dykt upp
-        # först i nästa veckas scan).
-        _pre_scan_sync_universe()
+            # ── Synka portfolio & bevakningslista till custom_universe FÖR SCAN ──
+            # Viktigt att detta sker INNAN all_tickers byggs, annars saknas
+            # nyligen tillagda tickers i denna scan (de hade annars dykt upp
+            # först i nästa veckas scan).
+            _pre_scan_sync_universe()
 
-        custom_tickers = [c["ticker"] for c in config.load_custom_universe()]
-        all_tickers = list(dict.fromkeys(config.UNIVERSE + custom_tickers))
-        logger.info(f"  📋 Universe: {len(all_tickers)} tickers")
+            custom_tickers = [c["ticker"] for c in config.load_custom_universe()]
+            all_tickers = list(dict.fromkeys(config.UNIVERSE + custom_tickers))
+            logger.info(f"  📋 Universe: {len(all_tickers)} tickers")
 
-        raw_df = fetch_universe_data(all_tickers, verbose=True)
+            raw_df = fetch_universe_data(all_tickers, verbose=True)
 
-        # Auto-flagga misslyckade tickers (strike-system), men bara for
-        # GENUINA fetch-fel (t.ex. 404/delisted), INTE for rate-limited (429)
-        # dar felet sitter hos yfinance, inte aktien.
-        # Vi laser fetch_errors.json for att fa ratt status per ticker.
-        try:
-            from core.filters import update_ticker_health
-            survived = set(raw_df["ticker"].tolist()) if not raw_df.empty and "ticker" in raw_df.columns else set()
-            all_failed = [t for t in all_tickers if t not in survived]
-
-            # Las fetch_errors.json for att fa ratt status per ticker
-            _fe_path = DATA_DIR / "fetch_errors.json"
-            fetch_failed = list(all_failed)
-
-            if os.path.exists(_fe_path):
-                try:
-                    _fe_data = json.loads(open(_fe_path, encoding="utf-8").read())
-                    if _fe_data:
-                        latest = _fe_data[-1]
-                        rate_limited_set = set(latest.get("rate_limited_tickers", []))
-                        genuine_fails = []
-                        for t in all_failed:
-                            if t in rate_limited_set:
-                                continue
-                            # Kolla failed_detail for status
-                            status = "FAILED"
-                            for fd in latest.get("failed_tickers", []):
-                                if fd.get("ticker") == t:
-                                    status = fd.get("status", "FAILED")
-                                    break
-                            if status not in ("RATE_LIMITED", "TIMEOUT", "SKIPPED"):
-                                genuine_fails.append(t)
-                        if genuine_fails:
-                            fetch_failed = genuine_fails
-                            logger.info(f"  🔍 {len(genuine_fails)} genuina fetch-fel (exkl rate-limited)")
-                except Exception:
-                    pass
-
-            if fetch_failed:
-                _warnings, _removed = update_ticker_health(
-                    attempted_tickers=all_tickers,
-                    survived_tickers=list(survived),
-                    df_raw=raw_df,
-                    fetch_failed=fetch_failed,
-                )
-                if _removed:
-                    logger.info(f"  🚫 Auto-blacklistad: {[r['ticker'] for r in _removed[:5]]}")
-        except Exception as _the:
-            logger.debug(f"  ufe0f ticker-health update hoppades over: {_the}")
-
-        if not raw_df.empty:
-            # Detektera marknadsregim för dynamiska vikter
+            # Auto-flagga misslyckade tickers (strike-system), men bara for
+            # GENUINA fetch-fel (t.ex. 404/delisted), INTE for rate-limited (429)
+            # dar felet sitter hos yfinance, inte aktien.
+            # Vi laser fetch_errors.json for att fa ratt status per ticker.
             try:
-                regime_info = detect_regime()
-                regime = regime_info.get("regime", "OSÄKER")
-                logger.info(f"  🌡 Marknadsregim: {regime}")
-            except Exception as _re:
-                regime = "OSÄKER"
-                logger.warning(f"  ⚠ Regime-detektion misslyckades: {_re} - kör OSÄKER")
+                from core.filters import update_ticker_health
+                survived = set(raw_df["ticker"].tolist()) if not raw_df.empty and "ticker" in raw_df.columns else set()
+                all_failed = [t for t in all_tickers if t not in survived]
 
-            # Använd sektor-neutraliserad scoring för att undvika strukturell bias
+                # Las fetch_errors.json for att fa ratt status per ticker
+                _fe_path = DATA_DIR / "fetch_errors.json"
+                fetch_failed = list(all_failed)
+
+                if os.path.exists(_fe_path):
+                    try:
+                        _fe_data = json.loads(open(_fe_path, encoding="utf-8").read())
+                        if _fe_data:
+                            latest = _fe_data[-1]
+                            rate_limited_set = set(latest.get("rate_limited_tickers", []))
+                            genuine_fails = []
+                            for t in all_failed:
+                                if t in rate_limited_set:
+                                    continue
+                                status = "FAILED"
+                                for fd in latest.get("failed_tickers", []):
+                                    if fd.get("ticker") == t:
+                                        status = fd.get("status", "FAILED")
+                                        break
+                                if status not in ("RATE_LIMITED", "TIMEOUT", "SKIPPED"):
+                                    genuine_fails.append(t)
+                            if genuine_fails:
+                                fetch_failed = genuine_fails
+                                logger.info(f"  {len(genuine_fails)} genuina fetch-fel (exkl rate-limited)")
+                    except Exception:
+                        pass
+
+                if fetch_failed:
+                    _warnings, _removed = update_ticker_health(
+                        attempted_tickers=all_tickers,
+                        survived_tickers=list(survived),
+                        df_raw=raw_df,
+                        fetch_failed=fetch_failed,
+                    )
+                    if _removed:
+                        logger.info(f"  🚫 Auto-blacklistad: {[r['ticker'] for r in _removed[:5]]}")
+            except Exception as _the:
+                logger.debug(f"  ufe0f ticker-health update hoppades over: {_the}")
+
+            if not raw_df.empty:
+                # Detektera marknadsregim for dynamiska vikter
+                # Detektera marknadsregim för dynamiska vikter
+                try:
+                    regime_info = detect_regime()
+                    regime = regime_info.get("regime", "OSAKER")
+                    logger.info(f"  Marknadsregim: {regime}")
+                except Exception as _re:
+                    regime = "OSAKER"
+                    logger.warning(f"  Regime-detektion misslyckades: {_re} - kor OSKER")
+
+                # Anvnd sektor-neutraliserad scoring
             # där tech-bolag systematiskt överrankas och värdebolag underrankas.
             # Varje faktor score beräknas INOM sektor (t.ex. P/E för tech vs fastighet).
             use_sector_neutral = getattr(config, "SCORE_MODE", "") == "sector_neutral"
@@ -1069,757 +1208,775 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                     except Exception as _dae:
                         logger.debug(f"  ℹ drift-larm hoppades över: {_dae}")
             except Exception as _sne:
-                logger.debug(f"  ℹ Snapshot ej sparad: {_sne}")
-        else:
-            logger.warning("  ⚠ Universe fetch returnerade tom DataFrame - laddar senaste cache")
-            scored = _load_latest_scored("scored_universe_*.parquet")
-
-        _ml_universe = "universe"
-    elif mode == "smallcap":
-        scored = _load_latest_scored("smallcap_scored_*.csv")
-        _ml_universe = "smallcap"
-    else:
-        scored = pd.DataFrame()
-        _ml_universe = None
-
-    # Guard: om scored fortfarande är tom efter all dataladdning -> avbryt
-    if scored.empty and mode in ("weekly", "smallcap", "morning", "evening"):
-        logger.error("  ❌ Ingen scored_universe-data tillgänglig - avbryter pipeline")
-        return
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # 1b. DAGLIG RE-SCORING (endast för morning/evening)
-    #     Hämta nya priser för alla tickers -> uppdatera scores
-    # ═══════════════════════════════════════════════════════════════════════
-    if mode in ("morning", "evening") and not scored.empty and "ticker" in scored.columns:
-        logger.info("📡 Hämtar nya priser för re-scoring...")
-        try:
-            tickers = scored["ticker"].dropna().unique().tolist()
-            # Begränsa för att inte överbelasta yfinance
-            price_tickers = [t for t in tickers if not t.startswith("^")][:300]
-            
-            price_data = fetch_prices_only(price_tickers, period="6mo", max_workers=12)
-            if price_data:
-                n_prices = len(price_data)
-                scored = update_scored_with_prices(scored, price_data)
-                logger.info(f"  ✅ Priser hämtade för {n_prices} tickers - scores uppdaterade")
-                
-                # Spara den uppdaterade parquet + csv
-                csv_path = REPORT_DIR / f"scored_universe_{date_str}"
-                _save_scored(scored, csv_path)
+                logger.debug(f"  Snapshot ej sparad: {_sne}")
             else:
-                logger.warning("  ⚠ Inga priser kunde hämtas - använder gårdagens data")
-        except Exception as e:
-            logger.warning(f"  ⚠ Re-scoring misslyckades: {e} - använder gårdagens data")
+                logger.warning("Universe fetch returnerade tom DataFrame - laddar senaste cache")
+                scored = _load_latest_scored("scored_universe_*.parquet")
+                _ml_universe = "universe"
+        elif mode == "smallcap":
+            scored = _load_latest_scored("smallcap_scored_*.csv")
+            _ml_universe = "smallcap"
+        else:
+            scored = pd.DataFrame()
+            _ml_universe = None
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 1c. ML-PREDIKTION (om modell finns)
-    #     Lägger till predicted_return + ml_rank-kolumner och sparar back.
-    # ═══════════════════════════════════════════════════════════════════════
-    if _ml_universe and not scored.empty and "ticker" in scored.columns:
-        try:
-            from core.ml_predictor import predict_returns_sector
-            scored_ml = predict_returns_sector(scored, default_universe=_ml_universe)
-            if "predicted_return" in scored_ml.columns:
-                scored = scored_ml
-                logger.info(f"  🤖 ML-prediktioner tillagda för {_ml_universe} ({len(scored)} rader)")
-                # Spara back så Streamlit-appen kan visa kolumnen
-                if _ml_universe == "universe":
+        # Guard: om scored fortfarande ar tom efter all dataladdning -> avbryt
+        if scored.empty and mode in ("weekly", "smallcap", "morning", "evening"):
+            logger.error("Ingen scored_universe-data tillganglig - avbryter pipeline")
+            return
+
+        # =========================================================================
+        # 1b. DAGLIG RE-SCORING (endast for morning/evening)
+        #     Hamta nya priser for alla tickers -> uppdatera scores
+        # =========================================================================
+        if mode in ("morning", "evening") and not scored.empty and "ticker" in scored.columns:
+            logger.info("Hamtar nya priser...")
+            try:
+                tickers = scored["ticker"].dropna().unique().tolist()
+                price_tickers = [t for t in tickers if not t.startswith("^")][:300]
+                price_data = fetch_prices_only(price_tickers, period="6mo", max_workers=12)
+                if price_data:
+                    n_prices = len(price_data)
+                    scored = update_scored_with_prices(scored, price_data)
+                    logger.info(f"  Priser hamtade for {n_prices} tickers - scores uppdaterade")
+
+                    # Spara den uppdaterade parquet + csv
                     csv_path = REPORT_DIR / f"scored_universe_{date_str}"
+                    _save_scored(scored, csv_path)
                 else:
-                    csv_path = REPORT_DIR / f"smallcap_scored_{date_str}"
-                _save_scored(scored, csv_path)
-        except Exception as e:
-            logger.warning(f"  ⚠ ML-prediktion hoppades över: {e}")
+                    logger.warning("  Inga priser kunde hamtas - anvander gordagens data")
+            except Exception as e:
+                logger.warning(f"  Re-scoring misslyckades: {e} - anvander gordagens data")
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 1d. ML PAPER TRADING (om modell finns)
-    #     Registrera dagens topp-N enligt ML som virtuella köp.
-    # ═══════════════════════════════════════════════════════════════════════
-    if _ml_universe and not scored.empty and "predicted_return" in scored.columns:
-        try:
-            from core.ml_paper_trading import record_daily_signals
-            n_recorded = record_daily_signals(scored, universe=_ml_universe, top_n=10)
-            if n_recorded:
-                logger.info(f"  📈 ML paper trading: {n_recorded} signaler registrerade ({_ml_universe})")
-        except Exception as e:
-            logger.warning(f"  ⚠ ML paper trading hoppades över: {e}")
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # 1e. KLASSISK PAPER TRADING (score-baserad, körs för weekly + smallcap)
-    # ═══════════════════════════════════════════════════════════════════════
-    if mode in ("weekly", "smallcap") and not scored.empty:
-        try:
-            from portfolio.paper_trading import record_weekly_picks
-            pt_universe = "smallcap" if mode == "smallcap" else "universe"
-            pt_result = record_weekly_picks(scored, top_n=10, universe=pt_universe, verbose=False)
-            n_pt = len(pt_result.get("trades", [])) if isinstance(pt_result, dict) else 0
-            logger.info(f"  📊 Klassisk paper trading: {n_pt} positioner registrerade ({pt_universe})")
-        except Exception as e:
-            logger.warning(f"  ⚠ Klassisk paper trading hoppades över: {e}")
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # 1f. UNIVERSE ROTATION (weekly-mode, efter scoring och paper trading)
-    # ═══════════════════════════════════════════════════════════════════════
-    if mode == "weekly" and not scored.empty:
-        try:
-            _rot_dry_run = os.getenv("ROTATION_DRY_RUN", "true").lower() not in ("false", "0", "no")
-            from core.rotation_engine import run_rotation
-            rotation_result = run_rotation(
-                max_replacements=5,
-                auto_execute=not _rot_dry_run,
-                use_ai=True,
-                dry_run=_rot_dry_run,
-                scored=scored,
-                provider="auto",
-            )
-            n_triggers = len(rotation_result.get("triggers", []))
-            n_executed = len(rotation_result.get("executed", []))
-            if n_triggers:
-                logger.info(f"  🔄 Rotation: {n_triggers} utlösare hittades, {n_executed} exekverade (dry_run={_rot_dry_run})")
-            else:
-                logger.info("  🔄 Rotation: inga utlösare hittades")
-        except Exception as e:
-            logger.warning(f"  ⚠ Rotation hoppades över: {e}")
-
-    # Portfölj & watchlist
-    holdings = _load_portfolio()
-    watchlist_raw = _load_watchlist()
-    watchlist_tickers = [i.get("ticker", "") for i in watchlist_raw if i.get("ticker")]
-
-    # Synka portföljinnehav till custom_universe så de ingår i veckoscannen
-    try:
-        custom_existing = set(c["ticker"] for c in config.load_custom_universe())
-        universe_tickers_set = set(getattr(config, "UNIVERSE", []))
-        added = 0
-        for _, h in holdings.iterrows():
-            t = str(h.get("ticker", "")).upper().strip()
-            if not t:
-                continue
-            # Kolla om tickern redan finns i UNIVERSE eller custom
-            if t in universe_tickers_set or t in custom_existing:
-                continue
-            # Kolla med suffix för svenska/nordiska aktier
-            in_main = any(t + sfx in universe_tickers_set for sfx in (".ST", ".HE", ".CO", ".OL"))
-            if in_main:
-                continue
-            in_custom = any(t + sfx in custom_existing for sfx in (".ST", ".HE", ".CO", ".OL"))
-            if in_custom:
-                continue
-            # Lägg till med full ticker (om den redan har suffix) eller utan
-            config.add_custom_to_universe(t, str(h.get("name", "")))
-            added += 1
-        if added:
-            logger.info(f"  ➕ Lade till {added} portföljinnehav i custom_universe för veckoscannen")
-    except Exception as e:
-        logger.warning(f"  ⚠ Kunde inte synka portfölj till custom_universe: {e}")
-
-    # Synka även bevakningar till custom_universe
-    try:
-        custom_existing_wl = set(c["ticker"] for c in config.load_custom_universe())
-        universe_tickers_set_wl = set(getattr(config, "UNIVERSE", []))
-        added_wl = 0
-        for w in watchlist_tickers:
-            if not w:
-                continue
-            w_up = w.upper().strip()
-            if w_up in universe_tickers_set_wl or w_up in custom_existing_wl:
-                continue
-            in_main_wl = any(w_up + sfx in universe_tickers_set_wl for sfx in (".ST", ".HE", ".CO", ".OL"))
-            if in_main_wl:
-                continue
-            in_custom_wl = any(w_up + sfx in custom_existing_wl for sfx in (".ST", ".HE", ".CO", ".OL"))
-            if in_custom_wl:
-                continue
-            config.add_custom_to_universe(w_up, "")
-            added_wl += 1
-        if added_wl:
-            logger.info(f"  ➕ Lade till {added_wl} bevakningar i custom_universe för veckoscannen")
-    except Exception as e:
-        logger.warning(f"  ⚠ Kunde inte synka bevakningar till custom_universe: {e}")
-
-    # Berika portfölj
-    enriched = _enrich_holdings(holdings, scored)
-
-    # Top/bottom från scored
-    top_10, bottom_5 = _get_top_bottom(scored, top_n=10)
-
-    # Opportunities
-    opportunities = _get_opportunities(scored)
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # 2. GENERERA RAPPORT (Markdown)
-    # ═══════════════════════════════════════════════════════════════════════
-
-    report_lines = []
-
-    if mode == "morning":
-        # ── Rubrik ────────────────────────────────────────────────────────
-        report_lines.append(f"# 🌅 MarketScan Morgonbrief - {date_str}\n")
-        report_lines.append(f"_{short_summary}_\n")
-        report_lines.append(f"VIX: {vix}" if vix else "")
-        report_lines.append("")
-
-        # ── Globala index ─────────────────────────────────────────────────
-        report_lines.append(_section_header("🌏 Global överblick"))
-        report_lines.append(f"_{narrative}_\n")
-        index_lines = []
-        for ticker, data in indices.items():
-            name = data.get("name", ticker)
-            chg = data.get("change_pct")
-            close = data.get("close")
-            if chg is not None and close is not None:
-                arrow = "🟢" if chg >= 0 else "🔴"
-                index_lines.append(f"- {name} {arrow} **{chg:+.1f}%** ({close:,.0f})")
-        if index_lines:
-            report_lines.extend(index_lines[:15])
-
-        # ── Stop-loss varningar ──────────────────────────────────────────
-        sl_warnings = [h for h in enriched if h.get("pnl_pct") is not None and h["pnl_pct"] <= -12]
-        if sl_warnings:
-            report_lines.append(_section_header("⚠️ Stop-loss varningar"))
-            for h in sl_warnings:
-                report_lines.append(f"- 🔴 **{flag_for_ticker(h['ticker'])} {h['ticker']}** - {h['pnl_pct']:+.1f}% sedan inköp (stop-loss vid {h['stop_loss_pct']:+.1f}%)")
-            report_lines.append("")
-
-        # ── Portfölj ─────────────────────────────────────────────────────
-        report_lines.append(_section_header("💼 Din portfölj"))
-        if enriched:
-            for h in enriched[:10]:
-                emoji = "🟢" if (h.get("pnl_pct") or 0) >= 0 else "🔴"
-                pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "--"
-                sl_info = f" (stop-loss vid {h['stop_loss_pct']:+.1f}%)" if h.get('stop_loss_pct') and (h.get('pnl_pct') or 0) <= -10 else ""
-                score_val = h.get('score')
-                score_str = f"{score_val:.0f}" if score_val is not None else "--"
-                entry_str = h.get('entry', '--') or '--'
-                report_lines.append(f"- {emoji} **{flag_for_ticker(h['ticker'])} {h['ticker']}** - {pnl} | Score {score_str} | {entry_str}{sl_info}")
-        else:
-            report_lines.append("*(Inga innehav i portföljen)*")
-
-        # ── Bevakningar ──────────────────────────────────────────────────
-        if watchlist_tickers:
-            report_lines.append(_section_header("⭐ Dina bevakningar"))
-            # Slå upp data för bevakningar från scored universe
-            watchlist_with_data = []
-            if not scored.empty and "ticker" in scored.columns:
-                for w in watchlist_tickers[:8]:
-                    w_up = w.upper().strip()
-                    match = scored[scored["ticker"] == w_up]
-                    if not match.empty:
-                        r = match.iloc[0]
-                        sc = r.get("score_total")
-                        entry = r.get("entry_signal", "--")
-                        trend = r.get("trend_signal", "--")
-                        rsi = r.get("rsi_14")
-                        price = r.get("current_price") or r.get("close", 0)
-                        watchlist_with_data.append(f"- **{flag_for_ticker(w_up)} {w_up}** - Score {sc:.0f} | {entry} | Trend: {trend} | RSI {rsi:.0f}" if sc and sc == sc else f"- **{w_up}** - (ingen score)")
+        # =========================================================================
+        # 1c. ML-PREDIKTION (om modell finns)
+        #     Lagger till predicted_return + ml_rank-kolumner och sparar back.
+        # =========================================================================
+        if _ml_universe and not scored.empty and "ticker" in scored.columns:
+            try:
+                from core.ml_predictor import predict_returns_sector
+                scored_ml = predict_returns_sector(scored, default_universe=_ml_universe)
+                if "predicted_return" in scored_ml.columns:
+                    scored = scored_ml
+                    logger.info(f"  ML-prediktioner tillagda for {_ml_universe} ({len(scored)} rader)")
+                    if _ml_universe == "universe":
+                        csv_path = REPORT_DIR / f"scored_universe_{date_str}"
                     else:
-                        watchlist_with_data.append(f"- **{w_up}** - (inte i universet)")
-            else:
-                for w in watchlist_tickers[:5]:
-                    watchlist_with_data.append(f"- {w}")
-            report_lines.extend(watchlist_with_data)
-            report_lines.append("")
+                        csv_path = REPORT_DIR / f"smallcap_scored_{date_str}"
+                    _save_scored(scored, csv_path)
+            except Exception as e:
+                logger.warning(f"  ML-prediktion hoppades over: {e}")
 
-        # ── Topp-5 ───────────────────────────────────────────────────────
-        if top_10:
-            report_lines.append(_section_header("🏆 Dagens hetaste"))
-            for t in top_10[:5]:
-                report_lines.append(f"- **{flag_for_ticker(t['ticker'])} {t['ticker']}** - Score {t['score']:.0f} | {t['entry']} | {t['sector']}")
+        # =========================================================================
+        # 1d. ML PAPER TRADING (om modell finns)
+        #     Registrera dagens topp-N enligt ML som virtuella kop.
+        # =========================================================================
+        if _ml_universe and not scored.empty and "predicted_return" in scored.columns:
+            try:
+                from core.ml_paper_trading import record_daily_signals
+                n_recorded = record_daily_signals(scored, universe=_ml_universe, top_n=10)
+                if n_recorded:
+                    logger.info(f"  ML paper trading: {n_recorded} signaler registrerade ({_ml_universe})")
+            except Exception as e:
+                logger.warning(f"  ML paper trading hoppades over: {e}")
 
-        # ── Opportunities ────────────────────────────────────────────────
-        if opportunities:
-            report_lines.append(_opportunity_section(opportunities))
+        # =========================================================================
+        # 1e. KLASSISK PAPER TRADING (score-baserad, krs for weekly + smallcap)
+        # =========================================================================
+        if mode in ("weekly", "smallcap") and not scored.empty:
+            try:
+                from portfolio.paper_trading import record_weekly_picks
+                pt_universe = "smallcap" if mode == "smallcap" else "universe"
+                pt_result = record_weekly_picks(scored, top_n=10, universe=pt_universe, verbose=False)
+                n_pt = len(pt_result.get("trades", [])) if isinstance(pt_result, dict) else 0
+                logger.info(f"  Klassisk paper trading: {n_pt} positioner registrerade ({pt_universe})")
+            except Exception as e:
+                logger.warning(f"  Klassisk paper trading hoppades over: {e}")
 
-        # ── Kalender ─────────────────────────────────────────────────────
-        try:
-            from core.earnings_calendar import upcoming_in_portfolio, upcoming_in_top
-            from core.macro_calendar import get_upcoming_macro_events
-            holdings_df = pd.DataFrame(enriched) if enriched else pd.DataFrame()
-            cal_earn = upcoming_in_portfolio(holdings_df, scored, days_ahead=7) if not holdings_df.empty else pd.DataFrame()
-            if cal_earn.empty:
-                cal_earn = upcoming_in_top(scored, top_n=50, days_ahead=7)
-            cal_macro = get_upcoming_macro_events(days_ahead=7)
-            if not cal_earn.empty or cal_macro:
-                report_lines.append(_section_header("📅 Kommande rapporter & makro (7 dagar)"))
-                for _, row in cal_earn.head(5).iterrows():
-                    ticker_c = row.get("ticker", "")
-                    edate_c  = row.get("earnings_date", "?")
-                    days_c   = row.get("days_until", "?")
-                    report_lines.append(f"- 📊 **{ticker_c}** rapporterar {edate_c} (om {days_c} d)")
-                for ev in cal_macro[:3]:
-                    report_lines.append(
-                        f"- {ev.get('flag','')} **{ev.get('event','')}** — {ev.get('date','')} (om {ev.get('days_until','')} d)"
-                    )
-                report_lines.append("")
-        except Exception as _cal_err:
-            logger.debug(f"  Kalenderdata kunde inte hämtas: {_cal_err}")
-
-        # ── Nyheter ──────────────────────────────────────────────────────
-        report_lines.append(_section_header("📰 Nyheter"))
-        report_lines.append("*(Nyheter hämtas via nyhetslarm - se separat mail)*")
-        report_lines.append("")
-
-        # ── AI-sektion ───────────────────────────────────────────────────
-        report_lines.append(_section_header("🤖 AI: Dagens analys"))
-        report_lines.append("*Genereras nedan...*\n")
-
-    elif mode == "evening":
-        # ── Rubrik ────────────────────────────────────────────────────────
-        report_lines.append(f"# 🌆 MarketScan Kvällsbrev - {date_str}\n")
-        report_lines.append(f"_{short_summary}_\n")
-
-        # ── Dagens utveckling ────────────────────────────────────────────
-        report_lines.append(_section_header("📊 Dagen som gick"))
-        for ticker in ["^OMX", "^GDAXI", "^FTSE", "^GSPC", "^IXIC"]:
-            data = indices.get(ticker)
-            if data:
-                name = data.get("name", ticker)
-                chg = data.get("change_pct")
-                close = data.get("close")
-                if chg is not None and close is not None:
-                    arrow = "🟢" if chg >= 0 else "🔴"
-                    report_lines.append(f"- {name} {arrow} **{chg:+.1f}%** ({close:,.0f})")
-        report_lines.append("")
-
-        # ── Portfölj-P&L ─────────────────────────────────────────────────
-        report_lines.append(_section_header("💼 Dagens portfölj"))
-        if enriched:
-            total_pnl = sum(h["pnl_pct"] for h in enriched if h["pnl_pct"] is not None)
-            total_pnl = total_pnl / max(len([h for h in enriched if h["pnl_pct"] is not None]), 1)
-            report_lines.append(f"**Snitt P&L: {total_pnl:+.1f}%**\n")
-            for h in enriched:
-                emoji = "🟢" if (h.get("pnl_pct") or 0) >= 0 else "🔴"
-                pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "--"
-                score_str = f"{h['score']:.0f}" if h.get('score') is not None else "--"
-                report_lines.append(f"- {emoji} **{flag_for_ticker(h['ticker'])} {h['ticker']}** - {pnl} | Score {score_str} | Rekommendation: {_get_rec(h)}")
-        else:
-            report_lines.append("*(Inga innehav i portföljen)*")
-
-        # ── Dagens topp/bottom ───────────────────────────────────────────
-        if top_10 or bottom_5:
-            report_lines.append(_section_header("🏆 Dagens topp & botten"))
-            if top_10:
-                report_lines.append("**Bästa:** " + ", ".join(f"{flag_for_ticker(t['ticker'])} {t['ticker']} ({t['score']:.0f})" for t in top_10[:5]))
-            if bottom_5:
-                report_lines.append("**Sämsta:** " + ", ".join(f"{flag_for_ticker(b['ticker'])} {b['ticker']} ({b['score']:.0f})" for b in bottom_5[:5]))
-
-        # ── Opportunities ────────────────────────────────────────────────
-        if opportunities:
-            report_lines.append(_opportunity_section(opportunities))
-
-        # ── Imorgon ──────────────────────────────────────────────────────
-        report_lines.append(_section_header("🔮 Imorgon"))
-        report_lines.append("*(Makro- och earnings-kalender - se veckorapport)*")
-        report_lines.append("")
-
-        # ── AI-sektion ───────────────────────────────────────────────────
-        report_lines.append(_section_header("🤖 AI: Dagens reflektion"))
-        report_lines.append("*Genereras nedan...*\n")
-
-    elif mode == "weekly":
-        # ── Rubrik ────────────────────────────────────────────────────────
-        day_sv = {"Monday": "måndag", "Tuesday": "tisdag", "Wednesday": "onsdag",
-                  "Thursday": "torsdag", "Friday": "fredag", "Saturday": "lördag",
-                  "Sunday": "söndag"}.get(day_name, day_name)
-        report_lines.append(f"# 📊 MarketScan Veckorapport - v. {datetime.now().isocalendar()[1]}\n")
-        report_lines.append(f"_{short_summary}_\n")
-
-        # ── Marknadsregim ────────────────────────────────────────────────
-        report_lines.append(_section_header("📈 Marknadsöversikt"))
-        report_lines.append(f"- Globalt: {narrative}")
-        if not scored.empty:
-            avg_score = scored["score_total"].mean() if "score_total" in scored.columns else 0
-            n_stark = int((scored.get("entry_signal") == "STARK").sum()) if "entry_signal" in scored.columns else 0
-            report_lines.append(f"- Snittscore: {avg_score:.1f}")
-            report_lines.append(f"- STARK entry-signal: {n_stark} st\n")
-
-        # ── Sektorer ─────────────────────────────────────────────────────
-        if "sector" in scored.columns and "score_total" in scored.columns:
-            report_lines.append(_section_header("🏭 Sektorer"))
-            # Filtrera bort okända/tomma sektorer och NaN-snitt innan loopen
-            sec = scored.groupby("sector")["score_total"].mean().sort_values(ascending=False)
-            _skip_sectors = {"Unknown", "unknown", ""}
-            for sector, avg in sec.items():
-                # Hoppa över tomma sektornamn, "Unknown" och sektorer där avg är NaN
-                if not sector or str(sector).strip() in _skip_sectors or pd.isna(avg):
-                    continue
-                arrow = "🟢" if avg >= 60 else "🟡" if avg >= 45 else "🔴"
-                report_lines.append(f"- {arrow} **{sector}** - snittscore {avg:.1f}")
-            report_lines.append("")
-
-        # ── Portfölj ─────────────────────────────────────────────────────
-        report_lines.append(_section_header("💼 Portföljanalys"))
-        if enriched:
-            for h in enriched:
-                rec = _get_rec(h)
-                emoji = "🟢" if rec in ("BEHÅLL", "KÖP MER") else "🟡" if rec == "BEVAKA" else "🔴"
-                pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "--"
-                score_str = f"{h['score']:.0f}" if h.get('score') is not None else "--"
-                report_lines.append(f"- {emoji} **{flag_for_ticker(h['ticker'])} {h['ticker']}** - {pnl} | Score {score_str} | **{rec}**")
-        else:
-            report_lines.append("*(Inga innehav)*")
-
-        # ── Topp-10 ──────────────────────────────────────────────────────
-        if top_10:
-            report_lines.append(_section_header("🏆 Topp-10 köprekommendationer"))
-            for i, t in enumerate(top_10[:10], 1):
-                report_lines.append(
-                    f"  {i}. **{flag_for_ticker(t['ticker'])} {t['ticker']}** "
-                    f"- Score {t['score']:.0f} | {t['entry']} | {t['sector']}"
+        # =========================================================================
+        # 1f. UNIVERSE ROTATION (weekly-mode, efter scoring och paper trading)
+        # =========================================================================
+        if mode == "weekly" and not scored.empty:
+            try:
+                _rot_dry_run = os.getenv("ROTATION_DRY_RUN", "true").lower() not in ("false", "0", "no")
+                from core.rotation_engine import run_rotation
+                rotation_result = run_rotation(
+                    max_replacements=5,
+                    auto_execute=not _rot_dry_run,
+                    use_ai=True,
+                    dry_run=_rot_dry_run,
+                    scored=scored,
+                    provider="auto",
                 )
-                # Faktor-attribution: visa varför aktien rankas högt
-                attr = format_factor_attribution_md(t, compact=True)
-                if attr:
-                    for attr_line in attr.split("\n"):
-                        report_lines.append(f"     {attr_line}")
-                    report_lines.append("")
+                n_triggers = len(rotation_result.get("triggers", []))
+                n_executed = len(rotation_result.get("executed", []))
+                if n_triggers:
+                    logger.info(f"  Rotation: {n_triggers} utlosare hittades, {n_executed} exekverade (dry_run={_rot_dry_run})")
+                else:
+                    logger.info("  Rotation: inga utlosare hittades")
+            except Exception as e:
+                logger.warning(f"  Rotation hoppades over: {e}")
 
-        # ── Bottom-5 ─────────────────────────────────────────────────────
-        if bottom_5:
-            report_lines.append(_section_header("🔴 Bottom-5 varningar"))
-            for b in bottom_5[:5]:
-                report_lines.append(f"- **{flag_for_ticker(b['ticker'])} {b['ticker']}** - Score {b['score']:.0f} | {b['entry']} | {b['sector']}")
+        # Portfolj & watchlist
+        holdings = _load_portfolio()
+        watchlist_raw = _load_watchlist()
+        watchlist_tickers = [i.get("ticker", "") for i in watchlist_raw if i.get("ticker")]
 
-        # ── Opportunities ────────────────────────────────────────────────
-        if opportunities:
-            report_lines.append(_opportunity_section(opportunities))
+        # Synka portfoljinnehav till custom_universe sa de ingar i veckoscannen
+        try:
+            custom_existing = set(c["ticker"] for c in config.load_custom_universe())
+            universe_tickers_set = set(getattr(config, "UNIVERSE", []))
+            added = 0
+            for _, h in holdings.iterrows():
+                t = str(h.get("ticker", "")).upper().strip()
+                if not t:
+                    continue
+                if t in universe_tickers_set or t in custom_existing:
+                    continue
+                in_main = any(t + sfx in universe_tickers_set for sfx in (".ST", ".HE", ".CO", ".OL"))
+                if in_main:
+                    continue
+                in_custom = any(t + sfx in custom_existing for sfx in (".ST", ".HE", ".CO", ".OL"))
+                if in_custom:
+                    continue
+                config.add_custom_to_universe(t, str(h.get("name", "")))
+                added += 1
+            if added:
+                logger.info(f"  Lade till {added} portfoljinnehav i custom_universe for veckoscannen")
+        except Exception as e:
+            logger.warning(f"  Kunde inte synka portfolj till custom_universe: {e}")
 
-        # ── AI-sektion ───────────────────────────────────────────────────
-        report_lines.append(_section_header("🤖 AI: Veckoanalys"))
-        report_lines.append("*Genereras nedan...*\n")
+        # Synka aven bevakningar till custom_universe
+        try:
+            custom_existing_wl = set(c["ticker"] for c in config.load_custom_universe())
+            universe_tickers_set_wl = set(getattr(config, "UNIVERSE", []))
+            added_wl = 0
+            for w in watchlist_tickers:
+                if not w:
+                    continue
+                w_up = w.upper().strip()
+                if w_up in universe_tickers_set_wl or w_up in custom_existing_wl:
+                    continue
+                in_main_wl = any(w_up + sfx in universe_tickers_set_wl for sfx in (".ST", ".HE", ".CO", ".OL"))
+                if in_main_wl:
+                    continue
+                in_custom_wl = any(w_up + sfx in custom_existing_wl for sfx in (".ST", ".HE", ".CO", ".OL"))
+                if in_custom_wl:
+                    continue
+                config.add_custom_to_universe(w_up, "")
+                added_wl += 1
+            if added_wl:
+                logger.info(f"  Lade till {added_wl} bevakningar i custom_universe for veckoscannen")
+        except Exception as e:
+            logger.warning(f"  Kunde inte synka bevakningar till custom_universe: {e}")
 
-    elif mode == "smallcap":
-        # ── Rubrik ────────────────────────────────────────────────────────
-        report_lines.append(f"# 🏦 MarketScan Småbolag - {date_str}\n")
-        report_lines.append(f"_{short_summary}_\n")
+        # Berika portfölj
+        enriched = _enrich_holdings(holdings, scored)
 
-        # ── Index-överblick ───────────────────────────────────────────────
-        report_lines.append(_section_header("🌏 Marknadsläge"))
-        index_lines = []
-        for ticker in ["^OMX", "^GSPC", "^IXIC", "^GDAXI"]:
-            data = indices.get(ticker)
-            if data:
+        # Top/bottom från scored
+        top_10, bottom_5 = _get_top_bottom(scored, top_n=10)
+
+        # Opportunities
+        opportunities = _get_opportunities(scored)
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # 2. GENERERA RAPPORT (Markdown)
+        # ═══════════════════════════════════════════════════════════════════════
+
+        report_lines = []
+
+        if mode == "morning":
+            # ── Rubrik ────────────────────────────────────────────────────────
+            report_lines.append(f"# 🌅 MarketScan Morgonbrief - {date_str}\n")
+            report_lines.append(f"_{short_summary}_\n")
+            report_lines.append(f"VIX: {vix}" if vix else "")
+            report_lines.append("")
+
+            # ── Globala index ─────────────────────────────────────────────────
+            report_lines.append(_section_header("🌏 Global överblick"))
+            report_lines.append(f"_{narrative}_\n")
+            index_lines = []
+            for ticker, data in indices.items():
                 name = data.get("name", ticker)
                 chg = data.get("change_pct")
                 close = data.get("close")
                 if chg is not None and close is not None:
                     arrow = "🟢" if chg >= 0 else "🔴"
                     index_lines.append(f"- {name} {arrow} **{chg:+.1f}%** ({close:,.0f})")
-        if index_lines:
-            report_lines.extend(index_lines)
-        report_lines.append("")
+            if index_lines:
+                report_lines.extend(index_lines[:15])
 
-        # ── Universet ─────────────────────────────────────────────────────
-        if not scored.empty and "score_total" in scored.columns:
-            avg_score = scored["score_total"].mean()
-            n_ok = int((scored.get("entry_signal", pd.Series()) == "OK").sum()) if "entry_signal" in scored.columns else 0
-            report_lines.append(f"**Skannade småbolag:** {len(scored)} st | Snittscore: {avg_score:.1f} | Entry OK: {n_ok} st\n")
+            # ── Stop-loss varningar ──────────────────────────────────────────
+            sl_warnings = [h for h in enriched if h.get("pnl_pct") is not None and h["pnl_pct"] <= -12]
+            if sl_warnings:
+                report_lines.append(_section_header("⚠️ Stop-loss varningar"))
+                for h in sl_warnings:
+                    report_lines.append(f"- 🔴 **{flag_for_ticker(h['ticker'])} {h['ticker']}** - {h['pnl_pct']:+.1f}% sedan inköp (stop-loss vid {h['stop_loss_pct']:+.1f}%)")
+                report_lines.append("")
 
-        # ── Portfölj ─────────────────────────────────────────────────────
-        report_lines.append(_section_header("💼 Din portfölj"))
-        if enriched:
-            for h in enriched[:10]:
-                emoji = "🟢" if (h.get("pnl_pct") or 0) >= 0 else "🔴"
-                pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "--"
-                score_str = f"{h['score']:.0f}" if h.get('score') is not None else "--"
-                entry_str = h.get('entry') or '--'
-                report_lines.append(f"- {emoji} **{flag_for_ticker(h['ticker'])} {h['ticker']}** - {pnl} | Score {score_str} | {entry_str}")
-        else:
-            report_lines.append("*(Inga innehav i portföljen)*")
-        report_lines.append("")
+            # ── Portfölj ─────────────────────────────────────────────────────
+            report_lines.append(_section_header("💼 Din portfölj"))
+            if enriched:
+                for h in enriched[:10]:
+                    emoji = "🟢" if (h.get("pnl_pct") or 0) >= 0 else "🔴"
+                    pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "--"
+                    sl_info = f" (stop-loss vid {h['stop_loss_pct']:+.1f}%)" if h.get('stop_loss_pct') and (h.get('pnl_pct') or 0) <= -10 else ""
+                    score_val = h.get('score')
+                    score_str = f"{score_val:.0f}" if score_val is not None else "--"
+                    entry_str = h.get('entry', '--') or '--'
+                    report_lines.append(f"- {emoji} **{flag_for_ticker(h['ticker'])} {h['ticker']}** - {pnl} | Score {score_str} | {entry_str}{sl_info}")
+            else:
+                report_lines.append("*(Inga innehav i portföljen)*")
 
-        # ── Topp-10 ──────────────────────────────────────────────────────
-        if top_10:
-            report_lines.append(_section_header("🏆 Topp-10 småbolag"))
-            for i, t in enumerate(top_10[:10], 1):
-                report_lines.append(f"  {i}. **{flag_for_ticker(t['ticker'])} {t['ticker']}** - Score {t['score']:.0f} | {t['entry']} | {t['sector']}")
+            # ── Bevakningar ──────────────────────────────────────────────────
+            if watchlist_tickers:
+                report_lines.append(_section_header("⭐ Dina bevakningar"))
+                # Slå upp data för bevakningar från scored universe
+                watchlist_with_data = []
+                if not scored.empty and "ticker" in scored.columns:
+                    for w in watchlist_tickers[:8]:
+                        w_up = w.upper().strip()
+                        match = scored[scored["ticker"] == w_up]
+                        if not match.empty:
+                            r = match.iloc[0]
+                            sc = r.get("score_total")
+                            entry = r.get("entry_signal", "--")
+                            trend = r.get("trend_signal", "--")
+                            rsi = r.get("rsi_14")
+                            price = r.get("current_price") or r.get("close", 0)
+                            watchlist_with_data.append(f"- **{flag_for_ticker(w_up)} {w_up}** - Score {sc:.0f} | {entry} | Trend: {trend} | RSI {rsi:.0f}" if sc and sc == sc else f"- **{w_up}** - (ingen score)")
+                        else:
+                            watchlist_with_data.append(f"- **{w_up}** - (inte i universet)")
+                else:
+                    for w in watchlist_tickers[:5]:
+                        watchlist_with_data.append(f"- {w}")
+                report_lines.extend(watchlist_with_data)
+                report_lines.append("")
 
-        # ── Bottom varningar ──────────────────────────────────────────────
-        if bottom_5:
-            report_lines.append(_section_header("🔴 Varningar"))
-            for b in bottom_5[:5]:
-                report_lines.append(f"- **{flag_for_ticker(b['ticker'])} {b['ticker']}** - Score {b['score']:.0f} | {b['entry']} | {b['sector']}")
+            # ── Topp-5 ───────────────────────────────────────────────────────
+            if top_10:
+                report_lines.append(_section_header("🏆 Dagens hetaste"))
+                for t in top_10[:5]:
+                    report_lines.append(f"- **{flag_for_ticker(t['ticker'])} {t['ticker']}** - Score {t['score']:.0f} | {t['entry']} | {t['sector']}")
 
-        # ── Opportunities ────────────────────────────────────────────────
-        if opportunities:
-            report_lines.append(_opportunity_section(opportunities))
+            # ── Opportunities ────────────────────────────────────────────────
+            if opportunities:
+                report_lines.append(_opportunity_section(opportunities))
 
-        # ── AI-sektion ───────────────────────────────────────────────────
-        report_lines.append(_section_header("🤖 AI: Småbolagsanalys"))
-        report_lines.append("*Genereras nedan...*\n")
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # 3. AI-ANROP
-    # ═══════════════════════════════════════════════════════════════════════
-
-    # ─── Fetch live news for AI context (portfolio + watchlist + top-5) ─────
-    pipeline_news_text = ""
-    try:
-        from core.news_fetcher import fetch_company_news
-        # Build set of tickers worth fetching news for - keep small to avoid rate limits
-        news_tickers: list[tuple[str, str | None]] = []
-        seen = set()
-        # Portfolio holdings
-        for h in (enriched or [])[:10]:
-            t = h.get("ticker")
-            if t and t not in seen:
-                seen.add(t)
-                news_tickers.append((t, h.get("name")))
-        # Watchlist
-        for t in (watchlist_tickers or [])[:5]:
-            if t and t not in seen:
-                seen.add(t)
-                news_tickers.append((t, None))
-        # Top-5 picks
-        for tp in (top_10 or [])[:5]:
-            t = tp.get("ticker") if isinstance(tp, dict) else None
-            if t and t not in seen:
-                seen.add(t)
-                news_tickers.append((t, tp.get("name") if isinstance(tp, dict) else None))
-
-        news_blocks = []
-        for ticker_, cname in news_tickers[:15]:
+            # ── Kalender ─────────────────────────────────────────────────────
             try:
-                items = fetch_company_news(ticker_, days_back=3, company_name=cname) or []
-                if items:
-                    lines = []
-                    for n in items[:4]:
-                        title = n.get("headline", n.get("title", "")).strip()
-                        src = n.get("source", "")
-                        age = n.get("age_hours")
-                        age_s = f" ({age:.0f}h sedan)" if age is not None else ""
-                        if title:
-                            lines.append(f"- {title} [{src}]{age_s}")
-                    if lines:
-                        news_blocks.append(f"{ticker_}:\n" + "\n".join(lines))
-            except Exception:
-                continue
-        if news_blocks:
-            pipeline_news_text = "\n\n".join(news_blocks)
-            logger.info(f"  📰 Hämtade nyheter för {len(news_blocks)} tickers (AI-kontext)")
-    except Exception as e:
-        logger.warning(f"  ⚠ Kunde inte hämta nyheter för AI: {e}")
+                from core.earnings_calendar import upcoming_in_portfolio, upcoming_in_top
+                from core.macro_calendar import get_upcoming_macro_events
+                holdings_df = pd.DataFrame(enriched) if enriched else pd.DataFrame()
+                cal_earn = upcoming_in_portfolio(holdings_df, scored, days_ahead=7) if not holdings_df.empty else pd.DataFrame()
+                if cal_earn.empty:
+                    cal_earn = upcoming_in_top(scored, top_n=50, days_ahead=7)
+                cal_macro = get_upcoming_macro_events(days_ahead=7)
+                if not cal_earn.empty or cal_macro:
+                    report_lines.append(_section_header("📅 Kommande rapporter & makro (7 dagar)"))
+                    for _, row in cal_earn.head(5).iterrows():
+                        ticker_c = row.get("ticker", "")
+                        edate_c  = row.get("earnings_date", "?")
+                        days_c   = row.get("days_until", "?")
+                        report_lines.append(f"- 📊 **{ticker_c}** rapporterar {edate_c} (om {days_c} d)")
+                    for ev in cal_macro[:3]:
+                        report_lines.append(
+                            f"- {ev.get('flag','')} **{ev.get('event','')}** — {ev.get('date','')} (om {ev.get('days_until','')} d)"
+                        )
+                    report_lines.append("")
+            except Exception as _cal_err:
+                logger.debug(f"  Kalenderdata kunde inte hämtas: {_cal_err}")
 
-    ai_section = ""
-    try:
-        logger.info("  🤖 Anropar AI...")
-        provider = os.getenv("AI_PROVIDER", "auto") or "auto"
+            # ── Nyheter ──────────────────────────────────────────────────────
+            report_lines.append(_section_header("📰 Nyheter"))
+            report_lines.append("*(Nyheter hämtas via nyhetslarm - se separat mail)*")
+            report_lines.append("")
 
-        def _add_news(base_ctx: str) -> str:
-            """Append fetched news to the context using the separator ai_chat understands."""
-            if pipeline_news_text:
-                return base_ctx + "\n\nFärska nyheter:\n" + pipeline_news_text
-            return base_ctx
-
-        if mode == "morning":
-            ctx = _build_ai_morning_context(
-                indices, enriched, watchlist_tickers, top_10, bottom_5,
-                opportunities, "", "OSÄKER", vix
-            )
-            result = ai_analysis.ai_chat(
-                "Skapa dagens morgonbrief. Analysera datan och ge mig en personlig rapport.",
-                context=_add_news(ctx),
-                provider=provider,
-                depth="Djup",
-            )
-            ai_section = result
+            # ── AI-sektion ───────────────────────────────────────────────────
+            report_lines.append(_section_header("🤖 AI: Dagens analys"))
+            report_lines.append("*Genereras nedan...*\n")
 
         elif mode == "evening":
-            total_pnl = 0
-            if enriched:
-                vals = [h["pnl_pct"] for h in enriched if h["pnl_pct"] is not None]
-                total_pnl = sum(vals) / len(vals) if vals else 0
+            # ── Rubrik ────────────────────────────────────────────────────────
+            report_lines.append(f"# 🌆 MarketScan Kvällsbrev - {date_str}\n")
+            report_lines.append(f"_{short_summary}_\n")
 
-            ctx = _build_ai_evening_context(
-                indices, enriched, watchlist_tickers, top_10, bottom_5,
-                opportunities, total_pnl, [], "Inga"
-            )
-            result = ai_analysis.ai_chat(
-                "Skapa dagens kvällsrapport. Analysera datan och ge mig en personlig sammanfattning.",
-                context=_add_news(ctx),
-                provider=provider,
-                depth="Djup",
-            )
-            ai_section = result
+            # ── Dagens utveckling ────────────────────────────────────────────
+            report_lines.append(_section_header("📊 Dagen som gick"))
+            for ticker in ["^OMX", "^GDAXI", "^FTSE", "^GSPC", "^IXIC"]:
+                data = indices.get(ticker)
+                if data:
+                    name = data.get("name", ticker)
+                    chg = data.get("change_pct")
+                    close = data.get("close")
+                    if chg is not None and close is not None:
+                        arrow = "🟢" if chg >= 0 else "🔴"
+                        report_lines.append(f"- {name} {arrow} **{chg:+.1f}%** ({close:,.0f})")
+            report_lines.append("")
+
+            # ── Portfölj-P&L ─────────────────────────────────────────────────
+            report_lines.append(_section_header("💼 Dagens portfölj"))
+            if enriched:
+                total_pnl = sum(h["pnl_pct"] for h in enriched if h["pnl_pct"] is not None)
+                total_pnl = total_pnl / max(len([h for h in enriched if h["pnl_pct"] is not None]), 1)
+                report_lines.append(f"**Snitt P&L: {total_pnl:+.1f}%**\n")
+                for h in enriched:
+                    emoji = "🟢" if (h.get("pnl_pct") or 0) >= 0 else "🔴"
+                    pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "--"
+                    score_str = f"{h['score']:.0f}" if h.get('score') is not None else "--"
+                    report_lines.append(f"- {emoji} **{flag_for_ticker(h['ticker'])} {h['ticker']}** - {pnl} | Score {score_str} | Rekommendation: {_get_rec(h)}")
+            else:
+                report_lines.append("*(Inga innehav i portföljen)*")
+
+            # ── Dagens topp/bottom ───────────────────────────────────────────
+            if top_10 or bottom_5:
+                report_lines.append(_section_header("🏆 Dagens topp & botten"))
+                if top_10:
+                    report_lines.append("**Bästa:** " + ", ".join(f"{flag_for_ticker(t['ticker'])} {t['ticker']} ({t['score']:.0f})" for t in top_10[:5]))
+                if bottom_5:
+                    report_lines.append("**Sämsta:** " + ", ".join(f"{flag_for_ticker(b['ticker'])} {b['ticker']} ({b['score']:.0f})" for b in bottom_5[:5]))
+
+            # ── Opportunities ────────────────────────────────────────────────
+            if opportunities:
+                report_lines.append(_opportunity_section(opportunities))
+
+            # ── Imorgon ──────────────────────────────────────────────────────
+            report_lines.append(_section_header("🔮 Imorgon"))
+            report_lines.append("*(Makro- och earnings-kalender - se veckorapport)*")
+            report_lines.append("")
+
+            # ── AI-sektion ───────────────────────────────────────────────────
+            report_lines.append(_section_header("🤖 AI: Dagens reflektion"))
+            report_lines.append("*Genereras nedan...*\n")
 
         elif mode == "weekly":
-            ctx = _build_ai_weekly_context(
-                scored, enriched, watchlist_tickers, top_10, bottom_5,
-                {}, opportunities, "", indices
-            )
-            result = ai_analysis.ai_chat(
-                "Skapa en djup veckoanalys. Analysera datan och ge mig en fullständig rapport med rekommendationer.",
-                context=_add_news(ctx),
-                provider=provider,
-                depth="Extra djup",
-            )
-            ai_section = result
+            # ── Rubrik ────────────────────────────────────────────────────────
+            day_sv = {"Monday": "måndag", "Tuesday": "tisdag", "Wednesday": "onsdag",
+                      "Thursday": "torsdag", "Friday": "fredag", "Saturday": "lördag",
+                      "Sunday": "söndag"}.get(day_name, day_name)
+            report_lines.append(f"# 📊 MarketScan Veckorapport - v. {datetime.now().isocalendar()[1]}\n")
+            report_lines.append(f"_{short_summary}_\n")
+
+            # ── Marknadsregim ────────────────────────────────────────────────
+            report_lines.append(_section_header("📈 Marknadsöversikt"))
+            report_lines.append(f"- Globalt: {narrative}")
+            if not scored.empty:
+                avg_score = scored["score_total"].mean() if "score_total" in scored.columns else 0
+                n_stark = int((scored.get("entry_signal") == "STARK").sum()) if "entry_signal" in scored.columns else 0
+                report_lines.append(f"- Snittscore: {avg_score:.1f}")
+                report_lines.append(f"- STARK entry-signal: {n_stark} st\n")
+
+            # ── Sektorer ─────────────────────────────────────────────────────
+            if "sector" in scored.columns and "score_total" in scored.columns:
+                report_lines.append(_section_header("🏭 Sektorer"))
+                # Filtrera bort okända/tomma sektorer och NaN-snitt innan loopen
+                sec = scored.groupby("sector")["score_total"].mean().sort_values(ascending=False)
+                _skip_sectors = {"Unknown", "unknown", ""}
+                for sector, avg in sec.items():
+                    # Hoppa över tomma sektornamn, "Unknown" och sektorer där avg är NaN
+                    if not sector or str(sector).strip() in _skip_sectors or pd.isna(avg):
+                        continue
+                    arrow = "🟢" if avg >= 60 else "🟡" if avg >= 45 else "🔴"
+                    report_lines.append(f"- {arrow} **{sector}** - snittscore {avg:.1f}")
+                report_lines.append("")
+
+            # ── Portfölj ─────────────────────────────────────────────────────
+            report_lines.append(_section_header("💼 Portföljanalys"))
+            if enriched:
+                for h in enriched:
+                    rec = _get_rec(h)
+                    emoji = "🟢" if rec in ("BEHÅLL", "KÖP MER") else "🟡" if rec == "BEVAKA" else "🔴"
+                    pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "--"
+                    score_str = f"{h['score']:.0f}" if h.get('score') is not None else "--"
+                    report_lines.append(f"- {emoji} **{flag_for_ticker(h['ticker'])} {h['ticker']}** - {pnl} | Score {score_str} | **{rec}**")
+            else:
+                report_lines.append("*(Inga innehav)*")
+
+            # ── Topp-10 ──────────────────────────────────────────────────────
+            if top_10:
+                report_lines.append(_section_header("🏆 Topp-10 köprekommendationer"))
+                for i, t in enumerate(top_10[:10], 1):
+                    report_lines.append(
+                        f"  {i}. **{flag_for_ticker(t['ticker'])} {t['ticker']}** "
+                        f"- Score {t['score']:.0f} | {t['entry']} | {t['sector']}"
+                    )
+                    # Faktor-attribution: visa varför aktien rankas högt
+                    attr = format_factor_attribution_md(t, compact=True)
+                    if attr:
+                        for attr_line in attr.split("\n"):
+                            report_lines.append(f"     {attr_line}")
+                        report_lines.append("")
+
+            # ── Bottom-5 ─────────────────────────────────────────────────────
+            if bottom_5:
+                report_lines.append(_section_header("🔴 Bottom-5 varningar"))
+                for b in bottom_5[:5]:
+                    report_lines.append(f"- **{flag_for_ticker(b['ticker'])} {b['ticker']}** - Score {b['score']:.0f} | {b['entry']} | {b['sector']}")
+
+            # ── Opportunities ────────────────────────────────────────────────
+            if opportunities:
+                report_lines.append(_opportunity_section(opportunities))
+
+            # ── AI-sektion ───────────────────────────────────────────────────
+            report_lines.append(_section_header("🤖 AI: Veckoanalys"))
+            report_lines.append("*Genereras nedan...*\n")
 
         elif mode == "smallcap":
-            ctx = _build_ai_smallcap_context(
-                scored, enriched, watchlist_tickers, top_10, bottom_5,
-                opportunities, indices
-            )
-            result = ai_analysis.ai_chat(
-                "Skapa en småbolagsanalys. Identifiera de bästa köpkandidaterna och ge konkreta rekommendationer.",
-                context=_add_news(ctx),
-                system_prompt_override=SMALLCAP_AI_SYSTEM_PROMPT,
-                provider=provider,
-                depth="Djup",
-            )
-            ai_section = result
+            # ── Rubrik ────────────────────────────────────────────────────────
+            report_lines.append(f"# 🏦 MarketScan Småbolag - {date_str}\n")
+            report_lines.append(f"_{short_summary}_\n")
 
-        logger.info(f"  ✅ AI-svar mottaget ({len(ai_section)} tecken)")
-    except Exception as e:
-        logger.error(f"  ❌ AI-anrop misslyckades: {e}")
-        ai_section = f"⚠️ AI-analys kunde inte genereras: {e}"
+            # ── Index-överblick ───────────────────────────────────────────────
+            report_lines.append(_section_header("🌏 Marknadsläge"))
+            index_lines = []
+            for ticker in ["^OMX", "^GSPC", "^IXIC", "^GDAXI"]:
+                data = indices.get(ticker)
+                if data:
+                    name = data.get("name", ticker)
+                    chg = data.get("change_pct")
+                    close = data.get("close")
+                    if chg is not None and close is not None:
+                        arrow = "🟢" if chg >= 0 else "🔴"
+                        index_lines.append(f"- {name} {arrow} **{chg:+.1f}%** ({close:,.0f})")
+            if index_lines:
+                report_lines.extend(index_lines)
+            report_lines.append("")
 
-    # Lägg AI-sektionen i rapporten (ersätt placeholder)
-    report_text = "\n".join(report_lines)
-    report_text = report_text.replace("*Genereras nedan...*\n", "")
-    report_text += f"\n\n{ai_section}\n"
+            # ── Universet ─────────────────────────────────────────────────────
+            if not scored.empty and "score_total" in scored.columns:
+                avg_score = scored["score_total"].mean()
+                n_ok = int((scored.get("entry_signal", pd.Series()) == "OK").sum()) if "entry_signal" in scored.columns else 0
+                report_lines.append(f"**Skannade småbolag:** {len(scored)} st | Snittscore: {avg_score:.1f} | Entry OK: {n_ok} st\n")
 
-    # Spara AI-text separat för lazy-load i Streamlit
-    _save_ai_text(mode, date_str, ai_section)
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # 4. SPARA RAPPORT
-    # ═══════════════════════════════════════════════════════════════════════
-
-    prefix = {"morning": "morning", "evening": "evening", "weekly": "weekly", "smallcap": "smallcap"}
-    report_file = REPORT_DIR / f"{prefix.get(mode, mode)}_{date_str}.md"
-    report_file.write_text(report_text, encoding="utf-8")
-    logger.info(f"  💾 Rapport sparad: {report_file}")
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # 5. SKICKA MAIL
-    # ═══════════════════════════════════════════════════════════════════════
-
-    subject_map = {
-        "morning": f"🌅 MarketScan Morgonbrief - {date_str}",
-        "evening": f"🌆 MarketScan Kvällsbrev - {date_str}",
-        "weekly": f"📊 MarketScan Veckorapport - v.{datetime.now().isocalendar()[1]}",
-        "smallcap": f"🏦 MarketScan Småbolag - {date_str}",
-    }
-    subscription_type_map = {
-        "morning":  "morning_report",
-        "evening":  "evening_report",
-        "weekly":   "weekly_summary",
-        "smallcap": "smallcap_report",
-    }
-    subject = subject_map.get(mode, f"MarketScan Rapport - {date_str}")
-    sub_type = subscription_type_map.get(mode, "morning_report")
-
-    try:
-        from core.email_template import load_subscribers, build_personal_portfolio_section
-
-        # Skicka personaliserade mail per prenumerant
-        subscribers = load_subscribers()
-        active_subs = [
-            s for s in subscribers
-            if s.get("active", True) and s.get("subscriptions", {}).get(sub_type, False) and s.get("email")
-        ]
-
-        if active_subs:
-            email_sent = False
-            for sub in active_subs:
-                try:
-                    # Bygg personlig portföljsektion om användaren har ett konto
-                    personal_section = ""
-                    uname = sub.get("username")
-                    if uname and mode in ("morning", "weekly"):
-                        personal_section = build_personal_portfolio_section(uname, scored if not scored.empty else None)
-
-                    body = report_text
-                    if personal_section:
-                        body = body + "\n\n---\n\n" + personal_section
-
-                    ok = send_email(
-                        subject=subject,
-                        body_markdown=body,
-                        from_name="MarketScan",
-                        recipients=[sub["email"]],
-                    )
-                    if ok:
-                        logger.info(f"  ✉ Mail skickat till {sub['email']}")
-                        email_sent = True
-                    else:
-                        logger.warning(f"  ⚠ Mail misslyckades för {sub['email']}")
-                except Exception as sub_e:
-                    logger.error(f"  ❌ Mail-fel för {sub.get('email','?')}: {sub_e}")
-        else:
-            # Fallback: skicka till konfigurerat EMAIL_TO om inga prenumeranter
-            email_sent = send_email(
-                subject=subject,
-                body_markdown=report_text,
-                from_name="MarketScan",
-                subscription_type=sub_type,
-            )
-            if email_sent:
-                logger.info(f"  ✉ Mail skickat: {subject}")
+            # ── Portfölj ─────────────────────────────────────────────────────
+            report_lines.append(_section_header("💼 Din portfölj"))
+            if enriched:
+                for h in enriched[:10]:
+                    emoji = "🟢" if (h.get("pnl_pct") or 0) >= 0 else "🔴"
+                    pnl = f"{h['pnl_pct']:+.1f}%" if h['pnl_pct'] is not None else "--"
+                    score_str = f"{h['score']:.0f}" if h.get('score') is not None else "--"
+                    entry_str = h.get('entry') or '--'
+                    report_lines.append(f"- {emoji} **{flag_for_ticker(h['ticker'])} {h['ticker']}** - {pnl} | Score {score_str} | {entry_str}")
             else:
-                logger.warning("  ⚠ Mail kunde inte skickas (kontrollera EMAIL-inställningar)")
+                report_lines.append("*(Inga innehav i portföljen)*")
+            report_lines.append("")
 
-    except Exception as e:
-        logger.error(f"  ❌ Mail-fel: {e}")
+            # ── Topp-10 ──────────────────────────────────────────────────────
+            if top_10:
+                report_lines.append(_section_header("🏆 Topp-10 småbolag"))
+                for i, t in enumerate(top_10[:10], 1):
+                    report_lines.append(f"  {i}. **{flag_for_ticker(t['ticker'])} {t['ticker']}** - Score {t['score']:.0f} | {t['entry']} | {t['sector']}")
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 5b. STARK-LARM PER ANVÄNDARE (bevakningslista + innehav)
-    # ═══════════════════════════════════════════════════════════════════════
-    if not scored.empty and mode in ("morning", "weekly"):
+            # ── Bottom varningar ──────────────────────────────────────────────
+            if bottom_5:
+                report_lines.append(_section_header("🔴 Varningar"))
+                for b in bottom_5[:5]:
+                    report_lines.append(f"- **{flag_for_ticker(b['ticker'])} {b['ticker']}** - Score {b['score']:.0f} | {b['entry']} | {b['sector']}")
+
+            # ── Opportunities ────────────────────────────────────────────────
+            if opportunities:
+                report_lines.append(_opportunity_section(opportunities))
+
+            # ── AI-sektion ───────────────────────────────────────────────────
+            report_lines.append(_section_header("🤖 AI: Småbolagsanalys"))
+            report_lines.append("*Genereras nedan...*\n")
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # 3. AI-ANROP
+        # ═══════════════════════════════════════════════════════════════════════
+
+        # ─── Fetch live news for AI context (portfolio + watchlist + top-5) ─────
+        pipeline_news_text = ""
         try:
-            _send_stark_alerts(scored, date_str)
+            from core.news_fetcher import fetch_company_news
+            # Build set of tickers worth fetching news for - keep small to avoid rate limits
+            news_tickers: list[tuple[str, str | None]] = []
+            seen = set()
+            # Portfolio holdings
+            for h in (enriched or [])[:10]:
+                t = h.get("ticker")
+                if t and t not in seen:
+                    seen.add(t)
+                    news_tickers.append((t, h.get("name")))
+            # Watchlist
+            for t in (watchlist_tickers or [])[:5]:
+                if t and t not in seen:
+                    seen.add(t)
+                    news_tickers.append((t, None))
+            # Top-5 picks
+            for tp in (top_10 or [])[:5]:
+                t = tp.get("ticker") if isinstance(tp, dict) else None
+                if t and t not in seen:
+                    seen.add(t)
+                    news_tickers.append((t, tp.get("name") if isinstance(tp, dict) else None))
+
+            news_blocks = []
+            for ticker_, cname in news_tickers[:15]:
+                try:
+                    items = fetch_company_news(ticker_, days_back=3, company_name=cname) or []
+                    if items:
+                        lines = []
+                        for n in items[:4]:
+                            title = n.get("headline", n.get("title", "")).strip()
+                            src = n.get("source", "")
+                            age = n.get("age_hours")
+                            age_s = f" ({age:.0f}h sedan)" if age is not None else ""
+                            if title:
+                                lines.append(f"- {title} [{src}]{age_s}")
+                        if lines:
+                            news_blocks.append(f"{ticker_}:\n" + "\n".join(lines))
+                except Exception:
+                    continue
+            if news_blocks:
+                pipeline_news_text = "\n\n".join(news_blocks)
+            logger.info(f"  Nyheter hamtade for {len(news_blocks)} tickers (AI-kontext)")
         except Exception as e:
-            logger.warning(f"  ⚠ STARK-larm misslyckades: {e}")
+            logger.warning(f"  Kunde inte hamta nyheter for AI: {e}")
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 5c. KALENDER-PÅMINNELSE (enbart morning, måndagar eller 1:a dag i månaden)
-    # ═══════════════════════════════════════════════════════════════════════
-    if mode == "morning":
+        ai_section = ""
         try:
-            from core.earnings_calendar import upcoming_in_portfolio, upcoming_in_top
-            from core.macro_calendar import get_upcoming_macro_events
-            from core.alerts import send_calendar_reminder
-            _now = datetime.now()
-            # Skicka kalender-mail på måndagar och 1:a varje månad
-            if _now.weekday() == 0 or _now.day == 1:
-                _holdings_df = pd.DataFrame(enriched) if enriched else pd.DataFrame()
-                _cal_earn = (
-                    upcoming_in_portfolio(_holdings_df, scored, days_ahead=14)
-                    if not _holdings_df.empty
-                    else pd.DataFrame()
+            logger.info("  Anropar AI...")
+            provider = os.getenv("AI_PROVIDER", "auto") or "auto"
+
+            def _add_news(base_ctx: str) -> str:
+                if pipeline_news_text:
+                    return base_ctx + "\n\nFarska nyheter:\n" + pipeline_news_text
+                return base_ctx
+
+            if mode == "morning":
+                ctx = _build_ai_morning_context(
+                    indices, enriched, watchlist_tickers, top_10, bottom_5,
+                    opportunities, "", "OSÄKER", vix
                 )
-                if _cal_earn.empty:
-                    _cal_earn = upcoming_in_top(scored, top_n=50, days_ahead=14)
-                _cal_macro = get_upcoming_macro_events(days_ahead=14)
-                if not _cal_earn.empty or _cal_macro:
-                    _sent = send_calendar_reminder(
-                        earnings_events=_cal_earn if not _cal_earn.empty else None,
-                        macro_events=_cal_macro or None,
-                        days_ahead=14,
+                result = ai_analysis.ai_chat(
+                    "Skapa dagens morgonbrief. Analysera datan och ge mig en personlig rapport.",
+                    context=_add_news(ctx),
+                    provider=provider,
+                    depth="Djup",
+                )
+                ai_section = result
+
+            elif mode == "evening":
+                total_pnl = 0
+                if enriched:
+                    vals = [h["pnl_pct"] for h in enriched if h["pnl_pct"] is not None]
+                    total_pnl = sum(vals) / len(vals) if vals else 0
+
+                ctx = _build_ai_evening_context(
+                    indices, enriched, watchlist_tickers, top_10, bottom_5,
+                    opportunities, total_pnl, [], "Inga"
+                )
+                result = ai_analysis.ai_chat(
+                    "Skapa dagens kvällsrapport. Analysera datan och ge mig en personlig sammanfattning.",
+                    context=_add_news(ctx),
+                    provider=provider,
+                    depth="Djup",
+                )
+                ai_section = result
+
+            elif mode == "weekly":
+                ctx = _build_ai_weekly_context(
+                    scored, enriched, watchlist_tickers, top_10, bottom_5,
+                    {}, opportunities, "", indices
+                )
+                result = ai_analysis.ai_chat(
+                    "Skapa en djup veckoanalys. Analysera datan och ge mig en fullständig rapport med rekommendationer.",
+                    context=_add_news(ctx),
+                    provider=provider,
+                    depth="Extra djup",
+                )
+                ai_section = result
+
+            elif mode == "smallcap":
+                ctx = _build_ai_smallcap_context(
+                    scored, enriched, watchlist_tickers, top_10, bottom_5,
+                    opportunities, indices
+                )
+                result = ai_analysis.ai_chat(
+                    "Skapa en småbolagsanalys. Identifiera de bästa köpkandidaterna och ge konkreta rekommendationer.",
+                    context=_add_news(ctx),
+                    system_prompt_override=SMALLCAP_AI_SYSTEM_PROMPT,
+                    provider=provider,
+                    depth="Djup",
+                )
+                ai_section = result
+
+            logger.info(f"  ✅ AI-svar mottaget ({len(ai_section)} tecken)")
+        except Exception as e:
+            logger.error(f"  ❌ AI-anrop misslyckades: {e}")
+            ai_section = f"⚠️ AI-analys kunde inte genereras: {e}"
+
+        # Lägg AI-sektionen i rapporten (ersätt placeholder)
+        report_text = "\n".join(report_lines)
+        report_text = report_text.replace("*Genereras nedan...*\n", "")
+        report_text += f"\n\n{ai_section}\n"
+
+        # Spara AI-text separat för lazy-load i Streamlit
+        _save_ai_text(mode, date_str, ai_section)
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # 4. SPARA RAPPORT
+        # ═══════════════════════════════════════════════════════════════════════
+
+        prefix = {"morning": "morning", "evening": "evening", "weekly": "weekly", "smallcap": "smallcap"}
+        report_file = REPORT_DIR / f"{prefix.get(mode, mode)}_{date_str}.md"
+        report_file.write_text(report_text, encoding="utf-8")
+        logger.info(f"  💾 Rapport sparad: {report_file}")
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # 5. SKICKA MAIL
+        # ═══════════════════════════════════════════════════════════════════════
+
+        subject_map = {
+            "morning": f"🌅 MarketScan Morgonbrief - {date_str}",
+            "evening": f"🌆 MarketScan Kvällsbrev - {date_str}",
+            "weekly": f"📊 MarketScan Veckorapport - v.{datetime.now().isocalendar()[1]}",
+            "smallcap": f"🏦 MarketScan Småbolag - {date_str}",
+        }
+        subscription_type_map = {
+            "morning":  "morning_report",
+            "evening":  "evening_report",
+            "weekly":   "weekly_summary",
+            "smallcap": "smallcap_report",
+        }
+        subject = subject_map.get(mode, f"MarketScan Rapport - {date_str}")
+        sub_type = subscription_type_map.get(mode, "morning_report")
+
+        try:
+            from core.email_template import load_subscribers, build_personal_portfolio_section
+
+            # Skicka personaliserade mail per prenumerant
+            subscribers = load_subscribers()
+            active_subs = [
+                s for s in subscribers
+                if s.get("active", True) and s.get("subscriptions", {}).get(sub_type, False) and s.get("email")
+            ]
+
+            if active_subs:
+                email_sent = False
+                for sub in active_subs:
+                    try:
+                        # Bygg personlig portföljsektion om användaren har ett konto
+                        personal_section = ""
+                        uname = sub.get("username")
+                        if uname and mode in ("morning", "weekly"):
+                            personal_section = build_personal_portfolio_section(uname, scored if not scored.empty else None)
+
+                        body = report_text
+                        if personal_section:
+                            body = body + "\n\n---\n\n" + personal_section
+
+                        ok = send_email(
+                            subject=subject,
+                            body_markdown=body,
+                            from_name="MarketScan",
+                            recipients=[sub["email"]],
+                        )
+                        if ok:
+                            logger.info(f"  ✉ Mail skickat till {sub['email']}")
+                            email_sent = True
+                        else:
+                            logger.warning(f"  ⚠ Mail misslyckades för {sub['email']}")
+                    except Exception as sub_e:
+                        logger.error(f"  ❌ Mail-fel för {sub.get('email','?')}: {sub_e}")
+            else:
+                # Fallback: skicka till konfigurerat EMAIL_TO om inga prenumeranter
+                email_sent = send_email(
+                    subject=subject,
+                    body_markdown=report_text,
+                    from_name="MarketScan",
+                    subscription_type=sub_type,
+                )
+                if email_sent:
+                    logger.info(f"  ✉ Mail skickat: {subject}")
+                else:
+                    logger.warning("  ⚠ Mail kunde inte skickas (kontrollera EMAIL-inställningar)")
+
+        except Exception as e:
+            logger.error(f"  ❌ Mail-fel: {e}")
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # 5b. STARK-LARM PER ANVÄNDARE (bevakningslista + innehav)
+        # ═══════════════════════════════════════════════════════════════════════
+        if not scored.empty and mode in ("morning", "weekly"):
+            try:
+                _send_stark_alerts(scored, date_str)
+            except Exception as e:
+                logger.warning(f"  ⚠ STARK-larm misslyckades: {e}")
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # 5c. KALENDER-PÅMINNELSE (enbart morning, måndagar eller 1:a dag i månaden)
+        # ═══════════════════════════════════════════════════════════════════════
+        if mode == "morning":
+            try:
+                from core.earnings_calendar import upcoming_in_portfolio, upcoming_in_top
+                from core.macro_calendar import get_upcoming_macro_events
+                from core.alerts import send_calendar_reminder
+                _now = datetime.now()
+                # Skicka kalender-mail på måndagar och 1:a varje månad
+                if _now.weekday() == 0 or _now.day == 1:
+                    _holdings_df = pd.DataFrame(enriched) if enriched else pd.DataFrame()
+                    _cal_earn = (
+                        upcoming_in_portfolio(_holdings_df, scored, days_ahead=14)
+                        if not _holdings_df.empty
+                        else pd.DataFrame()
                     )
-                    if _sent:
-                        logger.info("  📅 Kalender-påminnelse skickad")
-        except Exception as _cal_e:
-            logger.warning(f"  ⚠ Kalender-påminnelse misslyckades: {_cal_e}")
+                    if _cal_earn.empty:
+                        _cal_earn = upcoming_in_top(scored, top_n=50, days_ahead=14)
+                    _cal_macro = get_upcoming_macro_events(days_ahead=14)
+                    if not _cal_earn.empty or _cal_macro:
+                        _sent = send_calendar_reminder(
+                            earnings_events=_cal_earn if not _cal_earn.empty else None,
+                            macro_events=_cal_macro or None,
+                            days_ahead=14,
+                        )
+                        if _sent:
+                            logger.info("  📅 Kalender-påminnelse skickad")
+            except Exception as _cal_e:
+                logger.warning(f"  ⚠ Kalender-påminnelse misslyckades: {_cal_e}")
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 6. KLART
-    # ═══════════════════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════════════════
+        # 6. KLART
+        # ═══════════════════════════════════════════════════════════════════════
 
-    elapsed = time.time() - start_time
-    logger.info(f"\n{'='*50}")
-    logger.info(f"✅ Pipeline klar! ({elapsed:.0f}s)")
-    logger.info(f"{'='*50}\n")
+        pipeline_success = True
+        elapsed = time.time() - start_time
+        logger.info(f"\n{'='*50}")
+        logger.info(f"✅ Pipeline klar! ({elapsed:.0f}s)")
+        logger.info(f"{'='*50}\n")
 
-    return {
-        "mode": mode,
-        "date": date_str,
-        "report_file": str(report_file),
-        "email_sent": email_sent if 'email_sent' in locals() else False,
-        "elapsed_seconds": elapsed,
-    }
+        return {
+            "mode": mode,
+            "date": date_str,
+            "report_file": str(report_file),
+            "email_sent": email_sent if 'email_sent' in locals() else False,
+            "elapsed_seconds": elapsed,
+        }
+
+    except Exception as pipeline_error:
+        # Fånga alla pipeline-fel för metrik
+        pipeline_success = False
+        elapsed = time.time() - start_time
+        logger.error(f"❌ Pipeline misslyckades efter {elapsed:.0f}s: {pipeline_error}")
+        pl.log_error("pipeline", "PIPELINE_FAILED", str(pipeline_error)[:300])
+        raise
+    finally:
+        # ── Alltid spara metrik och loggar ──────────────────────────────────
+        try:
+            if metrics is not None:
+                metrics.pipeline_end(mode, success=pipeline_success)
+        except Exception:
+            pass
+        try:
+            pl.save()
+        except Exception:
+            pass
+        # Spara health snapshot
+        try:
+            from core.monitoring.health import save_health_snapshot
+            save_health_snapshot()
+        except Exception:
+            pass
 
 
 # ══════════════════════════════════════════════════════════════════════════════

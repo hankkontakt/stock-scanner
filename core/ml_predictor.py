@@ -648,7 +648,7 @@ def train_from_dataset(parquet_path: Path, universe: str) -> Optional[TrainedMod
         model=model,
         feature_cols=TECH_FEATURES,
         universe=universe,
-        trained_at=pd.Timestamp.utcnow().isoformat(),
+        trained_at=pd.Timestamp.now().isoformat(),
         n_rows=len(df),
         test_metrics=metrics,
     )
@@ -841,7 +841,7 @@ def train_with_cpcv(parquet_path: Optional[Path], universe: str,
         model=final_model,
         feature_cols=TECH_FEATURES,
         universe=universe,
-        trained_at=pd.Timestamp.utcnow().isoformat(),
+        trained_at=pd.Timestamp.now().isoformat(),
         n_rows=len(df),
         test_metrics={
             "cpcv_avg_ic":      avg_ic,          # Per-datum-IC, genomsnitt över folds
@@ -1160,6 +1160,93 @@ def predict_returns_sector(
     return df
 
 
+def train_model(df: pd.DataFrame, universe: str = "custom",
+                 target_col: str = "forward_return_30d",
+                 features: Optional[list[str]] = None) -> Optional[TrainedModel]:
+    """
+    Tranar en ML-modell fran en DataFrame. Hjalpfunktion for tester och notebook-anvandning.
+
+    Detta ar ett bekvamlighetsalias som accepterar en DataFrame direkt
+    (i stallet for en parquet-sokvag som train_with_cpcv kraver).
+
+    Args:
+        df: DataFrame med kolumner ['date', target_col] + feature-kolumner.
+        universe: Etikett for modellen (anvands for metadata).
+        target_col: Kolumnnamn for target-variabel (default 'forward_return_30d').
+        features: Lista av feature-kolumner. Om None, anvands TECH_FEATURES.
+
+    Returns:
+        TrainedModel eller None vid fel.
+    """
+    required = {"date", target_col}
+    missing = required - set(df.columns)
+    if missing:
+        logger.error(f"train_model: saknar kolumner: {missing}")
+        return None
+
+    feature_cols = features or [c for c in TECH_FEATURES if c in df.columns]
+    if not feature_cols:
+        logger.error("train_model: inga features hittades i DataFrame")
+        return None
+
+    df = df.copy()
+    df = df.dropna(subset=[target_col]).copy()
+    if len(df) < 100:
+        logger.error(f"train_model: for fa rader: {len(df)}")
+        return None
+
+    # Filtrera extrema outliers
+    df = df[df[target_col].between(-0.9, 5.0)]
+
+    # Cross-sectional target
+    df = _add_cross_sectional_target(df)
+    df = df.sort_values("date")
+
+    # Time-based split
+    split_idx = int(len(df) * 0.8)
+    train, test = df.iloc[:split_idx], df.iloc[split_idx:]
+
+    X_tr = train[feature_cols].fillna(0).values
+    y_tr = train["target_cs"].values
+    X_te = test[feature_cols].fillna(0).values
+    y_te = test["target_cs"].values
+
+    model = _make_regressor()
+    model.fit(X_tr, y_tr)
+
+    # Utvardera
+    pred_te = model.predict(X_te)
+
+    ic = _per_date_ic(test["date"].values, pred_te, y_te)
+    mae = float(np.mean(np.abs(pred_te - y_te)))
+    hit_rate = float(((pred_te > 0) == (y_te > 0)).mean())
+
+    # Feature importance (Project 1B)
+    log_feature_importance(
+        model,
+        feature_cols,
+        output_path=MODELS_DIR / "feature_importance.json",
+    )
+
+    # Spara modell for senare inference (kravs av predict_returns)
+    trained = TrainedModel(
+        model=model,
+        feature_cols=feature_cols,
+        universe=universe,
+        trained_at=datetime.datetime.now().isoformat(),
+        n_rows=len(df),
+        test_metrics={
+            "ic": round(ic, 4),
+            "mae": round(mae, 4),
+            "hit_rate": round(hit_rate, 4),
+            "n_train": len(train),
+            "n_test": len(test),
+        },
+    )
+    save_model(trained, universe)
+    return trained
+
+
 def _load_features_from_cache(ticker: str, cache_dir: Path) -> dict:
     """Försök ladda OHLCV-historik från cachen och beräkna features.
     Returnerar dict med NaN om cachen saknas.
@@ -1180,3 +1267,936 @@ def _load_features_from_cache(ticker: str, cache_dir: Path) -> dict:
     except Exception as e:
         logger.debug(f"Kunde inte hämta features för {ticker}: {e}")
         return {f: float("nan") for f in TECH_FEATURES}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FEATURE IMPORTANCE & MODEL ANALYSIS  (PROJECT 1B)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def log_feature_importance(
+    model: object,
+    feature_names: list[str],
+    output_path: Optional[Path] = None,
+) -> dict:
+    """
+    Extraherar feature importance fran en tradmodell och sparar som JSON.
+
+    Stodjer XGBoost (feature_importances_), RandomForest, och
+    HistGradientBoostingRegressor (via .feature_importances_ om tillgangligt,
+    annars approximeras med permutation importance).
+
+    Args:
+        model: Tranad modell (XGBoost, RandomForest, etc.).
+        feature_names: Lista av feature-namn (samma ordning som vid traning).
+        output_path: Sökvag for JSON-utdata. Om None, sparas inte.
+
+    Returns:
+        Dict {feature_name: importance} sorterad efter importance (hogst forst).
+    """
+    try:
+        # XGBoost / RandomForest: anvander inbyggd feature_importances_
+        if hasattr(model, "feature_importances_"):
+            importances = model.feature_importances_
+        elif hasattr(model, "coef_"):
+            # Linjara modeller: anvander koefficienter som importance
+            importances = np.abs(model.coef_).ravel()
+        else:
+            logger.warning("Modellen har ingen feature_importances_ eller coef_")
+            return {}
+
+        # Skapa dict och sortera
+        feat_imp = dict(zip(feature_names, importances))
+        feat_imp = {
+            k: round(float(v), 6)
+            for k, v in sorted(feat_imp.items(), key=lambda x: abs(x[1]), reverse=True)
+        }
+
+        # Spara till JSON om output_path anges
+        if output_path:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps(feat_imp, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            logger.info(f"Sparade feature importance: {output_path}")
+
+        return feat_imp
+
+    except Exception as e:
+        logger.warning(f"Kunde inte extrahera feature importance: {e}")
+        return {}
+
+
+def plot_feature_importance(
+    feature_importance: dict,
+    top_n: int = 20,
+) -> Optional[object]:
+    """
+    Skapar en Plotly bar chart over feature importance.
+
+    Args:
+        feature_importance: Dict {feature_name: importance}.
+        top_n: Visa bara de N viktigaste features.
+
+    Returns:
+        Plotly Figure-objekt, eller None om plotly saknas.
+    """
+    try:
+        import plotly.graph_objects as go
+    except ImportError:
+        logger.warning("plotly ar inte installerat -- hoppar over plot")
+        return None
+
+    if not feature_importance:
+        return None
+
+    # Sortera och begransa till top_n
+    sorted_items = sorted(
+        feature_importance.items(), key=lambda x: abs(x[1]), reverse=True
+    )[:top_n]
+
+    names = [item[0] for item in sorted_items][::-1]
+    values = [item[1] for item in sorted_items][::-1]
+    colors = ["green" if v > 0 else "red" for v in values]
+
+    fig = go.Figure(go.Bar(
+        x=values,
+        y=names,
+        orientation="h",
+        marker_color=colors,
+    ))
+    fig.update_layout(
+        title=f"Feature Importance (top {top_n})",
+        xaxis_title="Importance",
+        yaxis_title="Feature",
+        height=max(300, len(names) * 25),
+        margin=dict(l=10, r=10, t=40, b=10),
+    )
+    return fig
+
+
+def feature_permutation_importance(
+    model: object,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
+    feature_names: list[str],
+    n_repeats: int = 5,
+    random_state: int = 42,
+) -> dict:
+    """
+    Beraknar permutation importance for godtycklig modell.
+
+    Permutation importance maler hur mycket validerings-felet okar nar
+    en features varden slumpas om (permuteras). Detta fungerar for ALLA
+    modelltyper, till skillnad fran inbyggd feature_importances_ som bara
+    finns for tradmodeller.
+
+    Args:
+        model: Tranad modell (valfri sklearn-kompatibel).
+        X_val: Valideringsdata (numpy array).
+        y_val: Valideringstarget.
+        feature_names: Lista av feature-namn.
+        n_repeats: Antal permutationer per feature.
+        random_state: Fro for reproducibilitet.
+
+    Returns:
+        Dict {feature_name: mean_importance_score}.
+    """
+    rng = np.random.default_rng(random_state)
+    baseline_preds = model.predict(X_val)
+    baseline_error = float(np.mean((baseline_preds - y_val) ** 2))
+
+    if baseline_error < 1e-12:
+        logger.warning("Baseline error ar noll -- kan inte berakna permutation importance")
+        return {}
+
+    importances = {}
+    for i, name in enumerate(feature_names):
+        if i >= X_val.shape[1]:
+            continue
+        scores = []
+        for _ in range(n_repeats):
+            X_perm = X_val.copy()
+            X_perm[:, i] = rng.permutation(X_perm[:, i])
+            perm_preds = model.predict(X_perm)
+            perm_error = float(np.mean((perm_preds - y_val) ** 2))
+            scores.append((perm_error - baseline_error) / baseline_error)
+        importances[name] = round(float(np.mean(scores)), 6)
+
+    # Sortera efter importance (hogst forst)
+    importances = dict(
+        sorted(importances.items(), key=lambda x: abs(x[1]), reverse=True)
+    )
+    return importances
+
+
+def compute_partial_dependence(
+    model: object,
+    X: np.ndarray,
+    feature_name: str,
+    feature_index: int,
+    n_points: int = 50,
+) -> dict:
+    """
+    Beraknar partial dependence for en enskild feature.
+
+    Partial dependence visar hur modellens prediktion forandras nar en
+    feature varieras, medan ovriga features halls konstanta (medelvarde).
+    Hjalper till att forsta om sambandet ar linjart, monotont, eller
+    icke-linjart.
+
+    Args:
+        model: Tranad modell.
+        X: Feature-matris (anvands for att bestamma vardeintervall).
+        feature_name: Feature-namn (for etiketter i output).
+        feature_index: Kolumnindex for feature i X.
+        n_points: Antal punkter langs feature-vardeintervallet.
+
+    Returns:
+        Dict med:
+          - 'feature_name': feature-namn
+          - 'values': lista av feature-varden
+          - 'predictions': lista av modellprediktioner vid respektive varde
+    """
+    if X.shape[1] <= feature_index:
+        logger.warning(
+            f"feature_index {feature_index} overstiger X dimension {X.shape[1]}"
+        )
+        return {"feature_name": feature_name, "values": [], "predictions": []}
+
+    feat_vals = X[:, feature_index]
+    p5 = float(np.percentile(feat_vals, 2))
+    p95 = float(np.percentile(feat_vals, 98))
+
+    if abs(p95 - p5) < 1e-10:
+        p5 = float(feat_vals.min())
+        p95 = float(feat_vals.max())
+
+    grid = np.linspace(p5, p95, n_points)
+    X_base = X.mean(axis=0, keepdims=True).repeat(len(grid), axis=0)
+    X_base[:, feature_index] = grid
+
+    try:
+        preds = model.predict(X_base)
+        preds_list = [round(float(p), 6) for p in preds]
+    except Exception as e:
+        logger.warning(f"Partial dependence misslyckades for {feature_name}: {e}")
+        return {"feature_name": feature_name, "values": [], "predictions": []}
+
+    return {
+        "feature_name": feature_name,
+        "values": [round(float(v), 6) for v in grid],
+        "predictions": preds_list,
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ENSEMBLE METHODS  (PROJECT 1D)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class EnsemblePredictor:
+    """
+    Ensemble av flera ML-modeller for robustare prediktioner.
+
+    Kombinerar:
+      - XGBoost (huvudmodell) -- basta isolerade prestanda for tabulardata
+      - RandomForest (sklearn) -- alltid tillganglig, bra for icke-linjara monster
+      - Linjar regression -- enkel baseline som fangar linjara samband
+      - LightGBM -- om installerad, annars anvands RandomForest
+
+    Sammanvagningsmetod:
+      - Weighted average: vikter baserade pa validerings-IC (hogre IC = hogre vikt)
+      - Default: equal weight om inga valideringsresultat finns
+    """
+
+    def __init__(
+        self,
+        use_lightgbm: bool = True,
+        random_state: int = 42,
+        n_jobs: int = -1,
+    ):
+        """
+        Initierar ensemble-predictorn.
+
+        Args:
+            use_lightgbm: Forsok anvanda LightGBM om installerad.
+            random_state: Fro for reproducibilitet.
+            n_jobs: Antal parallella jobb (-1 = alla CPU-karnor).
+        """
+        self.random_state = random_state
+        self.n_jobs = n_jobs
+        self.models: dict[str, object] = {}
+        self.weights: dict[str, float] = {}
+        self.feature_cols: list[str] = []
+        self._is_fitted = False
+
+        # Undertryck varningar fran LightGBM om den inte finns
+        self._lightgbm_available = False
+        if use_lightgbm:
+            try:
+                import lightgbm as lgb  # noqa: F401
+                self._lightgbm_available = True
+            except ImportError:
+                logger.info("LightGBM ej installerat -- anvander RandomForest som substitut")
+
+    def _build_xgboost(self) -> object:
+        """Skapa XGBoost-regressor."""
+        try:
+            import xgboost as xgb
+            return xgb.XGBRegressor(
+                n_estimators=300,
+                max_depth=5,
+                learning_rate=0.05,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=self.random_state,
+                n_jobs=self.n_jobs,
+                verbosity=0,
+            )
+        except ImportError:
+            logger.warning("XGBoost ej installerat -- anvander HistGradientBoosting")
+            from sklearn.ensemble import HistGradientBoostingRegressor
+            return HistGradientBoostingRegressor(
+                max_iter=300, max_depth=5, random_state=self.random_state,
+            )
+
+    def _build_random_forest(self) -> object:
+        """Skapa RandomForest-regressor."""
+        from sklearn.ensemble import RandomForestRegressor
+        return RandomForestRegressor(
+            n_estimators=300,
+            max_depth=8,
+            min_samples_leaf=5,
+            random_state=self.random_state,
+            n_jobs=min(self.n_jobs, 1) if self.n_jobs > 0 else 1,
+        )
+
+    def _build_lightgbm(self) -> object | None:
+        """Skapa LightGBM-regressor om installerad."""
+        if not self._lightgbm_available:
+            return None
+        import lightgbm as lgb
+        return lgb.LGBMRegressor(
+            n_estimators=300,
+            max_depth=5,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=self.random_state,
+            n_jobs=self.n_jobs,
+            verbosity=-1,
+        )
+
+    def _build_linear(self) -> object:
+        """Skapa linjar regressionsmodell."""
+        from sklearn.linear_model import Ridge
+        return Ridge(alpha=1.0, random_state=self.random_state)
+
+    def fit(
+        self,
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        X_val: Optional[np.ndarray] = None,
+        y_val: Optional[np.ndarray] = None,
+        feature_cols: Optional[list[str]] = None,
+    ) -> "EnsemblePredictor":
+        """
+        Tranar alla modeller i ensemblen.
+
+        Args:
+            X_train: Traningsdata.
+            y_train: Trainings-target.
+            X_val: Valideringsdata (for viktbestamning). Kan vara None.
+            y_val: Validerings-target. Kan vara None.
+            feature_cols: Feature-namn (for senare referens).
+
+        Returns:
+            self (for method chaining).
+        """
+        if feature_cols:
+            self.feature_cols = feature_cols
+
+        # Bygg och trana varje modell
+        model_builders = {
+            "xgboost": self._build_xgboost,
+            "random_forest": self._build_random_forest,
+            "linear": self._build_linear,
+        }
+
+        # Lagg till LightGBM om tillganglig
+        if self._lightgbm_available:
+            model_builders["lightgbm"] = self._build_lightgbm
+
+        for name, builder in model_builders.items():
+            try:
+                model = builder()
+                if name == "lightgbm" and model is None:
+                    continue
+                model.fit(X_train, y_train)
+                self.models[name] = model
+                logger.info(f"  Ensemble: tränade {name}")
+            except Exception as e:
+                logger.warning(f"  Ensemble: {name} misslyckades: {e}")
+
+        if not self.models:
+            raise RuntimeError("Inga modeller i ensemblen kunde tränas")
+
+        # Bestam vikter baserat pa validerings-IC
+        if X_val is not None and y_val is not None:
+            self._compute_weights_from_ic(X_val, y_val)
+        else:
+            # Equal weight som fallback
+            n_models = len(self.models)
+            for name in self.models:
+                self.weights[name] = 1.0 / n_models
+
+        self._is_fitted = True
+        return self
+
+    def _compute_weights_from_ic(self, X_val: np.ndarray, y_val: np.ndarray):
+        """
+        Beraknar ensemble-vikter baserat pa varje modells validerings-IC.
+
+        IC (Information Coefficient) = Spearman rankkorrelation mellan
+        predikterade och faktiska varden. Hogre IC = hogre vikt.
+        """
+        try:
+            from scipy.stats import spearmanr
+        except ImportError:
+            # Fallback till equal weight om scipy saknas
+            n_models = len(self.models)
+            for name in self.models:
+                self.weights[name] = 1.0 / n_models
+            return
+
+        ics = {}
+        for name, model in self.models.items():
+            try:
+                preds = model.predict(X_val)
+                ic_val, _ = spearmanr(preds, y_val)
+                ics[name] = max(0.0, float(ic_val) if not np.isnan(ic_val) else 0.0)
+            except Exception:
+                ics[name] = 0.0
+
+        total_ic = sum(ics.values()) or 1.0
+        for name in self.models:
+            self.weights[name] = (ics.get(name, 0.0) + 0.01) / (total_ic + 0.01 * len(ics))
+
+        # Normalisera sa summan = 1.0
+        w_sum = sum(self.weights.values())
+        if w_sum > 0:
+            for name in self.models:
+                self.weights[name] /= w_sum
+
+        ics_str = ", ".join(f"{n}: {ics.get(n, 0):.4f}" for n in self.models)
+        logger.info(f"  Ensemble weights (IC-based): {ics_str}")
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """
+        Prediktera med weighted average av alla modeller.
+
+        Args:
+            X: Feature-matris.
+
+        Returns:
+            Numpy array med ensemble-prediktioner.
+        """
+        if not self._is_fitted:
+            raise RuntimeError("EnsemblePredictor har inte tränats. Kör .fit() först.")
+
+        all_preds = []
+        for name, model in self.models.items():
+            try:
+                preds = model.predict(X)
+                all_preds.append(preds * self.weights.get(name, 0))
+            except Exception as e:
+                logger.warning(f"  Ensemble predict {name} misslyckades: {e}")
+                continue
+
+        if not all_preds:
+            raise RuntimeError("Inga modeller i ensemblen kunde prediktera")
+
+        return np.sum(all_preds, axis=0)
+
+    def get_model_weights(self) -> dict:
+        """Returnerar aktuella ensemble-vikter."""
+        return dict(self.weights)
+
+    def get_individual_predictions(self, X: np.ndarray) -> dict:
+        """
+        Returnerar prediktioner fran varje enskild modell.
+
+        Args:
+            X: Feature-matris.
+
+        Returns:
+            Dict {model_name: prediktioner}.
+        """
+        result = {}
+        for name, model in self.models.items():
+            try:
+                result[name] = model.predict(X)
+            except Exception as e:
+                logger.warning(f"  Individual predict {name} misslyckades: {e}")
+                result[name] = np.full(X.shape[0], float("nan"))
+        return result
+
+
+def ensemble_predict(
+    models: dict[str, object],
+    X: np.ndarray,
+    weights: Optional[dict[str, float]] = None,
+) -> np.ndarray:
+    """
+    Weighted average ensemble-prediktion.
+
+    Args:
+        models: Dict {model_name: model} av tränade modeller.
+        X: Feature-matris.
+        weights: Dict {model_name: weight}. Om None, anvands equal weight.
+
+    Returns:
+        Numpy array med ensemble-prediktioner.
+    """
+    if not models:
+        raise ValueError("Minst en modell krävs för ensemble-prediktion")
+
+    # Equal weight om inga vikter anges
+    if weights is None:
+        weights = {name: 1.0 / len(models) for name in models}
+
+    all_preds = []
+    total_weight = 0.0
+
+    for name, model in models.items():
+        w = weights.get(name, 0.0)
+        if w <= 0:
+            continue
+        try:
+            preds = model.predict(X)
+            all_preds.append(preds * w)
+            total_weight += w
+        except Exception as e:
+            logger.warning(f"Ensemble predict {name} misslyckades: {e}")
+            continue
+
+    if not all_preds or total_weight <= 0:
+        # Fallback: anvand forsta modellen
+        first_model = next(iter(models.values()))
+        return first_model.predict(X)
+
+    ensemble_pred = np.sum(all_preds, axis=0)
+    if abs(total_weight - 1.0) > 1e-6:
+        ensemble_pred /= total_weight
+
+    return ensemble_pred
+
+
+def stacking_ensemble(
+    base_models: list[object],
+    meta_model: object,
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
+    cv_folds: int = 5,
+) -> object:
+    """
+    Stacking ensemble: tränar en meta-modell pa base-modellernas prediktioner.
+
+    Stacking ar en tva-nivars ensemble:
+      Niva 1: Base-modeller tränas pa train-data
+      Niva 2: Meta-modell tränas pa base-modellernas OUT-OF-FOLD prediktioner
+              pa valideringsdata (for att undvika overfitting)
+
+    Args:
+        base_models: Lista av otränade base-modeller.
+        meta_model: Otränad meta-modell.
+        X_train: Trainingsdata for base-modeller.
+        y_train: Trainings-target.
+        X_val: Valideringsdata for meta-modell-training.
+        y_val: Validerings-target.
+        cv_folds: Antal CV-folds for out-of-fold prediktioner.
+
+    Returns:
+        Tranad meta-modell (klar att anvanda med .predict()).
+    """
+    from sklearn.model_selection import KFold
+
+    n_base = len(base_models)
+    if n_base == 0:
+        raise ValueError("Minst en base-modell krävs")
+
+    # Skapa out-of-fold prediktioner for meta-training
+    # (for att undvika att meta-modellen lär sig base-modellernas overfitting)
+    kf = KFold(n_splits=cv_folds, shuffle=True, random_state=42)
+    oof_preds = np.zeros((len(X_train), n_base))
+
+    for i, model in enumerate(base_models):
+        fold_preds = np.zeros(len(X_train))
+        for train_idx, val_idx in kf.split(X_train):
+            X_fold_train = X_train[train_idx]
+            y_fold_train = y_train[train_idx]
+            X_fold_val = X_train[val_idx]
+
+            try:
+                model_clone = (
+                    model.__class__(**model.get_params())
+                    if hasattr(model, "get_params")
+                    else model.__class__()
+                )
+                model_clone.fit(X_fold_train, y_fold_train)
+                fold_preds[val_idx] = model_clone.predict(X_fold_val)
+            except Exception as e:
+                logger.warning(f"  Stacking fold {i} misslyckades: {e}")
+                fold_preds[val_idx] = 0.0
+
+        oof_preds[:, i] = fold_preds
+
+    # Trana meta-modell pa out-of-fold prediktioner
+    # Kombinera OOF preds med original features for meta-training
+    X_meta = np.hstack([X_val, oof_preds[:len(X_val)]])
+    try:
+        meta_model.fit(X_meta, y_val)
+    except Exception as e:
+        logger.warning(f"Meta-model training misslyckades: {e}")
+        # Fallback: trana meta bara pa OOF preds
+        meta_model.fit(oof_preds[:len(X_val)], y_val)
+
+    logger.info(
+        f"Stacking ensemble: {n_base} base models, "
+        f"meta={meta_model.__class__.__name__}"
+    )
+    return meta_model
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# WALK-FORWARD ANALYSIS  (PROJECT 1E)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def walk_forward_validate(
+    df: pd.DataFrame,
+    n_train: int = 504,
+    n_test: int = 63,
+    step: int = 21,
+) -> list[dict]:
+    """
+    Walk-forward validering: rullande träning och test over tid.
+
+    Delar upp datan i sekventiella fonster:
+      - Train:   n_train dagar (standard 504 = 2 ar)
+      - Test:    n_test dagar  (standard 63 = 3 manader)
+      - Step:    step dagar    (standard 21 = 1 manad)
+
+    For varje fönster beräknas:
+      - IC (Information Coefficient)
+      - Hit rate
+      - Top-10 return (genomsnittlig forward_return_30d for top-10 prediktioner)
+      - Max drawdown
+
+    Args:
+        df: DataFrame med ['date', 'forward_return_30d'] + TECH_FEATURES.
+        n_train: Antal dagar i train-fonstret. Default 504 (2 ar).
+        n_test: Antal dagar i test-fonstret. Default 63 (3 manader).
+        step: Steglangd mellan fonster i dagar. Default 21 (1 manad).
+
+    Returns:
+        Lista av dict, en per window, med nycklar:
+          window_idx, train_start, train_end, test_start, test_end,
+          ic, hit_rate, top_10_return, max_drawdown.
+    """
+    required_cols = {"date", "forward_return_30d"}
+    missing = required_cols - set(df.columns)
+    if missing:
+        raise ValueError(f"DataFrame saknar kolumner: {missing}")
+
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values("date").reset_index(drop=True)
+
+    all_dates = sorted(df["date"].unique())
+    if len(all_dates) < n_train + n_test:
+        raise ValueError(
+            f"For fa datum for walk-forward: {len(all_dates)}. "
+            f"Behover minst {n_train + n_test}."
+        )
+
+    # Hitta features
+    available_features = [c for c in TECH_FEATURES if c in df.columns]
+    if not available_features:
+        raise ValueError("Inga tekniska features hittades i DataFrame")
+
+    results: list[dict] = []
+    window_idx = 0
+
+    for start_i in range(0, len(all_dates) - n_train - n_test + 1, step):
+        train_end_i = start_i + n_train
+        test_end_i = min(train_end_i + n_test, len(all_dates))
+
+        if test_end_i > len(all_dates):
+            break
+
+        train_dates = all_dates[start_i:train_end_i]
+        test_dates = all_dates[train_end_i:test_end_i]
+
+        train_mask = df["date"].isin(train_dates)
+        test_mask = df["date"].isin(test_dates)
+
+        train_df = df[train_mask].copy()
+        test_df = df[test_mask].copy()
+
+        if train_df.empty or test_df.empty:
+            window_idx += 1
+            continue
+
+        # Trana modell
+        try:
+            model = _make_regressor()
+            X_tr = train_df[available_features].fillna(0).values
+            y_tr = train_df["forward_return_30d"].values
+            model.fit(X_tr, y_tr)
+        except Exception as e:
+            logger.warning(f"  WF window {window_idx}: training failed: {e}")
+            window_idx += 1
+            continue
+
+        # Prediktera pa test
+        try:
+            X_te = test_df[available_features].fillna(0).values
+            preds = model.predict(X_te)
+        except Exception as e:
+            logger.warning(f"  WF window {window_idx}: prediction failed: {e}")
+            window_idx += 1
+            continue
+
+        y_te = test_df["forward_return_30d"].values
+
+        # Per-datum-IC
+        ic = _per_date_ic(test_df["date"].values, preds, y_te)
+
+        # Hit rate
+        hit_rate = float(((preds > 0) == (y_te > 0)).mean()) if len(y_te) > 0 else 0.0
+
+        # Top-10 return: genomsnittlig forward_return_30d for top-10 prediktioner
+        top_n_return = 0.0
+        test_with_preds = test_df.copy()
+        test_with_preds["predicted_return"] = preds
+        # Valj senaste datumet per ticker, sen top-10
+        if "ticker" in test_with_preds.columns:
+            test_latest = test_with_preds.loc[
+                test_with_preds.groupby("ticker")["date"].idxmax()
+            ]
+            top_tickers = test_latest.nlargest(10, "predicted_return")
+            if not top_tickers.empty:
+                top_n_return = float(top_tickers["forward_return_30d"].mean())
+
+        # Max drawdown (simulera equal-weight)
+        if "ticker" in test_with_preds.columns:
+            daily_means = test_with_preds.groupby("date")["forward_return_30d"].mean()
+            cumulative = (1 + daily_means).cumprod()
+            max_dd = _max_drawdown_from_series(cumulative)
+        else:
+            max_dd = 0.0
+
+        results.append({
+            "window_idx": window_idx,
+            "train_start": train_dates[0],
+            "train_end": train_dates[-1],
+            "test_start": test_dates[0],
+            "test_end": test_dates[-1],
+            "ic": ic,
+            "hit_rate": hit_rate,
+            "top_10_return": top_n_return,
+            "max_drawdown": max_dd,
+            "n_train": len(train_df),
+            "n_test": len(test_df),
+        })
+
+        logger.info(
+            f"  WF window {window_idx}: "
+            f"IC={ic:.4f}, hit_rate={hit_rate:.4f}, "
+            f"top10_ret={top_n_return:.4f}"
+        )
+
+        window_idx += 1
+
+    if not results:
+        logger.warning("Inga windows i walk_forward_validate -- for lite data?")
+
+    return results
+
+
+def _max_drawdown_from_series(equity: pd.Series) -> float:
+    """Hjalpfunktion: beraknar max drawdown fran en equity-serie."""
+    if len(equity) < 2:
+        return 0.0
+    peak = equity.expanding().max()
+    dd = (equity - peak) / peak
+    return round(float(abs(dd.min())), 4)
+
+
+def compute_ic_over_time(
+    df: pd.DataFrame,
+    prediction_col: str = "predicted_return",
+    forward_return_col: str = "forward_return_30d",
+    freq: str = "M",
+) -> pd.DataFrame:
+    """
+    Beraknar IC (Information Coefficient) per manad over tid.
+
+    IC per manad = Spearman rankkorrelation mellan predikterad och faktisk
+    avkastning, beräknad separat for varje manad. Detta visar om modellens
+    prediktionsformaga ar stabil over tid eller om den degraderas.
+
+    Args:
+        df: DataFrame med ['date', prediction_col, forward_return_col].
+        prediction_col: Kolumnnamn for prediktioner.
+        forward_return_col: Kolumnnamn for faktisk forward return.
+        freq: Frekvens for IC-berakning: 'ME' (manadsvis), 'W' (veckovis).
+
+    Returns:
+        DataFrame med kolumner ['period', 'ic', 'n_stocks'] sorterad efter
+        period, dar ic ar Spearman-IC for den perioden.
+    """
+    required = {"date", prediction_col, forward_return_col}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"DataFrame saknar kolumner: {missing}")
+
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"])
+
+    try:
+        from scipy.stats import spearmanr
+    except ImportError:
+        logger.error("scipy.stats.spearmanr kravs for compute_ic_over_time")
+        return pd.DataFrame()
+
+    # Skapa period-kolumn
+    df["_period"] = df["date"].dt.to_period(freq)
+
+    records = []
+    for period, group in df.groupby("_period", sort=True):
+        if len(group) < 10:
+            continue
+        preds = group[prediction_col].values
+        actuals = group[forward_return_col].values
+
+        # Kolla att det finns varians
+        if preds.std() < 1e-10 or actuals.std() < 1e-10:
+            continue
+
+        try:
+            ic_val, p_val = spearmanr(preds, actuals)
+            if not np.isnan(ic_val):
+                records.append({
+                    "period": str(period),
+                    "ic": round(float(ic_val), 4),
+                    "p_value": round(float(p_val), 6),
+                    "n_stocks": len(group),
+                })
+        except Exception:
+            continue
+
+    if not records:
+        logger.warning("Inga IC-varden kunde beräknas")
+        return pd.DataFrame()
+
+    result_df = pd.DataFrame(records).sort_values("period").reset_index(drop=True)
+
+    # Rullande medelvarde (3 perioder) for trend
+    if len(result_df) >= 3:
+        result_df["ic_ma3"] = result_df["ic"].rolling(3).mean().round(4)
+
+    n_pos = (result_df["ic"] > 0).sum()
+    logger.info(
+        f"IC over time: {len(result_df)} periods, "
+        f"{n_pos}/{len(result_df)} positive "
+        f"(mean={result_df['ic'].mean():.4f})"
+    )
+
+    return result_df
+
+
+def detect_model_decay(
+    ic_history: pd.DataFrame,
+    ic_col: str = "ic",
+    threshold: float = -0.05,
+    lookback_periods: int = 3,
+) -> dict:
+    """
+    Detekterar modell-degradation baserat pa IC-historia.
+
+    Varnar nar IC sjunker under en tröskel under en period, vilket tyder pa
+    att modellens prediktionsformaga har forsamrats (model decay/koncept drift).
+
+    Args:
+        ic_history: DataFrame fran compute_ic_over_time med IC per period.
+        ic_col: Kolumnnamn for IC-varden.
+        threshold: IC-troskel under vilken varning utfardas. Default -0.05.
+        lookback_periods: Antal senaste perioder att utvardera. Default 3.
+
+    Returns:
+        Dict med:
+          - 'decay_detected': bool -- True om decay har detekterats
+          - 'current_ic': float -- senaste IC-vardet
+          - 'mean_ic_recent': float -- medel-IC over senaste perioderna
+          - 'alert_message': str -- lasbar varning
+          - 'details': dict -- utforligare statistik
+    """
+    if ic_history.empty:
+        return {
+            "decay_detected": False,
+            "current_ic": 0.0,
+            "mean_ic_recent": 0.0,
+            "alert_message": "Ingen IC-historia tillganglig",
+            "details": {"n_periods": 0},
+        }
+
+    recent = ic_history.tail(lookback_periods)
+    current_ic = float(recent[ic_col].iloc[-1]) if not recent.empty else 0.0
+    mean_ic = float(recent[ic_col].mean()) if not recent.empty else 0.0
+
+    all_mean = float(ic_history[ic_col].mean())
+    all_std = float(ic_history[ic_col].std()) or 1.0
+
+    # Berakna z-score for senaste IC
+    recent_z = (recent[ic_col] - all_mean) / all_std if len(ic_history) > 5 else pd.Series([0.0])
+
+    # Decay-villkor: medel-IC under threshold ELLER z-score < -2 i senaste perioden
+    decay_detected = (mean_ic < threshold) or (
+        not recent_z.empty and float(recent_z.iloc[-1]) < -2.0
+    )
+
+    if decay_detected:
+        alert = (
+            f"VARNING: Modell-degradation detekterad! "
+            f"Senaste IC={current_ic:.4f}, "
+            f"medel senaste {lookback_periods}= {mean_ic:.4f}, "
+            f"troskel={threshold}. "
+            f"Overvag omtraning med nyare data."
+        )
+        logger.warning(alert)
+    else:
+        alert = (
+            f"IC-status OK: senaste={current_ic:.4f}, "
+            f"medel={mean_ic:.4f}, troskel={threshold}"
+        )
+        logger.info(alert)
+
+    return {
+        "decay_detected": decay_detected,
+        "current_ic": current_ic,
+        "mean_ic_recent": mean_ic,
+        "alert_message": alert,
+        "details": {
+            "n_periods": len(ic_history),
+            "all_time_mean_ic": round(all_mean, 4),
+            "all_time_std_ic": round(all_std, 4),
+            "recent_z_score": round(float(recent_z.iloc[-1]), 4) if not recent_z.empty else 0.0,
+            "lookback_periods": lookback_periods,
+            "threshold": threshold,
+            "n_positive_periods": int((ic_history[ic_col] > 0).sum()),
+            "n_negative_periods": int((ic_history[ic_col] < 0).sum()),
+        },
+    }

@@ -98,7 +98,7 @@ jobs:
           elif [ "${{ github.event.schedule }}" = "30 15 * * 1-5" ]; then
             echo "mode=evening" >> $GITHUB_OUTPUT
             echo "tickers=" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "0 9 * * 6" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 7 * * 6" ]; then
             echo "mode=weekly" >> $GITHUB_OUTPUT
             echo "tickers=" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "15 8 * * 1" ]; then

@@ -10,7 +10,15 @@ import yfinance as yf
 from web.utils import (
     kpi_row, scatter_momentum_value, pct_fmt, _get_provider, _get_depth,
 )
-from web.ui.components import clickable_stock_table
+from web.ui.components import clickable_stock_table, page_header, section
+from web.ui.screener_utils import (
+    TECHNICAL_QUICK_FILTERS as _TECH_QF,
+    apply_quick_filters as _tech_apply_qf,
+    render_enhanced_screener_bar as _tech_render_bar,
+    paginate_dataframe as _tech_paginate,
+    render_pagination as _tech_pagination,
+    render_export_buttons as _tech_export,
+)
 from core import ai_analysis
 from core.country_flags import flag_for_ticker
 
@@ -104,6 +112,28 @@ Till skillnad från fundamental analys (som tittar på bolagets vinster och bala
 
     tab1, tab2, tab3, tab4 = st.tabs(["📋 Tabell", "📊 Diagram", "📉 MACD/RSI", "🔀 Jämför"])
 
+    # ── Enhanced screener bar (columns, quick filters, export) ────────────────
+    _tech_cols_map = {
+        "ticker": "Ticker", "name": "Bolag", "sector": "Sektor",
+        "current_price": "Pris", "rsi_14": "RSI",
+        "price_vs_ma50": "vs MA50", "price_vs_ma200": "vs MA200",
+        "bb_position": "BB", "macd_above_signal": "MACD>sig.",
+        "trend_signal": "Trend", "entry_signal": "Entry",
+        "return_1m": "1m", "return_3m": "3m", "return_6m": "6m",
+        "return_12m": "12m", "volatility": "Vol.", "beta": "Beta",
+        "pct_from_52w_high": "från ATH",
+    }
+    _tech_view_opts = _tech_render_bar(
+        _tech_cols_map,
+        default_columns=["ticker", "name", "sector", "current_price", "rsi_14", "trend_signal", "entry_signal", "return_1m"],
+        filter_presets=_TECH_QF,
+        key="tech",
+    )
+
+    # Apply quick filter if selected
+    if _tech_view_opts["quick_filter"]:
+        out = _tech_apply_qf(out, _tech_view_opts["quick_filter"], _TECH_QF)
+
     with tab1:
         tech_show = [c for c in [
             "rank", "ticker", "name", "sector",
@@ -131,6 +161,10 @@ Till skillnad från fundamental analys (som tittar på bolagets vinster och bala
                               column_help={"RSI": "Relativ styrka 0-100. >70 överköpt, <30 översålt.",
                                            "BB": "Bollinger-position: 0=nedre bandet (billigt), 1=övre (dyrt).",
                                            "MACD>sig.": "Sant = MACD över signallinjen (uppåtmomentum)."})
+
+        # ── Pagination + Export ───────────────────────────────────────────────
+        _tech_page_size, _tech_page = _tech_pagination(len(out), key="tech_tab1")
+        _tech_export(out, filename_prefix="technical_analysis", key="tech_tab1_export")
 
     with tab2:
         if "rsi_14" in out.columns and "ticker" in out.columns:

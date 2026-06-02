@@ -7,7 +7,16 @@ from web.utils import (
     kpi_row, sector_bar_chart, score_distribution_chart, pct_fmt,
 )
 from web.stock_detail import render_stock_detail
-from web.ui.components import clickable_stock_table
+from web.ui.components import clickable_stock_table, page_header, section
+from web.ui.screener_utils import (
+    QUICK_FILTERS as _SC_QF,
+    apply_quick_filters as _sc_apply_qf,
+    render_enhanced_screener_bar as _sc_render_bar,
+    paginate_dataframe as _sc_paginate,
+    render_pagination as _sc_pagination,
+    render_export_buttons as _sc_export,
+    filter_changed_rows as _sc_filter_changed,
+)
 from core.country_flags import flag_for_ticker
 
 
@@ -112,6 +121,28 @@ def page_smallcap(sc_df: pd.DataFrame, filters: dict):
         ["🏆 Rankinglista", "📊 Nyckeltal", "🔬 Faktortabell", "🕵️ Insider"]
     )
 
+    # ── Enhanced screener bar (columns, quick filters, export) ────────────────
+    _sc_cols_map = {
+        "ticker": "Ticker", "sc_stars": "⭐", score_col: "Poäng",
+        "predicted_return": "AI 30d-ret", "ml_rank": "AI rank",
+        "insider_signal": "Insider", "current_price": "Pris",
+        "day_change_pct": "Dag%", "week_change_pct": "Vecka%",
+        "return_6m": "6m%", "return_12m": "12m%",
+        "piotroski_score": "Piotroski", "sector": "Sektor",
+        "ev_to_ebitda": "EV/EBITDA", "price_to_book": "P/B",
+        "revenue_growth": "Tillväxt", "debt_to_equity": "D/E",
+    }
+    _sc_view_opts = _sc_render_bar(
+        _sc_cols_map,
+        default_columns=["ticker", "sc_stars", score_col, "insider_signal", "current_price", "return_6m"],
+        filter_presets=_SC_QF,
+        key="sc",
+    )
+
+    # Apply quick filter if selected
+    if _sc_view_opts["quick_filter"]:
+        filt = _sc_apply_qf(filt, _sc_view_opts["quick_filter"], _SC_QF)
+
     with tab1:
         with st.expander("ℹ️ Hur läser jag rankinglistan? -- Förklaring för nybörjare", expanded=False):
             st.markdown("""
@@ -190,6 +221,10 @@ Systemet delar in bolagen i 1-5 stjärnor baserat på totalpoängen:
                                     column_config=col_cfg, height=600,
                                     on_select="rerun", selection_mode="single-row",
                                     key="sc_ranking_table")
+
+            # ── Pagination + Export ───────────────────────────────────────────
+            _sc_page_size, _sc_page = _sc_pagination(len(filt), key="sc_rank")
+            _sc_export(filt, filename_prefix="smallcap_results", key="sc_rank_export")
 
             c1, c2 = st.columns(2)
             with c1:

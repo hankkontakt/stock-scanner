@@ -25,6 +25,32 @@ import pandas as pd
 import streamlit as st
 
 from core import config
+
+# ── i18n: Locale Detection ───────────────────────────────────────────────────────
+# Prioritet: st.query_params > session_state > browser > default "sv"
+def detect_locale() -> str:
+    """Detektera anvandarens locale fran query_params, session_state eller default."""
+    # 1. Query param (hogst prioritet - for url-based val)
+    try:
+        locale_qp = st.query_params.get("locale")
+        if locale_qp in ("sv", "en", "de"):
+            return locale_qp
+    except Exception:
+        pass
+
+    # 2. Session state
+    locale_ss = st.session_state.get("locale", "")
+    if locale_ss in ("sv", "en", "de"):
+        return locale_ss
+
+    # 3. Default
+    return "sv"
+
+
+# Initiera TranslationManager
+from core.i18n import TranslationManager
+T = TranslationManager(detect_locale())
+st.session_state.setdefault("locale", T.locale)
 from web.utils import (
     load_scan_reports, load_smallcap_reports, load_portfolio, load_watchlist,
     _get_provider, _get_depth,
@@ -62,6 +88,8 @@ from web.pages.stock_search    import page_stock_search
 from web.pages.watchlist_detail import page_watchlist_detail
 from web.pages.ai_journal       import page_ai_journal
 from web.pages.universe_explorer import page_universe_explorer
+from web.pages.options_dashboard import page_options_dashboard
+from web.pages.strategy_builder import page_strategy_builder
 import traceback
 
 # ── P
@@ -112,148 +140,14 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Global CSS ────────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-  /* ── Typsnitt: Inter ──────────────────────────────────────────────────────── */
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+# ── Global CSS (migrerad till web/ui/css.py) ──────────────────────────────────
+# All global styling is in the centralized CSS design system (web/ui/css.py),
+# which is injected below. The old inline CSS block (formerly lines 116-253)
+# has been removed -- everything is now driven by design tokens from tokens.py
+# with [data-testid] selectors, animations, card components, and responsive
+# breakpoints at 768px and 1024px.
 
-  /* Sätt Inter på body -- ärver till all text.
-     Vi undviker att sätta !important på span/div så att Streamlits
-     ikonfonter (Material Symbols Rounded) i span-element inte krockar. */
-  body,
-  .stApp,
-  [data-testid="stAppViewContainer"],
-  [data-testid="stSidebarContent"],
-  [data-testid="stHeader"] {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-  }
-
-  /* Explicit override på semantiska textelement (ej span -- ikoner bor i span) */
-  p, h1, h2, h3, h4, h5, h6,
-  button, input, textarea, select, a, td, th, label, li {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-  }
-  h1, h2, h3 { font-weight: 700 !important; letter-spacing: -0.02em !important; }
-
-  /* ── Sidövergång - döljer ghosting vid rerun ─────────────────────────────── */
-  /* Fade + subtil slide-up varje gång huvudinnehållet renderas om */
-  [data-testid="stMainBlockContainer"] > div:first-child,
-  [data-testid="block-container"] {
-    animation: pageIn 0.22s ease-out both;
-  }
-  @keyframes pageIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  /* Sidebar-filter: mjuk höjd-transition när filter-expander läggs till/tas bort */
-  div[data-testid="stSidebarContent"] .streamlit-expander {
-    transition: opacity 0.15s ease;
-  }
-
-  /* ── Tabeller ────────────────────────────────────────────────────────────── */
-  .stDataFrame thead th {
-    font-size: 11px !important;
-    font-weight: 600 !important;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: #8892a4 !important;
-    background: #1a1f2e !important;
-    border-bottom: 2px solid #2d3250 !important;
-  }
-  .stDataFrame tbody td { font-size: 13px !important; }
-  .stDataFrame tbody tr:hover td {
-    background: rgba(76,155,232,0.04) !important;
-  }
-
-  /* ── Avdelare (st.markdown("---")) ──────────────────────────────────────── */
-  hr {
-    border: none !important;
-    height: 1px !important;
-    background: linear-gradient(to right, transparent, #2d3250 20%, #2d3250 80%, transparent) !important;
-    margin: 28px 0 20px 0 !important;
-  }
-
-  /* ── Taggar ──────────────────────────────────────────────────────────────── */
-  .tag-green  { background:#1a3a2a; color:#4caf50; border:1px solid #4caf50;
-                border-radius:4px; padding:1px 7px; font-size:11px; }
-  .tag-yellow { background:#3a3010; color:#ffc107; border:1px solid #ffc107;
-                border-radius:4px; padding:1px 7px; font-size:11px; }
-  .tag-red    { background:#3a1010; color:#ef5350; border:1px solid #ef5350;
-                border-radius:4px; padding:1px 7px; font-size:11px; }
-  .tag-blue   { background:#0d2137; color:#42a5f5; border:1px solid #42a5f5;
-                border-radius:4px; padding:1px 7px; font-size:11px; }
-  .tag-grey   { background:#1e2230; color:#8892a4; border:1px solid #4a5568;
-                border-radius:4px; padding:1px 7px; font-size:11px; }
-
-  /* ── Sidebar ─────────────────────────────────────────────────────────────── */
-  div[data-testid="stSidebarContent"] { background: #131722; }
-
-  /* Nav-knappar: transparent bakgrund, vänsterkant hover */
-  div[data-testid="stSidebarContent"] .stButton button {
-    background: transparent !important;
-    border: none !important;
-    border-left: 3px solid transparent !important;
-    border-radius: 0 6px 6px 0 !important;
-    text-align: left !important;
-    font-weight: 400 !important;
-    font-size: 13px !important;
-    color: #8892a4 !important;
-    padding: 7px 12px !important;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
-    width: 100% !important;
-  }
-  div[data-testid="stSidebarContent"] .stButton button:hover {
-    background: rgba(76,155,232,0.08) !important;
-    border-left-color: #4c9be8 !important;
-    color: #e8eaf0 !important;
-  }
-  /* Expander-rubriker i sidebar */
-  div[data-testid="stSidebarContent"] .streamlit-expanderHeader {
-    font-size: 10px !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.12em !important;
-    text-transform: uppercase !important;
-    color: #4a5568 !important;
-  }
-
-  /* ── Mobil (max-width: 768px) ────────────────────────────────────────────── */
-  @media (max-width: 768px) {
-    /* Mer luft under titlar */
-    h1 { font-size: 22px !important; margin-bottom: 12px !important; }
-    h2 { font-size: 18px !important; }
-    h3 { font-size: 16px !important; }
-
-    /* Tabeller: horisontell scroll i stället för klämda kolumner */
-    .stDataFrame { overflow-x: auto !important; }
-    .stDataFrame table { min-width: 480px !important; }
-    .stDataFrame tbody td,
-    .stDataFrame thead th { font-size: 12px !important; padding: 6px 8px !important; }
-
-    /* Knappar: tillräcklig tryckkänsla på pekskärm */
-    .stButton button { min-height: 44px !important; font-size: 14px !important; }
-
-    /* KPI-kort: 2 per rad på mobil i stället för 4 */
-    [data-testid="column"] { min-width: 45% !important; }
-
-    /* Formulärfält: läsbar textstorlek på iOS (förhindrar auto-zoom) */
-    input, select, textarea { font-size: 16px !important; }
-
-    /* Plotly-grafer: ingen horisontell overflow */
-    .js-plotly-plot, .plotly { max-width: 100% !important; }
-
-    /* Metrics / info-boxar: mer luft */
-    [data-testid="stMetric"] { padding: 12px !important; }
-
-    /* Göm onödiga padding-spacers på mobil */
-    [data-testid="stVerticalBlock"] > div[style*="gap"] { gap: 8px !important; }
-  }
-</style>
-""", unsafe_allow_html=True)
-
-# ── Nytt designsystem (web/ui) -- kort, metrics, taggar, typografi ─────────────
-# Läggs ovanpå blocket ovan; ersätter det helt vid den kommande nav-omskrivningen.
+# ── Injicera designsystem (web/ui) -- kort, metrics, taggar, typografi ───────
 try:
     from web.ui.css import inject_global_css
     from web.ui.icons import ic
@@ -316,6 +210,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             "global-markets": "🌍 Globala marknader",
             "sector-rotation":"🏭 Sektorrotation",
             "backtesting":    "📈 Backtesting",
+            "options":        "📊 Options & Derivator",
             "portfolio":      "💼 Portfölj",
             "portfolio-analysis":  "💼 Portföljanalys",
             "portfolio-rebalance": "💼 Rebalansering",
@@ -329,6 +224,8 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             "admin":          "🔧 Admin",
             "ai-journal":     "📓 AI Journal",
             "universe":       "🔭 Universe Explorer",
+            "strategy":       "🔧 Strategy Builder",
+            "stock-compare":  "🔀 Stock Comparison",
         }
         _reverse_map = {v: k for k, v in _known_pages.items()}
 
@@ -344,11 +241,16 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             st.session_state["nav_page"] = "📊 Översikt"
 
         def _navigate_to(page_title: str):
-            """Navigera till en sida - query_params skapar automatiskt
-            en historikentry i webbläsaren -> tillbaka-knappen fungerar."""
+            """Navigera till en sida."""
             st.session_state["nav_page"] = page_title
             qp_key = _reverse_map.get(page_title, "overview")
             st.query_params["p"] = qp_key
+            # Track recent pages
+            _recent = st.session_state.setdefault("_recent_pages", [])
+            if page_title in _recent:
+                _recent.remove(page_title)
+            _recent.insert(0, page_title)
+            st.session_state["_recent_pages"] = _recent[:10]
             st.rerun()
 
         def _nav_button(nav_key: str, display: str, icon_key: str):
@@ -357,11 +259,62 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                          icon=ic(icon_key) or None):
                 _navigate_to(nav_key)
 
-        # Översikt - alltid synlig överst
-        _nav_button("📊 Översikt", "Översikt", "home")
+        # ── Searchable navigation filter ──────────────────────────────────────
+        _nav_search = st.text_input(
+            "\U0001f50d Filter pages...",
+            placeholder="Type to filter...",
+            key="nav_filter",
+            label_visibility="collapsed",
+        )
+        _nav_q = _nav_search.strip().lower() if _nav_search else ""
 
-        # Sektioner enligt informationsarkitekturen (routing-nycklar oförändrade).
-        # (nav_key, display, icon_key)
+        # ── Recent pages (show last 3 visited) ────────────────────────────────
+        _recent = st.session_state.setdefault("_recent_pages", [])
+        if _recent and not _nav_q:
+            st.markdown("""
+<div style="font-size:9px;font-weight:700;color:#4a5568;letter-spacing:0.12em;text-transform:uppercase;margin:8px 0 4px;">
+  Senaste sidor
+</div>
+""", unsafe_allow_html=True)
+            for _rp in _recent[:3]:
+                if _rp in _reverse_map:
+                    if st.button(f"• {_rp}", key=f"recent_{_reverse_map[_rp]}", use_container_width=True):
+                        _navigate_to(_rp)
+            st.markdown('<div style="height:1px;background:linear-gradient(to right,transparent,#2d3250 30%,#2d3250 70%,transparent);margin:6px 0;"></div>', unsafe_allow_html=True)
+
+        # ── Pinned pages (⭐) ─────────────────────────────────────────────────
+        _pinned = st.session_state.setdefault("_pinned_pages", ["\U0001f4ca Översikt", "\U0001f50d Veckoscanner"])
+        if _pinned and not _nav_q:
+            st.markdown("""
+<div style="font-size:9px;font-weight:700;color:#4a5568;letter-spacing:0.12em;text-transform:uppercase;margin:8px 0 4px;">
+  Favoriter
+</div>
+""", unsafe_allow_html=True)
+            for _pp in _pinned[:5]:
+                if _pp in _reverse_map:
+                    _pk = _reverse_map[_pp]
+                    if st.button(f"⭐ {_pp}", key=f"pin_{_pk}", use_container_width=True):
+                        _navigate_to(_pp)
+            st.markdown('<div style="height:1px;background:linear-gradient(to right,transparent,#2d3250 30%,#2d3250 70%,transparent);margin:6px 0;"></div>', unsafe_allow_html=True)
+
+        # ── Pin/unpin current page toggle ─────────────────────────────────────
+        _current_page = st.session_state.get("nav_page", "\U0001f4ca Översikt")
+        _is_pinned = _current_page in _pinned
+        if st.button(
+            f"{'⭐' if _is_pinned else '☆'} {'Unpin' if _is_pinned else 'Pin'} current page",
+            key="nav_toggle_pin",
+            use_container_width=True,
+            help="Pin this page to your favorites at the top of the sidebar.",
+        ):
+            if _is_pinned:
+                _pinned.remove(_current_page)
+            else:
+                _pinned.insert(0, _current_page)
+            st.session_state["_pinned_pages"] = _pinned[:10]
+
+        # ── Sektioner med collapse state ──────────────────────────────────────
+        # Collapse all sections by default (persist expand/collapse state)
+        _has_filter = bool(_nav_q)
         _SECTIONS = [
             ("MARKNAD", True, [
                 ("🔍 Veckoscanner",     "Veckoscanner",      "scanner"),
@@ -372,6 +325,8 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             ]),
             ("AKTIE", True, [
                 ("📈 Teknisk analys",   "Teknisk analys",    "technical"),
+                ("🔀 Stock Comparison","Stock Comparison",  "stock"),
+                ("📊 Options & Derivator", "Options & Derivator", "chart"),
                 ("⭐ Bevakningar",      "Bevakningar",       "watch"),
             ]),
             ("PORTFÖLJ", True, [
@@ -384,6 +339,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                 ("📄 Paper Trading",    "Paper Trading",     "paper"),
                 ("🤖 AI Paper Trading", "AI Paper Trading",  "simulation"),
                 ("📈 Backtesting",      "Backtesting",       "backtest"),
+                ("🔧 Strategy Builder", "Strategy Builder",   "strategy"),
             ]),
             ("AI & LARM", False, [
                 ("🚨 Larm & Notiser",   "Larm & Notiser",    "alerts"),
@@ -396,8 +352,23 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             ]),
         ]
         for sec_name, sec_open, pages in _SECTIONS:
-            with st.expander(sec_name, expanded=sec_open):
-                for nav_key, display, icon_key in pages:
+            if _has_filter:
+                filtered_pages = [
+                    p for p in pages
+                    if _nav_q in p[0].lower() or _nav_q in p[1].lower()
+                ]
+                if not filtered_pages:
+                    continue
+                display_pages = filtered_pages
+                sec_expanded = True
+            else:
+                display_pages = pages
+                _sec_key = f"_nav_sec_{sec_name}"
+                if _sec_key not in st.session_state:
+                    st.session_state[_sec_key] = sec_open
+                sec_expanded = st.session_state[_sec_key]
+            with st.expander(sec_name, expanded=sec_expanded):
+                for nav_key, display, icon_key in display_pages:
                     _nav_button(nav_key, display, icon_key)
 
         # Admin - bara synlig för admin-användaren
@@ -528,6 +499,29 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             )
             st.session_state["selected_provider"] = ai_provider
 
+        # ── Sparade vyer ─────────────────────────────────────────────────────
+        try:
+            from web.ui.saved_views import render_saved_views_ui as _render_saved_views
+            _current_view_config = {
+                "page": page,
+                "filters": filters,
+                "date_selection": f"{scan_date} / {sc_date}",
+            }
+            _loaded_view = _render_saved_views(current_config=_current_view_config)
+            if _loaded_view:
+                # Apply loaded view config
+                pass
+        except Exception:
+            pass
+
+        # ── Experience mode toggle ────────────────────────────────────────────
+        try:
+            from web.ui.experience_mode import InvestorExperience as _ExpMgr
+            _exp = _ExpMgr()
+            _exp.render_toggle()
+        except Exception:
+            pass
+
         # ── Statusfot med exakt klockslag ────────────────────────────────────
         st.markdown("---")
         _latest_scan_file = None
@@ -555,6 +549,27 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                 st.warning(f"⚠️ Scandata är **{_age_hours/24:.0f} dagar** gammal -- senaste vecko­scan misslyckades troligen. Trigga manuellt via Admin -> Kör scan.", icon="⚠️")
             elif _age_hours > 48:
                 st.info(f"ℹ️ Scandata är **{_age_hours:.0f}h** gammal. Nästa schema­lagda uppdatering sker snart.", icon="ℹ️")
+
+        # ── Språkväljare i sidebar footer ─────────────────────────────────────
+        _current_locale = T.locale
+        _locale_labels = {"sv": "SV", "en": "EN", "de": "DE"}
+        locale_cols = st.columns(3)
+        for i, (loc, label) in enumerate(_locale_labels.items()):
+            with locale_cols[i]:
+                if st.button(
+                    label,
+                    key=f"locale_{loc}",
+                    use_container_width=True,
+                    type="secondary" if _current_locale != loc else "primary",
+                    help=TranslationManager().get_locale_name(loc),
+                ):
+                    st.session_state["locale"] = loc
+                    T.set_locale(loc)
+                    try:
+                        st.query_params["locale"] = loc
+                    except Exception:
+                        pass
+                    st.rerun()
 
     return page, scan_date, sc_date, filters
 
@@ -1153,6 +1168,9 @@ def main():
                 secs = sorted(df["sector"].dropna().unique().tolist())
             _safe_render("Teknisk analys", page_technical, df, filters)
 
+        elif page == "📊 Options & Derivator":
+            _safe_render("Options & Derivator", page_options_dashboard)
+
         elif page == "🤖 AI":
             _safe_render("AI", page_ai, df, sc_df, holdings)
 
@@ -1166,8 +1184,19 @@ def main():
         elif page == "🔭 Universe Explorer":
             _safe_render("Universe Explorer", page_universe_explorer, df)
 
+        elif page == "🔀 Stock Comparison":
+            from web.pages.stock_comparison import page_stock_comparison
+            _safe_render("Stock Comparison", page_stock_comparison, df)
+
+        elif page == "🔧 Strategy Builder":
+            _safe_render("Strategy Builder", page_strategy_builder)
+
         elif page == "🔧 Admin":
             _safe_render("Admin", page_admin)
+
+        elif page == "🔀 Stock Comparison":
+            from web.pages.stock_comparison import page_stock_comparison
+            _safe_render("Stock Comparison", page_stock_comparison, df)
 
 
 if __name__ == "__main__":

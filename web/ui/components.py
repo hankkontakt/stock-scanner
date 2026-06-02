@@ -9,7 +9,8 @@ visuella kort som grupperas i st.columns istället för staplade fullbreddseleme
 from __future__ import annotations
 
 import html as _html
-from typing import Iterable
+import time as _time
+from typing import Any, Iterable
 
 import pandas as pd
 import streamlit as st
@@ -239,3 +240,257 @@ def shortcut(label: str, page_path: str, icon: str = "link") -> None:
     except Exception:
         # Fallback om page_link ej stöds i kontexten
         st.caption(f"{label} ->")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LOADING STATES & SKELETON UI
+# ══════════════════════════════════════════════════════════════════════════════
+
+def loading_skeleton(height: int = 200, lines: int = 3) -> None:
+    """Render a pulsing skeleton placeholder.
+
+    Args:
+        height: Height of the main skeleton block in pixels.
+        lines: Number of text-like skeleton lines to show below the block.
+    """
+    lines_html = ""
+    for _ in range(lines):
+        lines_html += '<div class="ms-skeleton-line"></div>'
+
+    st.markdown(
+        f'<div class="ms-card" style="padding:16px;">'
+        f'<div class="ms-skeleton-block" style="height:{height}px;"></div>'
+        f'<div style="margin-top:12px;">{lines_html}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def page_loading_slot(page_name: str) -> None:
+    """Render a page-specific skeleton placeholder.
+
+    Shows different skeleton layouts depending on the page type.
+    """
+    if page_name in ("Veckoscanner", "Småbolag", "Teknisk analys"):
+        # Table-heavy page: show header + filter bar skeleton + table skeleton
+        st.markdown(
+            '<div class="ms-card">'
+            '<div class="ms-skeleton-block" style="height:40px;width:60%;"></div>'
+            '<div style="display:flex;gap:8px;margin:16px 0;">'
+            '<div class="ms-skeleton-line" style="width:120px;height:32px;"></div>'
+            '<div class="ms-skeleton-line" style="width:120px;height:32px;"></div>'
+            '<div class="ms-skeleton-line" style="width:120px;height:32px;"></div>'
+            '</div>'
+            '<div class="ms-skeleton-block" style="height:300px;"></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    elif page_name in ("Översikt", "Portfölj", "Portföljanalys"):
+        # KPI-heavy page: show 4 metric skeletons + main content
+        st.markdown(
+            '<div class="ms-card">'
+            '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px;">'
+            '<div class="ms-skeleton-block" style="height:80px;"></div>'
+            '<div class="ms-skeleton-block" style="height:80px;"></div>'
+            '<div class="ms-skeleton-block" style="height:80px;"></div>'
+            '<div class="ms-skeleton-block" style="height:80px;"></div>'
+            '</div>'
+            '<div class="ms-skeleton-block" style="height:250px;"></div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    elif page_name in ("AI", "AI Journal"):
+        # AI page: show text-heavy skeleton
+        st.markdown(
+            '<div class="ms-card">'
+            '<div class="ms-skeleton-block" style="height:24px;width:40%;"></div>'
+            '<div style="margin-top:16px;">'
+            '<div class="ms-skeleton-line"></div>'
+            '<div class="ms-skeleton-line"></div>'
+            '<div class="ms-skeleton-line"></div>'
+            '<div class="ms-skeleton-line" style="width:50%;"></div>'
+            '</div>'
+            '<div style="margin-top:24px;">'
+            '<div class="ms-skeleton-block" style="height:18px;width:30%;"></div>'
+            '<div style="margin-top:12px;">'
+            '<div class="ms-skeleton-line"></div>'
+            '<div class="ms-skeleton-line"></div>'
+            '<div class="ms-skeleton-line" style="width:65%;"></div>'
+            '</div>'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        # Default: generic skeleton
+        loading_skeleton(height=200, lines=4)
+
+
+class LoadingManager:
+    """Manages loading states with skeletons, progress bars, and streaming AI output.
+
+    Replaces ad-hoc st.spinner() calls with custom skeleton UI.
+    Supports progress steps for multi-stage operations and real-time
+    token streaming for AI responses.
+    """
+
+    def __init__(self, container=None):
+        self._container = container or st
+        self._progress_placeholder = None
+        self._text_placeholder = None
+
+    # ── Context manager for simple loading ───────────────────────────────────
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
+    # ── Skeleton loading ─────────────────────────────────────────────────────
+
+    def show_skeleton(self, height: int = 200, lines: int = 3) -> None:
+        """Show a skeleton placeholder. Call .hide() to remove."""
+        self._container.empty()
+        with self._container:
+            loading_skeleton(height, lines)
+
+    def hide(self) -> None:
+        """Remove the skeleton/loading placeholder."""
+        self._container.empty()
+
+    # ── Progress steps (for AI analysis, data processing) ────────────────────
+
+    def progress_steps(self, steps: list[str]) -> "ProgressSteps":
+        """Create a sequence of progress steps.
+
+        Args:
+            steps: List of step descriptions, e.g.
+                   ["Step 1/4: Loading data...", "Step 2/4: Analyzing...", ...]
+
+        Returns:
+            ProgressSteps context manager.
+        """
+        return ProgressSteps(self._container, steps)
+
+    # ── AI streaming ─────────────────────────────────────────────────────────
+
+    def stream_ai_response(self, placeholder=None) -> "AIStreamDisplay":
+        """Create a real-time AI streaming display.
+
+        Args:
+            placeholder: Optional st.empty() to use for the stream.
+
+        Returns:
+            AIStreamDisplay context manager.
+        """
+        return AIStreamDisplay(placeholder or self._container.empty())
+
+
+class ProgressSteps:
+    """Display sequential progress steps for multi-stage operations."""
+
+    def __init__(self, container, steps: list[str]):
+        self._container = container
+        self._steps = steps
+        self._current_step = 0
+        self._placeholder = container.empty()
+
+    def __enter__(self):
+        self._render()
+        return self
+
+    def __exit__(self, *args):
+        pass
+
+    def advance(self, step_index: int | None = None) -> None:
+        """Advance to the next (or specified) step."""
+        if step_index is not None:
+            self._current_step = min(step_index, len(self._steps) - 1)
+        else:
+            self._current_step = min(self._current_step + 1, len(self._steps) - 1)
+        self._render()
+
+    def complete(self, message: str = "Done!") -> None:
+        """Mark all steps as complete."""
+        self._current_step = len(self._steps)
+        progress = 1.0
+        html = (
+            f'<div class="ms-progress">'
+            f'<div class="ms-progress-bar"><div class="ms-progress-fill" style="width:100%;background:#26c281;"></div></div>'
+            f'<div class="ms-progress-label" style="color:#26c281;">{_html.escape(message)}</div>'
+            f'</div>'
+        )
+        self._placeholder.markdown(html, unsafe_allow_html=True)
+
+    def _render(self) -> None:
+        total = len(self._steps)
+        done = self._current_step
+        progress = done / total if total > 0 else 0
+
+        steps_html = ""
+        for i, step in enumerate(self._steps):
+            if i < done:
+                icon = "✅"
+                color = "#26c281"
+            elif i == done:
+                icon = "⏳"
+                color = "#4c9be8"
+            else:
+                icon = "⬜"
+                color = "#8892a4"
+            steps_html += f'<div style="color:{color};font-size:13px;margin:2px 0;">{icon} {_html.escape(step)}</div>'
+
+        html = (
+            f'<div class="ms-card" style="padding:16px;">'
+            f'<div class="ms-progress-bar" style="margin-bottom:12px;">'
+            f'<div class="ms-progress-fill" style="width:{progress * 100:.0f}%;"></div>'
+            f'</div>'
+            f'{steps_html}'
+            f'</div>'
+        )
+        self._placeholder.markdown(html, unsafe_allow_html=True)
+
+
+class AIStreamDisplay:
+    """Display streaming AI output token by token in real-time."""
+
+    def __init__(self, placeholder):
+        self._placeholder = placeholder
+        self._text = ""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
+    def update(self, text: str) -> None:
+        """Update the displayed text (append new tokens)."""
+        self._text = text
+        self._render()
+
+    def append(self, token: str) -> None:
+        """Append a token to the streaming output."""
+        self._text += token
+        self._render()
+
+    def finish(self, final_text: str | None = None) -> None:
+        """Finalize the streaming output."""
+        if final_text is not None:
+            self._text = final_text
+        self._render(final=True)
+
+    def _render(self, final: bool = False) -> None:
+        border = "1px solid #4c9be8" if not final else "1px solid #26c281"
+        icon = "🤖" if not final else "✅"
+        self._placeholder.markdown(
+            f'<div class="ms-card" style="border:{border};">'
+            f'<div style="font-size:12px;color:#8892a4;margin-bottom:8px;">{icon} AI Response</div>'
+            f'<div style="font-size:14px;color:#e8eaf0;line-height:1.6;white-space:pre-wrap;">'
+            f'{_html.escape(self._text)}'
+            f'</div>'
+            + ('<div class="ms-pulse" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4c9be8;margin-top:4px;"></div>' if not final else '')
+            + f'</div>',
+            unsafe_allow_html=True,
+        )

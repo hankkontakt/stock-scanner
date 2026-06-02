@@ -13,7 +13,16 @@ from web.utils import (
     conviction_meter_chart, conviction_meter_breakdown,
 )
 from web.stock_detail import render_stock_detail
-from web.ui.components import clickable_stock_table
+from web.ui.components import clickable_stock_table, page_header, section
+from web.ui.screener_utils import (
+    QUICK_FILTERS as _WS_QF,
+    apply_quick_filters as _ws_apply_qf,
+    render_enhanced_screener_bar as _ws_render_bar,
+    paginate_dataframe as _ws_paginate,
+    render_pagination as _ws_pagination,
+    render_export_buttons as _ws_export,
+    filter_changed_rows as _ws_filter_changed,
+)
 from core.country_flags import flag_for_ticker
 
 
@@ -331,6 +340,33 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
          "Antal bolag med STARK köpsignal bland filtrerade bolag. Dessa är de starkaste köpkandidaterna just nu."),
     ])
 
+    # ── Enhanced screener bar (columns, quick filters, export) ────────────────
+    _ws_cols_map = {
+        "ticker": "Ticker", "name": "Bolag", "sector": "Sektor",
+        "score_total": "Score", "entry_signal": "Entry",
+        "confidence_label": "Konf.", "trend_signal": "Trend",
+        "current_price": "Pris", "rsi_14": "RSI",
+        "pe_trailing": "P/E", "price_to_book": "P/B",
+        "roe": "ROE", "revenue_growth": "Tillväxt",
+        "debt_to_equity": "D/E", "dividend_yield": "Utdelning",
+        "return_1m": "1m", "return_3m": "3m", "return_6m": "6m",
+        "piotroski_f": "Piotroski", "delta_flag": "Δ",
+    }
+    _ws_view_opts = _ws_render_bar(
+        _ws_cols_map,
+        default_columns=["ticker", "name", "sector", "score_total", "entry_signal", "trend_signal", "rsi_14", "pe_trailing"],
+        filter_presets=_WS_QF,
+        key="ws",
+    )
+
+    # Apply quick filter if selected
+    if _ws_view_opts["quick_filter"]:
+        filt_df = _ws_apply_qf(filt_df, _ws_view_opts["quick_filter"], _WS_QF)
+
+    # Show changes only
+    if _ws_view_opts.get("show_changes_only"):
+        filt_df = _ws_filter_changed(filt_df)
+
     tab1, tab2, tab3, tab4, tab_scorecard = st.tabs(
         ["📋 Ranking", "📊 Fundamental", "📈 Momentum & Teknisk", "🔬 Score-detalj", "📊 Signal Scorecard"]
     )
@@ -349,6 +385,16 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
                 _main_ranking_table(ml_sorted, holdings, watchlist, table_key="main_ranking_table_ml")
         else:
             _main_ranking_table(filt_df, holdings, watchlist)
+
+        # ── Pagination + Export ───────────────────────────────────────────────
+        _ws_page_size, _ws_page = _ws_pagination(len(filt_df), key="ws_rank")
+        _ws_paged = _ws_paginate(filt_df, _ws_page_size, _ws_page)
+        if _ws_page_size > 0:
+            _main_ranking_table(_ws_paged, holdings, watchlist, table_key="main_ranking_table_paged")
+        else:
+            _main_ranking_table(filt_df, holdings, watchlist)
+
+        _ws_export(filt_df, filename_prefix="scanner_results", key="ws_rank_export")
         c1, c2 = st.columns(2)
         with c1:
             st.plotly_chart(sector_bar_chart(filt_df), use_container_width=True)

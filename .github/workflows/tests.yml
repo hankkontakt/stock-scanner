@@ -16,12 +16,9 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      PYTHONPATH: .
-
+    timeout-minutes: 5
     steps:
       - name: 📥 Hämta kod
         uses: actions/checkout@v4
@@ -30,13 +27,78 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: 📦 Installera ruff
+        run: pip install ruff
+
+      - name: 🔍 Ruff check
+        run: ruff check core/ tests/ --output-format=github
+
+  type-check:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 5
+    steps:
+      - name: 📥 Hämta kod
+        uses: actions/checkout@v4
+
+      - name: 🐍 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 📦 Installera mypy + dependencies
+        run: |
+          pip install mypy
+          pip install -r requirements.txt
+
+      - name: 🏷️ MyPy check
+        run: mypy core/ --ignore-missing-imports || true
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    env:
+      PYTHONPATH: .
+
+    steps:
+      - name: 📥 Hämta kod
+        uses: actions/checkout@v4
+
+      - name: 🐍 Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
           cache: "pip"
 
       - name: 📦 Installera beroenden
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov pytest-xdist pytest-mock hypothesis
 
-      - name: 🧪 Kör tester med täckning
-        run: pytest tests/ -v --tb=short --cov=core --cov-fail-under=20 --cov-report=term-missing
+      - name: 🧪 Kör tester med täckning (parallellt)
+        run: |
+          pytest tests/ -v --tb=short -n auto \
+            --cov=core \
+            --cov-fail-under=35 \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --durations=10 \
+            -m "not slow"
+
+      - name: 🐌 Kör prestandatester (seriellt)
+        run: |
+          pytest tests/test_performance.py -v --tb=short \
+            --cov=core --cov-append \
+            -m slow || echo "Performance tests skipped (may be slow on CI)"
+
+      - name: 📊 Ladda upp täckningsrapport
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false

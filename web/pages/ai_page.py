@@ -1,5 +1,6 @@
 """web/pages/ai_page.py - Sida 6: AI Dashboard"""
 
+import json
 import re
 from datetime import datetime, date
 
@@ -10,6 +11,7 @@ from web.utils import (
     load_watchlist, load_portfolio, _get_provider, _get_depth,
 )
 from core import ai_analysis, config
+from core.ai_ensemble import AiEnsemble
 from web.ui.components import clickable_stock_table
 
 
@@ -37,14 +39,36 @@ def _ai_section_footer():
     return '</div>'
 
 
+def _consensus_badge(agreement: str) -> str:
+    """Returnera HTML för consensus-badge."""
+    if agreement == "full":
+        return '<span style="background:#00c85320;color:#00c853;padding:2px 10px;border-radius:12px;font-size:0.8rem">🟢 Konsensus</span>'
+    elif agreement == "conflict":
+        return '<span style="background:#ff174420;color:#ff1744;padding:2px 10px;border-radius:12px;font-size:0.8rem">🔴 Konflikt</span>'
+    else:
+        return '<span style="background:#ffd60020;color:#ffd600;padding:2px 10px;border-radius:12px;font-size:0.8rem">🟡 Delade meningar</span>'
+
+
+def _confidence_bar(confidence: float) -> str:
+    """Returnera en enkel CSS-confidence bar."""
+    pct = min(int(confidence * 100), 100)
+    color = "#00c853" if pct >= 80 else "#ffd600" if pct >= 50 else "#ff1744"
+    return f'''
+    <div style="background:#2d3250;border-radius:4px;height:8px;width:100%;margin:4px 0">
+        <div style="background:{color};width:{pct}%;height:8px;border-radius:4px"></div>
+    </div>
+    <span style="font-size:0.8rem">{pct}%</span>
+    '''
+
+
 def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
     """AI Dashboard - alla AI-funktioner samlade."""
     st.title("🤖 AI - MarketScan Intelligence")
 
     provider = _get_provider()
-    api_key = config.DEEPSEEK_API_KEY or config.GEMINI_API_KEY
+    api_key = config.DEEPSEEK_API_KEY or config.GEMINI_API_KEY or config.CLAUDE_API_KEY
     if not api_key:
-        st.warning("⚠️ Ingen AI API-nyckel konfigurerad. Ställ in DEEPSEEK_API_KEY eller GEMINI_API_KEY i .env.")
+        st.warning("⚠️ Ingen AI API-nyckel konfigurerad. Ställ in DEEPSEEK_API_KEY, GEMINI_API_KEY eller CLAUDE_API_KEY i .env.")
         return
 
     status = ai_analysis.test_api_key(provider=provider)
@@ -53,11 +77,12 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
     else:
         st.warning(f"⚠️ {status['message']}")
         if "saknas" in status.get("message", "").lower():
-            return
+            # Visa bara varning, blockera inte hela sidan
+            pass
 
-    tab_market, tab_stock, tab_compare, tab_sector, tab_chat, tab_portfolio, tab_news = st.tabs([
+    tab_market, tab_stock, tab_compare, tab_sector, tab_chat, tab_portfolio, tab_news, tab_multi = st.tabs([
         "📊 Marknad", "📈 Aktieanalys", "🔄 Jämför", "🏭 Sektor",
-        "💬 Chat", "💼 Portfölj", "📰 Nyheter"
+        "💬 Chat", "💼 Portfölj", "📰 Nyheter", "🔀 Multi-AI"
     ])
 
     # ── Flik 1: Market Dashboard Summary (Feature 8) ────────────────────────
@@ -253,7 +278,9 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                             _ticker_rows = df[df["ticker"] == sel_ticker]
                             _cur_price = float(_ticker_rows.iloc[0].get("current_price") or _ticker_rows.iloc[0].get("close") or 0) if not _ticker_rows.empty else 0
                             _score = float(_ticker_rows.iloc[0].get("score_total") or 0) if not _ticker_rows.empty else 0
-                            log_ai_recommendation(sel_ticker, rec, _score, _cur_price, result[:300])
+                            _sector = str(_ticker_rows.iloc[0].get("sector") or "") if not _ticker_rows.empty else ""
+                            log_ai_recommendation(sel_ticker, rec, _score, _cur_price, result[:300],
+                                                  provider=provider, sector=_sector)
                         except Exception:
                             pass
 
@@ -911,3 +938,227 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
                         st.caption("Inga nyheter hittade för senaste 3 dagar.")
                 except Exception:
                     st.caption("Kunde inte hämta nyheter.")
+
+    # ── Flik 8: Multi-AI Ensemble (Project 4) ──────────────────────────────
+    with tab_multi:
+        st.subheader("🔀 Multi-AI Ensemble")
+        st.caption("Analysera en aktie med flera AI-modeller samtidigt och jämför svaren sida vid sida.")
+
+        # Provider-selector
+        ensemble_mode = st.selectbox(
+            "Provider-läge",
+            ["Auto (ensemble)", "DeepSeek + Gemini", "DeepSeek + Claude", "Gemini + Claude", "Alla tre"],
+            index=0,
+            key="ensemble_mode",
+        )
+
+        mode_to_providers = {
+            "Auto (ensemble)": ["deepseek", "gemini"],
+            "DeepSeek + Gemini": ["deepseek", "gemini"],
+            "DeepSeek + Claude": ["deepseek", "claude"],
+            "Gemini + Claude": ["gemini", "claude"],
+            "Alla tre": ["deepseek", "gemini", "claude"],
+        }
+
+        if not df.empty and "ticker" in df.columns:
+            tickers = sorted(df["ticker"].tolist())
+            col1, col2, col3 = st.columns([3, 2, 1])
+            with col1:
+                sel_ticker = st.selectbox("Välj aktie", tickers, key="ensemble_ticker")
+            with col2:
+                ensemble_depth = st.selectbox("Djup", ["Snabb", "Normal", "Djup"], index=1, key="ensemble_depth")
+            with col3:
+                st.markdown("<br>", unsafe_allow_html=True)
+                run_ensemble = st.button("🤖 Kör ensemble", type="primary", use_container_width=True, key="btn_ensemble")
+
+            if run_ensemble:
+                with st.spinner(f"Frågar {len(mode_to_providers[ensemble_mode])} AI-modeller parallellt..."):
+                    try:
+                        providers = mode_to_providers[ensemble_mode]
+                        ensemble = AiEnsemble()
+
+                        # Bygg stock_data från DataFrame
+                        stock_data = {}
+                        match = df[df["ticker"] == sel_ticker]
+                        if not match.empty:
+                            row = match.iloc[0]
+                            factor_fields = {
+                                "score_total": "Total Score",
+                                "score_value": "Value", "score_quality": "Quality",
+                                "score_momentum": "Momentum", "score_growth": "Growth",
+                                "score_risk": "Risk", "score_size": "Size",
+                                "score_dividend": "Dividend", "score_sentiment": "Sentiment",
+                                "entry_signal": "Entry Signal", "confidence_label": "Confidence",
+                                "trend_signal": "Trend", "pe_trailing": "P/E (trailing)",
+                                "roe": "ROE", "revenue_growth": "Revenue Growth",
+                                "price_to_book": "P/B", "rsi_14": "RSI (14)",
+                                "price_vs_ma200": "vs MA200", "piotroski_f": "Piotroski F-Score",
+                                "sector": "Sector", "name": "Company Name",
+                                "current_price": "Price", "return_1m": "1m Return",
+                                "return_3m": "3m Return", "return_6m": "6m Return",
+                            }
+                            for field, label in factor_fields.items():
+                                val = row.get(field)
+                                if val is not None and not pd.isna(val):
+                                    stock_data[label] = round(val, 2) if isinstance(val, float) else val
+
+                        result = ensemble.ensemble_analysis(
+                            sel_ticker,
+                            stock_data=stock_data,
+                            providers=providers,
+                            depth=ensemble_depth,
+                        )
+
+                        # ---- Show consensus summary ----
+                        st.markdown("---")
+                        st.markdown("### Ensemble-resultat")
+                        st.markdown(f"**Ticker:** {result.ticker}")
+
+                        # Consensus badge + confidence
+                        badge = _consensus_badge(result.agreement_level)
+                        st.markdown(f"{badge} | **Consensus:** {result.consensus} | "
+                                    f"**Konfidens:** {result.consensus_confidence:.0%}",
+                                    unsafe_allow_html=True)
+
+                        st.markdown(_confidence_bar(result.consensus_confidence), unsafe_allow_html=True)
+
+                        if result.error:
+                            st.warning(f"⚠️ {result.error}")
+
+                        # ---- Show provider responses side by side ----
+                        st.markdown("---")
+                        st.markdown("### Svar från varje AI-modell")
+
+                        # Spara till journal
+                        from web.pages.ai_journal import record_ai_signal
+
+                        provider_tabs = st.tabs([p.capitalize() for p in result.responses.keys()])
+
+                        for idx, (p_name, (text, conf, rec)) in enumerate(result.responses.items()):
+                            with provider_tabs[idx]:
+                                if text:
+                                    weight = result.provider_weights.get(p_name, 1.0)
+                                    st.markdown(
+                                        f"**Rekommendation:** {rec} | "
+                                        f"**Konfidens:** {conf:.0%} | "
+                                        f"**Vikt:** {weight:.1f}x",
+                                    )
+                                    st.markdown(_confidence_bar(conf), unsafe_allow_html=True)
+                                    st.markdown(text)
+
+                                    # Verifiera-knapp
+                                    col_a, col_b = st.columns([1, 3])
+                                    with col_a:
+                                        v_key = f"verify_{p_name}_{sel_ticker}"
+                                        if st.button(f"✅ Verifiera {p_name}", key=v_key):
+                                            # Hämta aktuellt pris
+                                            cur_price = None
+                                            if not df.empty and "ticker" in df.columns:
+                                                price_row = df[df["ticker"] == sel_ticker]
+                                                if not price_row.empty:
+                                                    cur_price = price_row.iloc[0].get("current_price") or price_row.iloc[0].get("close")
+
+                                            if cur_price:
+                                                from web.pages.ai_journal import record_ai_verification
+                                                entry_price = stock_data.get("Price", 0)
+                                                if entry_price and entry_price > 0:
+                                                    ret = (float(cur_price) / float(entry_price) - 1) * 100
+                                                    record_ai_verification(sel_ticker, rec, ret)
+                                                    st.success(f"Verifierad! {sel_ticker} gick {ret:+.1f}% sedan signalen.")
+                                                else:
+                                                    st.warning("Saknar ingångspris för verifiering.")
+                                            else:
+                                                st.warning("Saknar aktuellt pris för verifiering.")
+
+                                    # Spara signal
+                                    try:
+                                        sector = stock_data.get("Sector", "")
+                                        record_ai_signal(
+                                            sel_ticker, rec, conf,
+                                            provider=p_name,
+                                            context={
+                                                "price": stock_data.get("Price"),
+                                                "score": stock_data.get("Total Score"),
+                                                "sector": sector,
+                                                "snippet": text[:200],
+                                                "signal_type": "ensemble",
+                                            },
+                                        )
+                                    except Exception:
+                                        pass
+                                else:
+                                    st.error(f"❌ {p_name.capitalize()} svarade inte: {rec}")
+
+                        # ---- Spara ensemble-signal ----
+                        try:
+                            sector = stock_data.get("Sector", "")
+                            record_ai_signal(
+                                sel_ticker, result.consensus, result.consensus_confidence,
+                                provider="ensemble",
+                                context={
+                                    "price": stock_data.get("Price"),
+                                    "score": stock_data.get("Total Score"),
+                                    "sector": sector,
+                                    "snippet": f"Ensemble consensus: {result.consensus} "
+                                               f"(agreement: {result.agreement_level})",
+                                    "signal_type": "ensemble_consensus",
+                                },
+                            )
+                        except Exception:
+                            pass
+
+                        # ---- Provider comparison table ----
+                        st.markdown("---")
+                        st.markdown("### Provider-jämförelse")
+                        cmp_rows = []
+                        for p_name, (text, conf, rec) in result.responses.items():
+                            cmp_rows.append({
+                                "Provider": p_name.capitalize(),
+                                "Rekommendation": rec,
+                                "Konfidens": f"{conf:.0%}",
+                                "Vikt": f"{result.provider_weights.get(p_name, 1.0):.1f}x",
+                                "Svarade": "Ja" if text else "Nej",
+                            })
+                        st.dataframe(pd.DataFrame(cmp_rows), use_container_width=True, hide_index=True)
+
+                        # ---- Provider accuracy comparison ----
+                        try:
+                            acc_data = ensemble._load_provider_accuracy()
+                            if acc_data:
+                                st.markdown("---")
+                                st.markdown("### Historisk träffsäkerhet")
+                                acc_rows = []
+                                for p, acc in sorted(acc_data.items(), key=lambda x: x[1], reverse=True):
+                                    acc_rows.append({
+                                        "Provider": p.capitalize(),
+                                        "Accuracy": f"{acc:.1%}",
+                                    })
+                                st.dataframe(pd.DataFrame(acc_rows), use_container_width=True, hide_index=True)
+                        except Exception:
+                            pass
+
+                    except Exception as e:
+                        st.error(f"❌ Ensemble-analys misslyckades: {e}")
+                        import traceback
+                        st.exception(e)
+
+            # Visa snabbdata för vald ticker
+            if sel_ticker:
+                row = df[df["ticker"] == sel_ticker]
+                if not row.empty:
+                    r = row.iloc[0]
+                    st.markdown("---")
+                    st.caption("📋 Snabbdata")
+                    cc1, cc2, cc3, cc4, cc5 = st.columns(5)
+                    with cc1:
+                        st.metric("Score", f"{r.get('score_total', '--'):.0f}/100" if not pd.isna(r.get('score_total')) else "--")
+                    with cc2:
+                        st.metric("Entry", r.get("entry_signal", "--"))
+                    with cc3:
+                        st.metric("Trend", r.get("trend_signal", "--"))
+                    with cc4:
+                        st.metric("RSI", f"{r.get('rsi_14', '--'):.0f}" if not pd.isna(r.get('rsi_14', '--')) else "--")
+                    with cc5:
+                        st.metric("Piotroski", f"{r.get('piotroski_f', '--')}/9" if not pd.isna(r.get('piotroski_f', '--')) else "--")
+        else:
+            st.info("Ingen scandata tillgänglig för ensemble-analys.")
