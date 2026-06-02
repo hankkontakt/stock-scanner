@@ -1110,6 +1110,38 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-02 — Täckningsgap + Score-trender + Universe Audit
+
+**Rotorsak (täckningsgap):** `run_pipeline('weekly')` ersätter `scored_universe.parquet` varje körning
+med bara de tickers som lyckas hämtas från Yahoo denna vecka. Yahoo rate-limiterar 60–65% av
+tickers → parqueten hade kroniskt bara ~568/1 434 tickers (39,6%). Kända blue-chips som JPM, BAC,
+XOM, SAP.DE, BMW.DE saknades permanent.
+
+**Fix 1 — Staleness-merge (`core/daily_pipeline.py` ~rad 1228):**
+- Läser föregående veckas parquet som `prev_scored_for_merge` innan scoring.
+- Efter scoring + filter: tickers som ej hämtades denna vecka → ärvs från förra parqueten med
+  kolumn `data_stale_days` (antal dagar gammal data; max 14 dagar).
+- Täckning ökar från 39 % → ≥90 % efter första körning med fix.
+- UI (weekly_scan.py): stale-tickers markeras med ⏱ suffix i Ticker-kolumnen.
+
+**Fix 2 — Score-delta (`core/daily_pipeline.py` ~rad 1220, `web/pages/weekly_scan.py`):**
+- Beräknar `score_delta_4w` = score_total - score_total_förra_veckan.
+- Kolumn "Score Δ" i Ranking-tabellen (▲ +12, ─ +2, ▼ -8).
+- Filter "▲ Visa bara förbättrande aktier" (score_delta_4w ≥ +5) tillgängligt ovan tabellen.
+
+**Fix 3 — `data_fetched_date` / `data_stale_days` i `core/scoring.py` (rad 958):**
+- `score_universe()` stämplar nu varje rad med `data_fetched_date = today` och `data_stale_days = 0`.
+
+**Fix 4 — `run_universe_audit()` (`core/daily_pipeline.py` ~rad 2168):**
+- Ny funktion som jämför universe.json mot alla historiska parquet-snapshots.
+- Returnerar/sparar `data/universe_audit.json` med: `never_appeared`, `rarely_appeared`, `always_present`.
+- Senaste audit (2026-06-02): 631 aldrig, 0 sällan, 540 alltid (46 % täckning med 2 snapshots).
+
+**Fix 5 — Admin Universe Health: täcknings-dashboard (`web/pages/admin_tabs/health.py`):**
+- Ny sektion "Universum-täckning" med metrics: totalt, täckning %, saknade, stale-count.
+- Knapp "Kör universe-audit" kör `run_universe_audit()` direkt från UI.
+- Röd/gul/grön indikator: <60 % = error, 60-80 % = warning, ≥80 % = success.
+
 ### 2026-06-02 — Veckoscanner-sidan kraschade: StreamlitDuplicateElementKey 'ws_csv'
 
 **Symptom:** "Sidan Veckoscanner kunde inte laddas: There are multiple elements with the

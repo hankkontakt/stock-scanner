@@ -1,5 +1,7 @@
 """admin/health.py - Universe Health tab for admin page."""
+import json
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -8,9 +10,100 @@ from core import config
 from web.utils import DATA_DIR, REPORT_DIR, load_watchlist
 
 
+def _render_coverage_dashboard():
+    """Visar täcknings-dashboard för universe vs senaste scored parquet."""
+    st.markdown("### 📊 Universum-täckning")
+    st.caption("Hur stor andel av universe.json representeras i senaste scored_universe.parquet?")
+
+    # Ladda senaste parquet
+    parquet_files = sorted(REPORT_DIR.glob("scored_universe_*.parquet"), reverse=True)
+    if not parquet_files:
+        st.warning("Ingen scored_universe.parquet hittad. Kör en weekly scan först.")
+        return
+
+    try:
+        scored_df = pd.read_parquet(parquet_files[0], columns=["ticker", "data_stale_days"] if True else ["ticker"])
+    except Exception:
+        try:
+            scored_df = pd.read_parquet(parquet_files[0])
+        except Exception as _e:
+            st.error(f"Kunde inte läsa parquet: {_e}")
+            return
+
+    universe_tickers = set(t.upper() for t in config.UNIVERSE)
+    scored_tickers   = set(scored_df["ticker"].str.upper().tolist())
+    covered          = scored_tickers & universe_tickers
+    missing          = universe_tickers - scored_tickers
+    coverage_pct     = len(covered) / len(universe_tickers) * 100 if universe_tickers else 0
+
+    # Stale-data räkning
+    n_stale = 0
+    if "data_stale_days" in scored_df.columns:
+        n_stale = int(scored_df["data_stale_days"].fillna(0).gt(0).sum())
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Universe.json", len(universe_tickers))
+    with col2:
+        delta_color = "normal" if coverage_pct >= 80 else "inverse"
+        st.metric("Täckning", f"{coverage_pct:.0f}%", help="≥80% = bra. <60% = problem med Yahoo rate-limiting.")
+    with col3:
+        st.metric("Saknas i parquet", len(missing), help="Tickers i universe.json som inte finns i senaste scan-resultat.")
+    with col4:
+        st.metric("Stale data (⏱)", n_stale, help="Aktier vars data är ärvd från förra scan (Yahoo rate-limitad).")
+
+    if coverage_pct < 60:
+        st.error(f"⚠️ Täckning {coverage_pct:.0f}% — under 60%. Många aktier saknas troligen p.g.a. Yahoo rate-limiting. "
+                 "Staleness-merge hjälper automatiskt efter nästa körning.")
+    elif coverage_pct < 80:
+        st.warning(f"⚠️ Täckning {coverage_pct:.0f}% — under 80%. Staleness-merge aktiveras automatiskt i weekly scan.")
+    else:
+        st.success(f"✅ Täckning {coverage_pct:.0f}% — bra!")
+
+    # Universe-audit (om filen finns)
+    audit_path = DATA_DIR / "universe_audit.json"
+    if audit_path.exists():
+        try:
+            audit = json.loads(audit_path.read_text(encoding="utf-8"))
+            with st.expander(f"📋 Senaste universe-audit ({audit.get('generated','?')[:10]})", expanded=False):
+                st.metric("Aldrig scorade", len(audit.get("never_appeared", [])),
+                          help="Tickers som aldrig dykt upp i någon historisk parquet — kandidater för borttagning.")
+                st.metric("Sällan scorade (<33% av scans)", len(audit.get("rarely_appeared", [])))
+                st.metric("Alltid scorade (≥80%)", len(audit.get("always_present", [])))
+                if audit.get("never_appeared"):
+                    st.caption("Tickers som aldrig scorats:")
+                    st.code(", ".join(audit["never_appeared"][:50]))
+        except Exception:
+            pass
+
+    # Kör audit-knapp
+    if st.button("🔍 Kör universe-audit nu", key="btn_run_universe_audit",
+                 help="Analyserar alla historiska parquets och identifierar tickers som aldrig lyckas hämtas."):
+        with st.spinner("Analyserar snapshots..."):
+            try:
+                from core.daily_pipeline import run_universe_audit
+                result = run_universe_audit(min_snapshots=1)
+                if "error" in result:
+                    st.warning(result["error"])
+                else:
+                    st.success(
+                        f"✅ Audit klar! {len(result['never_appeared'])} aldrig, "
+                        f"{len(result['rarely_appeared'])} sällan, "
+                        f"{len(result['always_present'])} alltid ({result['coverage_pct']:.0f}% täckning)"
+                    )
+                    st.rerun()
+            except Exception as _ae:
+                st.error(f"Audit misslyckades: {_ae}")
+
+    st.markdown("---")
+
+
 def render():
     st.subheader("Universe Health - underhall av aktieuniversum")
     st.caption("Upptack avnoterade/ogiltiga tickers, hantera svartlista och hitta nya aktier med AI.")
+
+    # ── Täcknings-dashboard ────────────────────────────────────────────────────
+    _render_coverage_dashboard()
 
     try:
         from core.universe_health import (
