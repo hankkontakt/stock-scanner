@@ -1126,6 +1126,42 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 **Ny funktion `country_code_for_ticker(ticker) → str`** i `core/country_flags.py` — returnerar ISO-2 kod.
 **Ny funktion `ticker_display(ticker) → str`** i `core/country_flags.py` — returnerar `"SE · VOLV-B.ST"`.
 
+### 2026-06-02 — UX Makeover: Sprint 6 (kpi_grid, experience mode, responsiv CSS, Treemap)
+
+**Sprint 6 genomförd (commit 2cdf97a):**
+
+**A7 — kpi_row → kpi_grid (1 ändring, 10 sidor uppgraderade automatiskt):**
+- `web/utils.py`: `kpi_row()` är nu en tunn wrapper runt `kpi_grid()` i `web/ui/components.py`.
+  Konverterar `(label, value, delta, help)`-tupler till dict-format och delegerar.
+  10 sidor som använder `kpi_row()` (backtesting, smallcap, sector_rotation, weekly_scan, alerts,
+  paper_trading, portfolio, technical, watchlist_detail, stock_search) uppgraderas automatiskt
+  till design-systemets styling utan att röra varje sida separat.
+- Fallback: vid import-fel (t.ex. cold start) renderar `kpi_row()` standard `st.metric()`.
+
+**C6 — Experience mode (Nybörjarläge / Expertläge):**
+- `web/ui/experience_mode.py`: Toggle-knapp på svenska — "Byt till Expertläge" / "Byt till Nybörjarläge".
+  Ikoner från `web/ui/icons.py`. Text var tidigare engelska ("Switch to Expert Mode") — fixad.
+- `web/pages/weekly_scan.py`: I Nybörjarläge visas 8 kolumner (rank, ticker, name, _status, sector,
+  score_total, entry_signal, trend_signal); i Expertläge alla 16 kolumner inkl. ml_rank,
+  predicted_return, piotroski_f, confidence_label, delta_flag, data_stale_days m.fl.
+
+**C7 — Responsiv CSS för mobil (`web/ui/css.py`):**
+- 4-kolumns KPI-grid wrappar till 2×2 på skärmar ≤768px via `flex-wrap: wrap`.
+- Touch-vänliga knappar: `min-height: 44px` (Apple HIG-standard).
+- Kompaktare padding: `block-container` 0.75rem istf standard 2rem.
+- iOS zoom-prevention: `input, select, textarea { font-size: 16px }` (förhindrar auto-zoom).
+- KPI-cards: `padding: 14px 16px`, värde-font `22px` (från 28px) på mobil.
+
+**B5.1 — Sektor Treemap (ersätter stapeldiagram):**
+- `web/pages/sector_rotation.py`: Tab "Sektorstyrka" visar nu `go.Treemap` istf `go.Bar`.
+- Storlek = antal aktier i sektorn från `df["sector"]` (minst 1).
+- Färg per trendstyrka: STARK UPPTREND=#26c281 (grön), UPPTREND=#4c9be8 (blå),
+  NEUTRAL=#4a5568 (grå), NEDTREND=#c0622f (orange), STARK NEDTREND=#f0616d (röd).
+- Hover: sektor, signal, 3m-momentum, 1m-momentum, antal aktier.
+- Dark theme: `paper_bgcolor="#131722"`, `textfont color="#e8eaf0"`.
+
+---
+
 ### 2026-06-02 — Täckningsgap + Score-trender + Universe Audit
 
 **Rotorsak (täckningsgap):** `run_pipeline('weekly')` ersätter `scored_universe.parquet` varje körning

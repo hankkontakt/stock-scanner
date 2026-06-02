@@ -8,8 +8,12 @@ on:
     - cron: "30 15 * * 1-5"
     # Veckoscan lördag: cron 0 7 = 09:00 sommar / 08:00 vinter (innan marknaderna stänger)
     - cron: "0 7 * * 6"
+    # Retry rate-limitade (lördag): 4 timmar efter veckoscan, Yahoo-gränser normalt återställda
+    - cron: "0 11 * * 6"
     # Småbolag måndag: cron 15 7 = 09:15 sommar / 08:15 vinter
     - cron: "15 7 * * 1"
+    # Retry rate-limitade (måndag): 4 timmar efter småbolagsscan
+    - cron: "0 11 * * 1"
     # Portfolio price refresh: cron 10 11 = 13:10 sommar / 12:10 vinter
     - cron: "10 11 * * 1-5"
     # Refresh missing data: 10:00 + 17:00 sommar / 09:00 + 16:00 vinter
@@ -29,6 +33,7 @@ on:
           - smallcap
           - targeted
           - refresh_missing
+          - retry_rate_limited
       tickers:
         description: 'Kommaseparerade tickers (endast för targeted-läge, t.ex. VOLV-B.ST,ERIC-B.ST)'
         required: false
@@ -37,7 +42,8 @@ on:
 jobs:
   pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # retry_rate_limited kan ta upp till 60 min (5 pass × ~10 min + delays)
+    timeout-minutes: 60
     permissions:
       contents: write   # Krävs för git push via GITHUB_TOKEN
     env:
@@ -101,8 +107,14 @@ jobs:
           elif [ "${{ github.event.schedule }}" = "0 7 * * 6" ]; then
             echo "mode=weekly" >> $GITHUB_OUTPUT
             echo "tickers=" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "15 8 * * 1" ]; then
+          elif [ "${{ github.event.schedule }}" = "0 11 * * 6" ]; then
+            echo "mode=retry_rate_limited" >> $GITHUB_OUTPUT
+            echo "tickers=" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "15 7 * * 1" ]; then
             echo "mode=smallcap" >> $GITHUB_OUTPUT
+            echo "tickers=" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 11 * * 1" ]; then
+            echo "mode=retry_rate_limited" >> $GITHUB_OUTPUT
             echo "tickers=" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "10 12 * * 1-5" ]; then
             echo "mode=portfolio_refresh" >> $GITHUB_OUTPUT
@@ -127,6 +139,9 @@ jobs:
           # Rotation: set ROTATION_DRY_RUN=false to auto-execute rotation
           # Default "true" for safety -- rotation previews without executing
           ROTATION_DRY_RUN: ${{ secrets.ROTATION_DRY_RUN || 'true' }}
+          # Retry: max antal yttre pass och fördröjning (s) per pass
+          RETRY_MAX_PASSES: "5"
+          RETRY_PASS_DELAY_S: "120"
         run: |
           echo "▶️ Kör pipeline i läge: ${{ steps.mode.outputs.mode }}"
           python -c "from core.daily_pipeline import run_pipeline; run_pipeline('${{ steps.mode.outputs.mode }}')"
