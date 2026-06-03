@@ -1,7 +1,8 @@
 {
-  "universe": "smallcap",
-  "trained_at": "2026-06-03T11:45:59.254897",
-  "n_rows": 14586,
+  "universe": "sector_industrial",
+  "sector": "Industrials",
+  "trained_at": "2026-06-03T11:45:42.949929",
+  "n_rows": 5418,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -31,13 +32,13 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "cpcv_avg_ic": 0.021,
-    "ic": 0.021,
-    "cpcv_avg_hitrate": 0.5149,
-    "hit_rate": 0.5149,
+    "cpcv_avg_ic": 0.0337,
+    "ic": 0.0337,
+    "cpcv_avg_hitrate": 0.5264,
+    "hit_rate": 0.5264,
     "dsr": 0.0036,
     "target": "cross_sectional_demeaned",
     "n_folds": 6,
-    "n_train_total": 14586
+    "n_train_total": 5418
   }
 }
