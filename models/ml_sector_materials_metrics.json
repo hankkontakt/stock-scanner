@@ -1,7 +1,8 @@
 {
-  "universe": "smallcap",
-  "trained_at": "2026-06-03T11:45:59.254897",
-  "n_rows": 14586,
+  "universe": "sector_materials",
+  "sector": "Basic Materials",
+  "trained_at": "2026-06-03T11:45:49.001108",
+  "n_rows": 2012,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -31,13 +32,13 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "cpcv_avg_ic": 0.021,
-    "ic": 0.021,
-    "cpcv_avg_hitrate": 0.5149,
-    "hit_rate": 0.5149,
+    "cpcv_avg_ic": 0.0487,
+    "ic": 0.0487,
+    "cpcv_avg_hitrate": 0.5273,
+    "hit_rate": 0.5273,
     "dsr": 0.0036,
     "target": "cross_sectional_demeaned",
     "n_folds": 6,
-    "n_train_total": 14586
+    "n_train_total": 2012
   }
 }

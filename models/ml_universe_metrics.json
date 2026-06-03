@@ -1,7 +1,7 @@
 {
   "universe": "universe",
-  "trained_at": "2026-05-31T06:59:47.879242+00:00",
-  "n_rows": 52849,
+  "trained_at": "2026-06-03T11:45:09.558766",
+  "n_rows": 53134,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -17,13 +17,27 @@
     "dist_from_52w_high",
     "dist_from_52w_low",
     "bb_position",
-    "momentum_3_vs_12"
+    "momentum_3_vs_12",
+    "log_return_1m",
+    "volatility_skew_30d",
+    "hurst_exponent_60d",
+    "serial_correlation_20d",
+    "volume_price_corr_20d",
+    "klinger_oscillator",
+    "max_drawdown_60d",
+    "consecutive_down_days",
+    "rsi_divergence",
+    "skewness_30d",
+    "kurtosis_30d"
   ],
   "test_metrics": {
-    "mae": 0.1053,
-    "ic": 0.0023,
-    "hit_rate": 0.544,
-    "n_train": 42279,
-    "n_test": 10570
+    "cpcv_avg_ic": 0.0273,
+    "ic": 0.0273,
+    "cpcv_avg_hitrate": 0.5234,
+    "hit_rate": 0.5234,
+    "dsr": 0.0,
+    "target": "cross_sectional_demeaned",
+    "n_folds": 6,
+    "n_train_total": 53134
   }
 }
