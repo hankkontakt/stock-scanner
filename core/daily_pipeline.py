@@ -85,6 +85,69 @@ def _load_latest_scored(pattern: str = "scored_universe_*.parquet") -> pd.DataFr
     return pd.DataFrame()
 
 
+def _load_all_recent_scored(max_age_days: int = 14) -> pd.DataFrame:
+    """Ladda ALLA scored_universe-parquets/CSVs de senaste max_age_days dagarna.
+
+    Returnerar en deduplierad DataFrame med den senaste förekomsten av varje
+    ticker (nyast parquet vinner). Används som staleness-bas i weekly-scan för
+    att bygga upp täckning från dag ett istf. att vänta vecka för vecka.
+
+    Täckningspotential:
+      - 1 parquet  (500 tickers) → union ≈ 500
+      - 2 parquets (500+500, 50% överlapp) → union ≈ 750
+      - 3 parquets → union ≈ 900+
+    """
+    cutoff = pd.Timestamp.today().normalize() - pd.Timedelta(days=max_age_days)
+
+    # Samla alla tillgängliga parquet/csv (nyast först)
+    all_files: list[Path] = []
+    for f in sorted(REPORT_DIR.glob("scored_universe_*.parquet"), reverse=True):
+        try:
+            mtime = pd.Timestamp(f.stat().st_mtime, unit="s").normalize()
+            if mtime >= cutoff:
+                all_files.append(f)
+        except OSError:
+            pass
+    # Fallback: csv om inga parquets hittades
+    if not all_files:
+        for f in sorted(REPORT_DIR.glob("scored_universe_*.csv"), reverse=True):
+            try:
+                mtime = pd.Timestamp(f.stat().st_mtime, unit="s").normalize()
+                if mtime >= cutoff:
+                    all_files.append(f)
+            except OSError:
+                pass
+
+    if not all_files:
+        logger.warning("  ⚠ _load_all_recent_scored: inga filer inom fönstret")
+        return pd.DataFrame()
+
+    frames: list[pd.DataFrame] = []
+    for f in all_files:
+        try:
+            df = pd.read_parquet(f) if f.suffix == ".parquet" else pd.read_csv(f, low_memory=False)
+            df.columns = df.columns.str.strip()
+            frames.append(df)
+        except Exception as _e:
+            logger.warning(f"  ⚠ Kunde inte läsa {f.name}: {_e}")
+
+    if not frames:
+        return pd.DataFrame()
+
+    # Konkatenera och deduplicera: behåll första förekomsten (= nyaste filen,
+    # eftersom all_files är sorterad nyast→äldst och vi concat i den ordningen).
+    combined = pd.concat(frames, ignore_index=True)
+    if "ticker" in combined.columns:
+        combined = combined.drop_duplicates(subset=["ticker"], keep="first")
+
+    n_files = len(frames)
+    logger.info(
+        f"  📂 _load_all_recent_scored: {n_files} fil(er), "
+        f"{len(combined)} unika tickers (senaste {max_age_days} dagar)"
+    )
+    return combined
+
+
 def _save_scored(df: pd.DataFrame, path: Path):
     """Spara DataFrame som både .parquet (zstd) och .csv (för bakåtkompatibilitet).
     
@@ -1186,14 +1249,14 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             except Exception as _the:
                 logger.debug(f"  ufe0f ticker-health update hoppades over: {_the}")
 
-            # ── Ladda föregående veckas scored_universe för staleness-merge ──────────
+            # ── Ladda ALLA senaste scored_universe-parquets för staleness-merge ─────
             # Sparas undan INNAN ny parquet skrivs; används efter scoring för att
             # bevara tickers som rate-limiterades denna körning (täckningsgap-fix).
-            prev_scored_for_merge = _load_latest_scored("scored_universe_*.parquet")
-            if prev_scored_for_merge.empty:
-                prev_scored_for_merge = _load_latest_scored("scored_universe_*.csv")
+            # Använder _load_all_recent_scored() (union av alla parquets ≤14 dagar)
+            # istf. bara senaste, vilket ger mycket bättre täckning redan från dag 1.
+            prev_scored_for_merge = _load_all_recent_scored(max_age_days=14)
             if not prev_scored_for_merge.empty:
-                logger.info(f"  📂 Föregående scored_universe: {len(prev_scored_for_merge)} rader (staleness-bas)")
+                logger.info(f"  📂 Staleness-bas: {len(prev_scored_for_merge)} unika tickers (alla parquets ≤14 dagar)")
 
             if not raw_df.empty:
                 # Detektera marknadsregim for dynamiska vikter
