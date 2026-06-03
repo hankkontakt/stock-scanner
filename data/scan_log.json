@@ -182,5 +182,14 @@
       "scan_type": "refresh_missing",
       "elapsed_seconds": 0.0
     }
+  },
+  {
+    "timestamp": "2026-06-03T18:41:04",
+    "scan_type": "refresh_missing",
+    "status": "OK",
+    "details": {
+      "scan_type": "refresh_missing",
+      "elapsed_seconds": 0.0
+    }
   }
 ]
