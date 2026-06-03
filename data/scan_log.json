@@ -173,5 +173,14 @@
       "scan_type": "weekly",
       "elapsed_seconds": 1346.8
     }
+  },
+  {
+    "timestamp": "2026-06-03T12:31:17",
+    "scan_type": "refresh_missing",
+    "status": "OK",
+    "details": {
+      "scan_type": "refresh_missing",
+      "elapsed_seconds": 0.0
+    }
   }
 ]
