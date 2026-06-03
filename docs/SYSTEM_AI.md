@@ -1110,6 +1110,40 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-03 — Fix: Multi-parquet staleness merge (täckning ~685 → 900+ efter en körning)
+
+**Commit — `core/daily_pipeline.py`**
+
+**Problem:** Staleness-mergen laddade bara SENASTE parqueten (`_load_latest_scored`).
+Om förra parqueten hade 568 tickers och nya scannen fick 600 färska, landade totalen på
+~685 (bara de ~85 från förra parqueten som inte hämtades färska denna gång lades till).
+Täckning förbättrades sakta vecka för vecka istf. direkt.
+
+**Fix — ny `_load_all_recent_scored(max_age_days=14)` (`core/daily_pipeline.py`):**
+- Laddar ALLA `scored_universe_*.parquet` (+ CSV fallback) vars `mtime` är ≤ 14 dagar gamla.
+- Concat + `drop_duplicates(subset=["ticker"], keep="first")` → nyaste data per ticker vinner.
+- Returnerar union av alla tickers i fönstret → staleness-basen är nu mycket rikare från dag 1.
+- Loggar: `_load_all_recent_scored: 3 fil(er), 764 unika tickers (senaste 14 dagar)`.
+
+**Staleness-merge i `run_pipeline('weekly')` uppdaterad:**
+- Ersätter `prev_scored_for_merge = _load_latest_scored(...)` med
+  `prev_scored_for_merge = _load_all_recent_scored(max_age_days=14)`.
+- Lokalt test (3 parquets): bas = 764 tickers → nästa weekly-scan ger ~900+ tickers totalt.
+  På GitHub Actions (fler cumulative parquets) förväntas 1000+ efter 2–3 veckors drift.
+
+**Täckningspotential:**
+| # parquets | Unique tickers (ex. overlap) |
+|---|---|
+| 1 (gamla beteendet) | ~600 |
+| 2 | ~750 |
+| 3 | ~850–900 |
+| 4+ | ~950–1050 |
+
+**Varför täcks aldrig 100%?** Yahoo rate-limiterar alltid EN DEL av tickers. `retry_rate_limited`-
+körningarna (lördag + måndag 13:00) täcker de som fortfarande saknas efter weekly-scan + merge.
+
+---
+
 ### 2026-06-02 — Fix: Dubbla morgonmail + retry i Starta scan + kron-detection buggar
 
 **Commit — `web/pages/admin_tabs/scans.py`, `.github/workflows/daily_scan.yml`**

@@ -1,4 +1,10 @@
-"""admin/health.py - Universe Health tab for admin page."""
+"""admin/health.py - Universe Health tab for admin page.
+
+Tre sektioner:
+  1. _render_coverage_dashboard() — täckningsmått vs scored_universe.parquet
+  2. _render_universe_audit()     — historisk audit + retry rate-limitade
+  3. Svartlista + hälsokontroll   — manuell hantering + health-check mot yfinance
+"""
 import json
 from datetime import date
 from pathlib import Path
