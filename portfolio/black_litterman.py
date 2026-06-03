@@ -309,11 +309,18 @@ class BlackLittermanOptimizer:
                 returns_df = returns_df.dropna(how="any")
                 if len(returns_df) > 10:
                     cov = _ledoit_wolf_shrinkage(returns_df.values)
-                    if N > sample_n:
+                    n_valid = len(valid_tickers)
+                    # Säkerställ alltid N×N output — saknade tickers får mediansignma
+                    if n_valid < N:
+                        med_var = float(np.median(np.diag(cov))) if cov.size else 0.04
+                        full_cov = np.eye(N) * med_var
+                        full_cov[:n_valid, :n_valid] = cov
+                        cov = full_cov
+                    elif N > sample_n:
                         full_cov = np.eye(N) * np.median(np.diag(cov))
                         full_cov[:sample_n, :sample_n] = cov
                         cov = full_cov
-                    logger.info(f"BL: computed {sample_n}x{sample_n} Ledoit-Wolf cov")
+                    logger.info(f"BL: computed {n_valid}/{sample_n} Ledoit-Wolf cov → {N}×{N}")
                     return cov
         except Exception as e:
             logger.debug(f"BL: covariance estimation failed: {e}")

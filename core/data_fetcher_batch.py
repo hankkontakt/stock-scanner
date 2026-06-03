@@ -179,7 +179,7 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
             print(f"  ⚠ {n} tickers misslyckades (övriga fel): "
                   f"{', '.join(failed[:10])}{'...' if n > 10 else ''}")
             if n > 15:
-                print(f"  💡 Tips: Kör filters.clear_blacklist() om välkända aktier är med i listan")
+                print("  💡 Tips: Kör filters.clear_blacklist() om välkända aktier är med i listan")
         print(f"  ✓ {len(df)}/{total} aktier hämtade")
 
     # ── Spara detaljerat fellog till data/fetch_errors.json ───────────────

@@ -1289,7 +1289,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             try:
                 from core import piotroski as _piotroski
                 scored = _piotroski.add_piotroski_to_universe(scored, verbose=True)
-                logger.info(f"  ✅ Piotroski beräknat")
+                logger.info("  ✅ Piotroski beräknat")
             except Exception as _pe:
                 logger.warning(f"  ⚠ Piotroski misslyckades: {_pe}")
 
@@ -2555,6 +2555,6 @@ if __name__ == "__main__":
     import sys
     mode = sys.argv[1] if len(sys.argv) > 1 else "morning"
     if mode not in ("morning", "evening", "weekly", "smallcap"):
-        print(f"Användning: python -m core.daily_pipeline [morning|evening|weekly|smallcap]")
+        print("Användning: python -m core.daily_pipeline [morning|evening|weekly|smallcap]")
         sys.exit(1)
     run_pipeline(mode=mode)

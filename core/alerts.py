@@ -134,7 +134,7 @@ def send_daily_update(
             f'background:#f1f5f9">Signal</th>'
             f'</tr></thead><tbody>'
             + "\n".join(rows) +
-            f'</tbody></table>'
+            '</tbody></table>'
         )
 
     has_alerts = bool(alerts)
@@ -224,7 +224,7 @@ def send_calendar_reminder(
             f'<th style="padding:7px 10px;text-align:center;background:#f1f5f9;font-size:11px;font-weight:600">Score</th>'
             f'</tr></thead><tbody>'
             + "\n".join(rows_html) +
-            f'</tbody></table>'
+            '</tbody></table>'
         )
 
     # ── Makrohändelser ───────────────────────────────────────────────────────

@@ -391,7 +391,7 @@ def _evaluate_alert(ticker: str, headline: str, article: dict,
                 "headline": headline,
                 "status": is_holding,
                 "source": article.get("source", ""),
-                "ai_analysis": f"⚠️ Automatisk alert: rubriken innehåller nyckelord som kan vara viktiga.",
+                "ai_analysis": "⚠️ Automatisk alert: rubriken innehåller nyckelord som kan vara viktiga.",
                 "timestamp": datetime.now().isoformat(),
             }
     return None
