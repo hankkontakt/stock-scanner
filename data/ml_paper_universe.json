@@ -299,6 +299,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "RGTI",
+      "name": "Rigetti Computing, Inc.",
+      "entry_price": 26.8799991607666,
+      "predicted_return": 0.26798883080482483,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "AEHR",
+      "name": "Aehr Test Systems, Inc.",
+      "entry_price": 113.0,
+      "predicted_return": 0.2678464651107788,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "2303.TW",
+      "name": "United Microelectronics Corporation",
+      "entry_price": 144.5,
+      "predicted_return": 0.2677142918109894,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "012330.KS",
+      "name": "Hyundai Mobis Co.,Ltd",
+      "entry_price": 759000.0,
+      "predicted_return": 0.25286367535591125,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "ASTS",
+      "name": "AST SpaceMobile, Inc.",
+      "entry_price": 118.16999816894531,
+      "predicted_return": 0.2435072958469391,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "MIGI",
+      "name": "Big Digital Energy Inc",
+      "entry_price": 7.239999771118164,
+      "predicted_return": 0.22781769931316376,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "MRVL",
+      "name": "Marvell Technology, Inc.",
+      "entry_price": 290.7900085449219,
+      "predicted_return": 0.22131715714931488,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 1.1150000095367432,
+      "predicted_return": 0.22001683712005615,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "STMPA.PA",
+      "name": "STMicroelectronics N.V.",
+      "entry_price": 58.95000076293945,
+      "predicted_return": 0.2179058939218521,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-03",
+      "ticker": "SMCI",
+      "name": "Super Micro Computer, Inc.",
+      "entry_price": 46.09000015258789,
+      "predicted_return": 0.20682168006896973,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -316,6 +416,11 @@
       "date": "2026-06-02",
       "equity": 100000.0,
       "n_open": 30
+    },
+    {
+      "date": "2026-06-03",
+      "equity": 100000.0,
+      "n_open": 40
     }
   ]
 }

@@ -385,5 +385,116 @@
       }
     ],
     "delisted_tickers": []
+  },
+  {
+    "timestamp": "2026-06-03T10:10:16Z",
+    "total": 1211,
+    "n_ok": 1202,
+    "n_failed": 9,
+    "n_delisted": 0,
+    "n_rate_limited": 57,
+    "rate_limited_tickers": [
+      "6758.T",
+      "FEMSAUBD.MX",
+      "ANTO.L",
+      "TM",
+      "UGPA3.SA",
+      "LABB.MX",
+      "8316.T",
+      "JMAT.L",
+      "SMFG",
+      "IMB.L",
+      "LGEN.L",
+      "DGE.L",
+      "CEMEXCPO.MX",
+      "FRES.L",
+      "6954.T",
+      "FLRY3.SA",
+      "SONY",
+      "NXT.L",
+      "7751.T",
+      "CMIG4.SA",
+      "9984.T",
+      "HAPV3.SA",
+      "6501.T",
+      "6902.T",
+      "MGLU3.SA",
+      "AV.L",
+      "EQTL3.SA",
+      "EGIE3.SA",
+      "JBSS3.SA",
+      "KPN.AS",
+      "JD.L",
+      "MUFG",
+      "RADL3.SA",
+      "TOTS3.SA",
+      "ULVR.L",
+      "8306.T",
+      "TSCO.L",
+      "CRH.L",
+      "HMC",
+      "BATS.L",
+      "BOOM",
+      "WALMEX.MX",
+      "UMG.AS",
+      "AAL.L",
+      "RIO.L",
+      "GGBR4.SA",
+      "GFNORTEO.MX",
+      "NTDOY",
+      "GLEN.L",
+      "BLND.L",
+      "7203.T",
+      "VIV.PA",
+      "SBRY.L"
+    ],
+    "failed_tickers": [
+      {
+        "ticker": "EXAS",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "6406.T",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "0011.HK",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "TATAMOTORS.NS",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "CENY.BR",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "PHNX.L",
+        "status": "FAILED",
+        "pass": 2
+      },
+      {
+        "ticker": "BRFS3.SA",
+        "status": "FAILED",
+        "pass": 2
+      },
+      {
+        "ticker": "EMBR3.SA",
+        "status": "FAILED",
+        "pass": 2
+      },
+      {
+        "ticker": "AZUL4.SA",
+        "status": "FAILED",
+        "pass": 2
+      }
+    ],
+    "delisted_tickers": []
   }
 ]
