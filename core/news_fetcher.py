@@ -868,8 +868,8 @@ def fetch_company_news(ticker: str, days_back: int = 7, company_name: str = None
     # 1. Finnhub
     finnhub_results = []
     try:
-        if config.FINNHUB_API_KEY:
-            finnhub_results = fetch_finnhub_news(ticker, days_back=days_back)
+        if _cfg.FINNHUB_API_KEY:
+            finnhub_results = fetch_news(ticker, _cfg.FINNHUB_API_KEY, days=days_back)
     except Exception:
         pass
 

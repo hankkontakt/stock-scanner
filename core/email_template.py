@@ -28,6 +28,8 @@ from typing import Optional
 
 import mistune
 
+EN_DASH = "–"  # –
+
 _SUBSCRIBERS_PATH = Path(__file__).resolve().parent.parent / "data" / "email_subscribers.json"
 
 # Alla prenumerationstyper med human-readable etiketter
@@ -916,8 +918,8 @@ def _plotly_fallback_html(fig, chart_id: str) -> str:
                     f"border:1px solid {COLORS['border']}'>"
                 )
                 html_parts.append(
-                    f"<tr><th style='padding:4px 8px;text-align:left'>Label</th>"
-                    f"<th style='padding:4px 8px;text-align:right'>Värde</th></tr>"
+                    "<tr><th style='padding:4px 8px;text-align:left'>Label</th>"
+                    "<th style='padding:4px 8px;text-align:right'>Värde</th></tr>"
                 )
                 for i in range(min(len(trace.x), 10)):
                     html_parts.append(

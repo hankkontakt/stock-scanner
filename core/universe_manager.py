@@ -590,7 +590,7 @@ def run_full_maintenance(
     }
 
     logger.info("\n" + "="*55)
-    logger.info(f"✅ Underhåll klart!")
+    logger.info("✅ Underhåll klart!")
     logger.info(f"   Kandidater funna:  {len(candidates)}")
     logger.info(f"   Nya pending:       {n_new}")
     logger.info(f"   Auto-tillagda:     {len(auto_added)}")

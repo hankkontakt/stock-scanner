@@ -88,7 +88,7 @@ def fetch_news_sentiment(ticker: str, api_key: str, delay: float = 0.3) -> float
         resp = requests.get(url, params={"symbol": clean, "token": api_key}, timeout=8)
 
         if resp.status_code == 429:
-            print(f"  ⚠ Finnhub rate limit - väntar 60s...")
+            print("  ⚠ Finnhub rate limit - väntar 60s...")
             time.sleep(60)
             resp = requests.get(url, params={"symbol": clean, "token": api_key}, timeout=8)
 
