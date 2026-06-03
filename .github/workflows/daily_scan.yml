@@ -2,21 +2,21 @@ name: 📊 MarketScan Pipeline (Daily)
 
 on:
   schedule:
-    # Morgon: cron 10 7 = 09:10 sommar / 08:10 vinter (5-10 min efter börsöppning 09:00)
-    - cron: "10 7 * * 1-5"
-    # Kväll: cron 30 15 = 17:30 sommar / 16:30 vinter (strax efter USA-börsens öppning 15:30)
+    # Morgon: 07:05 UTC = 09:05 CEST (5 min efter Stockholmsbörsen öppnar 09:00)
+    - cron: "5 7 * * 1-5"
+    # Kväll: 15:30 UTC = 17:30 CEST (precis när Stockholmsbörsen stänger)
     - cron: "30 15 * * 1-5"
-    # Veckoscan lördag: cron 0 7 = 09:00 sommar / 08:00 vinter (innan marknaderna stänger)
+    # Veckoscan lördag: 07:00 UTC = 09:00 CEST
     - cron: "0 7 * * 6"
-    # Retry rate-limitade (lördag): 4 timmar efter veckoscan, Yahoo-gränser normalt återställda
+    # Retry rate-limitade (lördag): 11:00 UTC = 13:00 CEST (4h efter veckoscan)
     - cron: "0 11 * * 6"
-    # Småbolag måndag: cron 15 7 = 09:15 sommar / 08:15 vinter
+    # Småbolag måndag: 07:15 UTC = 09:15 CEST
     - cron: "15 7 * * 1"
-    # Retry rate-limitade (måndag): 4 timmar efter småbolagsscan
+    # Retry rate-limitade (måndag): 11:00 UTC = 13:00 CEST (4h efter småbolagsscan)
     - cron: "0 11 * * 1"
-    # Portfolio price refresh: cron 10 11 = 13:10 sommar / 12:10 vinter
+    # Portfolio price refresh: 11:10 UTC = 13:10 CEST
     - cron: "10 11 * * 1-5"
-    # Refresh missing data: 10:00 + 17:00 sommar / 09:00 + 16:00 vinter
+    # Refresh missing data: 08:00 + 15:00 UTC = 10:00 + 17:00 CEST
     - cron: "0 8,15 * * 1-5"
 
   workflow_dispatch:
@@ -98,7 +98,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
             echo "tickers=${{ github.event.inputs.tickers }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "0 7 * * 1-5" ]; then
+          elif [ "${{ github.event.schedule }}" = "5 7 * * 1-5" ]; then
             echo "mode=morning" >> $GITHUB_OUTPUT
             echo "tickers=" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "30 15 * * 1-5" ]; then
@@ -116,7 +116,7 @@ jobs:
           elif [ "${{ github.event.schedule }}" = "0 11 * * 1" ]; then
             echo "mode=retry_rate_limited" >> $GITHUB_OUTPUT
             echo "tickers=" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "10 12 * * 1-5" ]; then
+          elif [ "${{ github.event.schedule }}" = "10 11 * * 1-5" ]; then
             echo "mode=portfolio_refresh" >> $GITHUB_OUTPUT
             echo "tickers=" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "0 8,15 * * 1-5" ]; then

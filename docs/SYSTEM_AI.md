@@ -1110,6 +1110,41 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-02 — Fix: Dubbla morgonmail + retry i Starta scan + kron-detection buggar
+
+**Commit — `web/pages/admin_tabs/scans.py`, `.github/workflows/daily_scan.yml`**
+
+**Bugg 1 — Portfolio_refresh körde som morning-mode (dubbla morgonmail):**
+- Cron `"10 11 * * 1-5"` (13:10 CEST) matchade INTE detection-check `"10 12 * * 1-5"` → föll
+  till `else → morning` → körde full morning pipeline → skickade ett EXTRA morgonbrev kl ~13:50 CEST.
+- Fix: detection ändrad till `"10 11 * * 1-5"`.
+
+**Bugg 2 — Morning detection var fel (råkade funka via `else`):**
+- Cron `"5 7 * * 1-5"` (09:05 CEST) matchade INTE `"0 7 * * 1-5"` → föll till `else → morning`.
+- Fungerade av misstag men bröts om man lade till fler crons. Fix: detection uppdaterad.
+
+**Krontider justerade:**
+- Morning: `"10 7"` → `"5 7"` (07:05 UTC = 09:05 CEST, 5 min efter Stockholmsbörsen öppnar).
+- Evening: `"30 15"` = 17:30 CEST är korrekt (precis när Stockholmsbörsen stänger), oförändrad.
+- Alla detektions-strängar uppdaterade att matcha exakt mot respektive cron.
+
+**`scans.py` — Starta scan-dropdown uppdaterad:**
+- Lade till `retry_rate_limited` som val ("Retry rate-limitade tickers").
+- Svenska accenter i alla etiketter (Kvällsrapport, Småbolagsscan).
+- Hjälptext per mode som visar vad varje scan gör.
+
+**Komplett cron-schema efter fix:**
+| UTC | CEST | Dag | Mode |
+|---|---|---|---|
+| 07:05 | 09:05 | Mån–Fre | morning |
+| 15:30 | 17:30 | Mån–Fre | evening |
+| 08:00+15:00 | 10:00+17:00 | Mån–Fre | refresh_missing |
+| 11:10 | 13:10 | Mån–Fre | portfolio_refresh |
+| 07:00 | 09:00 | Lördag | weekly |
+| 11:00 | 13:00 | Lördag | retry_rate_limited |
+| 07:15 | 09:15 | Måndag | smallcap |
+| 11:00 | 13:00 | Måndag | retry_rate_limited |
+
 ### 2026-06-02 — Feat: Iterativ retry av rate-limitade tickers (Pass-3+)
 
 **Commit 5fbee15 — `core/daily_pipeline.py`, `.github/workflows/daily_scan.yml`**
