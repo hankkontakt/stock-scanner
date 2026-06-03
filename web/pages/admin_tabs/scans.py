@@ -5,12 +5,33 @@ from web.pages.admin import _trigger_targeted_refresh, _get_github_token, _get_s
 
 
 _WORKFLOW_DISPATCH = {
-    "morning": "morning",
-    "evening": "evening",
-    "weekly": "weekly",
-    "smallcap": "smallcap",
-    "targeted": "targeted",
-    "refresh_missing": "refresh_missing",
+    "morning":            "morning",
+    "evening":            "evening",
+    "weekly":             "weekly",
+    "smallcap":           "smallcap",
+    "targeted":           "targeted",
+    "refresh_missing":    "refresh_missing",
+    "retry_rate_limited": "retry_rate_limited",
+}
+
+_MODE_LABELS = {
+    "morning":            "Morgonbrief (09:05 CEST)",
+    "evening":            "Kvällsrapport (17:30 CEST)",
+    "weekly":             "Veckoscan (full)",
+    "smallcap":           "Småbolagsscan",
+    "targeted":           "Targeted refresh (specifika tickers)",
+    "refresh_missing":    "Refresh missing data",
+    "retry_rate_limited": "Retry rate-limitade tickers",
+}
+
+_MODE_HELP = {
+    "morning":            "Hämtar portföljpriser och skickar morgonbrevet.",
+    "evening":            "Hämtar stängningspriser och skickar kvällsrapporten.",
+    "weekly":             "Full universumscan med scoring, rotation och audit. Tar ~20-40 min.",
+    "smallcap":           "Scan av nordiska och globala småbolag.",
+    "targeted":           "Hämtar om specifika tickers du anger nedan.",
+    "refresh_missing":    "Letar upp tickers med saknad data och hämtar dem.",
+    "retry_rate_limited": "Kör om tickers som rate-limitades i senaste scan. Itererar tills alla klarar sig.",
 }
 
 
@@ -18,17 +39,13 @@ def render():
     st.subheader("Starta scan via GitHub Actions")
 
     scan_mode = st.selectbox(
-            "Valj scanlage",
-            list(_WORKFLOW_DISPATCH.keys()),
-            format_func=lambda k: {
-                "morning": "Morgonbrief",
-                "evening": "Kvallsrapport",
-                "weekly": "Veckoscan (full)",
-                "smallcap": "Smabolagsscan",
-                "targeted": "Targeted refresh (specifika tickers)",
-                "refresh_missing": "Refresh missing data",
-            }.get(k, k),
+        "Välj scanlage",
+        list(_WORKFLOW_DISPATCH.keys()),
+        format_func=lambda k: _MODE_LABELS.get(k, k),
     )
+
+    if scan_mode in _MODE_HELP:
+        st.caption(_MODE_HELP[scan_mode])
 
     targeted_tickers = ""
     if scan_mode == "targeted":
