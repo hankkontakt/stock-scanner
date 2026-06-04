@@ -39,9 +39,9 @@ _logger = logging.getLogger(__name__)
 # Saniterar API-nycklar ur felmeddelanden: OpenAI (sk-*), Google (AIza*),
 # DeepSeek (ingen känd prefix — täcks av generisk 40+-tecken alfanumerisk sekvens).
 _token_sanitize = re.compile(
-    r"(sk-[a-zA-Z0-9]{10,}"       # OpenAI-format
+    r"(sk-[a-zA-Z0-9_\-]{10,}"    # OpenAI-format: sk-XXXX och sk-proj-XXXX (nyare format)
     r"|AIza[a-zA-Z0-9_\-]{20,}"   # Google/Gemini-format
-    r"|[a-zA-Z0-9]{40,})"         # Generisk lång token (DeepSeek etc.)
+    r"|[a-zA-Z0-9]{40,})"         # Generisk lång token (DeepSeek, Anthropic, etc.)
 )
 
 
