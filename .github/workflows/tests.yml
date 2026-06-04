@@ -32,7 +32,7 @@ jobs:
         run: pip install ruff
 
       - name: 🔍 Ruff check
-        run: ruff check core/ tests/ --output-format=github
+        run: ruff check core/ tests/ portfolio/ web/ smallcap/ scripts/ --output-format=github
 
   type-check:
     runs-on: ubuntu-latest

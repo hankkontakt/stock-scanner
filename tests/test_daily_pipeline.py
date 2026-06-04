@@ -37,12 +37,17 @@ def test_get_score_deltas_both_empty():
 
 
 def test_get_score_deltas_merge_empty():
-    """_get_score_deltas med icke-overlappande tickers ska returnera {}."""
+    """_get_score_deltas med icke-overlappande tickers:
+    Sedan left-join (D4-fix) returneras dagens tickers med NaN-delta.
+    Resultatet ska innehålla dagens ticker, ej {}."""
     from core.daily_pipeline import _get_score_deltas
     today = pd.DataFrame({"ticker": ["A"], "score_total": [50.0]})
     yesterday = pd.DataFrame({"ticker": ["B"], "score_total": [45.0]})
     result = _get_score_deltas(today, yesterday)
-    assert result == {}
+    # Left join: A finns i movers_up (score_yesterday = NaN → score_delta = NaN)
+    assert "movers_up" in result
+    assert len(result["movers_up"]) == 1
+    assert result["movers_up"][0]["ticker"] == "A"
 
 
 def test_get_top_bottom_empty():

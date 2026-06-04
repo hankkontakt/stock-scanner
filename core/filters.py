@@ -130,8 +130,10 @@ def calc_entry_signal(df: pd.DataFrame) -> pd.DataFrame:
         if score < 55:
             return "EJ AKTUELL"
 
-        # RSI-koll
-        rsi_ok       = rsi is None or (35 <= rsi <= 68)
+        # RSI-koll — saknad RSI (ny notering / kort historik) → VÄNTA, ge ej STARK/OK utan bekräftelse
+        if rsi is None:
+            return "VÄNTA"
+        rsi_ok       = 35 <= rsi <= 68
         rsi_overköpt = rsi is not None and rsi > 75
         rsi_överSålt = rsi is not None and rsi < 30
 

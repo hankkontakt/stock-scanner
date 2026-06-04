@@ -381,7 +381,7 @@ def _get_score_deltas(today_df: pd.DataFrame, yesterday_df: pd.DataFrame,
             "rsi_14":      "rsi_yesterday",
             "close":       "close_yesterday",
         }),
-        on="ticker", how="inner",
+        on="ticker", how="left",  # left: behåll ALLA dagens tickers inkl. nya
     )
     if merged.empty:
         return {}
@@ -403,13 +403,22 @@ def _get_score_deltas(today_df: pd.DataFrame, yesterday_df: pd.DataFrame,
         merged["rsi_crossed_30up"]  = False
         merged["rsi_crossed_70down"] = False
 
-    base_cols = ["ticker", "score_total", "score_yesterday", "score_delta", "price_delta_pct"]
+    # score_yesterday kan vara NaN för nya tickers (left join) — fillna för sortering
+    if "score_yesterday" not in merged.columns:
+        merged["score_yesterday"] = float("nan")
+
+    base_cols = [c for c in ["ticker", "score_total", "score_yesterday", "score_delta", "price_delta_pct"]
+                 if c in merged.columns]
+
+    # RSI-spike-kolumner: välj bara de som faktiskt finns
+    rsi_spike_rows = merged[merged["rsi_crossed_30up"] | merged["rsi_crossed_70down"]]
+    rsi_cols = [c for c in ["ticker", "rsi_14", "rsi_yesterday", "rsi_crossed_30up", "rsi_crossed_70down"]
+                if c in rsi_spike_rows.columns]
+
     return {
         "movers_up":   merged.nlargest(top_n, "score_delta")[base_cols].to_dict("records"),
         "movers_down": merged.nsmallest(top_n, "score_delta")[base_cols].to_dict("records"),
-        "rsi_spikes":  merged[merged["rsi_crossed_30up"] | merged["rsi_crossed_70down"]][
-            ["ticker", "rsi_14", "rsi_yesterday", "rsi_crossed_30up", "rsi_crossed_70down"]
-        ].to_dict("records"),
+        "rsi_spikes":  rsi_spike_rows[rsi_cols].to_dict("records"),
         "big_price":   merged[merged["price_delta_pct"].abs() >= 4].nlargest(10, "price_delta_pct")[
             base_cols
         ].to_dict("records"),
@@ -1024,9 +1033,12 @@ def run_portfolio_refresh(verbose: bool = True) -> dict:
         logger.warning("  ⚠ Inga priser kunde matchas")
         return result
 
-    # Spara
+    # Spara — atomisk skrivning: tmp → replace förhindrar korrupt fil vid avbrott
     try:
-        holdings.to_csv(DATA_DIR / "holdings.csv", index=False)
+        _h_path = DATA_DIR / "holdings.csv"
+        _h_tmp  = _h_path.with_suffix(".tmp.csv")
+        holdings.to_csv(_h_tmp, index=False)
+        _h_tmp.replace(_h_path)  # Atomisk rename
         if verbose:
             logger.info(f"  ✅ holdings.csv uppdaterad -- {updated} innehav med nya priser")
     except Exception as e:

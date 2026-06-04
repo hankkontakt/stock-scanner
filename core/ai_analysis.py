@@ -36,7 +36,13 @@ except ImportError:
     _fetch_news_ai = None
 
 _logger = logging.getLogger(__name__)
-_token_sanitize = re.compile(r"(sk-[a-zA-Z0-9]{10,}|AIza[a-zA-Z0-9_-]{20,})")
+# Saniterar API-nycklar ur felmeddelanden: OpenAI (sk-*), Google (AIza*),
+# DeepSeek (ingen känd prefix — täcks av generisk 40+-tecken alfanumerisk sekvens).
+_token_sanitize = re.compile(
+    r"(sk-[a-zA-Z0-9]{10,}"       # OpenAI-format
+    r"|AIza[a-zA-Z0-9_\-]{20,}"   # Google/Gemini-format
+    r"|[a-zA-Z0-9]{40,})"         # Generisk lång token (DeepSeek etc.)
+)
 
 
 # ── Runtime-säker secret-läsare ────────────────────────────────────────────
