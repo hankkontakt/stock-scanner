@@ -1095,6 +1095,16 @@ def main():
     holdings      = load_portfolio()
     watchlist     = load_watchlist()
 
+    # A5: Cacha laddad data i session_state för åtkomst från sidofunktioner.
+    # Detta är en del av migreringen mot st.navigation() — sidor kan läsa
+    # data via st.session_state istf att ta emot dem som argument.
+    # Nästa steg: låt varje sida läsa från session_state direkt, sedan kan
+    # all sidrouting migreras till st.navigation() (st.Page(func, url_path=...)).
+    st.session_state["_data_scan_reports"] = scan_reports
+    st.session_state["_data_sc_reports"] = sc_reports
+    st.session_state["_data_holdings"] = holdings
+    st.session_state["_data_watchlist"] = watchlist
+
     scan_dates = list(scan_reports.keys())
     sc_dates   = list(sc_reports.keys())
 

@@ -50,8 +50,17 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# DATALADDNING
+# A1-SPLIT STATUS: Delvis genomförd
+# Extraherade moduler (ny kod bör importera direkt från dessa):
+#   - core.pipeline_helpers     — data-I/O, _save_scored, _load_portfolio etc.
+#   - core.pipeline_performance — _timed_stage, get_performance_summary etc.
+#   - core.pipeline_report      — rapport-byggare, AI-kontext (redan existerande)
+#   - core.pipeline_alerts      — alert-sändning (redan existerande)
+# Funktionerna nedan är kvar för backward compatibility.
+# TODO(A1): Ta bort duplikaten och låt alla anropare importera från modulerna.
 # ══════════════════════════════════════════════════════════════════════════════
+
+# ── DATALADDNING ──────────────────────────────────────────────────────────────
 
 def _latest_report(pattern: str = "scored_universe_*.parquet") -> Optional[Path]:
     """Hitta senaste rapportfil som matchar mönstret.
@@ -517,116 +526,21 @@ from core.pipeline_alerts import _send_stark_alerts, _get_rec
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PIPELINE PERFORMANCE TRACKING
+# A1-split: Importeras från core.pipeline_performance (ny modul).
+# Gamla anropare via daily_pipeline fortsätter att fungera (re-export).
 # ══════════════════════════════════════════════════════════════════════════════
 
+from core.pipeline_performance import (  # noqa: E402
+    _timed_stage, _record_perf,
+    get_performance_summary, get_slowest_stages, get_performance_trend,
+    _PERF_LOCK, _PERF_HISTORY,
+)
+
+# Dessa importer och modulhänvisningar (ovan) ersätter de inliner-definitionerna.
+# Behåll threading/collections-import som backup för kod som refererar direkt.
 import threading
 from collections import defaultdict, deque
 from contextlib import contextmanager
-
-_PERF_LOCK = threading.Lock()
-_PERF_HISTORY: dict[str, deque] = defaultdict(lambda: deque(maxlen=100))
-
-
-@contextmanager
-def _timed_stage(name: str, plogger=None, **extra):
-    """
-    Context manager som mäter duration för en pipeline-stage.
-    Loggar via PipelineLogger om tillgängligt.
-
-    Användning:
-        with _timed_stage("fetch_data", plogger=pl) as ctx:
-            data = fetch_data()
-            ctx["rows_processed"] = len(data)
-    """
-    start = time.time()
-    meta: dict = {"name": name, "rows_processed": 0, "errors": 0}
-    if plogger:
-        plogger.start_stage(name)
-    try:
-        yield meta
-        elapsed_ms = (time.time() - start) * 1000
-        meta["duration_ms"] = round(elapsed_ms, 1)
-        if plogger:
-            plogger.end_stage(name)
-        _record_perf(name, meta)
-    except Exception as e:
-        elapsed_ms = (time.time() - start) * 1000
-        meta["duration_ms"] = round(elapsed_ms, 1)
-        meta["errors"] = meta.get("errors", 0) + 1
-        meta["error"] = str(e)[:100]
-        if plogger:
-            plogger.end_stage(name)
-            plogger.log_error("pipeline", f"STAGE_FAILED:{name}", str(e)[:200])
-        _record_perf(name, meta)
-        raise
-
-
-def _record_perf(stage: str, meta: dict):
-    """Spara en prestandamätpunkt i historiken."""
-    try:
-        entry = {
-            "timestamp": time.time(),
-            "stage": stage,
-            **meta,
-        }
-        with _PERF_LOCK:
-            _PERF_HISTORY[stage].append(entry)
-    except Exception:
-        pass
-
-
-def get_performance_summary(last_n: int = 10) -> pd.DataFrame:
-    """
-    Tabell över genomsnittlig duration per stage (senaste N körningar).
-    Returnerar DataFrame med stage, avg_duration_ms, total_calls, error_rate.
-    """
-    rows = []
-    with _PERF_LOCK:
-        for stage, entries in _PERF_HISTORY.items():
-            recent = list(entries)[-last_n:]
-            if not recent:
-                continue
-            durations = [e.get("duration_ms", 0) for e in recent if e.get("duration_ms")]
-            errors = sum(1 for e in recent if e.get("errors", 0) > 0)
-            avg_duration = sum(durations) / len(durations) if durations else 0
-            rows.append({
-                "stage": stage,
-                "avg_duration_ms": round(avg_duration, 1),
-                "total_calls": len(recent),
-                "errors": errors,
-                "error_rate_pct": round(errors / len(recent) * 100, 1) if recent else 0,
-            })
-    if not rows:
-        return pd.DataFrame(columns=["stage", "avg_duration_ms", "total_calls", "errors", "error_rate_pct"])
-    df = pd.DataFrame(rows)
-    return df.sort_values("avg_duration_ms", ascending=False).reset_index(drop=True)
-
-
-def get_slowest_stages(top_n: int = 5) -> list[dict]:
-    """
-    Hitta flaskhalsar — de långsammaste stage:en baserat på average duration.
-    """
-    df = get_performance_summary()
-    if df.empty:
-        return []
-    return df.head(top_n).to_dict("records")
-
-
-def get_performance_trend(stage_name: str, last_n: int = 20) -> list[dict]:
-    """
-    Hur har prestandan för en specifik stage ändrats?
-    Returnerar lista av dicts med index, duration_ms, timestamp.
-    """
-    with _PERF_LOCK:
-        entries = list(_PERF_HISTORY.get(stage_name, []))[-last_n:]
-    return [
-        {
-            "index": i,
-            "duration_ms": e.get("duration_ms", 0),
-            "timestamp": e.get("timestamp"),
-        }
-        for i, e in enumerate(entries)
-    ]
 
 # ══════════════════════════════════════════════════════════════════════════════
 # AI-PROMPTS
@@ -2268,6 +2182,14 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 details={"scan_type": mode, "elapsed_seconds": _elapsed},
                 error=(str(_err)[:300] if (not pipeline_success and _err) else None),
             )
+        except Exception:
+            pass
+        # E3: Spara strukturerade metrics
+        try:
+            from core.metrics import record_pipeline_run
+            _n = len(scored_df) if "scored_df" in dir() and scored_df is not None and hasattr(scored_df, "__len__") else 0  # type: ignore[possibly-undefined]
+            _n_err = 1 if not pipeline_success else 0
+            record_pipeline_run(mode=mode, duration_s=_elapsed, n_scored=_n, n_errors=_n_err)
         except Exception:
             pass
         try:
