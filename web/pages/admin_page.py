@@ -69,6 +69,12 @@ def page_admin():
     except ImportError:
         _has_metrics = False
 
+    try:
+        from web.pages.admin_tabs.diagnostics import render_diagnostics_tab as _diagnostics
+        _has_diagnostics = True
+    except ImportError:
+        _has_diagnostics = False
+
     _tab_names = [
         "Översikt",
         "Bevakningslista",
@@ -86,7 +92,8 @@ def page_admin():
         "AI-logg",
         "Larm",
         "Felsökning",
-        "Metrics",  # E3: pipeline-metrics och observability
+        "Metrics",       # E3: pipeline-metrics och observability
+        "Diagnostik",    # STEG 2: självdiagnos-dashboard
     ]
     tabs = st.tabs(_tab_names)
 
@@ -127,3 +134,8 @@ def page_admin():
             _metrics()
         else:
             st.info("core.metrics ej installerat.")
+    with tabs[17]:
+        if _has_diagnostics:
+            _diagnostics()
+        else:
+            st.info("Diagnostik-modulen ej tillgänglig.")
