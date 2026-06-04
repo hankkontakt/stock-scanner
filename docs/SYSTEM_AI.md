@@ -1136,13 +1136,31 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 **UX:**
 - `stock_detail.py`, `utils.py`, `alerts.py`, `portfolio.py`: `" * "` → `" · "` (mittpunkt U+00B7)
 
+**Commits 6f67f7c + ef03dcf — Säkerhet + CI/CD + UX:**
+
+*Säkerhet:*
+- `web/api/__init__.py`: before_request auth-hook på alla routes utom /health och /version
+  Kräver X-API-Key eller Authorization: Bearer <key>. Nycklar i data/api_keys.json (hashade).
+  `web/api/auth.py` med `generate_api_key`, `validate_api_key`, rate limiting existerade
+  men var aldrig kopplad till blueprinten — nu aktivt.
+- `core/ml_predictor.py`: save_model() sparar SHA-256 i .pkl.sha256 filen.
+  load_model() verifierar hash INNAN pickle.load() — tamper-detektion.
+  Varnar om sha256-fil saknas (äldre modeller).
+
+*CI/CD:*
+- `tests.yml`: mypy kör utan `|| true` — fel syns i CI-output (gult/varning)
+- `daily_scan.yml`: mode-karta som kommentar, varningslogg vid okänt schema
+
+*UX:*
+- `weekly_scan.py`: "Score (klassisk)" → "Score"
+- `weekly_scan.py`: staleness-markering " *" → " ⏱"
+
 **Kvarstående högt prio (ännu ej implementerat):**
-- S1: Flask REST API har ingen autentisering (web/app.py, web/api/__init__.py) — portföljdata publikt tillgänglig
-- S2: Password reset tokens i klartext JSON (streamlit_app.py rad 591–609)
-- S3: ML-modeller som pickle (.pkl) — deserialiserings-sårbarhet (ml_predictor.py)
-- D3: Trådosäkra rate-limit-flaggor i ThreadPoolExecutor (data_fetcher.py rad 256–315)
-- D5: Double-neutralization bug i scoring.py (flagga rensas ej vid ny prisdata)
-- A1: daily_pipeline.py (2255 rader) bör delas i 6 moduler
+- S2: Password reset tokens i klartext JSON (streamlit_app.py rad 591–609) — måttlig risk
+- D3: KONTROLLERAT — `_RATE_LIMIT_LOCK` existerar och används konsekvent, INGET ATT FIXA
+- D5: Double-neutralization — DESIGNMÄSSIGT KORREKT (kommentar i scoring.py förklarar)
+- M1: Closure-bug — KONTROLLERAT — `lambda w, idx=idx` (default-arg) är redan korrekt
+- A1: daily_pipeline.py (2255 rader) bör delas i 6 moduler (arkitekturuppgift)
 - A2: portfolio.py (2503 rader) bör delas i 3 sidor
 
 ### 2026-06-03 — Fix: portfolio_refresh krasch + multi-parquet staleness merge + täckning av 631 tickers
