@@ -88,11 +88,12 @@ jobs:
         run: |
           pytest tests/ -v --tb=short -n auto \
             --cov=core \
-            --cov-fail-under=35 \
+            --cov-fail-under=40 \
             --cov-report=term-missing \
             --cov-report=xml \
             --durations=10 \
             -m "not slow"
+          # T5: Höjt från 35% → 40% (mål: 50% i nästa sprint när T1/T6 är klara)
 
       - name: 🐌 Kör prestandatester (seriellt)
         run: |

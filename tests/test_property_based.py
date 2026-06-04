@@ -1,5 +1,6 @@
 """
-Property-based tester for stock-scanner — anvander brute-force permutations.
+Property-based tester for stock-scanner — anvander brute-force permutations +
+Hypothesis-strategier (T8).
 
 Krav pa invarianta egenskaper (properties):
   - ALLA viktkombinationer sum=1.0
@@ -15,6 +16,14 @@ import itertools
 import numpy as np
 import pandas as pd
 import pytest
+
+try:
+    from hypothesis import given, settings, assume
+    from hypothesis import strategies as st
+    _HYPOTHESIS_AVAILABLE = True
+except ImportError:
+    _HYPOTHESIS_AVAILABLE = False
+    given = settings = assume = st = None
 
 from core import scoring as sc
 from core import config
@@ -234,3 +243,115 @@ class TestOptionsFlowScore:
         # 0.85 * 100 = 85; may get +10 boost for > 0.8 -> 95
         assert score.iloc[0] > score.iloc[2]  # More bullish > less bullish
         assert score.iloc[0] <= 100
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# T8: Hypothesis-drivna property-based tests
+# Definieras BARA om hypothesis är installerat (annars kraschar @given(st.lists(...))
+# vid import-tid eftersom st=None).
+# ══════════════════════════════════════════════════════════════════════════════
+
+if _HYPOTHESIS_AVAILABLE:
+    from hypothesis import given as _given, settings as _settings, assume as _assume
+    from hypothesis import strategies as _st
+
+    class TestHypothesisScoring:
+        """Hypothesis-strategier verifierar invarianta scoring-egenskaper (T8)."""
+
+        @_given(
+            _st.lists(_st.floats(min_value=-1e6, max_value=1e6, allow_nan=False, allow_infinity=False),
+                     min_size=2, max_size=200)
+        )
+        @_settings(max_examples=100)
+        def test_percentile_rank_always_0_to_100(self, values):
+            """percentile_rank returnerar ALLTID [0, 100] för godtyckliga floats."""
+            _assume(len(set(values)) > 0)
+            s = pd.Series(values, dtype=float)
+            ranked = sc.percentile_rank(s, ascending=True)
+            valid = ranked.dropna()
+            if len(valid) > 0:
+                assert float(valid.min()) >= 0.0, f"min={valid.min()} < 0"
+                assert float(valid.max()) <= 100.0, f"max={valid.max()} > 100"
+
+        @_given(
+            _st.lists(_st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
+                     min_size=5, max_size=50)
+        )
+        @_settings(max_examples=80)
+        def test_options_flow_score_bounded(self, signals):
+            """calc_options_flow_score returnerar ALLTID [0, 100]."""
+            df = pd.DataFrame({"options_flow_signal": signals})
+            score = sc.calc_options_flow_score(df)
+            valid = score.dropna()
+            if len(valid) > 0:
+                assert float(valid.min()) >= 0.0
+                assert float(valid.max()) <= 100.0
+
+        @_given(
+            _st.lists(
+                _st.floats(min_value=1e3, max_value=1e12, allow_nan=False, allow_infinity=False),
+                min_size=3, max_size=30
+            ),
+            _st.lists(
+                _st.floats(min_value=1e6, max_value=1e15, allow_nan=False, allow_infinity=False),
+                min_size=3, max_size=30
+            )
+        )
+        @_settings(max_examples=60)
+        def test_fcf_yield_score_non_negative(self, fcf_values, ev_values):
+            """FCF yield score är ALLTID >= 0 för godtyckliga FCF och EV-värden."""
+            n = min(len(fcf_values), len(ev_values))
+            if n < 2:
+                return
+            df = pd.DataFrame({
+                "free_cash_flow": fcf_values[:n],
+                "enterprise_value": ev_values[:n],
+            })
+            score = sc.calc_fcf_yield_score(df)
+            valid = score.dropna()
+            if len(valid) > 0:
+                assert float(valid.min()) >= 0.0
+
+    class TestHypothesisPipelineHelpers:
+        """Hypothesis-tester för pipeline-hjälpfunktioner."""
+
+        @_given(_st.text(min_size=0, max_size=30))
+        @_settings(max_examples=200)
+        def test_looks_like_ticker_never_crashes(self, s):
+            """_looks_like_ticker kraschar aldrig oavsett input."""
+            from core.daily_pipeline import _looks_like_ticker
+            result = _looks_like_ticker(s)
+            assert isinstance(result, bool)
+
+        @_given(_st.text(min_size=0, max_size=20))
+        @_settings(max_examples=200)
+        def test_ticker_validation_never_crashes(self, s):
+            """_TICKER_PATTERN.match() kraschar aldrig."""
+            from core.universe_manager import _TICKER_PATTERN
+            _TICKER_PATTERN.match(s.upper() if s else "")
+            # Ingen assertion — bare att det ej kraschar
+
+        @_given(
+            _st.lists(
+                _st.fixed_dictionaries({
+                    "ticker": _st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ", min_size=1, max_size=5),
+                    "score_total": _st.floats(min_value=0, max_value=100, allow_nan=False),
+                }),
+                min_size=0, max_size=50
+            ),
+            _st.lists(
+                _st.fixed_dictionaries({
+                    "ticker": _st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ", min_size=1, max_size=5),
+                    "score_total": _st.floats(min_value=0, max_value=100, allow_nan=False),
+                }),
+                min_size=0, max_size=50
+            )
+        )
+        @_settings(max_examples=50, deadline=5000)
+        def test_get_score_deltas_never_crashes(self, today_rows, yesterday_rows):
+            """_get_score_deltas kraschar aldrig oavsett input-form."""
+            from core.daily_pipeline import _get_score_deltas
+            today = pd.DataFrame(today_rows) if today_rows else pd.DataFrame()
+            yesterday = pd.DataFrame(yesterday_rows) if yesterday_rows else pd.DataFrame()
+            result = _get_score_deltas(today, yesterday)
+            assert isinstance(result, dict)
