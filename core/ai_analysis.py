@@ -223,7 +223,14 @@ def _resolve_provider(provider: str = "auto", task_type: str = "light") -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# KÄRN-FUNKTIONER
+# A3-SPLIT STATUS: Delvis genomförd
+# Nya moduler (ny kod bör använda dessa direkt):
+#   - core/providers/deepseek_provider.py — DeepSeekProvider class
+#   - core/providers/gemini_provider.py   — GeminiProvider class
+#   - core/providers/claude_provider.py   — ClaudeProvider class
+#   - core/ai_router.py                   — call_ai(), get_active_provider()
+# Funktionerna nedan är kvar för backward compatibility.
+# TODO(A3): Ersätt _deepseek_call()/_gemini_call() med call_ai() från ai_router.
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _deepseek_call(messages: list, system_prompt: str = "",
