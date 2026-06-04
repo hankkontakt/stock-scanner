@@ -117,6 +117,42 @@ jobs:
           file: ./coverage.xml
           fail_ci_if_error: false
 
+      - name: 📋 Spara pytest-resultat som JSON (AI-läsbar, bara 3.11)
+        if: always() && matrix.python-version == '3.11'
+        run: |
+          mkdir -p data/ci_reports
+          python - <<'PYEOF'
+          import json, subprocess, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          # Hämta täckningsprocent från coverage.xml om det finns
+          coverage_pct = None
+          try:
+              import xml.etree.ElementTree as ET
+              tree = ET.parse("coverage.xml")
+              root = tree.getroot()
+              coverage_pct = round(float(root.attrib.get("line-rate", 0)) * 100, 1)
+          except Exception:
+              pass
+          report = {
+              "ts":           datetime.now(timezone.utc).isoformat(),
+              "run_id":       int(os.environ.get("GITHUB_RUN_ID", 0)),
+              "workflow":     "tests",
+              "python":       "3.11",
+              "branch":       os.environ.get("GITHUB_REF_NAME", "main"),
+              "commit":       os.environ.get("GITHUB_SHA", "")[:8],
+              "job_status":   os.environ.get("JOB_STATUS", "unknown"),
+              "coverage_pct": coverage_pct,
+              "url":          f"https://github.com/{os.environ.get('GITHUB_REPOSITORY','')}/actions/runs/{os.environ.get('GITHUB_RUN_ID','')}",
+          }
+          Path("data/ci_reports/last_test_run.json").write_text(
+              json.dumps(report, indent=2), encoding="utf-8"
+          )
+          print(f"Pytest-rapport sparad (täckning: {coverage_pct}%)")
+          PYEOF
+        env:
+          JOB_STATUS: ${{ job.status }}
+
   security:
     runs-on: ubuntu-latest
     timeout-minutes: 5
