@@ -1110,6 +1110,54 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lägg nyaste överst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-04 — STEG 2: Komplett självdiagnos & testinfrastruktur (commit a72c6bb)
+
+**Syfte:** Bygga ett stort projekt för att AI-agenter (och människor) enkelt ska kunna
+testa alla delar av systemet — kod, GitHub Actions, e-post, webbapp, ML-modeller — från
+ett enda ställe.
+
+**Nya filer:**
+- `scripts/diagnose.py` — Komplett systemdiagnos (10 sektioner: miljö, konfiguration, e-post,
+  GitHub, Streamlit, pipeline, ML-modeller, notifieringar, databeroenden, feature flags).
+  ASCII-säker output (Windows cp1252-kompatibel). Sparar historik till `data/diagnose_history.jsonl`.
+  Kör: `python scripts/diagnose.py --quick` eller `--section email`.
+- `scripts/check_github.py` — GitHub Actions-status i realtid. Watch-mode (`--watch`),
+  job-detaljer (`--jobs`), filtrera per workflow eller branch. Kräver `GITHUB_TOKEN` + `GITHUB_REPO`.
+- `scripts/check_email.py` — SMTP-hälsokontroll: DNS, TCP-port, STARTTLS, autentisering,
+  testmail-utskick (`--send --to addr@example.com`). Kräver `EMAIL_SENDER` + `EMAIL_PASSWORD`.
+- `scripts/check_site.py` — HTTP-hälsokontroll för Streamlit: statuskod, latens, SSL-cert,
+  Streamlit-signaturdetektering, benchmark (`--benchmark 5`). Watch-mode (`--watch`).
+- `scripts/test_all.py` — Master test-runner som kör pytest + alla hälsokontroller i ett
+  kommando. Flaggor: `--fast` (bara pytest), `--all-checks`, `--github`, `--email`, `--site`.
+- `tests/test_live_api.py` — 17 live API-tester (märkta `@pytest.mark.live`): yfinance,
+  Finnhub, DeepSeek, Gemini, SMTP, Streamlit HTTP, GitHub API. Hoppar över automatiskt
+  om API-nycklar saknas eller om internet ej nås.
+- `web/pages/admin_tabs/diagnostics.py` — Streamlit Admin-tab "Diagnostik": knappar för
+  snabbdiagnos/fulldiagnos/testmail/GitHub-kontroll, historikgraf, sektionsstatus-grid,
+  loggvisare och felsökningsguide.
+- `.github/workflows/diagnose.yml` — Automatisk diagnos varje vardag kl 08:30 UTC och
+  söndagar 09:00. Manuell trigger med val av sektioner, snabbläge, testmail. Sparar
+  artefakter och skapar GitHub Step Summary.
+- `data/diagnose_history.jsonl` — Loggbok (JSONL) med varje diagnos-körning.
+  Nycklar: `ts`, `ok` (antal OK), `warn`, `error`, `healthy` (bool).
+
+**Uppdaterade filer:**
+- `web/pages/admin_page.py` — Tab 17 "Diagnostik" tillagd.
+- `pyproject.toml` — pytest-markers registrerade: `live`, `integration`, `slow`.
+  `test_all.py` exkluderar nu `live`-tester automatiskt (kräver explicit `-m live`).
+
+**Hur man kör:**
+```bash
+python scripts/diagnose.py --quick           # 10s snabbdiagnos
+python scripts/test_all.py --fast            # Bara pytest (427 pass)
+python scripts/test_all.py --all-checks      # Allt inkl. nätverkstester
+python scripts/check_github.py --watch       # Live GitHub-status
+python scripts/check_email.py --send         # Skicka testmail
+pytest tests/test_live_api.py -m live -v     # Live API-tester
+```
+
+---
+
 ### 2026-06-04 — STEG 0: Tre akuta regressioner fixade + STEG 1: Fullständig audit (Sprint 8–11)
 
 **STEG 0 — Akuta regressioner (commit 71b04f2):**
