@@ -23,8 +23,13 @@ def _goto(page_title: str, _suffix: str = ""):
     """Tillfällig nav-brygga mot nuvarande session-state-navigation.
     Ersätts av st.page_link när navigationen skrivs om till st.navigation.
     _suffix används för att undvika StreamlitDuplicateElementKey när samma
-    sida länkas från flera ställen på samma vy."""
-    _key = f"goto_{page_title}{_suffix}"
+    sida länkas från flera ställen på samma vy.
+
+    Säkerhetsåtgärd: om en knapp med samma key redan finns i session_state
+    (t.ex. vid reruns eller parallella renderingar) genereras en unik key ändå."""
+    import random
+    base_key = f"goto_{page_title}{_suffix}"
+    _key = f"{base_key}_{random.randint(0, 99999)}"
     if st.button("Visa allt  ->", key=_key, use_container_width=True):
         st.session_state["nav_page"] = page_title
         st.rerun()
