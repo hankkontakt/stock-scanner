@@ -399,6 +399,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "FLNC",
+      "name": "Fluence Energy, Inc.",
+      "entry_price": 27.90999984741211,
+      "predicted_return": 0.30515092611312866,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "ACCON.ST",
+      "name": "Acconeer AB (publ)",
+      "entry_price": 21.950000762939453,
+      "predicted_return": 0.28918007016181946,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "TRENT.NS",
+      "name": "Trent Limited",
+      "entry_price": 4257.60009765625,
+      "predicted_return": 0.27328231930732727,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "5801.T",
+      "name": "Furukawa Electric Co., Ltd.",
+      "entry_price": 53100.0,
+      "predicted_return": 0.25695133209228516,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "SMCI",
+      "name": "Super Micro Computer, Inc.",
+      "entry_price": 46.09000015258789,
+      "predicted_return": 0.2290223091840744,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "HIVE",
+      "name": "HIVE Digital Technologies Ltd.",
+      "entry_price": 4.539999961853027,
+      "predicted_return": 0.1841508150100708,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "ELG.DE",
+      "name": "Elmos Semiconductor SE",
+      "entry_price": 180.8000030517578,
+      "predicted_return": 0.16021357476711273,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "RKLB",
+      "name": "Rocket Lab Corporation",
+      "entry_price": 123.31999969482422,
+      "predicted_return": 0.15153633058071136,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "BE",
+      "name": "Bloom Energy Corporation",
+      "entry_price": 302.8500061035156,
+      "predicted_return": 0.14947572350502014,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-04",
+      "ticker": "2308.TW",
+      "name": "Delta Electronics, Inc.",
+      "entry_price": 2455.0,
+      "predicted_return": 0.14548872411251068,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -421,6 +521,11 @@
       "date": "2026-06-03",
       "equity": 100000.0,
       "n_open": 40
+    },
+    {
+      "date": "2026-06-04",
+      "equity": 100000.0,
+      "n_open": 50
     }
   ]
 }
