@@ -145,7 +145,11 @@ class CachingProvider(DataProvider):
         hit, val = self._get_cached(key, self._price_ttl)
         if hit:
             return val
-        result = self._inner.get_price_history(ticker, period, interval)
+        try:
+            result = self._inner.get_price_history(ticker, period, interval)
+        except Exception as e:
+            logger.debug("CachingProvider.get_price_history('%s') fel: %s", ticker, e)
+            return pd.DataFrame()
         self._set_cached(key, result)
         return result
 
@@ -154,7 +158,11 @@ class CachingProvider(DataProvider):
         hit, val = self._get_cached(key, self._info_ttl)
         if hit:
             return val
-        result = self._inner.get_info(ticker)
+        try:
+            result = self._inner.get_info(ticker)
+        except Exception as e:
+            logger.debug("CachingProvider.get_info('%s') fel: %s", ticker, e)
+            return {}
         self._set_cached(key, result)
         return result
 
