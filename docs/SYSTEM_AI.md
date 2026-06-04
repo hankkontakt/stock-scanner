@@ -186,18 +186,12 @@ stock-scanner/
 │       ├── ai_journal.py       # AI journal (8KB)
 │       ├── admin.py            # Admin data services (15KB)
 │       ├── admin_page.py       # Admin UI layout (4KB)
-│       ├── admin_tabs/         # 12 modular admin-flikar (1.2KB–6KB ea)
-│       │   ├── overview.py     #  Admin overview
-│       │   ├── scans.py        #  Scan history
-│       │   ├── health.py       #  Universe health
-│       │   ├── holdings.py     #  Holdings management
-│       │   ├── watchlist.py    #  Watchlist editor
-│       │   ├── users.py        #  Multi-user config
-│       │   ├── email_tab.py    #  Email subscribers
-│       │   ├── cache_tab.py    #  AI cache management
-│       │   ├── config_tab.py   #  Config viewer
-│       │   ├── import_tab.py   #  Avanza CSV import
-│       │   ├── debug_tab.py    #  Debug dashboard
+│       ├── admin_tabs/         # 5 admin-flikar (8–30KB ea)
+│       │   ├── tab_system.py      # Dashboard, GH Actions, diagnostik
+│       │   ├── tab_pipeline.py    # Kör scan, historik, cache
+│       │   ├── tab_universe.py    # Täckning, kandidater, strikes, kvalitet
+│       │   ├── tab_settings.py    # Konfiguration, API-nycklar, användare, e-post
+│       │   ├── tab_metrics.py     # Prestanda, AI, score-distribution
 │       │   └── __init__.py
 │       ├── settings_page.py    # User settings (7KB)
 │       ├── guide.py            # User guide (22KB)
@@ -1110,7 +1104,22 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lägg nyaste överst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
-### 2026-06-04 — STEG 2b: AI-synliga diagnostikrapporter (commit e5b780d)
+### 2026-06-05 — Admin-sida ombyggd från 18 flikar till 5 sektioner
+
+**Syfte:** Admin-sidan hade vuxit organiskt till 18 flikar med överlappande funktionalitet.
+Ombyggnation till 5 väldefinierade sektioner för bättre navigering och professionalism.
+
+**Ändringar:**
+- `web/pages/admin_page.py` — total rewrite: 5 st.tabs() + CSS-designsystem
+- Tab-system: `tab_system.py` (System — dashboard, GH Actions, diagnostik)
+- Tab-pipeline: `tab_pipeline.py` (Pipeline — scans, historik, cache) — **behållen som fanns**, endast datatäckning borttagen
+- Tab-universe: `tab_universe.py` (Universe — täckning, kandidater, strikes/blacklist, datakvalitet) — **NY**
+- Tab-settings: `tab_settings.py` (Inställningar — scoring, API-nycklar, användare, e-post) — **NY**
+- Tab-metrics: `tab_metrics.py` (Metrics — prestanda, AI, score-distribution, fetch-fel) — **NY**
+
+**Borttagna filer:** overview.py, diagnostics.py, debug_tab.py, scans.py, cache_tab.py, health.py, universe_discovery.py, strikes_health.py, data_quality.py, config_tab.py, users.py, email_tab.py, import_tab.py, metrics.py, watchlist.py, holdings.py (16 st)
+
+**Status:** Syntax- och importverifierad ✅
 
 **Syfte:** Lösa det faktiska problemet — systemet kör på GitHub Actions och Streamlit Cloud,
 inte lokalt. AI behöver kunna se vad som händer DÄR utan att logga in eller köra appen.
@@ -2347,6 +2356,10 @@ yfinance ──→ data_fetcher ──→ cache (data/cache/*.pkl)
 Detta avsnitt listar de 50 mest betydande förändringarna (nya funktioner, buggfixar, refaktoreringar) i omvänd ordning. Innehåller både vad som gjordes och varför.
 
 > **Från och med 2026-06-01 uppdateras SYSTEM_AI.md automatiskt av AI-verktyg efter varje ändring.** Underhåll enligt §0 Underhållsprotokoll.
+
+### 2026-06-05 — Admin-sida ombyggd från 18 flikar till 5 sektioner
+**Vad:** Hela admin-sidan (`web/pages/admin_page.py`) skriven från scratch. 16 gamla tab-filer borttagna, ersatta av 5 nya: `tab_system.py` (dashboard/GH Actions/diagnostik), `tab_pipeline.py` (scans/historik/cache), `tab_universe.py` (täckning/kandidater/strikes/datakvalitet), `tab_settings.py` (scoring/API-nycklar/användare/e-post), `tab_metrics.py` (prestanda/AI/score-distribution/fetch-fel). CSS-designsystem injicerat. `tab_pipeline.py` fanns redan och behölls med datatäckning borttagen.
+**Varför:** Admin-sidan hade 18 flikar med överlappande funktionalitet, kognitiv överbelastning och inkonsekvent UX. Mål: 5 väldefinierade sektioner med tydliga ansvarsområden, professionellt utseende.
 
 ### 2026-06-01 — predicted_return sparas vid köptillfället + StreamlitInvalidHeightError-fix
 **Vad:** Ny kolumn `predicted_return_at_buy` i `holdings.csv` sparar ML-modellens prediktion automatiskt vid köptillfället (slås upp från senaste scandata). Ny UI-kolumn "Pred@buy" jämte "Pred 30d" i portföljtabellen. Båda `data_table()` och `clickable_stock_table()` i `web/ui/components.py` har nu try/except för height så att Streamlit Cloud inte kraschar med `StreamlitInvalidHeightError` (vissa tabeller med få rader får height < vert lägre än Streamlit 1.44 minsta gräns).
