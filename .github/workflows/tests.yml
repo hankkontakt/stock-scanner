@@ -105,3 +105,24 @@ jobs:
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 📥 Hämta kod
+        uses: actions/checkout@v4
+
+      - name: 🐍 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 📦 Installera pip-audit
+        run: pip install pip-audit
+
+      - name: 🔒 Kontrollera CVE:er i beroenden
+        # continue-on-error: true — audit-fel blockerar INTE CI men syns tydligt i loggen.
+        # TODO(T7): sätt continue-on-error: false när kända false positives är tystate.
+        continue-on-error: true
+        run: pip-audit -r requirements.txt --format columns

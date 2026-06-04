@@ -1291,7 +1291,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                     if _removed:
                         logger.info(f"  🚫 Auto-blacklistad: {[r['ticker'] for r in _removed[:5]]}")
             except Exception as _the:
-                logger.debug(f"  ufe0f ticker-health update hoppades over: {_the}")
+                logger.warning(f"  ⚠️ ticker-health update hoppades över: {_the}")
 
             # ── Ladda ALLA senaste scored_universe-parquets för staleness-merge ─────
             # Sparas undan INNAN ny parquet skrivs; används efter scoring för att

@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from web.utils import load_watchlist, load_portfolio, _get_provider, REPORT_DIR
+from web.utils import load_watchlist, load_portfolio, _get_provider, REPORT_DIR, show_stale_data_warning, scan_data_age_hours
 from core import ai_analysis
 from core.country_flags import ticker_display
 
@@ -27,23 +27,21 @@ def _goto(page_title: str):
         st.rerun()
 
 
-@st.cache_data(ttl=300)
 def _data_age_str() -> str:
-    """Hur färsk är scandatan?"""
-    import os
-    files = sorted(Path(REPORT_DIR).glob("scored_universe_*.parquet"), reverse=True)
-    if not files:
-        files = sorted(Path(REPORT_DIR).glob("scored_universe_*.csv"), reverse=True)
-    if not files:
+    """Hur färsk är scandatan? Delegerar till centraliserad scan_data_age_hours()."""
+    age_h = scan_data_age_hours()
+    if age_h >= 9000:
         return "ingen scandata"
-    age_h = (datetime.now() - datetime.fromtimestamp(os.path.getmtime(files[0]))).total_seconds() / 3600
     if age_h < 36:
         return f"uppdaterad för {age_h:.0f}h sedan"
-    return f"⚠ {age_h/24:.0f} dagar gammal"
+    return f"⚠️ {age_h/24:.0f} dagar gammal"
 
 
 def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame = None):
     page_header("Översikt", "home", subtitle=f"Marknadsöversikt · {_data_age_str()}")
+
+    # U9: Visa prominent varning om data är äldre än 36h
+    show_stale_data_warning()
 
     if (df is None or df.empty) and (sc_df is None or sc_df.empty):
         empty_state("Aktiedata laddas in. Systemet uppdateras automatiskt varje vecka -- "

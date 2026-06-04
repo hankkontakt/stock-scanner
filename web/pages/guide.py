@@ -1,12 +1,13 @@
 """web/pages/guide.py - Sida 8: Guide & Hjälp"""
 
 import streamlit as st
+from web.ui.components import page_header
 
 
 def page_guide():
     """Introduktionssida som förklarar systemet för nya användare."""
 
-    st.title("📚 Guide & Hjälp")
+    page_header("Guide & Hjälp", "guide", subtitle="Introduktion till MarketScan — hur systemet fungerar och hur du läser resultaten.")
     st.markdown(
         "Välkommen till **MarketScan** -- ett automatiserat system som scannar "
         "hundratals aktier varje dag, betygsätter dem på 8 faktorer och lyfter fram "

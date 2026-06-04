@@ -15,10 +15,16 @@ Användning:
 import json
 import logging
 import os
+import re
 import subprocess
 from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
+
+# S4-FIX: Tillåtna tecken i ticker-symboler. Accepterar t.ex. VOLVO-B.ST, BRK-B, 2330.TW.
+# Blockerar shell-metakaraktärer (;|&`$(){}[]) som annars kan injiceras om en ticker
+# råkar hamna i ett subprocess-anrop med shell=True (defensive programming).
+_TICKER_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,19}$")
 
 import pandas as pd
 
@@ -141,6 +147,11 @@ def add_ticker_to_universe(
     """
     ticker = ticker.upper().strip()
     if not ticker:
+        return False
+
+    # S4-FIX: Validera ticker-format mot tillåten teckenuppsättning
+    if not _TICKER_PATTERN.match(ticker):
+        logger.error(f"  Ogiltig ticker-symbol (avvisad): '{ticker}' — matchar inte [A-Z0-9.-]{{1,20}}")
         return False
 
     # Kontrollera att tickern inte redan finns

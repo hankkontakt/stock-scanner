@@ -11,6 +11,7 @@ from web.utils import (
     kpi_row, sector_bar_chart, score_distribution_chart,
     scatter_momentum_value, pct_fmt, REPORT_DIR,
     conviction_meter_chart, conviction_meter_breakdown,
+    show_stale_data_warning, scan_data_age_hours,
 )
 from web.stock_detail import render_stock_detail
 from web.ui.components import clickable_stock_table, page_header, section
@@ -333,7 +334,10 @@ def _build_signal_scorecard() -> pd.DataFrame:
 
 def page_weekly_scan(df: pd.DataFrame, filters: dict,
                      holdings: pd.DataFrame, watchlist: list):
-    st.title("🔍 Veckoscanner")
+    page_header("Veckoscanner", "scanner", subtitle="Veckovis ranking av hela universums — scored på momentum, fundamenta och sentiment.")
+
+    # U9: Visa datafräschhet-varning om data är äldre än 36h
+    show_stale_data_warning()
 
     if df.empty:
         st.warning("Aktiedata håller på att laddas in. Systemet uppdateras automatiskt varje vecka -- prova igen om en stund.")
