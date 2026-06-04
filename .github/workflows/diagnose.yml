@@ -1,0 +1,160 @@
+name: Diagnose
+
+on:
+  schedule:
+    # Kör självdiagnos varje dag kl 08:00 UTC (efter morning scan)
+    - cron: "30 8 * * 1-5"
+    # Kör även söndagar för veckosummering
+    - cron: "0 9 * * 0"
+  workflow_dispatch:
+    inputs:
+      sections:
+        description: "Vilka sektioner att köra (lämna tomt för alla)"
+        required: false
+        default: ""
+      quick:
+        description: "Snabbläge (hoppar API-anrop)"
+        required: false
+        default: "false"
+        type: boolean
+      send_test_mail:
+        description: "Skicka testmail"
+        required: false
+        default: "false"
+        type: boolean
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: .
+      PYTHONIOENCODING: "utf-8"
+      # Injectade av GitHub Secrets
+      DEEPSEEK_API_KEY:    ${{ secrets.DEEPSEEK_API_KEY }}
+      GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
+      FINNHUB_API_KEY:     ${{ secrets.FINNHUB_API_KEY }}
+      EMAIL_SENDER:        ${{ secrets.EMAIL_SENDER }}
+      EMAIL_PASSWORD:      ${{ secrets.EMAIL_PASSWORD }}
+      EMAIL_TO:            ${{ secrets.EMAIL_TO }}
+      GITHUB_TOKEN:        ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_REPO:         ${{ github.repository }}
+      STREAMLIT_URL:       ${{ secrets.STREAMLIT_URL }}
+      NTFY_TOPIC:          ${{ secrets.NTFY_TOPIC }}
+      TELEGRAM_BOT_TOKEN:  ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID:    ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    steps:
+      - name: Checkout kod
+        uses: actions/checkout@v4
+
+      - name: Sätt upp Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Installera beroenden
+        run: pip install -r requirements.txt
+
+      - name: Ladda ner senaste data
+        uses: actions/cache@v4
+        with:
+          path: data/
+          key: diagnose-data-${{ github.run_number }}
+          restore-keys: |
+            diagnose-data-
+            pipeline-data-
+
+      - name: Kör diagnos (standard)
+        if: github.event.inputs.quick != 'true' && github.event.schedule != ''
+        run: |
+          python scripts/diagnose.py \
+            --save \
+            --json \
+            2>&1 | tee /tmp/diagnose_output.txt
+        continue-on-error: true
+
+      - name: Kör diagnos (snabb, manuell trigger)
+        if: github.event.inputs.quick == 'true'
+        run: |
+          python scripts/diagnose.py \
+            --quick \
+            --save \
+            --json \
+            ${{ github.event.inputs.sections != '' && format('--section {0}', github.event.inputs.sections) || '' }} \
+            2>&1 | tee /tmp/diagnose_output.txt
+        continue-on-error: true
+
+      - name: Kör diagnos med testmail (manuell trigger)
+        if: github.event.inputs.send_test_mail == 'true'
+        run: |
+          python scripts/diagnose.py \
+            --send-test-mail \
+            --save \
+            --json \
+            2>&1 | tee /tmp/diagnose_output.txt
+        continue-on-error: true
+
+      - name: Kör enhetstester parallellt
+        run: |
+          python -m pytest tests/ \
+            -q \
+            --tb=short \
+            -m "not integration" \
+            --timeout=60 \
+            2>&1 | tee /tmp/pytest_output.txt
+        continue-on-error: true
+
+      - name: Kontrollera GitHub Actions status
+        run: |
+          python scripts/check_github.py --limit 5 --json 2>&1 | tee /tmp/github_status.json
+        continue-on-error: true
+
+      - name: Kontrollera Streamlit webbapp
+        if: env.STREAMLIT_URL != ''
+        run: |
+          python scripts/check_site.py --json 2>&1 | tee /tmp/site_status.json
+        continue-on-error: true
+
+      - name: Ladda upp diagnosrapport som artefakt
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diagnose-report-${{ github.run_number }}
+          path: |
+            /tmp/diagnose_output.txt
+            /tmp/pytest_output.txt
+            /tmp/github_status.json
+            /tmp/site_status.json
+            data/diagnose_history.jsonl
+          retention-days: 30
+
+      - name: Skapa GitHub-sammanfattning
+        if: always()
+        run: |
+          echo "## MarketScan Diagnos — $(date +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Diagnosresultat" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/diagnose_output.txt 2>/dev/null | tail -30 || echo "Ingen output"
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pytest" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/pytest_output.txt 2>/dev/null | tail -20 || echo "Ingen output"
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/diagnose_output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+          cat /tmp/pytest_output.txt >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
+
+      - name: Spara diagnos-historik (commit till repo)
+        if: always() && github.event_name == 'schedule'
+        run: |
+          git config user.name  "MarketScan Bot"
+          git config user.email "bot@marketscan.local"
+          if [ -f data/diagnose_history.jsonl ]; then
+            git add data/diagnose_history.jsonl
+            git diff --staged --quiet || git commit -m "ci: diagnos-historik $(date +'%Y-%m-%d')"
+            git pull --rebase origin main
+            git push origin main
+          fi
+        continue-on-error: true
