@@ -1412,16 +1412,16 @@ def generate_market_summary(df: pd.DataFrame = None, sc_df: pd.DataFrame = None,
     resolved = _resolve_provider(provider)
     cache_key = _make_cache_key("market_summary", datetime.now().strftime("%Y-%m-%d"), resolved, depth)
 
+    # E2-FIX: Prompt hämtas från ai_prompts.py istf hårdkodad inline
+    from core.ai_prompts import SYSTEM_PROMPT_MARKET_SUMMARY as _mkt_prompt
     return _call_with_cache(
-        """Du är MarketScan AI-assistent. Skapa en marknadssammanfattning baserad på dagens scandata.
-
-Analysera datan och inkludera:
-1. Marknadsregim och övergripande sentiment
-2. Sektor- och breddsanalys (vilka sektorer leder, bredd mm)
-3. Starka kontra svaga aktier - mönster i faktorscorer
-4. Konkreta takeaways för investeraren
-
-Skriv på svenska, använd emojis. 150-300 ord beroende på datatillgång.""" + _depth_system_prompt_addon(depth),
+        _mkt_prompt + "\n\nAnalysera datan och inkludera:\n"
+        "1. Marknadsregim och övergripande sentiment\n"
+        "2. Sektor- och breddsanalys (vilka sektorer leder, bredd mm)\n"
+        "3. Starka kontra svaga aktier - mönster i faktorscorer\n"
+        "4. Konkreta takeaways för investeraren\n"
+        "\nSkriv på svenska, använd emojis. 150-300 ord beroende på datatillgång."
+        + _depth_system_prompt_addon(depth),
         [{"role": "user", "content": f"Skapa en marknadssammanfattning.\n\nData:\n```json\n{data_str}\n```"}],
         cache_key,
         max_tokens=_resolve_depth(depth),

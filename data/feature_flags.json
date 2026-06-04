@@ -1,0 +1,15 @@
+{
+  "live_fx_rates": true,
+  "enhanced_rsi_filter": true,
+  "atomic_csv_writes": true,
+  "sha256_ml_models": true,
+  "new_ml_features": false,
+  "beta_scoring_v2": false,
+  "walk_forward_cv": false,
+  "ai_ensemble_mode": false,
+  "pydantic_settings": false,
+  "data_provider_v2": false,
+  "debug_scoring": false,
+  "verbose_data_fetch": false,
+  "dry_run_mode": false
+}

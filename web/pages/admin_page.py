@@ -63,8 +63,13 @@ def page_admin():
     from web.pages.admin_tabs.data_quality import render as _data_quality
     from web.pages.admin_tabs.universe_discovery import render as _universe_discovery
     from web.pages.admin_tabs.strikes_health import render as _strikes_health
+    try:
+        from web.pages.admin_tabs.metrics import render as _metrics
+        _has_metrics = True
+    except ImportError:
+        _has_metrics = False
 
-    tabs = st.tabs([
+    _tab_names = [
         "Översikt",
         "Bevakningslista",
         "Portfölj",
@@ -81,7 +86,9 @@ def page_admin():
         "AI-logg",
         "Larm",
         "Felsökning",
-    ])
+        "Metrics",  # E3: pipeline-metrics och observability
+    ]
+    tabs = st.tabs(_tab_names)
 
     with tabs[0]:
         _overview(_load_scan_log)
@@ -115,3 +122,8 @@ def page_admin():
         render_alarms()
     with tabs[15]:
         _debug(_load_scan_log)
+    with tabs[16]:
+        if _has_metrics:
+            _metrics()
+        else:
+            st.info("core.metrics ej installerat.")

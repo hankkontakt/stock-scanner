@@ -163,3 +163,77 @@ Systemet använder platta filer (CSV, JSON, Parquet) committade till GitHub-repo
 | `data/blacklist.json` | Delistade tickers | Pipeline (auto) |
 | `reports/*.parquet` | Scanresultat | Pipeline |
 | `models/*.pkl` | ML-modeller | train_ml workflow |
+
+---
+
+## Fallback & Disaster Recovery (E6)
+
+### Om GitHub Actions är nere
+
+Pipeline kan köras manuellt lokalt med:
+```bash
+# Morgonscan
+python -c "from core.daily_pipeline import run_pipeline; run_pipeline('morning')"
+
+# Kvällscan
+python -c "from core.daily_pipeline import run_pipeline; run_pipeline('evening')"
+
+# Veckoscanning (lördag)
+python -c "from core.daily_pipeline import run_pipeline; run_pipeline('weekly')"
+
+# Småbolagsscan
+python -c "from core.daily_pipeline import run_pipeline; run_pipeline('smallcap')"
+
+# Specifika tickers
+TARGET_TICKERS="VOLV-B.ST,ERIC-B.ST" python -c "from core.daily_pipeline import run_pipeline; run_pipeline('targeted')"
+```
+
+Kräver: `.env`-filen med API-nycklar + Python-dependencies installerade.
+
+### Om Streamlit Cloud är nere
+
+Starta appen lokalt:
+```bash
+streamlit run streamlit_app.py
+```
+
+### Återställ data från backup
+
+1. GitHub är master-backup: `git pull origin main`
+2. Om `reports/` är tomma: kör `morning`-pipeline manuellt
+3. Om `models/*.pkl` är borta: kör `train_ml` workflow manuellt via Actions
+
+### Alternativ schemaläggning (utan GitHub Actions)
+
+Sätt upp cron-jobb lokalt (Linux/Mac):
+```bash
+# Öppna crontab
+crontab -e
+
+# Morgonscan mån-fre 09:05
+5 7 * * 1-5 cd /path/to/marketscan && python -c "from core.daily_pipeline import run_pipeline; run_pipeline('morning')" >> /tmp/ms_morning.log 2>&1
+
+# Kvällscan mån-fre 17:30
+30 15 * * 1-5 cd /path/to/marketscan && python -c "from core.daily_pipeline import run_pipeline; run_pipeline('evening')" >> /tmp/ms_evening.log 2>&1
+```
+
+Alternativt: Azure Functions, Railway, Render, eller Fly.io som sekundär deployment.
+
+### Viktiga felsökningskommandon
+
+```bash
+# Kontrollera senaste pipeline-körning
+cat data/scan_log.json | python -m json.tool | tail -40
+
+# Lista alla rapportfiler
+ls -la reports/scored_universe_*.parquet | tail -10
+
+# Kolla ML-modellernas ålder
+ls -la models/*.pkl
+
+# Diagnostikskript (fullständig systemkontroll)
+python scripts/diagnose.py --quick
+
+# Kör bara specifika diagnostik-sektioner
+python scripts/diagnose.py --section pipeline --section ml
+```
