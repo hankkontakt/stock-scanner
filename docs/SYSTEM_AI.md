@@ -1110,6 +1110,37 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-03 — Fix: portfolio_refresh krasch + multi-parquet staleness merge + täckning av 631 tickers
+
+**Commit (se nedan) — `core/daily_pipeline.py`**
+
+**Undersökning: 631 "aldrig scorade" tickers**
+- Stickprov 35/35 testade tickers = 100% aktiva på börsen (ABBV $381B, ABT $152B, VZ, PYPL osv.)
+- Auditens 2 snapshots är för få — "aldrig sett" = Yahoo rate-limitad i BÅDA körningarna, INTE avnoterad
+- Slutsats: ta inte bort dem. Kör `retry_rate_limited` (schema: lör+mån kl 13:00 CEST) + vänta 5-10 scannar
+
+**Fix 1 — `run_portfolio_refresh()` krasch (`'dict' object has no attribute 'columns'`):**
+- `fetch_prices_only()` returnerar `{ticker: {"current_price": float, ...}}` (dict)
+- Gammal kod: `for col in prices.columns:` — DataFrame-API på ett dict → AttributeError
+- Fix: ersätt loopen med direkt dict-access: `prices.get(ticker)["current_price"]`
+- Fix 2: förbättrat ticker-filter — hoppar nu över fondnamn med mellanslag
+  (`"LÄNSFÖRSÄKRINGAR GLOBAL INDEX"` → skippas med info-logg istf. krasch)
+
+**Fix 2 — Multi-parquet staleness merge (`_load_all_recent_scored`):**
+- Ny funktion ersätter `_load_latest_scored` i weekly-pipeline staleness-bas
+- Laddar UNION av alla parquets/CSVs från senaste 14 dagar (nyast ticker vinner)
+- Räknar korrekt staleness per ticker baserat på filens ålder
+- Täckning: ~40% (en fil) → 70-90%+ (union av alla tillgängliga filer)
+- Duplikat-definition borttagen (äldre enklare version ersatt av ny med staleness-logik)
+
+**Varför `retry_rate_limited` löser 631-problemet:**
+- Weekly scan hämtar ~600/1170 tickers (Yahoo rate-limit)
+- Retry körs 4h senare med exponentiell fördröjning → tar 300-500 ytterligare
+- Efter 2-3 körningar täcks nästan alla tickers
+- Staleness merge bevarar data mellan körningar (max 14 dagar)
+
+---
+
 ### 2026-06-03 — Fix: Ruff CI-lint (1759→0 fel) + undefined-name buggar + Black-Litterman test
 
 **Commit dadf55c — `pyproject.toml`, `portfolio/black_litterman.py`, `core/email_template.py`,
