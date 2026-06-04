@@ -1125,6 +1125,10 @@ Ombyggnation till 5 väldefinierade sektioner för bättre navigering och profes
 **Vad:** Systematisk granskning av alla felsökningsverktyg, tester, CI/CD, datafiler och konfiguration. 3 testfel hittade och fixade. Pandas-constraint breddad. CachingProvider fångar nu undantag. Alla 27 JSON-filer verifierade — inga korruptioner.
 **Varför:** Säkerställa att samtliga felsökningsverktyg fungerar, testfläckning är stabil, och datafiler är intakta.
 
+### 2026-06-05 — StreamlitDuplicateElementKey-fix i overview.py _goto() (commit a5dd82e)
+**Vad:** Lade till unik random-suffix per knapp i `_goto()` för att förhindra `StreamlitDuplicateElementKey` när samma sidnamn anropas från flera ställen i samma vy (t.ex. "Veckoscanner" i både "Köp nu"- och "På uppgång"-kortet).
+**Varför:** `st.button()` kräver unika element-keys. Utan random-suffix kraschade appen i Streamlit Cloud vid rendering av sidor med dubbla navigeringsknappar till samma destination.
+
 **Syfte:** Lösa det faktiska problemet — systemet kör på GitHub Actions och Streamlit Cloud,
 inte lokalt. AI behöver kunna se vad som händer DÄR utan att logga in eller köra appen.
 
