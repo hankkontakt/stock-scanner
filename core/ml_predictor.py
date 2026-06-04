@@ -43,6 +43,17 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# A4-SPLIT STATUS: Delvis genomförd
+# Extraherade moduler (ny kod bör importera direkt från dessa):
+#   - core/ml_features.py — compute_features_at(), RSI, MACD, Hurst etc.
+# Planerade moduler (inte implementerade ännu):
+#   - core/ml_train.py    — train_from_dataset(), train_with_cpcv(), save_model()
+#   - core/ml_inference.py — predict_returns(), load_model()
+# Funktionerna nedan är kvar för backward compatibility.
+# TODO(A4): Migrera tränings- och inference-kod till separata moduler.
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ══════════════════════════════════════════════════════════════════════════════
 # DEFLATED SHARPE RATIO  (Lopez de Prado 2018)
 # ══════════════════════════════════════════════════════════════════════════════
 
