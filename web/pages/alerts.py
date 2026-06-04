@@ -176,7 +176,7 @@ def _get_insider_alerts(df: pd.DataFrame) -> pd.DataFrame:
             types.append("Kluster (3+ insiders)")
         if (row.get("insider_pct") or 0) > 0.15:
             types.append(f"Högt ägande ({row.get('insider_pct', 0) * 100:.0f}%)")
-        return " * ".join(types) if types else "Insynsägande"
+        return " · ".join(types) if types else "Insynsägande"
 
     result["Insynssignal"] = result.apply(_signal_type, axis=1)
 

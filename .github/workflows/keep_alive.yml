@@ -2,8 +2,10 @@ name: 💤 Keep Alive
 
 on:
   schedule:
-    # Var 20:e minut (GitHub Actions minimum är 5 min, men 20 min räcker för Streamlit)
-    - cron: "*/20 * * * *"
+    # Var 30:e minut 06:00-23:00 UTC = 08:00-01:00 CEST (aktiva timmar)
+    # Minskat från */20 * * * * (2160 min/mån) för att spara GitHub Actions-minuter.
+    # Streamlit Community Cloud "always on" rekommenderas som alternativ.
+    - cron: "*/30 6-22 * * *"
   workflow_dispatch:
 
 jobs:

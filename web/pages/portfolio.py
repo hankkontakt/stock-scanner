@@ -681,7 +681,7 @@ def _manage_portfolio_section(holdings: pd.DataFrame):
                 if _n_new:     _parts.append(f"**{_n_new} nya**")
                 if _n_changed: _parts.append(f"**{_n_changed} ändrade**")
                 if _n_same:    _parts.append(f"{_n_same} oförändrade")
-                st.success("Hittade " + str(len(df_src)) + " innehav: " + (" * ".join(_parts) if _parts else str(len(df_src))) + ". Granska och bekräfta:")
+                st.success("Hittade " + str(len(df_src)) + " innehav: " + (" · ".join(_parts) if _parts else str(len(df_src))) + ". Granska och bekräfta:")
 
                 import_data = []
                 n_funds = n_certs = 0

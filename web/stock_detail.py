@@ -698,7 +698,7 @@ def _score_breakdown(row: pd.Series):
                     pass
                 kpi_parts.append(f"{klabel}: {_fmt(val, kfmt)}")
 
-        kpi_str = " * ".join(kpi_parts) if kpi_parts else "Data saknas"
+        kpi_str = " · ".join(kpi_parts) if kpi_parts else "Data saknas"
         st.markdown(
             f"{emoji} **{label}** "
             f"<span style='color:{color};font-weight:bold'>{s:.0f}</span> "

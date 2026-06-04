@@ -469,8 +469,8 @@ def conviction_meter_breakdown(row) -> str:
         return ""
     top = sorted(valid.items(), key=lambda x: x[1], reverse=True)[:2]
     bot = sorted(valid.items(), key=lambda x: x[1])[:2]
-    top_str = " * ".join(f"**{k}** ({v:.0f})" for k, v in top)
-    bot_str = " * ".join(f"**{k}** ({v:.0f})" for k, v in bot)
+    top_str = " · ".join(f"**{k}** ({v:.0f})" for k, v in top)
+    bot_str = " · ".join(f"**{k}** ({v:.0f})" for k, v in bot)
     return f"Styrkor: {top_str}   Svagheter: {bot_str}"
 
 

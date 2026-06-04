@@ -160,7 +160,11 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
                     }
                     new_count += 1
             if new_count:
-                _bl_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False))
+                # Atomisk skrivning: tmp → replace förhindrar korrupt blacklist
+                # vid simultana pipeline-körningar (race condition D2)
+                _bl_tmp = _bl_path.with_suffix(".tmp.json")
+                _bl_tmp.write_text(json.dumps(existing, indent=2, ensure_ascii=False))
+                _bl_tmp.replace(_bl_path)
                 if verbose:
                     print(f"  🚫 Auto-blacklistade {new_count} delistade tickers: "
                           f"{', '.join(delisted[:8])}{'...' if len(delisted) > 8 else ''}")

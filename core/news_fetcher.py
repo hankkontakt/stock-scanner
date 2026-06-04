@@ -112,17 +112,27 @@ def fetch_news(ticker: str, api_key: str, days: int = 3) -> list:
         )
 
         if resp.status_code == 429:
-            time.sleep(61)
-            resp = requests.get(
-                "https://finnhub.io/api/v1/company-news",
-                params={
-                    "symbol": symbol,
-                    "from":   date_from.strftime("%Y-%m-%d"),
-                    "to":     date_to.strftime("%Y-%m-%d"),
-                    "token":  api_key,
-                },
-                timeout=8,
-            )
+            # Exponentiell backoff: 61s → 122s → max 2 försök
+            import logging as _log_fn
+            for _attempt in range(2):
+                _delay = 61 * (2 ** _attempt)
+                _log_fn.getLogger(__name__).warning(
+                    "Finnhub company-news 429 för %s — väntar %ds (försök %d/2)",
+                    symbol, _delay, _attempt + 1,
+                )
+                time.sleep(_delay)
+                resp = requests.get(
+                    "https://finnhub.io/api/v1/company-news",
+                    params={
+                        "symbol": symbol,
+                        "from":   date_from.strftime("%Y-%m-%d"),
+                        "to":     date_to.strftime("%Y-%m-%d"),
+                        "token":  api_key,
+                    },
+                    timeout=8,
+                )
+                if resp.status_code != 429:
+                    break
 
         if resp.status_code != 200:
             _write_cache(cache_key, [])
@@ -245,12 +255,21 @@ def fetch_global_market_news(api_key: str, max_articles: int = 5) -> list:
                 timeout=8,
             )
             if resp.status_code == 429:
-                time.sleep(61)
-                resp = requests.get(
-                    "https://finnhub.io/api/v1/news",
-                    params={"category": "general", "token": api_key},
-                    timeout=8,
-                )
+                # Exponentiell backoff: 61s → 122s → max 2 försök
+                import logging as _log_gm
+                for _attempt in range(2):
+                    _delay = 61 * (2 ** _attempt)
+                    _log_gm.getLogger(__name__).warning(
+                        "Finnhub market-news 429 — väntar %ds (försök %d/2)", _delay, _attempt + 1,
+                    )
+                    time.sleep(_delay)
+                    resp = requests.get(
+                        "https://finnhub.io/api/v1/news",
+                        params={"category": "general", "token": api_key},
+                        timeout=8,
+                    )
+                    if resp.status_code != 429:
+                        break
             if resp.status_code == 200:
                 articles = resp.json()
                 if isinstance(articles, list):
