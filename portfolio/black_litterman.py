@@ -115,6 +115,11 @@ def _build_view_matrix(scored_df: pd.DataFrame, ic: float = 0.05) -> tuple:
     tau = TAU_DEFAULT
     ic_eff = max(abs(ic), MIN_IC_THRESHOLD)
     omega_diag = tau * np.ones(N) / ic_eff
+    # M2: Omega (view-osäkerhet) skalas med view-magnitud: omega *= |Q| + 0.01.
+    # Detta är ett avsiktligt konservativt val: större förväntad avkastning →
+    # större osäkerhet (mer skepticism mot extrema views).
+    # Standardformel (BL-litteraturen): Omega = tau * P @ Sigma @ P.T
+    # Vår formel är enklare (diagonal) och minskar känsligheten för outlier-views.
     omega_diag *= np.abs(Q) + 0.01
     Omega = np.diag(omega_diag)
     return P, Q, Omega
@@ -367,18 +372,28 @@ class BlackLittermanOptimizer:
 
         try:
             tau = self.tau
-            tau_sigma_inv = np.linalg.inv(tau * cov_matrix)
-            omega_inv = np.linalg.inv(uncertainty)
+            # M4-FIX: Använd pinv (pseudo-invers) som fallback vid singulär matris.
+            # np.linalg.inv() kraschar med LinAlgError om matrisen är singulär
+            # (t.ex. om alla returns är NaN eller identiska). pinv är numeriskt stabilare.
+            def _safe_inv(M):
+                try:
+                    return np.linalg.inv(M)
+                except np.linalg.LinAlgError:
+                    logger.warning("BL: singulär matris — använder pseudo-invers (pinv)")
+                    return np.linalg.pinv(M)
+
+            tau_sigma_inv = _safe_inv(tau * cov_matrix)
+            omega_inv = _safe_inv(uncertainty)
 
             posterior_precision = tau_sigma_inv + P.T @ omega_inv @ P
-            posterior_cov = np.linalg.inv(posterior_precision)
+            posterior_cov = _safe_inv(posterior_precision)
 
             posterior_mean = posterior_cov @ (
                 tau_sigma_inv @ prior + P.T @ omega_inv @ views
             )
             return posterior_mean
         except np.linalg.LinAlgError as e:
-            logger.warning(f"BL: posterior returns failed: {e}")
+            logger.warning(f"BL: posterior returns misslyckades: {e}")
             return None
 
     # ── View Conflict Measure ──────────────────────────────────────────────

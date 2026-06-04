@@ -92,11 +92,28 @@ jobs:
 
       - name: 🏋️  Träna modell (universum + per-sektor)
         if: ${{ github.event.inputs.universe == 'universe' || github.event.inputs.universe == 'both' || github.event_name == 'schedule' }}
-        run: python -m scripts.train_ml --universe universe --sectors
+        # CI4-FIX: Heartbeat var 5:e min så CI-loggen inte verkar fryst under lång träning
+        run: |
+          echo "Training started: $(date)"
+          (while true; do echo "--- Heartbeat $(date) ---"; sleep 300; done) &
+          HEARTBEAT_PID=$!
+          python -m scripts.train_ml --universe universe --sectors
+          TRAIN_EXIT=$?
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          echo "Training finished: $(date) (exit $TRAIN_EXIT)"
+          exit $TRAIN_EXIT
 
       - name: 🏋️  Träna modell (smallcap)
         if: ${{ github.event.inputs.universe == 'smallcap' || github.event.inputs.universe == 'both' || github.event_name == 'schedule' }}
-        run: python -m scripts.train_ml --universe smallcap
+        run: |
+          echo "Smallcap training started: $(date)"
+          (while true; do echo "--- Heartbeat $(date) ---"; sleep 300; done) &
+          HEARTBEAT_PID=$!
+          python -m scripts.train_ml --universe smallcap
+          TRAIN_EXIT=$?
+          kill $HEARTBEAT_PID 2>/dev/null || true
+          echo "Smallcap training finished: $(date) (exit $TRAIN_EXIT)"
+          exit $TRAIN_EXIT
 
       - name: 💾 Committa modeller
         run: |

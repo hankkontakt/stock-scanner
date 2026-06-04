@@ -94,53 +94,49 @@ jobs:
 
       - name: 🔄 Bestäm körläge
         id: mode
-        # ⚠️  P1-FIX: Cron-strängmatchning är skör — om schema ändras måste
-        # matchningen uppdateras SYNKRONT. Schemat (UTC) → mode-mappning:
-        #   "5 7 * * 1-5"  → morning          (mån-fre 09:05 CEST)
-        #   "30 15 * * 1-5" → evening          (mån-fre 17:30 CEST)
-        #   "0 7 * * 6"    → weekly            (lör 09:00 CEST)
-        #   "0 11 * * 6"   → retry_rate_limited (lör 13:00 CEST)
-        #   "15 7 * * 1"   → smallcap          (mån 09:15 CEST)
-        #   "0 11 * * 1"   → retry_rate_limited (mån 13:00 CEST)
-        #   "10 11 * * 1-5" → portfolio_refresh (mån-fre 13:10 CEST)
-        #   "0 8,15 * * 1-5" → refresh_missing (mån-fre 10:00+17:00 CEST)
-        # Fallback: morning (säkert default — re-scannar med morgon-regler)
+        # P1/CI1-FIX: Centraliserad lookup-tabell istf if/elif-kedja.
+        # Lägg till nytt schema = lägg till ny rad i MODE_MAP nedan.
+        # Ingen risk att kedjan "glömmer" att uppdateras vid schema-ändring.
+        #
+        # Schema (UTC) → mode-mappning:
+        #   "5 7 * * 1-5"    → morning           (mån-fre 09:05 CEST)
+        #   "30 15 * * 1-5"  → evening            (mån-fre 17:30 CEST)
+        #   "0 7 * * 6"      → weekly             (lör 09:00 CEST)
+        #   "0 11 * * 6"     → retry_rate_limited (lör 13:00 CEST)
+        #   "15 7 * * 1"     → smallcap           (mån 09:15 CEST)
+        #   "0 11 * * 1"     → retry_rate_limited (mån 13:00 CEST)
+        #   "10 11 * * 1-5"  → portfolio_refresh  (mån-fre 13:10 CEST)
+        #   "0 8,15 * * 1-5" → refresh_missing    (mån-fre 10:00+17:00 CEST)
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
             echo "tickers=${{ github.event.inputs.tickers }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "5 7 * * 1-5" ]; then
-            echo "mode=morning" >> $GITHUB_OUTPUT
-            echo "tickers=" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "30 15 * * 1-5" ]; then
-            echo "mode=evening" >> $GITHUB_OUTPUT
-            echo "tickers=" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "0 7 * * 6" ]; then
-            echo "mode=weekly" >> $GITHUB_OUTPUT
-            echo "tickers=" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "0 11 * * 6" ]; then
-            echo "mode=retry_rate_limited" >> $GITHUB_OUTPUT
-            echo "tickers=" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "15 7 * * 1" ]; then
-            echo "mode=smallcap" >> $GITHUB_OUTPUT
-            echo "tickers=" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "0 11 * * 1" ]; then
-            echo "mode=retry_rate_limited" >> $GITHUB_OUTPUT
-            echo "tickers=" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "10 11 * * 1-5" ]; then
-            echo "mode=portfolio_refresh" >> $GITHUB_OUTPUT
-            echo "tickers=" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "0 8,15 * * 1-5" ]; then
-            echo "mode=refresh_missing" >> $GITHUB_OUTPUT
-            echo "tickers=" >> $GITHUB_OUTPUT
           else
-            # Okänt schema — fallback morning (logga för felsökning)
-            echo "⚠️  Okänt cron-schema: '${{ github.event.schedule }}' — kör morning som fallback" >&2
-            echo "mode=morning" >> $GITHUB_OUTPUT
+            # Lookup-tabell (Python): en rad per schema = tydlig underhåll
+            SCHED="${{ github.event.schedule }}"
+            MODE=$(python3 -c "
+          import sys
+          MODE_MAP = {
+              '5 7 * * 1-5':    'morning',
+              '30 15 * * 1-5':  'evening',
+              '0 7 * * 6':      'weekly',
+              '0 11 * * 6':     'retry_rate_limited',
+              '15 7 * * 1':     'smallcap',
+              '0 11 * * 1':     'retry_rate_limited',
+              '10 11 * * 1-5':  'portfolio_refresh',
+              '0 8,15 * * 1-5': 'refresh_missing',
+          }
+          sched = sys.argv[1]
+          mode = MODE_MAP.get(sched)
+          if mode is None:
+              print(f'WARNING: Okänt cron-schema \"{sched}\" — fallback till morning', file=sys.stderr)
+              mode = 'morning'
+          print(mode)
+          " "$SCHED")
+            echo "mode=$MODE" >> $GITHUB_OUTPUT
             echo "tickers=" >> $GITHUB_OUTPUT
           fi
-          # Logga valt läge för enkel CI-felsökning
-          echo "✅ Valt körläge: $(grep 'mode=' $GITHUB_OUTPUT | head -1 | cut -d= -f2)"
+          echo "Valt körläge: $(grep 'mode=' $GITHUB_OUTPUT | head -1 | cut -d= -f2)"
 
       - name: 🚀 Kör pipeline
         env:
@@ -199,6 +195,10 @@ jobs:
             git add data/email_delivery_log.json 2>/dev/null || true
             GIT_EDITOR=true git rebase --continue 2>/dev/null || git rebase --skip 2>/dev/null || true
           }
+          # CI2-FIX: Verifiera att rebase inte tappade commits (logga de 3 senaste)
+          echo "--- Senaste commits efter rebase ---"
+          git log --oneline -3
+          echo "--- Inga commits tappades om ovan visas korrekt ---"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

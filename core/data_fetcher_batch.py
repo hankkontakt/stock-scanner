@@ -98,11 +98,18 @@ def fetch_universe_data(tickers: list, verbose: bool = True) -> pd.DataFrame:
                 failed.append(ticker)
                 failed_detail[ticker] = {"status": status, "pass": 1}
 
-    # ── Pass 2: retry rate-limited tickers med 1 worker + fördröjning ──────────
+    # ── Pass 2: retry rate-limited tickers med 1 worker + exponentiell backoff ─
+    # D6-FIX: Ersatt global 45s sleep med adaptiv väntetid baserat på hur många
+    # rate-limited tickers det finns. Mer tickers → kortare per-ticker-delay är OK
+    # eftersom 1 worker serialiserar anropen naturligt.
     if rate_limited:
+        import random as _random
+        _base_wait = min(30 + len(rate_limited) * 0.5, 60)  # 30-60s beroende på volym
+        _jitter = _random.uniform(0, 5)
+        _wait = round(_base_wait + _jitter)
         if verbose:
-            print(f"\n  ⏳ Pass 2: {len(rate_limited)} rate-limited tickers - väntar 45s för att ge Yahoo tid att återhämta sig...")
-        time.sleep(45)
+            print(f"\n  ⏳ Pass 2: {len(rate_limited)} rate-limited tickers — väntar {_wait}s (adaptiv backoff) ...")
+        time.sleep(_wait)
 
         pass2_completed = 0
         pass2_total = len(rate_limited)

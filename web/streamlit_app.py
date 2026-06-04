@@ -100,7 +100,10 @@ def _safe_render(page_name: str, fn, *args, **kwargs):
     try:
         fn(*args, **kwargs)
     except Exception as e:
-        st.error(f"Sidan {page_name} kunde inte laddas: {e}")
+        # S9-FIX: Sanitera felmeddelandet — ta bort potentiella secrets (tokens 40+ tecken)
+        import re as _re_s9
+        _safe_msg = _re_s9.sub(r"[REDACTED]", str(e))
+        st.error(f"Sidan {page_name} kunde inte laddas: {_safe_msg}")
         st.caption("Övriga delar av appen fungerar som vanligt.")
         with st.expander("Visa tekniska detaljer", expanded=False):
             st.code(traceback.format_exc())
@@ -970,7 +973,7 @@ def _run_auth() -> bool:
             for uname, udata in raw_creds.get("usernames", {}).items()
         }
     except Exception as e:
-        st.error(f"❌ Fel vid läsning av credentials från secrets: {e}")
+        st.error("❌ Fel vid läsning av credentials från secrets. Kontrollera Streamlit Secrets-konfigurationen.")
         return False
 
     # Slå samman med admin-hanterade användare (läses från data/users_config.json)

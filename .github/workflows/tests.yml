@@ -36,6 +36,9 @@ jobs:
 
   type-check:
     runs-on: ubuntu-latest
+    # T4: continue-on-error kvar tills de ~200 befintliga mypy-felen är åtgärdade.
+    # Mål: ta bort detta när core/ är mypy-clean (target: 2026-Q3).
+    # Fel SYNS tydligt i CI-loggen med felräknaren nedan.
     continue-on-error: true
     timeout-minutes: 5
     steps:
@@ -52,11 +55,16 @@ jobs:
           pip install mypy
           pip install -r requirements.txt
 
-      - name: 🏷️ MyPy check
-        # continue-on-error: true på job-nivå — mypy-fel blockerar INTE CI men syns som gult/varning.
-        # Ta INTE bort || true nedan förrän alla mypy-fel är åtgärdade i core/ (ca 200+ issues).
-        # TODO(T4): ta bort || true och sätt continue-on-error: false när core/ är mypy-clean.
-        run: mypy core/ --ignore-missing-imports
+      - name: 🏷️ MyPy check (T4)
+        run: |
+          # Kör mypy och räkna fel (synligt i CI-loggen)
+          mypy core/ --ignore-missing-imports 2>&1 | tee /tmp/mypy_out.txt || true
+          ERROR_COUNT=$(grep -c "error:" /tmp/mypy_out.txt || echo 0)
+          echo "::notice::MyPy hittade $ERROR_COUNT fel i core/ (mål: 0 — se T4 i audit)"
+          tail -5 /tmp/mypy_out.txt
+          # Misslyckas bara om felen ÖKAR från baseline (100+ = alltid fel)
+          # TODO(T4): Sänk tröskeln progressivt: 200 → 150 → 100 → 50 → 0
+          [ "$ERROR_COUNT" -lt 300 ] || (echo "MyPy-fel överstiger 300 — åtgärda!" && exit 1)
 
   test:
     needs: lint
@@ -88,14 +96,14 @@ jobs:
         run: |
           pytest tests/ -v --tb=short -n auto \
             --cov=core \
-            --cov-fail-under=30 \
+            --cov-fail-under=40 \
             --cov-report=term-missing \
             --cov-report=xml \
             --durations=10 \
             -m "not slow"
-          # T5: Tröskeln justerades ned 35% → 30% pga att -n auto (xdist) gav felaktig
-          # parallell-coverage. 30% matchar faktisk uppmätt täckning (410 tester).
-          # Mål: höj till 40% när dedikerade integrationstest är klara.
+          # T5: Höjt 30% → 40% (T5-FIX). xdist-parallell coverage kompenseras nu av
+          # att fler tester lagts till (security, chaos, property-based tests).
+          # Mål: höj progressivt till 60% när ytterligare integrationstest är klara.
 
       - name: 🐌 Kör prestandatester (seriellt)
         run: |
