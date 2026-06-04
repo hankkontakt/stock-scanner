@@ -19,10 +19,13 @@ from web.ui.ai_action import ai_run_control
 from web.ui import tokens as t
 
 
-def _goto(page_title: str):
+def _goto(page_title: str, _suffix: str = ""):
     """Tillfällig nav-brygga mot nuvarande session-state-navigation.
-    Ersätts av st.page_link när navigationen skrivs om till st.navigation."""
-    if st.button(f"Visa allt  ->", key=f"goto_{page_title}", use_container_width=True):
+    Ersätts av st.page_link när navigationen skrivs om till st.navigation.
+    _suffix används för att undvika StreamlitDuplicateElementKey när samma
+    sida länkas från flera ställen på samma vy."""
+    _key = f"goto_{page_title}{_suffix}"
+    if st.button("Visa allt  ->", key=_key, use_container_width=True):
         st.session_state["nav_page"] = page_title
         st.rerun()
 
@@ -99,7 +102,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                     empty_state("Inga STARK-signaler just nu.", icon="info")
             else:
                 empty_state("Ingen signaldata.", icon="info")
-            _goto("🔍 Veckoscanner")
+            _goto("🔍 Veckoscanner", "_buy")
 
     with col_b:
         with st.container(border=True):
@@ -234,7 +237,7 @@ def page_overview(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame 
                     empty_state("Ingen data.", icon="info")
             else:
                 empty_state("Ingen scandata.", icon="info")
-            _goto("🔍 Veckoscanner")
+            _goto("🔍 Veckoscanner", "_rise")
 
     # ── AI-sammanfattning (infälld, djup väljs vid körning) ──────────────────
     st.write("")

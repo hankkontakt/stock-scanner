@@ -37,13 +37,7 @@ class TestNetworkFailures:
         from core.data_provider import YFinanceProvider
         provider = YFinanceProvider()
         with patch("yfinance.Ticker") as mock_ticker:
-            mock_ticker.return_value.info = None
-            mock_ticker.return_value.info.__get__ = MagicMock(side_effect=ConnectionError)
-            # Simulera ConnectionError vid info-anrop
-            def raise_conn(*a, **k):
-                raise ConnectionError("No network")
-            mock_ticker.return_value.__init__ = raise_conn
-            # Sätter upp korrekt mock
+            # Simulera att yfinance.Ticker() i sig kastar ConnectionError
             mock_ticker.side_effect = ConnectionError("No network")
             result = provider.get_info("AAPL")
         assert isinstance(result, dict)
@@ -59,11 +53,22 @@ class TestNetworkFailures:
 
     def test_caching_provider_survives_inner_failure(self):
         """CachingProvider returnerar tom DF om inner provider kastar."""
-        from core.data_provider import CachingProvider, YFinanceProvider
-        inner = YFinanceProvider()
+        from core.data_provider import DataProvider
+        # Skapa en mock-adapter istället för YFinanceProvider (som har try/except)
+        class FailingProvider(DataProvider):
+            def get_price_history(self, ticker, period="1y", interval="1d"):
+                raise RuntimeError("API down")
+            def get_info(self, ticker):
+                return {}
+            def get_fast_info(self, ticker):
+                return {"price": None, "currency": None}
+            def get_name(self):
+                return "FailingProvider"
+
+        from core.data_provider import CachingProvider
+        inner = FailingProvider()
         cached = CachingProvider(inner, price_ttl_s=300)
-        with patch.object(inner, "get_price_history", side_effect=RuntimeError("API down")):
-            result = cached.get_price_history("AAPL")
+        result = cached.get_price_history("AAPL")
         assert isinstance(result, pd.DataFrame)
 
 
@@ -117,7 +122,7 @@ class TestMalformedData:
         monkeypatch.setattr(requests, "get", lambda *a, **k: mock_resp)
 
         try:
-            result = news_fetcher.fetch_rss_news("https://fake.url/feed", max_items=5)
+            result = news_fetcher.fetch_news("AAPL", api_key="", days=1)
             assert isinstance(result, list), "Ska returnera lista (möjligen tom) vid malformad XML"
         except Exception as e:
             pytest.fail(f"news_fetcher kraschade på malformad XML: {e}")
