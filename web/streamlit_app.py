@@ -101,7 +101,7 @@ def _safe_render(page_name: str, fn, *args, **kwargs):
         fn(*args, **kwargs)
     except Exception as e:
         st.error(f"Sidan {page_name} kunde inte laddas: {e}")
-        st.caption("Ovriga delar av appen fungerar som vanligt.")
+        st.caption("Övriga delar av appen fungerar som vanligt.")
         with st.expander("Visa tekniska detaljer", expanded=False):
             st.code(traceback.format_exc())
 
@@ -121,7 +121,7 @@ def _validate_api_keys():
         missing.append("FINNHUB_API_KEY (sentimentdata)")
     if missing:
         st.warning(
-            "Foljande API-nycklar saknas: "
+            "Följande API-nycklar saknas: "
             + ", ".join(f"**{k}**" for k in missing)
             + ". Funktioner som kravver dessa kommer att misslyckas eller anvanda fallback."
         )
@@ -804,27 +804,14 @@ def _handle_password_reset_flow() -> bool:
             elif pw1 != pw2:
                 st.error("Lösenorden matchar inte.")
             else:
-                # Hasha lösenordet -- prova olika API-varianter beroende på version
+                # Hasha lösenordet med bcrypt (standard $2b$12$... format)
                 new_hash = None
                 try:
-                    import streamlit_authenticator as stauth
-                    # Ny API (>=0.3.3): Hasher.hash(password)
-                    new_hash = stauth.Hasher.hash(pw1)
+                    import bcrypt as _bcrypt_mod
+                    new_hash = _bcrypt_mod.hashpw(pw1.encode("utf-8"),
+                                                  _bcrypt_mod.gensalt(rounds=12)).decode("utf-8")
                 except Exception:
-                    pass
-                if not new_hash:
-                    try:
-                        import streamlit_authenticator as stauth
-                        # Gammal API (<0.3): Hasher([password]).generate()[0]
-                        new_hash = stauth.Hasher([pw1]).generate()[0]
-                    except Exception:
-                        pass
-                if not new_hash:
-                    try:
-                        import bcrypt
-                        new_hash = bcrypt.hashpw(pw1.encode(), bcrypt.gensalt()).decode()
-                    except Exception:
-                        new_hash = None
+                    new_hash = None
                 if not new_hash:
                     st.error("❌ Kunde inte hasha lösenordet. Kontakta administratören.")
                 elif _update_user_password(username, new_hash):
@@ -918,128 +905,137 @@ def _load_managed_users() -> dict:
         return {}
 
 
+def _verify_password(plain: str, hashed: str) -> bool:
+    """Verifierar ett lösenord mot ett bcrypt-hash.
+
+    Stöder:
+    - bcrypt-format ($2b$...) från streamlit-authenticator eller bcrypt-biblioteket
+    - Klartext-jämförelse som nödfallsfallback (ska aldrig behövas i produktion)
+    """
+    try:
+        import bcrypt as _bcrypt
+        return _bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        pass
+    # Sista fallback: direktjämförelse (bara för äldre ej-hashade lösenord)
+    return plain == hashed
+
+
 def _run_auth() -> bool:
-    """Hanterar inloggning med streamlit-authenticator (cookie-baserade sessioner).
+    """Hanterar inloggning via bcrypt-baserat formulär (ingen extra_streamlit_components).
 
     Flöde:
-    1. Om credentials INTE är konfigurerade i secrets -> öppen åtkomst (lokal körning)
-    2. Admin-credentials läses från Streamlit Secrets
-    3. Övriga användare läses från data/users_config.json (hanteras via admin-sidan)
-    4. Om redan inloggad via cookie -> True direkt
-    5. Annars -> visa inloggningsformulär
+    1. Utan konfigurerade secrets → öppen åtkomst (lokal körning)
+    2. Om redan inloggad (session_state["authentication_status"] is True) → True direkt
+    3. Om URL har reset_token → visa lösenordsåterställning
+    4. Annars → visa inloggningsformulär, verifiera mot secrets + users_config.json
 
-    Sätter session_state["username"] efter lyckad inloggning.
+    Sätter session_state["authentication_status"] = True och session_state["username"]
+    efter lyckad inloggning.
     """
     if not _has_credentials_configured():
-        # Lokal körning utan secrets - öppen åtkomst, sätt admin som default-användare
+        # Lokal körning utan secrets — öppen åtkomst, sätt admin som default-användare
         if not st.session_state.get("username"):
             st.session_state["username"] = "admin"
         return True
 
-    try:
-        import streamlit_authenticator as stauth
-    except ImportError:
-        st.error("❌ streamlit-authenticator saknas. Kör: pip install streamlit-authenticator")
-        return False
-
-    # Bygg credentials-dict: admin från secrets + övriga från users_config.json
-    try:
-        raw_creds = st.secrets["credentials"]
-        credentials = {
-            "usernames": {
-                uname: dict(udata)
-                for uname, udata in raw_creds.get("usernames", {}).items()
-            }
-        }
-    except Exception as e:
-        st.error(f"❌ Fel vid läsning av credentials från secrets: {e}")
-        return False
-
-    # Slå samman med admin-hanterade användare (läses från data/users_config.json)
-    managed = _load_managed_users()
-    credentials["usernames"].update(managed)
-
-    cookie_cfg = {}
-    try:
-        cookie_cfg = dict(st.secrets.get("cookie", {}))
-    except Exception:
-        pass
-
-    authenticator = stauth.Authenticate(
-        credentials=credentials,
-        cookie_name=cookie_cfg.get("name", "marketscan_auth"),
-        key=cookie_cfg.get("key", "marketscan_default_key_change_me"),
-        cookie_expiry_days=int(cookie_cfg.get("expiry_days", 30)),
-    )
-
-    # Om URL har reset_token -> visa lösenordsåterställning istället för inloggning
-    if _handle_password_reset_flow():
-        return False
-
-    # Visa inloggningsformulär centrerat med varumärkeslogotyp
-    if st.session_state.get("authentication_status") is not True:
-        st.markdown("""
-        <style>
-        [data-testid="stForm"] {
-            max-width: 380px;
-            margin: 80px auto 0 auto;
-            background: #1e2230;
-            border: 1px solid #2d3250;
-            border-radius: 12px;
-            padding: 40px 36px 32px;
-        }
-        </style>
-        <div style="text-align:center; padding: 60px 0 0 0;">
-          <div style="font-size:24px; font-weight:800; letter-spacing:3px; color:#e8eaf0;">
-            MARKET<span style="color:#00d4aa;">SCAN</span>
-          </div>
-          <div style="font-size:11px; color:#64748b; letter-spacing:2px;
-                      text-transform:uppercase; margin-top:4px; margin-bottom:32px;">
-            Aktieanalys & Portfölj
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    authenticator.login(location="main")
-
-    status = st.session_state.get("authentication_status")
-
-    # Visa kontaktinfo + "Glömt lösenord?" under inloggningsformuläret (ej inloggad)
-    if status is not True:
-        st.markdown("""
-        <div style="text-align:center; margin-top:24px; padding: 0 20px;">
-          <div style="font-size:12px; color:#64748b; line-height:1.9;">
-            Inget konto? Kontakta
-            <a href="mailto:h.thurner@hotmail.com"
-               style="color:#4c9be8; text-decoration:none;">
-              h.thurner@hotmail.com
-            </a>
-            för att få tillgång.
-          </div>
-        </div>
-        <div style="max-width:380px; margin:16px auto 0 auto; padding:0 20px;">
-        </div>
-        """, unsafe_allow_html=True)
-        _show_forgot_password_form()
-
-    if status is True:
+    # Redan autentiserad denna session
+    if st.session_state.get("authentication_status") is True:
         username = st.session_state.get("username", "admin")
-        # Logga inloggning (en gång per session via session_state-flagga)
         if not st.session_state.get("_login_logged"):
             _log_activity(username, "login")
             st.session_state["_login_logged"] = True
-        # Lägg till utloggningsknapp i sidofältet
         with st.sidebar:
             st.markdown(
                 f"<div style='font-size:12px;color:#8892a4;padding:4px 0 8px;'>"
                 f"Inloggad som <b style='color:#e8eaf0;'>{username}</b></div>",
                 unsafe_allow_html=True,
             )
-            authenticator.logout("🚪 Logga ut", location="sidebar")
+            if st.button("🚪 Logga ut", key="_logout_btn", use_container_width=True):
+                _log_activity(username, "logout")
+                for _k in ("authentication_status", "username", "_login_logged", "_login_error"):
+                    st.session_state.pop(_k, None)
+                st.rerun()
         return True
-    elif status is False:
+
+    # Om URL har reset_token → visa lösenordsåterställning istället för inloggning
+    if _handle_password_reset_flow():
+        return False
+
+    # Bygg credentials-dict: admin från secrets + övriga från users_config.json
+    try:
+        raw_creds = st.secrets["credentials"]
+        credentials: dict[str, dict] = {
+            uname: dict(udata)
+            for uname, udata in raw_creds.get("usernames", {}).items()
+        }
+    except Exception as e:
+        st.error(f"❌ Fel vid läsning av credentials från secrets: {e}")
+        return False
+
+    # Slå samman med admin-hanterade användare (läses från data/users_config.json)
+    for uname, udata in _load_managed_users().items():
+        credentials.setdefault(uname, udata)
+        credentials[uname].update(udata)  # users_config.json override (t.ex. lösenordsåterställning)
+
+    # ── Inloggningsformulär ────────────────────────────────────────────────────
+    st.markdown("""
+    <style>
+    [data-testid="stForm"] {
+        max-width: 380px;
+        margin: 80px auto 0 auto;
+        background: #1e2230;
+        border: 1px solid #2d3250;
+        border-radius: 12px;
+        padding: 40px 36px 32px;
+    }
+    </style>
+    <div style="text-align:center; padding: 60px 0 0 0;">
+      <div style="font-size:24px; font-weight:800; letter-spacing:3px; color:#e8eaf0;">
+        MARKET<span style="color:#00d4aa;">SCAN</span>
+      </div>
+      <div style="font-size:11px; color:#64748b; letter-spacing:2px;
+                  text-transform:uppercase; margin-top:4px; margin-bottom:32px;">
+        Aktieanalys & Portfölj
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("_login_form", clear_on_submit=False):
+        uname_input = st.text_input("Användarnamn", placeholder="användarnamn",
+                                    autocomplete="username")
+        pw_input = st.text_input("Lösenord", type="password", placeholder="lösenord",
+                                 autocomplete="current-password")
+        login_btn = st.form_submit_button("🔐 Logga in", use_container_width=True,
+                                          type="primary")
+
+    if login_btn:
+        uname_lower = uname_input.strip().lower()
+        udata = credentials.get(uname_lower)
+        if udata and _verify_password(pw_input, udata.get("password", "")):
+            st.session_state["authentication_status"] = True
+            st.session_state["username"] = uname_lower
+            st.session_state.pop("_login_error", None)
+            st.rerun()
+        else:
+            st.session_state["_login_error"] = True
+
+    if st.session_state.get("_login_error"):
         st.error("❌ Fel användarnamn eller lösenord")
-    # status is None -> väntar på input
+
+    st.markdown("""
+    <div style="text-align:center; margin-top:24px; padding: 0 20px;">
+      <div style="font-size:12px; color:#64748b; line-height:1.9;">
+        Inget konto? Kontakta
+        <a href="mailto:h.thurner@hotmail.com"
+           style="color:#4c9be8; text-decoration:none;">
+          h.thurner@hotmail.com
+        </a>
+        för att få tillgång.
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    _show_forgot_password_form()
     return False
 
 
@@ -1139,7 +1135,7 @@ def main():
         elif page == "🏦 Småbolag":
             if not sc_df.empty and "sector" in sc_df.columns:
                 secs = sorted(sc_df["sector"].dropna().unique().tolist())
-            _safe_render("Smabolag", page_smallcap, sc_df, filters)
+            _safe_render("Småbolag", page_smallcap, sc_df, filters)
 
         elif page == "🔍 Aktie-sök":
             _safe_render("Aktie-sok", page_stock_search)
@@ -1151,10 +1147,10 @@ def main():
             _safe_render("Globala marknader", page_global_markets)
 
         elif page == "💼 Portfölj":
-            _safe_render("Portfolj", page_portfolio_holdings, df, holdings, watchlist, sc_df=sc_df)
+            _safe_render("Portfölj", page_portfolio_holdings, df, holdings, watchlist, sc_df=sc_df)
 
         elif page == "💼 Portföljanalys":
-            _safe_render("Portfoljanalys", page_portfolio_analysis, df, holdings, watchlist, sc_df=sc_df)
+            _safe_render("Portföljanalys", page_portfolio_analysis, df, holdings, watchlist, sc_df=sc_df)
 
         elif page == "💼 Rebalansering":
             _safe_render("Rebalansering", page_portfolio_rebalance, df, holdings, watchlist, sc_df=sc_df)
@@ -1193,7 +1189,7 @@ def main():
 
         elif page == "⚙️ Inställningar":
             from web.pages.settings_page import page_settings
-            _safe_render("Installningar", page_settings)
+            _safe_render("Inställningar", page_settings)
 
         elif page == "🔭 Universe Explorer":
             _safe_render("Universe Explorer", page_universe_explorer, df)

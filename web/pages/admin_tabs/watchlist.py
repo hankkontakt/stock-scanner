@@ -31,23 +31,23 @@ def render():
             st.success(f"`{remove_ticker}` borttagen ur bevakningslistan!")
             st.rerun()
     else:
-        st.info("Bevakningslistan ar tom.")
+        st.info("Bevakningslistan är tom.")
 
     st.markdown("---")
-    st.markdown("### Lagg till ny ticker")
+    st.markdown("### Lägg till ny ticker")
 
-    search_q = st.text_input("Sok aktie (ticker eller namn)", key="wl_search",
+    search_q = st.text_input("Sök aktie (ticker eller namn)", key="wl_search",
                              placeholder="t.ex. AAPL, VOLV-B.ST, Investor")
     if search_q:
         hits = _search_ticker_yfinance(search_q)
         if hits:
             options = {f"{h['ticker']} -- {h['name'][:40]}": h for h in hits}
-            selected = st.selectbox("Valj fran sokresultat", list(options.keys()),
+            selected = st.selectbox("Välj från sökresultat", list(options.keys()),
                                     key="wl_hit")
             if selected:
                 h = options[selected]
                 col1, col2 = st.columns([2, 1])
-                if col1.button("Lagg till i bevakningslistan", key="btn_wl_add"):
+                if col1.button("Lägg till i bevakningslistan", key="btn_wl_add"):
                     new_ticker = h["ticker"]
                     exists = any(i["ticker"] == new_ticker for i in items)
                     if not exists:
@@ -62,13 +62,13 @@ def render():
                     else:
                         st.info(f"`{new_ticker}` finns redan i bevakningslistan.")
         else:
-            st.caption("Inga sokresultat. Prova med annat sokeord.")
+            st.caption("Inga sökresultat. Prova med annat sökord.")
 
-    with st.expander("Eller lagg till manuellt (ticker)"):
+    with st.expander("Eller lägg till manuellt (ticker)"):
         manual_ticker = st.text_input("Ticker (t.ex. AAPL)", key="wl_manual", max_chars=15)
         manual_name = st.text_input("Namn (valfritt)", key="wl_name")
 
-        if st.button("Lagg till", key="btn_wl_add_manual"):
+        if st.button("Lägg till", key="btn_wl_add_manual"):
             mt = manual_ticker.strip().upper()
             if mt:
                 exists = any(i["ticker"] == mt for i in items)

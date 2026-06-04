@@ -424,9 +424,11 @@ def fetch_swedish_market_news(max_articles: int = 5) -> list:
 
                 # Datum
                 pub_el = (
-                    item.find("pubDate") or
-                    item.find("published") or
-                    item.find("atom:published", ns)
+                    item.find("pubDate")
+                    if item.find("pubDate") is not None
+                    else (item.find("published")
+                          if item.find("published") is not None
+                          else item.find("atom:published", ns))
                 )
                 age_h = 999
                 dt_s  = "—"

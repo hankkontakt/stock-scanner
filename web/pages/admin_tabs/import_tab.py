@@ -10,18 +10,18 @@ from web.utils import DATA_DIR
 
 
 def render():
-    st.subheader("Importera fran Avanza")
+    st.subheader("Importera från Avanza")
 
     st.markdown("""
-    Exportera din portfolj fran Avanza:
-    1. Logga in pa Avanza
-    2. Ga till: Konto -> Depa/ISK -> fliken Innehav
-    3. Klicka Exportera (langst ner till hoger)
+    Exportera din portfölj från Avanza:
+    1. Logga in på Avanza
+    2. Gå till: Konto → Depå/ISK → fliken Innehav
+    3. Klicka Exportera (längst ner till höger)
     4. Spara CSV-filen
     5. Ladda upp den nedan
     """)
 
-    uploaded = st.file_uploader("Valj Avanza-export (CSV)", type=["csv", "txt"],
+    uploaded = st.file_uploader("Välj Avanza-export (CSV)", type=["csv", "txt"],
                                 key="avanza_upload")
 
     if uploaded is not None:

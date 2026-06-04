@@ -1,4 +1,4 @@
-"""admin/users.py - Anvandare tab for admin page."""
+"""admin/users.py - Användare tab för admin page."""
 import json
 from datetime import date
 
@@ -8,19 +8,15 @@ import streamlit as st
 from web.utils import DATA_DIR
 
 
+def _hash_password(plain: str) -> str:
+    """Hasha ett lösenord med bcrypt (rounds=12). Returnerar $2b$... sträng."""
+    import bcrypt as _bcrypt
+    return _bcrypt.hashpw(plain.encode("utf-8"), _bcrypt.gensalt(rounds=12)).decode("utf-8")
+
+
 def render():
-    st.subheader("Anvandare")
-    st.caption("Hantera anvandarkonton for MarketScan.")
-
-    try:
-        import streamlit_authenticator as stauth
-        _stauth_ok = True
-    except ImportError:
-        st.error("`streamlit-authenticator` saknas. Kor: `pip install streamlit-authenticator`")
-        _stauth_ok = False
-
-    if not _stauth_ok:
-        return
+    st.subheader("Användare")
+    st.caption("Hantera användarkonton för MarketScan.")
 
     try:
         from web.pages.admin import _load_users_config, _save_users_config
@@ -30,13 +26,12 @@ def render():
 
     users = _load_users_config()
     active_users = [u for u in users if u.get("active", True)]
-    inactive_users = [u for u in users if not u.get("active", True)]
 
-    st.markdown(f"**{len(active_users)} aktiva anvandare** (utover admin)")
+    st.markdown(f"**{len(active_users)} aktiva användare** (utöver admin)")
     if active_users:
         user_rows = [
             {
-                "Anvandarnamn": u["username"],
+                "Användarnamn": u["username"],
                 "Namn": u.get("name", ""),
                 "E-post": u.get("email", ""),
                 "Tillagd": u.get("added", ""),
@@ -46,14 +41,14 @@ def render():
         ]
         st.dataframe(pd.DataFrame(user_rows), use_container_width=True, hide_index=True)
     else:
-        st.info("Inga extra anvandare tillagda anu.")
+        st.info("Inga extra användare tillagda ännu.")
 
     st.markdown("---")
-    st.markdown("### Lagg till ny anvandare")
+    st.markdown("### Lägg till ny användare")
     with st.form("form_add_user", clear_on_submit=True):
         col_u, col_n = st.columns(2)
         with col_u:
-            new_uname = st.text_input("Anvandarnamn *", placeholder="t.ex. hans",
+            new_uname = st.text_input("Användarnamn *", placeholder="t.ex. hans",
                                        help="Gemener, inga mellanslag.")
         with col_n:
             new_name = st.text_input("Visningsnamn", placeholder="t.ex. Hans")
@@ -62,24 +57,24 @@ def render():
         with col_e:
             new_email = st.text_input("E-post (valfritt)", placeholder="hans@example.com")
         with col_p:
-            new_pw = st.text_input("Losenord *", type="password",
+            new_pw = st.text_input("Lösenord *", type="password",
                                     placeholder="Minst 6 tecken",
                                     help="Lagras krypterat (bcrypt).")
 
-        submitted_add = st.form_submit_button("Skapa anvandare", type="primary")
+        submitted_add = st.form_submit_button("Skapa användare", type="primary")
         if submitted_add:
             uname_clean = new_uname.strip().lower().replace(" ", "_")
             existing_names = [u["username"] for u in users]
             if not uname_clean:
-                st.error("Ange ett anvandarnamn.")
+                st.error("Ange ett användarnamn.")
             elif uname_clean == "admin":
-                st.error("Anvandarnamnet 'admin' ar reserverat.")
+                st.error("Användarnamnet 'admin' är reserverat.")
             elif uname_clean in existing_names:
-                st.error(f"Anvandarnamnet `{uname_clean}` anvands redan.")
+                st.error(f"Användarnamnet `{uname_clean}` används redan.")
             elif len(new_pw) < 6:
-                st.error("Losenordet maste vara minst 6 tecken.")
+                st.error("Lösenordet måste vara minst 6 tecken.")
             else:
-                hashed_pw = stauth.Hasher.hash(new_pw)
+                hashed_pw = _hash_password(new_pw)
                 users.append({
                     "username": uname_clean,
                     "name": new_name.strip() or uname_clean.capitalize(),
@@ -89,14 +84,14 @@ def render():
                     "added": str(date.today()),
                 })
                 _save_users_config(users)
-                st.success(f"Anvandaren **{uname_clean}** skapad!")
+                st.success(f"Användaren **{uname_clean}** skapad!")
                 st.rerun()
 
     if users:
         st.markdown("---")
-        st.markdown("### Hantera befintliga anvandare")
+        st.markdown("### Hantera befintliga användare")
         manage_options = [u["username"] for u in users]
-        sel_uname = st.selectbox("Valj anvandare", manage_options, key="user_manage_sel")
+        sel_uname = st.selectbox("Välj användare", manage_options, key="user_manage_sel")
         sel_user = next((u for u in users if u["username"] == sel_uname), None)
 
         if sel_user:
@@ -116,5 +111,5 @@ def render():
                     st.success(f"`{sel_uname}` borttagen.")
                     st.rerun()
             with col_pw:
-                if st.button("Aterstall losenord", key="btn_user_reset", use_container_width=True):
-                    st.write("Aterstallning gors via 'Glomt losenord'-flodet.")
+                if st.button("Återställ lösenord", key="btn_user_reset", use_container_width=True):
+                    st.write("Återställning görs via 'Glömt lösenord'-flödet.")

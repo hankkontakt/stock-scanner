@@ -757,7 +757,7 @@ def log_api_requests():
 def webhook_list():
     """Lista alla registrerade webhooks."""
     if _WEBHOOK_MANAGER is None:
-        return jsonify({"error": "Webhook-manager ej tillganglig"}), 503
+        return jsonify({"error": "Webhook-manager ej tillgänglig"}), 503
     webhooks = _WEBHOOK_MANAGER.list_webhooks()
     stats = _WEBHOOK_MANAGER.get_webhook_stats()
     return jsonify({"webhooks": webhooks, "stats": stats})
@@ -767,7 +767,7 @@ def webhook_list():
 def webhook_register():
     """Registrera en ny webhook."""
     if _WEBHOOK_MANAGER is None:
-        return jsonify({"error": "Webhook-manager ej tillganglig"}), 503
+        return jsonify({"error": "Webhook-manager ej tillgänglig"}), 503
 
     data = request.get_json() or {}
     url = data.get("url", "").strip()
@@ -790,7 +790,7 @@ def webhook_register():
 def webhook_unregister(webhook_id: str):
     """Ta bort en webhook."""
     if _WEBHOOK_MANAGER is None:
-        return jsonify({"error": "Webhook-manager ej tillganglig"}), 503
+        return jsonify({"error": "Webhook-manager ej tillgänglig"}), 503
 
     if not _WEBHOOK_MANAGER.unregister_webhook(webhook_id):
         return jsonify({"error": "Webhook ej hittad"}), 404
@@ -802,7 +802,7 @@ def webhook_unregister(webhook_id: str):
 def webhook_log(webhook_id: str):
     """Hamta leveranslogg for en webhook."""
     if _WEBHOOK_MANAGER is None:
-        return jsonify({"error": "Webhook-manager ej tillganglig"}), 503
+        return jsonify({"error": "Webhook-manager ej tillgänglig"}), 503
 
     log = _WEBHOOK_MANAGER.get_delivery_log(webhook_id)
     return jsonify({"deliveries": log})
@@ -812,7 +812,7 @@ def webhook_log(webhook_id: str):
 def webhook_test():
     """Testa en webhook-URL med ett test-event."""
     if _WEBHOOK_MANAGER is None:
-        return jsonify({"error": "Webhook-manager ej tillganglig"}), 503
+        return jsonify({"error": "Webhook-manager ej tillgänglig"}), 503
 
     data = request.get_json() or {}
     url = data.get("url", "").strip()
@@ -838,7 +838,7 @@ def webhook_test():
 def webhook_stats():
     """Hamta webhook-statistik."""
     if _WEBHOOK_MANAGER is None:
-        return jsonify({"error": "Webhook-manager ej tillganglig"}), 503
+        return jsonify({"error": "Webhook-manager ej tillgänglig"}), 503
     return jsonify(_WEBHOOK_MANAGER.get_webhook_stats())
 
 

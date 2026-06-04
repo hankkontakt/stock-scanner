@@ -2111,7 +2111,7 @@ def _tab_optimize(holdings: pd.DataFrame, df: pd.DataFrame):
 
     # Optimizer-valjare
     st.subheader("🎯 Portföljoptimering")
-    st.caption("Välj optimeringsmetod och justera parametrar for att fa föreslagna portföljvikter.")
+    st.caption("Välj optimeringsmetod och justera parametrar för att få föreslagna portföljvikter.")
 
     opt_tabs = st.tabs([
         "Mean-Variance",

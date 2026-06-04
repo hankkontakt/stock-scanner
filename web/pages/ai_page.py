@@ -414,8 +414,8 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
 
     # ── Flik 5: AI Chat (adaptiv med historik) ─────────────────────────────
     with tab_chat:
-        st.subheader("AI-chatt - fraga MarketScan AI")
-        st.caption("Stall fragor om marknaden, aktier, strategier. Skriv t.ex. 'sok bland 50 basta' for att fa mer data.",
+        st.subheader("AI-chatt — fråga MarketScan AI")
+        st.caption("Ställ frågor om marknaden, aktier, strategier. Skriv t.ex. 'sök bland 50 bästa' för att få mer data.",
                    unsafe_allow_html=True)
 
         if "chat_history" not in st.session_state:
@@ -602,7 +602,7 @@ def page_ai(df: pd.DataFrame, sc_df: pd.DataFrame, holdings: pd.DataFrame):
 
             if not sc_df.empty:
                 sc_col = "sc_total" if "sc_total" in sc_df.columns else "score_total"
-                context_parts.append(f"Smabolag: {len(sc_df)} bolag")
+                context_parts.append(f"Småbolag: {len(sc_df)} bolag")
                 if sc_col in sc_df.columns:
                     context_parts.append(f"smabolagssnitt: {sc_df[sc_col].mean():.1f}")
                     sc_top = sc_df.nlargest(top_n, sc_col)
