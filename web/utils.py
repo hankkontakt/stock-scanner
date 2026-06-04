@@ -950,3 +950,23 @@ def apply_country_filter(df: pd.DataFrame, selected_countries: list[str]) -> pd.
         return False
 
     return df[df["ticker"].apply(_match)].reset_index(drop=True)
+
+
+# ── E4: Multi-tenant förberedelse ─────────────────────────────────────────────
+
+def get_current_user_id() -> str:
+    """Returnerar aktuell användares ID från session_state.
+
+    E4-implementation: Förberedelse för multi-tenant support.
+    Idag returnerar alltid "default" (eller username om inloggad).
+    I framtiden: varje användare får egna datafiler separerade per user_id.
+
+    Returns:
+        str: Användar-ID (t.ex. "admin", "hans", eller "default")
+    """
+    try:
+        import streamlit as _st
+        username = _st.session_state.get("username", "")
+        return str(username).strip().lower() if username else "default"
+    except Exception:
+        return "default"
