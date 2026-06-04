@@ -94,12 +94,32 @@ import traceback
 
 # ── P
 
+def _log_streamlit_error(page_name: str, exc: Exception) -> None:
+    """Logga Streamlit-fel till data/streamlit_errors.jsonl (läsbar av AI via repo)."""
+    try:
+        import json as _json
+        from datetime import timezone as _tz
+        errors_file = DATA_DIR / "streamlit_errors.jsonl"
+        entry = {
+            "ts":    datetime.now(_tz.utc).isoformat(),
+            "page":  page_name,
+            "error": str(exc)[:500],
+            "type":  type(exc).__name__,
+        }
+        with open(errors_file, "a", encoding="utf-8") as f:
+            f.write(_json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass  # Loggning får aldrig krascha appen
+
+
 def _safe_render(page_name: str, fn, *args, **kwargs):
     """Rensa en sida med felisolering. Om sidan kraschar visas felmeddelandet
     och resten av appen fungerar."""
     try:
         fn(*args, **kwargs)
     except Exception as e:
+        # Logga till fil (AI-läsbar via repo)
+        _log_streamlit_error(page_name, e)
         # S9-FIX: Sanitera felmeddelandet — ta bort potentiella secrets (tokens 40+ tecken)
         import re as _re_s9
         _safe_msg = _re_s9.sub(r"[REDACTED]", str(e))

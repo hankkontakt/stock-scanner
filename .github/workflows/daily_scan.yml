@@ -203,6 +203,37 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: 📋 Spara CI-körningsrapport (AI-läsbar)
+        if: always()
+        run: |
+          mkdir -p data/ci_reports
+          python - <<'PYEOF'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          report = {
+              "ts":         datetime.now(timezone.utc).isoformat(),
+              "run_id":     int(os.environ.get("GITHUB_RUN_ID", 0)),
+              "workflow":   "daily_scan",
+              "mode":       os.environ.get("PIPELINE_MODE", "unknown"),
+              "branch":     os.environ.get("GITHUB_REF_NAME", "main"),
+              "commit":     os.environ.get("GITHUB_SHA", "")[:8],
+              "job_status": os.environ.get("JOB_STATUS", "unknown"),
+              "url":        f"https://github.com/{os.environ.get('GITHUB_REPOSITORY','')}/actions/runs/{os.environ.get('GITHUB_RUN_ID','')}",
+          }
+          Path("data/ci_reports/last_daily_scan.json").write_text(
+              json.dumps(report, indent=2), encoding="utf-8"
+          )
+          print(f"CI-rapport sparad: {report['run_id']} / {report['mode']}")
+          PYEOF
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "MarketScan Bot"
+          git add data/ci_reports/last_daily_scan.json || true
+          git diff --staged --quiet || git commit -m "ci: körningsrapport daily_scan $(date +%Y-%m-%d)" || true
+        env:
+          PIPELINE_MODE: ${{ steps.mode.outputs.mode }}
+          JOB_STATUS:    ${{ job.status }}
+
       - name: 🚨 Skicka felmail om pipeline misslyckas
         if: failure()
         env:
