@@ -53,7 +53,10 @@ jobs:
           pip install -r requirements.txt
 
       - name: 🏷️ MyPy check
-        run: mypy core/ --ignore-missing-imports || true
+        # continue-on-error: true på job-nivå — mypy-fel blockerar INTE CI men syns som gult/varning.
+        # Ta INTE bort || true nedan förrän alla mypy-fel är åtgärdade i core/ (ca 200+ issues).
+        # TODO(T4): ta bort || true och sätt continue-on-error: false när core/ är mypy-clean.
+        run: mypy core/ --ignore-missing-imports
 
   test:
     needs: lint

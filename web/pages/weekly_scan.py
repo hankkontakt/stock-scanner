@@ -169,7 +169,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         "name":              "Bolag",
         "_status":           "Status",
         "sector":            "Sektor",
-        "score_total":       "Score (klassisk)",
+        "score_total":       "Score",
         "_score_delta":      "Score Δ",
         "predicted_return":  "AI 30d-ret",
         "ml_rank":           "AI rank",
@@ -184,7 +184,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
     # Lägg till staleness-markering i Ticker-kolumnen (= data ärvd från förra scan)
     if "_stale" in display.columns:
         display["Ticker"] = display.apply(
-            lambda r: r["Ticker"] + " *" if (r.get("_stale") or 0) > 0 else r["Ticker"],
+            lambda r: r["Ticker"] + " ⏱" if (r.get("_stale") or 0) > 0 else r["Ticker"],
             axis=1,
         )
         display.drop(columns=["_stale"], inplace=True)
@@ -205,9 +205,9 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         "Δ": st.column_config.TextColumn("Δ", help="Förändring sedan förra scanningen -- t.ex. 'NYI TOPP20' eller rörelsepil. Visar rörlighet i rankinglistan."),
         "Piotroski": st.column_config.NumberColumn("Piotroski", format="%.0f/9", help="Piotroski F-Score: 0-9 poäng baserade på 9 nyckeltal för lönsamhet, hävstång och effektivitet. 7-9 = stark fundamenta. 0-2 = svag."),
     }
-    if "Score (klassisk)" in display.columns:
-        col_cfg["Score (klassisk)"] = st.column_config.ProgressColumn(
-            "Score (klassisk)", min_value=0, max_value=100, format="%.0f",
+    if "Score" in display.columns:
+        col_cfg["Score"] = st.column_config.ProgressColumn(
+            "Score", min_value=0, max_value=100, format="%.0f",
             help="Totalt poäng 0-100 baserat på värdering, kvalitet, momentum, tillväxt, risk och storlek. 70+ = stark. 50-69 = neutral. <50 = svag.",
         )
     if "AI rank" in display.columns:
