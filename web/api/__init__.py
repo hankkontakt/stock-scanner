@@ -21,6 +21,73 @@ from core import config
 # Skapa blueprint
 api_v1 = Blueprint("api_v1", __name__, url_prefix="/api/v1")
 
+# ── Autentisering ─────────────────────────────────────────────────────────────────
+# Endpoints utan krav på API-nyckel
+_PUBLIC_ENDPOINTS = {"api_v1.health", "api_v1.version"}
+
+try:
+    from web.api.auth import require_api_key, validate_api_key, rate_limit_by_key
+    _AUTH_AVAILABLE = True
+except ImportError:
+    _AUTH_AVAILABLE = False
+    require_api_key = lambda f: f  # noqa: E731 — passthrough om auth-modul saknas
+
+
+@api_v1.before_request
+def _check_auth():
+    """Kräv API-nyckel på alla endpoints utom de publika.
+    Stöder: X-API-Key header eller Authorization: Bearer <key>
+    """
+    if not _AUTH_AVAILABLE:
+        return  # Auth-modul saknas — passthrough (dev-läge)
+    if request.endpoint in _PUBLIC_ENDPOINTS:
+        return  # Publika endpoints behöver ingen nyckel
+
+    key = request.headers.get("X-API-Key") or ""
+    if not key:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            key = auth[7:]
+
+    if not key:
+        return jsonify({
+            "status": "error",
+            "error": {
+                "code": "UNAUTHORIZED",
+                "message": "API-nyckel saknas. Skicka X-API-Key-header eller Authorization: Bearer <key>.",
+            },
+        }), 401
+
+    key_data = validate_api_key(key)
+    if not key_data:
+        return jsonify({
+            "status": "error",
+            "error": {"code": "UNAUTHORIZED", "message": "Ogiltig eller återkallad API-nyckel."},
+        }), 401
+
+    # Rate limiting
+    allowed, remaining, reset_time = rate_limit_by_key(
+        key,
+        max_requests=key_data.get("rate_limit_max", 100),
+        window_seconds=key_data.get("rate_limit_window", 60),
+    )
+    if not allowed:
+        return jsonify({
+            "status": "error",
+            "error": {"code": "RATE_LIMITED", "message": "För många anrop. Försök igen om en stund."},
+        }), 429
+
+
+@api_v1.after_request
+def _add_rate_limit_headers(response):
+    """Lägg till standard rate-limit-headers på alla svar."""
+    from flask import g
+    if hasattr(g, "rate_limit_remaining"):
+        response.headers["X-RateLimit-Limit"]     = str(g.rate_limit_limit)
+        response.headers["X-RateLimit-Remaining"] = str(g.rate_limit_remaining)
+        response.headers["X-RateLimit-Reset"]     = str(g.rate_limit_reset)
+    return response
+
 
 def _json_ok(data, took_ms: float = 0) -> dict:
     """Standard JSON-svar for lyckade anrop."""
