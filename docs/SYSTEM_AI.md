@@ -1110,6 +1110,41 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-04 — Komplett systemaudit + Sprint 1–3 fixes (commit 31f6466)
+
+**Systemaudit** (3 parallella AI-agenter + webbforskning): 71 fynd totalt — 9 kritiska, 22 höga, 28 medium, 12 låga. Dokumenterat i planfilen `kan-du-gora-en-floating-parrot.md`.
+
+**Genomförda fixes:**
+
+**Dataintegritet (D1, D2, D4):**
+- `daily_pipeline.py`: atomisk holdings.csv-skrivning (tmp→replace förhindrar korrupt fil vid krasch)
+- `data_fetcher_batch.py`: atomisk blacklist.json-skrivning (tmp→replace förhindrar race condition)
+- `daily_pipeline.py`: `_get_score_deltas()` inner→left join — nya tickers (ej i föregående parquet) syns nu i movers_up-e-posten istf. att försvinna tyst
+- `daily_pipeline.py`: defensiv kolumnkontroll i rsi_spikes-output (latent bugg avslöjad av left join)
+
+**Pipeline (P3, P8):**
+- `filters.py`: RSI=None → `"VÄNTA"` (aktier utan RSI-data fick tidigare STARK-signal utan teknisk bekräftelse)
+- `news_fetcher.py`: Finnhub 429 backoff 61s→exponentiellt (61s→122s, max 2 försök; fix för `NameError: _lg`)
+
+**Säkerhet (S6):**
+- `ai_analysis.py`: token-sanitering täcker nu DeepSeek/okända APIs (generisk 40+-tecken alfanumerisk sekvens tillagd)
+
+**CI/CD (T2, P2):**
+- `tests.yml`: ruff-scope `core/ tests/` → `core/ tests/ portfolio/ web/ smallcap/ scripts/`
+- `keep_alive.yml`: frekvens 20min→30min, begränsat till 06:00-22:00 UTC (~65% färre GitHub Actions-minuter)
+
+**UX:**
+- `stock_detail.py`, `utils.py`, `alerts.py`, `portfolio.py`: `" * "` → `" · "` (mittpunkt U+00B7)
+
+**Kvarstående högt prio (ännu ej implementerat):**
+- S1: Flask REST API har ingen autentisering (web/app.py, web/api/__init__.py) — portföljdata publikt tillgänglig
+- S2: Password reset tokens i klartext JSON (streamlit_app.py rad 591–609)
+- S3: ML-modeller som pickle (.pkl) — deserialiserings-sårbarhet (ml_predictor.py)
+- D3: Trådosäkra rate-limit-flaggor i ThreadPoolExecutor (data_fetcher.py rad 256–315)
+- D5: Double-neutralization bug i scoring.py (flagga rensas ej vid ny prisdata)
+- A1: daily_pipeline.py (2255 rader) bör delas i 6 moduler
+- A2: portfolio.py (2503 rader) bör delas i 3 sidor
+
 ### 2026-06-03 — Fix: portfolio_refresh krasch + multi-parquet staleness merge + täckning av 631 tickers
 
 **Commit (se nedan) — `core/daily_pipeline.py`**
