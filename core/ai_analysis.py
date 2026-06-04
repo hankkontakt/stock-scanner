@@ -803,6 +803,11 @@ def analyze_stock(ticker: str, df: pd.DataFrame = None,
                     if val is not None and not pd.isna(val):
                         stock_data[label] = round(val, 2) if isinstance(val, float) else val
 
+            # Data-anomaly flagga (finns i df efter score_universe)
+            anomaly_val = row.get("data_anomaly", "")
+            if anomaly_val and isinstance(anomaly_val, str) and anomaly_val.strip():
+                stock_data["⚠️ Dataanomalier"] = anomaly_val
+
     # Filtrera data baserat på djupnivå och bygg prompt
     filtered_data = _build_depth_context(stock_data, depth)
     data_str = _safe_json(filtered_data, indent=2, ensure_ascii=False) if filtered_data else "Ingen data tillgänglig för denna aktie."

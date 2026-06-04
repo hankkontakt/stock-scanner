@@ -918,6 +918,11 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame, company_na
                     if v is not None and not pd.isna(v):
                         context_fields[field] = float(v) if isinstance(v, (int, float)) else v
 
+                # Data-anomaly flagga (finns efter score_universe)
+                anomaly = row.get("data_anomaly", "")
+                if anomaly and isinstance(anomaly, str) and anomaly.strip():
+                    context_fields["data_anomaly"] = anomaly
+
                 stock_json = ai_analysis._safe_json(context_fields, ensure_ascii=False)
 
                 # Hämta live-nyheter

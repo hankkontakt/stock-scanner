@@ -1121,9 +1121,9 @@ Ombyggnation till 5 väldefinierade sektioner för bättre navigering och profes
 
 **Status:** Syntax- och importverifierad ✅
 
-### 2026-06-05 — Full systemaudit: diagnose-verktyg, tester, CI/CD, data, admin (commit ae4c386)
-**Vad:** Systematisk granskning av alla felsökningsverktyg, tester, CI/CD, datafiler och konfiguration. 3 testfel hittade och fixade. Pandas-constraint breddad. CachingProvider fångar nu undantag. Alla 27 JSON-filer verifierade — inga korruptioner.
-**Varför:** Säkerställa att samtliga felsökningsverktyg fungerar, testfläckning är stabil, och datafiler är intakta.
+### 2026-06-05 — Full systemaudit: AI/STARK disconnect, stale entry_signal, data validation
+**Vad:** Systematisk granskning av varför aktier kan visa "STARK" entry-signal men AI säger "Köp inte". 3 rotorsaker hittade och åtgärdade: (1) stel entry_signal som inte uppdaterades vid re-scoring i morning/evening pipeline, (2) AI-prompts som saknade metodikkontext (vad STARK/OK betyder, faktorvikter), (3) ingen data validation på orimliga finansiella värden. Ny `_calc_data_anomalies()` flaggar tveksamma datapunkter till AI.
+**Varför:** AI gav korrekt svar baserat på felaktig/stel data. AI:n ska ha bättre förutsättningar att bedöma när systemets egna signaler är pålitliga vs missvisande.
 
 ### 2026-06-05 — StreamlitDuplicateElementKey-fix i overview.py _goto() (commit a5dd82e)
 **Vad:** Lade till unik random-suffix per knapp i `_goto()` för att förhindra `StreamlitDuplicateElementKey` när samma sidnamn anropas från flera ställen i samma vy (t.ex. "Veckoscanner" i både "Köp nu"- och "På uppgång"-kortet).

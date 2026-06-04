@@ -599,6 +599,14 @@ def update_scored_with_prices(scored_df: pd.DataFrame, price_data: dict) -> pd.D
     except Exception:
         pass
 
+    # VIKTIGT: Uppdatera entry_signal, trend_signal, confidence_label etc
+    # efter re-scoring — annars blir entry_signal stale från förra veckoscannen.
+    try:
+        from core import filters as _flt
+        df = _flt.apply_all_filters(df, verbose=False)
+    except Exception:
+        pass
+
     return df
 
 

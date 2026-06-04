@@ -363,6 +363,42 @@ def percentile_rank(series: pd.Series, ascending: bool = True) -> pd.Series:
     return series.rank(pct=True, ascending=ascending) * 100
 
 
+def _calc_data_anomalies(df: pd.DataFrame) -> pd.Series:
+    """
+    Identifierar orimliga datapunkter som kan ge missvisande scores.
+    Returnerar en Series med semikolonseparerade flaggor per rad.
+    """
+    anomalies = pd.Series([""] * len(df), index=df.index)
+
+    # Extremt hög tillväxt (kan vara datafel eller engångshändelse)
+    if "revenue_growth" in df.columns:
+        anomalies = anomalies.where(
+            df["revenue_growth"].abs() <= 500,
+            anomalies + "EXTREME_GROWTH;"
+        )
+    if "earnings_growth" in df.columns:
+        anomalies = anomalies.where(
+            df["earnings_growth"].abs() <= 500,
+            anomalies + "EXTREME_EARNINGS_GROWTH;"
+        )
+
+    # Extremt låg forward PE (ofta datafel)
+    if "pe_forward" in df.columns:
+        anomalies = anomalies.where(
+            (df["pe_forward"].isna()) | (df["pe_forward"] >= 2),
+            anomalies + "SUSPICIOUS_FWD_PE;"
+        )
+
+    # Saknad kritisk data (pe_trailing, roe, return_12m alla tomma)
+    critical = ["pe_trailing", "roe", "return_12m"]
+    present = [c for c in critical if c in df.columns]
+    if present:
+        missing_all = df[present].isna().all(axis=1)
+        anomalies = anomalies.where(~missing_all, anomalies + "MISSING_CRITICAL;")
+
+    return anomalies
+
+
 def winsorize(series: pd.Series, lower: float = 0.02, upper: float = 0.98) -> pd.Series:
     """
     Cap extreme values at the 2nd and 98th percentile to reduce outlier influence.
@@ -1006,7 +1042,10 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     except Exception:
         pass
 
-    # ── Steg 5: Data-ålder-stämpel (för staleness-merge i weekly pipeline) ──────
+    # ── Steg 5: Data validation — flagga orimliga värden ───────────────────────
+    df["data_anomaly"] = _calc_data_anomalies(df)
+
+    # ── Steg 6: Data-ålder-stämpel (för staleness-merge i weekly pipeline) ──────
     # data_fetched_date = datumet då denna rad hämtades färskt från Yahoo.
     # data_stale_days = 0 för nyligen hämtad data; > 0 för bevarad stale-data.
     from datetime import date as _date
