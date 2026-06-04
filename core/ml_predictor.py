@@ -917,22 +917,67 @@ def train_sector_models(parquet_path: Path, min_rows: int = MIN_SECTOR_ROWS) -> 
     return results
 
 
+def _compute_sha256(path: Path) -> str:
+    """Beräkna SHA-256 checksum för en fil."""
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def save_model(trained: TrainedModel, universe: str) -> Path:
-    """Sparar tränad modell till models/ml_<universe>.pkl (atomic write)."""
+    """Sparar tränad modell till models/ml_<universe>.pkl (atomic write).
+
+    Säkerhetsmönster (S3-fix):
+    - Sparar SHA-256 av pickle-filen i en separat .sha256-fil.
+    - load_model() verifierar hash innan deserialisering.
+    - Förhindrar exekvering av skadlig kod om .pkl-filen tamperats
+      (t.ex. via en komprometterad GitHub-push).
+    """
     target = MODELS_DIR / f"ml_{universe}.pkl"
     tmp = target.with_suffix(".pkl.tmp")
     with open(tmp, "wb") as f:
         pickle.dump(trained, f)
     tmp.replace(target)
-    logger.info(f"💾 Sparade modell: {target}")
+
+    # Spara SHA-256 checksum vid sidan av modellen
+    checksum = _compute_sha256(target)
+    target.with_suffix(".pkl.sha256").write_text(checksum, encoding="utf-8")
+
+    logger.info(f"💾 Sparade modell: {target} [SHA256: {checksum[:16]}...]")
     return target
 
 
 def load_model(universe: str) -> Optional[TrainedModel]:
-    """Laddar tränad modell. Returnerar None om filen saknas/korrupt."""
+    """Laddar tränad modell med SHA-256-verifiering.
+
+    Returnerar None om filen saknas, checksumman inte matchar
+    (tamper-detektion) eller om filen är korrupt.
+    """
     target = MODELS_DIR / f"ml_{universe}.pkl"
     if not target.exists():
         return None
+
+    # Verifiera SHA-256 om checksumfil finns
+    sha_file = target.with_suffix(".pkl.sha256")
+    if sha_file.exists():
+        expected = sha_file.read_text(encoding="utf-8").strip()
+        actual = _compute_sha256(target)
+        if actual != expected:
+            logger.error(
+                f"❌ SHA-256-verifiering MISSLYCKADES för {target.name}! "
+                f"Förväntat: {expected[:16]}... Fick: {actual[:16]}... "
+                "Modellen kan ha manipulerats — LADDAR INTE."
+            )
+            return None
+    else:
+        logger.warning(
+            f"⚠ Ingen SHA-256-checksumfil för {target.name} — "
+            "overifierad laddning (kör träning igen för att skapa hash)"
+        )
+
     try:
         with open(target, "rb") as f:
             return pickle.load(f)
