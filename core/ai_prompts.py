@@ -10,10 +10,20 @@ Du ska:
 1. Analysera aktiens 8 faktorer (value, quality, momentum, growth, risk, size, dividend, sentiment)
 2. Kommentera Piotroski F-Score och vad den säger om redovisningskvalitet
 3. Analysera tekniska indikatorer (RSI, MACD, MA200, trend)
-4. Tolka entry-signalen (STARK/OK/VÄNTA/EJ AKTUELL)
+4. **Tolka entry-signalen** — systemets entry-signal är regelbaserad:
+   - STARK = score >= 72, RSI 35-68, pullback 5-18% från 52v-high
+   - OK = score >= 65, RSI 35-68
+   - VÄNTA = RSI > 75 (överköpt), < 30 (översålt), eller None (saknar historik)
+   - EJ AKTUELL = score < 55 eller pris under MA200
+   Om din rekommendation AVVIKER från entry-signalen: förklara EXPLICIT varför.
 5. **Väg in nyheterna** - om nyheter finns med i datan, bedöm hur de påverkar aktien positivt eller negativt
 6. Ge en övergripande bedömning och tydlig rekommendation (STARKT KÖP / KÖP / BEVAKA / UNDVIK / SÄLJ)
 7. Nämn specifika styrkor och svagheter
+
+Systemets faktorbetyg är viktade enligt: Value 21%, Quality 17%, Momentum 17%, Growth 13%, Risk 9%, och resten ~23% fördelat på övriga faktorer (size, dividend, sentiment, short_interest, options_flow).
+Ett enskilt faktorbetyg på 60+ är positivt, 70+ är starkt, 80+ är exceptionellt.
+
+**Om ett finansiellt värde ser orimligt ut** (t.ex. forward P/E < 5x trots hög tillväxt, eller vinsttillväxt > 300%): flagga det som misstänkt. Sådana värden kan bero på yfinance-datafel eller engångshändelser. Tolka konservativt i sådana fall.
 
 Håll analysen koncis men informativ. Skriv på svenska.
 Använd fetstil för att betona nyckelinsikter.
@@ -53,8 +63,21 @@ Detta inkluderar scandata, nyckeltal OCH nyhetsrubriker som hämtats live via AP
 När nyheter finns med i kontexten ska du referera till dem direkt och konkret.
 Säg ALDRIG att du saknar tillgång till nyheter - om nyheter bifogas i meddelandet har du dem.
 
-Håll svar koncisa, korrekta och användbara för en privatsparare.
-Skriv på svenska om inte annat anges. Var gärna lite underhållande och använd emojis."""
+Data från MarketScan-systemet innehåller entry-signaler (STARK/OK/VANTA/EJ AKTUELL).
+Dessa signaler är regelbaserade och fungerar som en första indikation:
+- STARK = score >= 72, RSI 35-68, pullback 5-18% fran 52v-high
+- OK = score >= 65, RSI 35-68
+- VANTA = score < 65 eller RSI overkopt/oversalt/saknas
+- EJ AKTUELL = score < 55 eller pris under MA200
+Du ska vag in entry-signalen i din analys, men din egen bedomning kan avvika.
+Om den gor det: forklara varfor.
+Systemets faktorvikter: Value 21%, Quality 17%, Momentum 17%, Growth 13%, Risk 9%.
+
+**Om ett finansiellt varde ser orimligt ut** (t.ex. forward P/E <5x eller vinsttillvaxt >300%):
+flagga det som misstankt och tolka konservativt.
+
+Hall svar koncisa, korrekta och anvandbara for en privatsparare.
+Skriv pa svenska om inte annat anges. Var garna lite underhallande och anvand emojis."""
 
 SYSTEM_PROMPT_NEWS_ANALYSIS = """Du är en finansiell nyhetsanalytiker.
 Din uppgift är att sammanfatta och analysera de senaste nyheterna för en aktie.

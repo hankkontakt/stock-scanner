@@ -122,6 +122,10 @@ def calc_entry_signal(df: pd.DataFrame) -> pd.DataFrame:
         vs_high    = row.get("pct_from_52w_high")
         trend_cap  = row.get("trend_capped", False)
 
+        # NaN/outlier guard — orimliga scores flaggas
+        if pd.isna(score) or score < 0 or score > 100:
+            return "DATA SAKNAS"
+
         # Obligatoriskt: över MA200
         if trend_cap or (vs_ma200 is not None and vs_ma200 < 0):
             return "EJ AKTUELL"
