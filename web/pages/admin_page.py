@@ -1,17 +1,27 @@
-"""admin_page.py - Admin Streamlit-sida (tab-navigering).
-Varje tabs rendering finns i separata moduler under admin/.
+"""
+admin_page.py — Admin Streamlit-sida (ombyggd, 5 sektioner)
+
+Arkitektur:
+  5 st.tabs() med väldefinierade sektioner.
+  Varje tabs rendering finns i separata moduler under admin_tabs/.
+
+  🟢 System         ← dashboard, hälsa, GitHub Actions, diagnostik
+  ▶️  Pipeline       ← kör skannar, körningshistorik, cache
+  🌐 Universe       ← täckning, kandidater, strikes, blacklist, datakvalitet
+  ⚙️  Inställningar   ← konfiguration, API-nycklar, användare, e-post
+  📊 Metrics        ← körningstider, AI-tokens, score-distribution, fetch-fel
 
 Delade datatjänstfunktioner finns i admin.py (oförändrade).
 """
+from __future__ import annotations
 
 import json
 from datetime import date, datetime
 from pathlib import Path
 
-import pandas as pd
 import streamlit as st
 
-from web.utils import DATA_DIR, REPORT_DIR, load_watchlist, load_portfolio
+from web.utils import DATA_DIR, REPORT_DIR
 from core import config
 from web.pages.admin import (
     _get_github_token, _get_st_secret, _check_admin_access,
@@ -21,9 +31,45 @@ from web.pages.admin import (
 )
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# DELAD FUNKTION (importeras av admin/*-modulerna)
-# ══════════════════════════════════════════════════════════════════════════════
+# ── CSS Design System ─────────────────────────────────────────────────────────
+
+_ADMIN_CSS = """
+<style>
+/* Status-badges */
+.status-ok    { background:#28a745; color:#fff; padding:3px 10px; border-radius:20px; font-size:0.85em; }
+.status-warn  { background:#f0a500; color:#fff; padding:3px 10px; border-radius:20px; font-size:0.85em; }
+.status-error { background:#dc3545; color:#fff; padding:3px 10px; border-radius:20px; font-size:0.85em; }
+
+/* KPI-kort */
+.kpi-card {
+    background:#f8f9fa; border-left:4px solid #2563eb;
+    padding:12px 16px; border-radius:6px; margin:4px 0;
+}
+
+/* Sektion-rubrik */
+.section-header {
+    font-size:1.15em; font-weight:700; color:#1e293b;
+    border-bottom:2px solid #e2e8f0; padding-bottom:6px; margin-bottom:4px;
+}
+.section-desc {
+    font-size:0.88em; color:#64748b; margin-top:2px; margin-bottom:16px;
+}
+
+/* Compact tables */
+[data-testid="stDataFrame"] {
+    font-size:0.85em;
+}
+
+/* Badges for metric cards */
+kpi-badge {
+    display:inline-block; padding:2px 8px; border-radius:12px;
+    font-size:0.78em; font-weight:600;
+}
+</style>
+"""
+
+
+# ── Delad funktion (importeras av admin/*-modulerna) ─────────────────────────
 
 def _load_scan_log() -> list:
     path = DATA_DIR / "scan_log.json"
@@ -33,12 +79,10 @@ def _load_scan_log() -> list:
         return []
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ADMIN-SIDA
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Admin-sida ────────────────────────────────────────────────────────────────
 
 def page_admin():
-    """Admin-sida — kräver lösenord."""
+    """Admin-sida — 5 sektioner, kräver lösenord."""
     if not _check_admin_access():
         if st.session_state.get("admin_authenticated", False):
             if st.button("Logga ut från admin", key="btn_admin_logout"):
@@ -46,96 +90,33 @@ def page_admin():
                 st.rerun()
         return
 
-    st.title("Admin — Hantera portfölj, bevakning & scannar")
+    # Injicera CSS
+    st.markdown(_ADMIN_CSS, unsafe_allow_html=True)
 
-    # Import av alla tab-moduler
-    from web.pages.admin_tabs.overview import render as _overview
-    from web.pages.admin_tabs.watchlist import render as _watchlist
-    from web.pages.admin_tabs.holdings import render as _holdings
-    from web.pages.admin_tabs.scans import render as _scans
-    from web.pages.admin_tabs.import_tab import render as _import_tab
-    from web.pages.admin_tabs.health import render as _health
-    from web.pages.admin_tabs.email_tab import render as _email
-    from web.pages.admin_tabs.users import render as _users
-    from web.pages.admin_tabs.config_tab import render as _config
-    from web.pages.admin_tabs.cache_tab import render_cache, render_ai_log, render_alarms
-    from web.pages.admin_tabs.debug_tab import render as _debug
-    from web.pages.admin_tabs.data_quality import render as _data_quality
-    from web.pages.admin_tabs.universe_discovery import render as _universe_discovery
-    from web.pages.admin_tabs.strikes_health import render as _strikes_health
-    try:
-        from web.pages.admin_tabs.metrics import render as _metrics
-        _has_metrics = True
-    except ImportError:
-        _has_metrics = False
+    st.title("Admin — Systemöversikt")
 
-    try:
-        from web.pages.admin_tabs.diagnostics import render_diagnostics_tab as _diagnostics
-        _has_diagnostics = True
-    except ImportError:
-        _has_diagnostics = False
+    # Importera de 5 tab-modulerna
+    from web.pages.admin_tabs.tab_system import render as _system
+    from web.pages.admin_tabs.tab_pipeline import render as _pipeline
+    from web.pages.admin_tabs.tab_universe import render as _universe
+    from web.pages.admin_tabs.tab_settings import render as _settings
+    from web.pages.admin_tabs.tab_metrics import render as _metrics
 
-    _tab_names = [
-        "Översikt",
-        "Bevakningslista",
-        "Portfölj",
-        "Starta scan",
-        "Avanza-import",
-        "Universe Health",
-        "Ticker-discovery",
-        "Strikes & Blacklist",
-        "Datakvalitet",
-        "E-post",
-        "Användare",
-        "Konfiguration",
-        "Cache",
-        "AI-logg",
-        "Larm",
-        "Felsökning",
-        "Metrics",       # E3: pipeline-metrics och observability
-        "Diagnostik",    # STEG 2: självdiagnos-dashboard
-    ]
-    tabs = st.tabs(_tab_names)
+    tab_system, tab_pipeline, tab_universe, tab_settings, tab_metrics = st.tabs([
+        "System",
+        "Pipeline",
+        "Universe",
+        "Inställningar",
+        "Metrics",
+    ])
 
-    with tabs[0]:
-        _overview(_load_scan_log)
-    with tabs[1]:
-        _watchlist()
-    with tabs[2]:
-        _holdings()
-    with tabs[3]:
-        _scans()
-    with tabs[4]:
-        _import_tab()
-    with tabs[5]:
-        _health()
-    with tabs[6]:
-        _universe_discovery()
-    with tabs[7]:
-        _strikes_health()
-    with tabs[8]:
-        _data_quality()
-    with tabs[9]:
-        _email()
-    with tabs[10]:
-        _users()
-    with tabs[11]:
-        _config()
-    with tabs[12]:
-        render_cache()
-    with tabs[13]:
-        render_ai_log()
-    with tabs[14]:
-        render_alarms()
-    with tabs[15]:
-        _debug(_load_scan_log)
-    with tabs[16]:
-        if _has_metrics:
-            _metrics()
-        else:
-            st.info("core.metrics ej installerat.")
-    with tabs[17]:
-        if _has_diagnostics:
-            _diagnostics()
-        else:
-            st.info("Diagnostik-modulen ej tillgänglig.")
+    with tab_system:
+        _system()
+    with tab_pipeline:
+        _pipeline()
+    with tab_universe:
+        _universe()
+    with tab_settings:
+        _settings()
+    with tab_metrics:
+        _metrics()
