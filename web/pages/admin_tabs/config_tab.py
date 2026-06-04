@@ -12,7 +12,7 @@ from web.utils import DATA_DIR
 
 def render():
     st.subheader("Konfiguration")
-    st.caption("Aktuella faktorvikter och scoressattningar.")
+    st.caption("Aktuella faktorvikter och scoreinställningar.")
 
     st.markdown("### Faktorvikter (scoring)")
     weights = config.FACTOR_WEIGHTS
@@ -20,15 +20,15 @@ def render():
     w_rows.append({"Faktor": "**Totalt**", "Vikt": f"{sum(weights.values())*100:.1f}%"})
     st.dataframe(pd.DataFrame(w_rows), use_container_width=True, hide_index=True)
 
-    st.markdown("### Smabolagskonfiguration")
+    st.markdown("### Småbolagskonfiguration")
     sc = config.SMALLCAP_CONFIG
     sc_rows = []
     for k, v in sc.items():
         if isinstance(v, dict):
             for sk, sv in v.items():
-                sc_rows.append({"Installning": f"{k}.{sk}", "Varde": str(sv)})
+                sc_rows.append({"Inställning": f"{k}.{sk}", "Värde": str(sv)})
         else:
-            sc_rows.append({"Installning": k, "Varde": str(v)})
+            sc_rows.append({"Inställning": k, "Värde": str(v)})
     st.dataframe(pd.DataFrame(sc_rows), use_container_width=True, hide_index=True)
 
     st.markdown("### Miljovariabler & Secrets")

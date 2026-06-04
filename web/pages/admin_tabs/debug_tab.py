@@ -1,4 +1,4 @@
-"""admin/debug_tab.py - Sheetning tab for admin page."""
+"""admin/debug_tab.py - Felsökning tab för admin page."""
 import json
 import time
 from datetime import datetime
@@ -60,7 +60,7 @@ def render(load_scan_log_fn):
                     "Tid": e.get("timestamp", "?")[:16].replace("T", " "),
                     "Typ": e.get("scan_type", "?"),
                     "Tickers": d.get("n_scored", d.get("n_tickers", "--")),
-                    "Portfolj": d.get("n_holdings", "--"),
+                    "Portfölj": d.get("n_holdings", "--"),
                     "Kortid": f"{d.get('elapsed_seconds', '--')}s",
                 })
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
@@ -127,31 +127,31 @@ def render(load_scan_log_fn):
         st.markdown("""
 **Orsak:** En dependency saknas i requirements.txt eller pip-installationen misslyckades.
 
-**Losning:** Kolla GitHub Actions-loggen -- vilket modul saknas? Lagg till i requirements.txt och pusha.
+**Lösning:** Kolla GitHub Actions-loggen — vilket modul saknas? Lägg till i requirements.txt och pusha.
         """)
     with st.expander("Pipeline timeout (30 min)"):
         st.markdown("""
 **Orsak:** yfinance hanger pa en eller flera tickers.
 
-**Losning:** Anvand `targeted`-lage eller `refresh_missing` for att reparera specifika tickers.
+**Lösning:** Använd `targeted`-läge eller `refresh_missing` för att reparera specifika tickers.
         """)
     with st.expander("'ValueError: If using all scalar values'"):
         st.markdown("""
 **Orsak:** `dict -> DataFrame` med skalarvarden.
 
-**Losning:** Se `web/streamlit_app.py` for guard.
+**Lösning:** Se `web/streamlit_app.py` för guard.
         """)
     with st.expander("Streamlit Cloud kraschar efter deploy"):
         st.markdown("""
 **Orsak:** Import som inte finns i Streamlit Cloud eller fil som inte commitats.
 
-**Losning:** Kolla Streamlit Cloud -> Manage app -> Logs.
+**Lösning:** Kolla Streamlit Cloud → Manage app → Logs.
         """)
     with st.expander("Streamlit Cloud sleepar -- data forsvinner"):
         st.markdown("""
 **Orsak:** Gratis-plan sleepar efter ~30 min. Keep-alive-workflowet hindrar detta.
 
-**Losning:** Se `.github/workflows/keep_alive.yml`.
+**Lösning:** Se `.github/workflows/keep_alive.yml`.
         """)
 
 

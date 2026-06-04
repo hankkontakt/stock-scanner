@@ -69,11 +69,11 @@ def remove_ticker_from_universe_json(ticker: str, data: dict) -> bool:
 
 
 def render():
-    st.subheader("Strikes & Ticker-halsa")
+    st.subheader("Strikes & Ticker-hälsa")
     st.caption(
-        "Tickers som misslyckats att hamta data flera ganger "
-        "(3 strikes = auto-blacklist). Har kan du aven se fetch-fel "
-        "och skilja pa rate-limited (yfinance-problem) vs genuina fel."
+        "Tickers som misslyckats att hämta data flera gånger "
+        "(3 strikes = auto-blacklist). Här kan du även se fetch-fel "
+        "och skilja på rate-limited (yfinance-problem) vs genuina fel."
     )
 
     strikes = _load_json("strike_list.json")
@@ -81,16 +81,16 @@ def render():
     universe_data = load_universe_json()
 
     tab_strikes, tab_blacklist, tab_universe, tab_fetch = st.tabs([
-        "Strikes (pagar)",
+        "Strikes (pågår)",
         "Blacklist (borttagna)",
-        "Ta bort fran universe",
-        "Fetch-fel (senaste korning)",
+        "Ta bort från universe",
+        "Fetch-fel (senaste körning)",
     ])
 
     # ── STRIKES ──────────────────────────────────────────────────────────────
     with tab_strikes:
         if not strikes:
-            st.success("Inga pagende strikes. Alla tickers fungerar!")
+            st.success("Inga pågående strikes. Alla tickers fungerar!")
         else:
             strike_rows = []
             for ticker, info in sorted(strikes.items()):
@@ -105,8 +105,8 @@ def render():
             sdf = pd.DataFrame(strike_rows)
             st.dataframe(sdf, use_container_width=True, hide_index=True)
 
-            st.markdown("#### Bulk-atgarder")
-            select_all_strikes = st.checkbox("Valj alla strikes", key="sel_all_strikes")
+            st.markdown("#### Bulk-åtgärder")
+            select_all_strikes = st.checkbox("Välj alla strikes", key="sel_all_strikes")
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 clear_strikes = st.button("Rensa strikes for valda", key="btn_clear_strikes")
@@ -172,7 +172,7 @@ def render():
             st.dataframe(bdf, use_container_width=True, hide_index=True)
 
             st.markdown("#### Bulk-atgarder")
-            select_all_bl = st.checkbox("Valj alla blacklistade", key="sel_all_bl")
+            select_all_bl = st.checkbox("Välj alla blacklistade", key="sel_all_bl")
 
             if st.button("Ta bort ur blacklist for valda (aterstall)", key="btn_restore_bl"):
                 to_restore = []
@@ -185,7 +185,7 @@ def render():
                     for t in to_restore:
                         blacklist.pop(t, None)
                     _save_json("blacklist.json", blacklist)
-                    st.success(f"Aterstallde {len(to_restore)} tickers fran blacklist.")
+                    st.success(f"Återställde {len(to_restore)} tickers från blacklist.")
                     st.rerun()
                 else:
                     st.warning("Inga tickers valda.")
@@ -217,7 +217,7 @@ def render():
                             for t in mkt_list:
                                 all_tickers.append({"ticker": t, "category": f"{cat}.{mkt_name}", "location": "markets"})
 
-        search_q = st.text_input("Sok ticker (lamna tomt for att visa alla)", key="universe_rm_search")
+        search_q = st.text_input("Sök ticker (lämna tomt för att visa alla)", key="universe_rm_search")
         if search_q:
             filtered = [t for t in all_tickers if search_q.upper() in t["ticker"].upper()]
         else:
@@ -225,7 +225,7 @@ def render():
 
         if filtered:
             st.caption(f"Visar {len(filtered)} tickers.")
-            select_all_rm = st.checkbox("Valj alla", key="sel_all_rm")
+            select_all_rm = st.checkbox("Välj alla", key="sel_all_rm")
 
             selected_rm = []
             for t_info in filtered:

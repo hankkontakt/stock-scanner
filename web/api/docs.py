@@ -173,7 +173,7 @@ def get_openapi_spec() -> dict:
             "/stocks/{ticker}": {
                 "get": {
                     "summary": "Fullstandig stock data",
-                    "description": "Hamta all tillganglig information om en aktie inklusive scoring, nyckeltal, nyheter och AI-analys.",
+                    "description": "Hämta all tillgänglig information om en aktie inklusive scoring, nyckeltal, nyheter och AI-analys.",
                     "tags": ["Stocks"],
                     "parameters": [
                         {"name": "ticker", "in": "path", "required": True,
@@ -211,7 +211,7 @@ def get_openapi_spec() -> dict:
                     ],
                     "responses": {
                         "200": {"description": "Nyheter"},
-                        "502": {"description": "Kunde inte hamta nyheter"},
+                        "502": {"description": "Kunde inte hämta nyheter"},
                     },
                 },
             },
@@ -226,7 +226,7 @@ def get_openapi_spec() -> dict:
                     ],
                     "responses": {
                         "200": {"description": "Prisdata"},
-                        "502": {"description": "Kunde inte hamta prisdata"},
+                        "502": {"description": "Kunde inte hämta prisdata"},
                     },
                 },
             },
@@ -241,7 +241,7 @@ def get_openapi_spec() -> dict:
                     ],
                     "responses": {
                         "200": {"description": "Options data"},
-                        "503": {"description": "Optionsmodul ej tillganglig"},
+                        "503": {"description": "Optionsmodul ej tillgänglig"},
                     },
                 },
             },
@@ -306,7 +306,7 @@ def get_openapi_spec() -> dict:
                     "tags": ["Portfolio"],
                     "responses": {
                         "200": {"description": "Analys"},
-                        "503": {"description": "Analysmodul ej tillganglig"},
+                        "503": {"description": "Analysmodul ej tillgänglig"},
                     },
                 },
             },

@@ -9,7 +9,7 @@ from web.utils import DATA_DIR
 
 def render():
     st.subheader("E-postprenumeranter")
-    st.caption("Hantera vem som far vilka e-postrapporter.")
+    st.caption("Hantera vem som får vilka e-postrapporter.")
 
     from core.email_template import (
         load_subscribers, save_subscribers, SUBSCRIPTION_TYPES,
@@ -26,23 +26,23 @@ def render():
             uname = s.get("username", "?")
             active = "Aktiv" if s.get("active", True) else "Inaktiv"
             subs = ", ".join(k for k, v in s.get("subscriptions", {}).items() if v)
-            rows.append({"E-post": email, "Namn": name, "Anvandare": uname,
+            rows.append({"E-post": email, "Namn": name, "Användare": uname,
                          "Status": active, "Prenumerationer": subs or "--"})
         import pandas as pd
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     else:
-        st.info("Inga prenumeranter anu.")
+        st.info("Inga prenumeranter ännu.")
 
     st.markdown("---")
-    st.markdown("**Lagg till prenumerant**")
+    st.markdown("**Lägg till prenumerant**")
     with st.form("form_add_sub"):
         col1, col2, col3 = st.columns(3)
         with col1:
             new_email = st.text_input("E-post *", placeholder="namn@example.com")
         with col2:
-            new_name = st.text_input("Namn", placeholder="For- och efternamn")
+            new_name = st.text_input("Namn", placeholder="För- och efternamn")
         with col3:
-            new_uname = st.text_input("Anvandarnamn",
+            new_uname = st.text_input("Användarnamn",
                                        placeholder="t.ex. hans")
 
         st.markdown("**Prenumerationer**")
@@ -52,7 +52,7 @@ def render():
             with cols[i % 4]:
                 new_subs[key] = st.checkbox(label, value=True, key=f"sub_{key}")
 
-        submitted = st.form_submit_button("Lagg till prenumerant",
+        submitted = st.form_submit_button("Lägg till prenumerant",
                                            type="primary", use_container_width=True)
 
         if submitted:

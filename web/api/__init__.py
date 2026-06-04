@@ -158,7 +158,7 @@ def _get_portfolio_df():
 def health():
     """System health check.
 
-    Delegeerar till core.monitoring om tillgangligt, annars grundlaggande check.
+    Delegeerar till core.monitoring om tillgängligt, annars grundläggande check.
     """
     start = time.time()
     status = "ok"
@@ -209,7 +209,7 @@ def stock_detail(ticker: str):
 
     df = _read_scored_file()
     if df.empty:
-        return _json_error("NO_DATA", "Ingen scored data tillganglig. Kor en scan forst.")
+        return _json_error("NO_DATA", "Ingen scored data tillgänglig. Kör en scan först.")
 
     stock = df[df["ticker"] == ticker]
     if stock.empty:
@@ -242,7 +242,7 @@ def stock_score(ticker: str):
 
     df = _read_scored_file()
     if df.empty:
-        return _json_error("NO_DATA", "Ingen scored data tillganglig")
+        return _json_error("NO_DATA", "Ingen scored data tillgänglig")
 
     stock = df[df["ticker"] == ticker]
     if stock.empty:
@@ -270,9 +270,9 @@ def stock_news(ticker: str):
         took_ms = (time.time() - start) * 1000
         return jsonify(_json_ok(news_list or [], took_ms))
     except ImportError:
-        return _json_error("MODULE_UNAVAILABLE", "Nyhetsmodul ej tillganglig", 503)
+        return _json_error("MODULE_UNAVAILABLE", "Nyhetsmodul ej tillgänglig", 503)
     except Exception as e:
-        return _json_error("FETCH_ERROR", f"Kunde inte hamta nyheter: {e}", 502)
+        return _json_error("FETCH_ERROR", f"Kunde inte hämta nyheter: {e}", 502)
 
 
 @api_v1.route("/stocks/<ticker>/price", methods=["GET"])
@@ -312,7 +312,7 @@ def stock_price(ticker: str):
         return jsonify(_json_ok({"prices": price_data, "meta": meta}, took_ms))
 
     except Exception as e:
-        return _json_error("FETCH_ERROR", f"Kunde inte hamta prisdata: {e}", 502)
+        return _json_error("FETCH_ERROR", f"Kunde inte hämta prisdata: {e}", 502)
 
 
 @api_v1.route("/stocks/<ticker>/options", methods=["GET"])
@@ -331,9 +331,9 @@ def stock_options(ticker: str):
         took_ms = (time.time() - start) * 1000
         return jsonify(_json_ok(data, took_ms))
     except ImportError:
-        return _json_error("MODULE_UNAVAILABLE", "Optionsmodul ej tillganglig", 503)
+        return _json_error("MODULE_UNAVAILABLE", "Optionsmodul ej tillgänglig", 503)
     except Exception as e:
-        return _json_error("FETCH_ERROR", f"Kunde inte hamta options: {e}", 502)
+        return _json_error("FETCH_ERROR", f"Kunde inte hämta options: {e}", 502)
 
 
 # ── Scans ────────────────────────────────────────────────────────────────────────
@@ -472,7 +472,7 @@ def portfolio():
             "total_pnl": round(total_value - total_cost, 2) if (total_value and total_cost) else None,
         }, took_ms))
     except Exception as e:
-        return _json_error("FETCH_ERROR", f"Kunde inte hamta portfoljdata: {e}", 500)
+        return _json_error("FETCH_ERROR", f"Kunde inte hämta portföljdata: {e}", 500)
 
 
 @api_v1.route("/portfolio/holdings", methods=["GET"])
@@ -485,7 +485,7 @@ def portfolio_holdings():
         took_ms = (time.time() - start) * 1000
         return jsonify(_json_ok(holdings, took_ms))
     except Exception as e:
-        return _json_error("FETCH_ERROR", f"Kunde inte hamta innehav: {e}", 500)
+        return _json_error("FETCH_ERROR", f"Kunde inte hämta innehav: {e}", 500)
 
 
 @api_v1.route("/portfolio/analysis", methods=["GET"])
@@ -502,7 +502,7 @@ def portfolio_analysis():
         took_ms = (time.time() - start) * 1000
         return jsonify(_json_ok(analysis, took_ms))
     except ImportError:
-        return _json_error("MODULE_UNAVAILABLE", "Analysmodul ej tillganglig", 503)
+        return _json_error("MODULE_UNAVAILABLE", "Analysmodul ej tillgänglig", 503)
     except Exception as e:
         return _json_error("ANALYSIS_ERROR", f"Kunde inte analysera portfolj: {e}", 500)
 
@@ -520,9 +520,9 @@ def alerts():
         took_ms = (time.time() - start) * 1000
         return jsonify(_json_ok(alerts_list or [], took_ms))
     except ImportError:
-        return _json_error("MODULE_UNAVAILABLE", "Larmmodul ej tillganglig", 503)
+        return _json_error("MODULE_UNAVAILABLE", "Larmmodul ej tillgänglig", 503)
     except Exception as e:
-        return _json_error("FETCH_ERROR", f"Kunde inte hamta larm: {e}", 500)
+        return _json_error("FETCH_ERROR", f"Kunde inte hämta larm: {e}", 500)
 
 
 # ── Sectors ──────────────────────────────────────────────────────────────────────
@@ -541,9 +541,9 @@ def sectors():
         took_ms = (time.time() - start) * 1000
         return jsonify(_json_ok(sector_data, took_ms))
     except ImportError:
-        return _json_error("MODULE_UNAVAILABLE", "Sektormodul ej tillganglig", 503)
+        return _json_error("MODULE_UNAVAILABLE", "Sektormodul ej tillgänglig", 503)
     except Exception as e:
-        return _json_error("FETCH_ERROR", f"Kunde inte hamta sektor-data: {e}", 500)
+        return _json_error("FETCH_ERROR", f"Kunde inte hämta sektor-data: {e}", 500)
 
 
 # ── Markets ──────────────────────────────────────────────────────────────────────
@@ -558,9 +558,9 @@ def markets_global():
         took_ms = (time.time() - start) * 1000
         return jsonify(_json_ok(indices, took_ms))
     except ImportError:
-        return _json_error("MODULE_UNAVAILABLE", "Globala marknader ej tillgangligt", 503)
+        return _json_error("MODULE_UNAVAILABLE", "Globala marknader ej tillgängligt", 503)
     except Exception as e:
-        return _json_error("FETCH_ERROR", f"Kunde inte hamta index: {e}", 500)
+        return _json_error("FETCH_ERROR", f"Kunde inte hämta index: {e}", 500)
 
 
 @api_v1.route("/markets/macro", methods=["GET"])
@@ -573,9 +573,9 @@ def markets_macro():
         took_ms = (time.time() - start) * 1000
         return jsonify(_json_ok(regime, took_ms))
     except ImportError:
-        return _json_error("MODULE_UNAVAILABLE", "Makromodul ej tillganglig", 503)
+        return _json_error("MODULE_UNAVAILABLE", "Makromodul ej tillgänglig", 503)
     except Exception as e:
-        return _json_error("FETCH_ERROR", f"Kunde inte hamta makrodata: {e}", 500)
+        return _json_error("FETCH_ERROR", f"Kunde inte hämta makrodata: {e}", 500)
 
 
 # ── Search ────────────────────────────────────────────────────────────────────────

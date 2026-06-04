@@ -1,4 +1,4 @@
-"""admin/holdings.py - Portfolj tab for admin page."""
+"""admin/holdings.py - Portfölj tab för admin page."""
 import json
 from datetime import date
 from pathlib import Path
@@ -13,7 +13,7 @@ from web.pages.admin import (
 
 
 def render():
-    st.subheader("Portfolj (holdings.csv)")
+    st.subheader("Portfölj (holdings.csv)")
     holdings = load_portfolio()
 
     if not holdings.empty:
@@ -25,7 +25,7 @@ def render():
         st.markdown("### Redigera innehav")
 
         selected = st.selectbox(
-            "Valj ticker att redigera",
+            "Välj ticker att redigera",
             [""] + sorted(holdings["ticker"].unique()),
             key="hold_edit_ticker",
         )
@@ -40,11 +40,11 @@ def render():
                 new_price = st.number_input("Kurs", value=float(row.get("cost_basis", 0)),
                                              step=1.0, format="%.2f", key="hold_price")
             with col_b:
-                new_buy = st.text_input("Kopdatum (YYYY-MM-DD)",
+                new_buy = st.text_input("Köpdatum (YYYY-MM-DD)",
                                          value=str(row.get("buy_date", "")),
                                          key="hold_buy")
 
-            if st.button("Spara andringar", key="btn_hold_save", type="primary"):
+            if st.button("Spara ändringar", key="btn_hold_save", type="primary"):
                 holdings.loc[holdings["ticker"] == selected, "shares"] = new_shares
                 holdings.loc[holdings["ticker"] == selected, "cost_basis"] = new_price
                 if "buy_date" in holdings.columns and new_buy:
@@ -52,19 +52,19 @@ def render():
                 csv_content = holdings.to_csv(index=False)
                 ok = _save_holdings_df(holdings)
                 if ok:
-                    st.success(f"Andringar sparade for `{selected}`!")
+                    st.success(f"Ändringar sparade för `{selected}`!")
                     st.rerun()
                 else:
-                    st.warning("Andringar sparade lokalt men GitHub-commit misslyckades.")
+                    st.warning("Ändringar sparade lokalt men GitHub-commit misslyckades.")
 
             if st.button("Ta bort innehav", key="btn_hold_remove"):
                 holdings = holdings[holdings["ticker"] != selected]
                 _save_holdings_df(holdings)
-                st.success(f"`{selected}` borttaget ur portfoljen!")
+                st.success(f"`{selected}` borttaget ur portföljen!")
                 st.rerun()
 
         st.markdown("---")
-        st.markdown("### Lagg till nytt innehav")
+        st.markdown("### Lägg till nytt innehav")
 
         with st.form("form_add_holding"):
             c1, c2, c3 = st.columns(3)
@@ -73,7 +73,7 @@ def render():
             with c2:
                 add_s = st.number_input("Antal *", min_value=0.0, step=1.0, format="%.2f")
             with c3:
-                add_p = st.number_input("Kopkurs *", min_value=0.0, step=10.0, format="%.2f")
+                add_p = st.number_input("Köpkurs *", min_value=0.0, step=10.0, format="%.2f")
 
             c4, c5, c6 = st.columns(3)
             with c4:
@@ -81,13 +81,13 @@ def render():
             with c5:
                 add_typ = st.selectbox("Typ", ["", "aktier", "fond", "etf", "certificate"], key="hold_typ")
             with c6:
-                add_buy = st.text_input("Kopdatum (YYYY-MM-DD)", key="hold_date",
+                add_buy = st.text_input("Köpdatum (YYYY-MM-DD)", key="hold_date",
                                          placeholder="2025-01-15")
 
-            submitted = st.form_submit_button("Lagg till", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Lägg till", type="primary", use_container_width=True)
             if submitted:
                 if not add_t or add_s <= 0:
-                    st.error("Ticker och antal maste anges.")
+                    st.error("Ticker och antal måste anges.")
                 else:
                     new_row = {"ticker": add_t, "shares": add_s, "cost_basis": add_p,
                                 "konto": add_k, "typ": add_typ, "buy_date": add_buy}

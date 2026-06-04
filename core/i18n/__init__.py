@@ -1,13 +1,13 @@
 """
 core/i18n/__init__.py
 =====================
-Internationaliseringssystem (i18n) for MarketScan.
-Hanterar oversattningar, locale-detection och datum/tid-format.
+Internationaliseringssystem (i18n) för MarketScan.
+Hanterar översättningar, locale-detection och datum/tid-format.
 
-Anvandning:
+Användning:
     from core.i18n import TranslationManager
     T = TranslationManager("sv")
-    print(T.t("portfolio"))           # "Portfolj"
+    print(T.t("portfolio"))           # "Portfölj"
     print(T.t("pe_ratio", value=15))  # "P/E-tal: 15"
 """
 
