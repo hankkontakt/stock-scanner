@@ -85,67 +85,86 @@ def _load_latest_scored(pattern: str = "scored_universe_*.parquet") -> pd.DataFr
     return pd.DataFrame()
 
 
-def _load_all_recent_scored(max_age_days: int = 14) -> pd.DataFrame:
-    """Ladda ALLA scored_universe-parquets/CSVs de senaste max_age_days dagarna.
+def _load_all_recent_scored(max_age_days: int = 14,
+                             pattern: str = "scored_universe_*.parquet") -> pd.DataFrame:
+    """Ladda ALLA scored_universe-parquets från de senaste max_age_days dagarna.
 
-    Returnerar en deduplierad DataFrame med den senaste förekomsten av varje
-    ticker (nyast parquet vinner). Används som staleness-bas i weekly-scan för
-    att bygga upp täckning från dag ett istf. att vänta vecka för vecka.
+    Returnerar en unifierad DataFrame där varje ticker representeras av sin
+    SENASTE scoring. Detta ger en mycket bredare täckningsbas än att bara ladda
+    den senaste filen — om ticker A rate-limiterades förra veckan men inte
+    för 2 veckor sedan, finns den fortfarande med.
 
-    Täckningspotential:
-      - 1 parquet  (500 tickers) → union ≈ 500
-      - 2 parquets (500+500, 50% överlapp) → union ≈ 750
-      - 3 parquets → union ≈ 900+
+    Täckning: ~40% (en fil) → typiskt 70-90% (union av alla tillgängliga filer).
     """
-    cutoff = pd.Timestamp.today().normalize() - pd.Timedelta(days=max_age_days)
+    today = pd.Timestamp.today().normalize()
+    cutoff = today - pd.Timedelta(days=max_age_days)
 
-    # Samla alla tillgängliga parquet/csv (nyast först)
-    all_files: list[Path] = []
-    for f in sorted(REPORT_DIR.glob("scored_universe_*.parquet"), reverse=True):
+    # Hitta alla parquets (fallback: csv) inom max_age_days
+    parquet_files = sorted(REPORT_DIR.glob(pattern), reverse=True)
+    if not parquet_files:
+        csv_pattern = pattern.replace(".parquet", ".csv")
+        parquet_files = sorted(REPORT_DIR.glob(csv_pattern), reverse=True)
+
+    frames_with_age: list[tuple[int, pd.DataFrame]] = []  # (age_days, df)
+    for path in parquet_files:
         try:
-            mtime = pd.Timestamp(f.stat().st_mtime, unit="s").normalize()
-            if mtime >= cutoff:
-                all_files.append(f)
-        except OSError:
-            pass
-    # Fallback: csv om inga parquets hittades
-    if not all_files:
-        for f in sorted(REPORT_DIR.glob("scored_universe_*.csv"), reverse=True):
-            try:
-                mtime = pd.Timestamp(f.stat().st_mtime, unit="s").normalize()
-                if mtime >= cutoff:
-                    all_files.append(f)
-            except OSError:
-                pass
-
-    if not all_files:
-        logger.warning("  ⚠ _load_all_recent_scored: inga filer inom fönstret")
-        return pd.DataFrame()
-
-    frames: list[pd.DataFrame] = []
-    for f in all_files:
-        try:
-            df = pd.read_parquet(f) if f.suffix == ".parquet" else pd.read_csv(f, low_memory=False)
+            mtime = pd.Timestamp.fromtimestamp(path.stat().st_mtime).normalize()
+            age_days = int((today - mtime).days)
+            if age_days > max_age_days:
+                continue
+            if path.suffix == ".parquet":
+                df = pd.read_parquet(path)
+            else:
+                df = pd.read_csv(path, low_memory=False)
             df.columns = df.columns.str.strip()
-            frames.append(df)
+            if "ticker" not in df.columns:
+                continue
+            frames_with_age.append((age_days, df))
+            logger.info(f"  📂 Multi-merge: {path.name} ({len(df)} rader, {age_days}d gammal)")
         except Exception as _e:
-            logger.warning(f"  ⚠ Kunde inte läsa {f.name}: {_e}")
+            logger.debug(f"  Kunde inte läsa {path.name}: {_e}")
 
-    if not frames:
+    if not frames_with_age:
+        logger.warning("  ⚠ Inga scored_universe-filer hittades för multi-merge")
         return pd.DataFrame()
 
-    # Konkatenera och deduplicera: behåll första förekomsten (= nyaste filen,
-    # eftersom all_files är sorterad nyast→äldst och vi concat i den ordningen).
-    combined = pd.concat(frames, ignore_index=True)
-    if "ticker" in combined.columns:
-        combined = combined.drop_duplicates(subset=["ticker"], keep="first")
+    # Bygg union: nyast data vinner per ticker (frames är sorterade nyast→äldst)
+    # Sätt data_fetched_date och data_stale_days baserat på filens ålder
+    seen_tickers: set[str] = set()
+    result_frames: list[pd.DataFrame] = []
 
-    n_files = len(frames)
+    for age_days, df in frames_with_age:
+        df = df.copy()
+        # Markera staleness om filen inte är från idag
+        if age_days > 0:
+            if "data_fetched_date" not in df.columns:
+                df["data_fetched_date"] = str((today - pd.Timedelta(days=age_days)).date())
+            df["data_stale_days"] = (
+                today - pd.to_datetime(df.get("data_fetched_date", str(today.date())),
+                                       errors="coerce")
+            ).dt.days.fillna(age_days).clip(lower=0).astype(int)
+        else:
+            df["data_stale_days"] = df.get("data_stale_days", pd.Series(0, index=df.index))
+
+        # Lägg bara till tickers som inte redan finns (nyare fil vann)
+        new_mask = ~df["ticker"].str.upper().isin(seen_tickers)
+        new_rows = df[new_mask]
+        if not new_rows.empty:
+            seen_tickers.update(new_rows["ticker"].str.upper().tolist())
+            result_frames.append(new_rows)
+
+    if not result_frames:
+        return pd.DataFrame()
+
+    merged = pd.concat(result_frames, ignore_index=True)
     logger.info(
-        f"  📂 _load_all_recent_scored: {n_files} fil(er), "
-        f"{len(combined)} unika tickers (senaste {max_age_days} dagar)"
+        f"  📦 Multi-parquet union: {len(merged)} unika tickers "
+        f"från {len(frames_with_age)} filer "
+        f"(senaste {max_age_days} dagar)"
     )
-    return combined
+    return merged
+
+
 
 
 def _save_scored(df: pd.DataFrame, path: Path):
@@ -933,10 +952,26 @@ def run_portfolio_refresh(verbose: bool = True) -> dict:
         return result
 
     # Filtrera bort rader utan ticker (t.ex. ISIN-baserade fonder)
-    valid = holdings[holdings["ticker"].notna() & (holdings["ticker"] != "")]
+    # Hoppar även över "tickers" som är fondnamn (innehåller mellanslag, >15 tecken)
+    def _is_valid_ticker(t) -> bool:
+        if not t or not isinstance(t, str):
+            return False
+        t = t.strip()
+        if not t or t == "":
+            return False
+        if " " in t:          # fondnamn, t.ex. "LÄNSFÖRSÄKRINGAR GLOBAL INDEX"
+            return False
+        if len(t) > 20:       # rimlig max-längd för en ticker (t.ex. "BRK-B.ST" = 8 tecken)
+            return False
+        return True
+
+    valid = holdings[holdings["ticker"].apply(_is_valid_ticker)]
     result["n_holdings"] = len(holdings)
-    skipped_count = len(holdings) - len(valid)
-    result["n_skipped"] = skipped_count
+    skipped_no_ticker = len(holdings) - len(valid)
+    if skipped_no_ticker:
+        skipped_names = holdings.loc[~holdings["ticker"].apply(_is_valid_ticker), "ticker"].tolist()
+        logger.info(f"  ℹ Hoppar över {skipped_no_ticker} icke-ticker-rader: {skipped_names[:5]}")
+    result["n_skipped"] = skipped_no_ticker
 
     if valid.empty:
         logger.info("  ℹ Inga ticker-baserade innehav att uppdatera")
@@ -953,22 +988,19 @@ def run_portfolio_refresh(verbose: bool = True) -> dict:
         logger.error(f"  ❌ fetch_prices_only misslyckades: {e}")
         return result
 
-    if prices is None or prices == {}:
+    if not prices:
         logger.warning("  ⚠ Inga priser kunde hamtas")
         return result
 
-    # Filter out tickers where yfinance returned no data (e.g. delisted/fund names)
+    # fetch_prices_only returnerar dict: {ticker: {"current_price": float, ...}}
+    # Bygg price_lookup med uppercase-nycklar
     price_lookup = {}
     for ticker in tickers:
-        ticker_upper = ticker.upper()
-        for col in prices.columns:
-            if col[0].upper() == ticker_upper or col[0] == ticker:
-                serie = prices[col]
-                if isinstance(serie, pd.DataFrame):
-                    serie = serie.iloc[:, 0]
-                if not serie.empty:
-                    price_lookup[ticker] = float(serie.dropna().iloc[-1])
-                break
+        data = prices.get(ticker) or prices.get(ticker.upper())
+        if data and isinstance(data, dict):
+            cp = data.get("current_price")
+            if cp is not None and cp > 0:
+                price_lookup[ticker.upper()] = float(cp)
 
     updated = 0
     for idx, row in holdings.iterrows():
