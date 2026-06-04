@@ -1,144 +1,127 @@
 # AI Quickstart — Kom igång på 60 sekunder
 
-> **Läs detta FÖRST** om du är en AI-agent (Claude, Gemini etc.) som börjar en ny session.
+> **Läs detta FÖRST** om du är en AI-agent (Claude Code etc.) som börjar en ny session.
+> Systemet kör på **GitHub Actions** (pipeline) och **Streamlit Cloud** (webb) — inte lokalt.
 
-## 1. Kör briefing (30 sekunder)
+## 1. Kör briefing (0.2 sekunder)
 
 ```bash
 python scripts/ai_debug.py --quick
 ```
 
-Visar: pipeline-status, senaste CI-fel, Streamlit-fel, metrics, git-status.
+Visar utan nätverksanrop: pipeline-status, CI-fel, Streamlit-fel, metrics, git-status.
 
-Om GITHUB_TOKEN finns i .env:
+Med GitHub API-koll (kräver GITHUB_TOKEN i .env):
 ```bash
 python scripts/ai_debug.py --github
 ```
 
-## 2. Vad systemet kör PÅ
+## 2. Hur systemet kör
 
-| Komponent | Var det kör | Hur jag ser det |
-|-----------|-------------|-----------------|
-| Pipeline (scan, ML) | GitHub Actions | `data/health/health_YYYY-MM-DD.json` (commitat av CI) |
-| Webbapp | Streamlit Cloud | HTTP-koll på `$STREAMLIT_URL` |
-| Schema | GitHub Actions cron | `.github/workflows/daily_scan.yml` |
-| Tester | GitHub Actions (push) | `data/ci_reports/last_test_run.json` |
+| Komponent | Var | Hur jag ser det |
+|-----------|-----|-----------------|
+| Pipeline (scan, email, ML) | GitHub Actions (cron) | `data/health/health_YYYY-MM-DD.json` |
+| Webbapp (Streamlit) | Streamlit Cloud | HTTP-koll + `data/streamlit_errors.jsonl` |
+| CI-rapporter | GitHub Actions | `data/ci_reports/last_daily_scan.json` |
+| Tester | GitHub Actions (på push) | `data/ci_reports/last_test_run.json` |
+| Diagnos-schema | GitHub Actions (vardagar 08:30) | `data/diagnose_history.jsonl` |
+
+Alla `data/`-filer committas av CI → jag kan läsa dem med `Read`-verktyget.
 
 ## 3. Felsökning — vad jag kollar i ordning
 
 ### Pipeline kraschade?
 ```bash
-# 1. Läs senaste health-rapport (commitas av CI varje körning)
-cat data/health/health_$(date +%Y-%m-%d).json
+# 1. Se nuläget (läser lokala repo-filer)
+python scripts/ai_debug.py --quick
 
-# 2. Läs senaste scan-loggen
-cat data/scan_log.json
-
-# 3. Ladda ned CI-loggar från GitHub (kräver GITHUB_TOKEN)
+# 2. Ladda ned exakta CI-loggar från GitHub
 python scripts/fetch_ci_logs.py --save
-# → sparar data/ci_reports/latest_failure.txt med faktiska felrader
+# Sparar: data/ci_reports/latest_failure.txt
 
-# 4. Läs den sparade rapporten
-cat data/ci_reports/latest_failure.txt
-# eller: cat data/ci_reports/latest_failure.json
+# 3. Djupdiagnos specifik sektion
+python scripts/diagnose.py --section pipeline
+python scripts/diagnose.py --section ml
 ```
 
 ### Streamlit appen inte fungerar?
 ```bash
-# 1. Kolla om den svarar
+# 1. HTTP-hälsokoll (pingar Streamlit Cloud URL)
 python scripts/check_site.py
 
-# 2. Kolla loggade fel (skrivs av appen till repo)
+# 2. Kolla loggade sidkraschar (skrivs av appen, committas av CI)
 cat data/streamlit_errors.jsonl
 
-# 3. Kolla pipeline-data (Streamlit läser från data/)
-python scripts/diagnose.py --section pipeline --section ml
+# 3. Kolla pipeline-data som Streamlit läser
+python scripts/diagnose.py --section pipeline
 ```
 
 ### GitHub Actions-körningar misslyckas?
 ```bash
-# 1. Visa status med job-detaljer
-python scripts/check_github.py --jobs --limit 5
+# 1. Visa status per workflow
+python scripts/check_github.py --limit 10
 
-# 2. Ladda ned exakta felloggar
+# 2. Ladda ned exakta felloggar för senaste krasch
+python scripts/fetch_ci_logs.py --save
+
+# 3. Filtrera ett specifikt workflow
 python scripts/fetch_ci_logs.py --workflow daily_scan --save
-
-# 3. Filtrera bara fel från en viss workflow
-python scripts/fetch_ci_logs.py --workflow tests --save
 ```
 
 ### Konfiguration / API-nycklar?
 ```bash
-# Kontrollera alla nycklar och miljövariabler
 python scripts/diagnose.py --section config
-
-# Kontrollera e-post SMTP
-python scripts/check_email.py
-
-# Kontrollera notifieringskanaler
 python scripts/diagnose.py --section notif
 ```
 
-### ML-modeller fungerar inte?
+### ML-modeller?
 ```bash
-# Detaljkontroll
 python scripts/diagnose.py --section ml
-
-# Ladda och testa modell manuellt
-python -c "from core.ml_predictor import load_model; m = load_model('universe'); print(m)"
+python -c "from core.ml_predictor import load_model; m=load_model('universe'); print(m)"
 ```
 
-## 4. Vilka filer CI commitar (mina "sensor"-filer)
+## 4. Filer CI commitar (mina "sensorer")
 
 ```
 data/
-├── health/health_YYYY-MM-DD.json      Pipeline-hälsa (varje körning)
-├── ci_reports/last_daily_scan.json    Senaste pipeline-körning (status, mode, URL)
-├── ci_reports/last_test_run.json      Senaste pytest-körning (täckning, status)
-├── ci_reports/latest_failure.json     Senaste fel (om fetch_ci_logs.py --save körts)
-├── diagnose_history.jsonl             Diagnos-historik (--save)
-├── streamlit_errors.jsonl             Streamlit-appfel (loggas automatiskt)
-├── scan_log.json                      Pipeline-körningshistorik
-├── fetch_errors.json                  Datahämtningsfel per ticker
-└── metrics/metrics_*.json             Detaljerade körningsmätningar
+├── health/health_YYYY-MM-DD.json       Pipeline-hälsa (varje körning)
+├── ci_reports/last_daily_scan.json     Senaste pipeline-run (status, mode, URL)
+├── ci_reports/last_test_run.json       Senaste pytest (täckning, status)
+├── ci_reports/latest_failure.json      Senaste CI-fel (om fetch_ci_logs --save körts)
+├── diagnose_history.jsonl              Diagnos-historik (vardag 08:30 via CI)
+├── streamlit_errors.jsonl              Streamlit-sidkraschar (loggas automatiskt)
+├── scan_log.json                       Pipeline-körningshistorik
+├── fetch_errors.json                   Datahämtningsfel per ticker/batch
+└── metrics/metrics_YYYYMMDD_*.json     Pipeline-körningsmätningar
 ```
 
-## 5. Master test-runner
+## 5. Testa kod under utveckling
 
 ```bash
-# Bara pytest (430+ tester, ~3 min)
-python scripts/test_all.py --fast
+# Kör alla enhetstester (430+) — snabb verifiering före push
+python scripts/test_all.py
 
-# Allt inkl. nätverkstester (kräver .env)
-python scripts/test_all.py --all-checks
+# Bara pytest
+python scripts/test_all.py --pytest
 
-# Live API-tester (kräver API-nycklar)
-pytest tests/test_live_api.py -m live -v
+# Bara lint
+python scripts/test_all.py --lint
+
+# Specifik fil
+python scripts/test_all.py --file tests/test_scoring.py
 ```
 
-## 6. Om något går riktigt snett
+Tester körs också automatiskt via `.github/workflows/tests.yml` på varje push.
 
-```bash
-# Full diagnos + spara historik
-python scripts/diagnose.py --save
-
-# Kör ALLA kontroller
-python scripts/test_all.py --all-checks --json --save
-
-# Se vad som är anders ocommittat
-git status && git diff --stat
-```
-
-## 7. Snabbreferens kommandon
+## 6. Snabbreferens
 
 | Vad | Kommando |
 |-----|----------|
-| Snabb briefing | `python scripts/ai_debug.py --quick` |
-| Full briefing | `python scripts/ai_debug.py --github` |
-| CI-loggar | `python scripts/fetch_ci_logs.py --save` |
+| Snabb briefing (lokal) | `python scripts/ai_debug.py --quick` |
+| Briefing + GitHub live | `python scripts/ai_debug.py --github` |
+| Ladda ned CI-loggar | `python scripts/fetch_ci_logs.py --save` |
 | Systemdiagnos | `python scripts/diagnose.py --quick` |
-| Alla tester | `python scripts/test_all.py --fast` |
+| Köra tester | `python scripts/test_all.py` |
 | GitHub-status | `python scripts/check_github.py` |
-| E-post-test | `python scripts/check_email.py` |
-| Webb-hälsa | `python scripts/check_site.py` |
-| Live API-test | `pytest tests/test_live_api.py -m live -v` |
+| Streamlit HTTP-hälsa | `python scripts/check_site.py` |
+| Specifik diagnossektion | `python scripts/diagnose.py --section [env\|config\|github\|pipeline\|ml\|notif\|flags]` |

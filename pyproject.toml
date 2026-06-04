@@ -100,7 +100,6 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 markers = [
-    "live: Tester som kräver riktiga nätverksanrop (yfinance, AI, SMTP, GitHub). Kör med: pytest -m live",
-    "integration: Integrationstest med mockade eller minimala beroenden (körs ej i CI)",
+    "integration: Integrationstest med mockade beroenden (körs ej i normal CI)",
     "slow: Tester som tar >30s",
 ]
