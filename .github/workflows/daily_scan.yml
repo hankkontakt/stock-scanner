@@ -94,6 +94,17 @@ jobs:
 
       - name: 🔄 Bestäm körläge
         id: mode
+        # ⚠️  P1-FIX: Cron-strängmatchning är skör — om schema ändras måste
+        # matchningen uppdateras SYNKRONT. Schemat (UTC) → mode-mappning:
+        #   "5 7 * * 1-5"  → morning          (mån-fre 09:05 CEST)
+        #   "30 15 * * 1-5" → evening          (mån-fre 17:30 CEST)
+        #   "0 7 * * 6"    → weekly            (lör 09:00 CEST)
+        #   "0 11 * * 6"   → retry_rate_limited (lör 13:00 CEST)
+        #   "15 7 * * 1"   → smallcap          (mån 09:15 CEST)
+        #   "0 11 * * 1"   → retry_rate_limited (mån 13:00 CEST)
+        #   "10 11 * * 1-5" → portfolio_refresh (mån-fre 13:10 CEST)
+        #   "0 8,15 * * 1-5" → refresh_missing (mån-fre 10:00+17:00 CEST)
+        # Fallback: morning (säkert default — re-scannar med morgon-regler)
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
@@ -123,9 +134,13 @@ jobs:
             echo "mode=refresh_missing" >> $GITHUB_OUTPUT
             echo "tickers=" >> $GITHUB_OUTPUT
           else
+            # Okänt schema — fallback morning (logga för felsökning)
+            echo "⚠️  Okänt cron-schema: '${{ github.event.schedule }}' — kör morning som fallback" >&2
             echo "mode=morning" >> $GITHUB_OUTPUT
             echo "tickers=" >> $GITHUB_OUTPUT
           fi
+          # Logga valt läge för enkel CI-felsökning
+          echo "✅ Valt körläge: $(grep 'mode=' $GITHUB_OUTPUT | head -1 | cut -d= -f2)"
 
       - name: 🚀 Kör pipeline
         env:
