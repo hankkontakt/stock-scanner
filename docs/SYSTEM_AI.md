@@ -1106,9 +1106,61 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 | Cron weekly mode mismatch | **HIGH** | `daily_scan.yml:101` | Changed check from `0 9` to `0 7` |
 ---
 
-## 18. Andringslogg (uppdateras av varje AI vid varje andring)
+## 18. Ändringslogg (uppdateras av varje AI vid varje ändring)
 
-> Lagg nyaste overst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
+> Lägg nyaste överst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
+
+### 2026-06-04 — STEG 0: Tre akuta regressioner fixade + STEG 1: Fullständig audit (Sprint 8–11)
+
+**STEG 0 — Akuta regressioner (commit 71b04f2):**
+- **CookieManager**: `streamlit-authenticator` ersatt med `bcrypt` direkt.
+  `_run_auth()` i `streamlit_app.py` använder nu eget bcrypt-formulär (ingen `extra_streamlit_components`).
+  `web/pages/admin_tabs/users.py`: `stauth.Hasher.hash()` → `bcrypt.hashpw()`.
+- **åäö encoding**: 20 filer fixade. `core/i18n/sv.py` (120+ strängar), alla admin-flikar,
+  `web/api/__init__.py`, `web/streamlit_app.py`.
+- **Sleeping**: `keep_alive.yml` → `*/20 * * * *` (24/7, eliminerar 8h nattgap).
+
+**STEG 1 — Sprint 8 (commit 533abaf):**
+- **P1/CI1**: `daily_scan.yml` — Python lookup-tabell istf if/elif cron-strängmatchning
+- **CI2**: `git log --oneline -3` efter rebase för att verifiera inga commits tappats
+- **CI4**: Heartbeat-process var 5:e min under ML-träning (180min timeout utan output)
+- **T4**: mypy räknar fel och visar summary; varnar vid >300 (rullande tröskel)
+- **T5**: Coverage threshold höjt 30% → 40%
+- **D5**: `_region_neutralize_fundamentals()` — flag droppas före re-scoring (fixar 24h-gammal data)
+- **D6**: Global 45s sleep → adaptiv 30-60s backoff baserat på antal rate-limitade tickers
+- **P4**: `_get_ccy_to_usd()` med live FX-rates (24h TTL, yfinance, fallback till statisk)
+- **S9**: Exception-messages saniteras (ingen raw exception i UI)
+- **M2**: Omega-formel kommenterad (BL-litteraturen vs. vår konservativa formel)
+- **M3**: logger.warning() med explicit equal-weight fallback
+- **M4**: `_safe_inv()` — pinv fallback vid singulär matris i Black-Litterman
+
+**STEG 1 — Sprint 9 (commit ae77972): Extensibility (E1-E7)**
+- **E3**: `core/metrics.py` — JSONL metrics, record_metric(), get_metric_summary(), record_pipeline_run()
+- **E5**: `core/feature_flags.py` + `data/feature_flags.json` — is_enabled(), set_flag()
+- **E1**: `core/data_provider.py` — YFinanceProvider, CachingProvider, get_provider()
+- **E7**: `core/settings.py` — MarketScanSettings (Pydantic Settings v2 + os.environ fallback)
+- **E4**: `web/utils.py` — get_current_user_id() (multi-tenant förberedelse)
+- **E2**: `core/ai_prompts.py` utökad med MARKET_SUMMARY, AI_CHAT, SECTOR, COMPARISON
+- **E6**: `docs/DEPLOYMENT.md` — fallback-rutiner, manuella kommandon, cron-alternativ
+- **T6**: `tests/test_chaos.py` — 11 chaos-tester (timeout, NaN, XML, corrupt JSON, backoff)
+- **Admin**: `web/pages/admin_tabs/metrics.py` + ny "Metrics"-flik i admin_page.py
+
+**STEG 1 — Sprint 10 (commit bc9fd1b): A1 Pipeline-split + A5 Navigation-prep**
+- **A1**: `core/pipeline_helpers.py` (data-I/O) + `core/pipeline_performance.py` (timing)
+  `daily_pipeline.py` importerar performance-funktioner från pipeline_performance (ej inliner)
+  E3-integration: record_pipeline_run() anropas efter varje körning
+- **A5**: session_state data-cache i main() som förberedelse för st.navigation()
+
+**STEG 1 — Sprint 11 (commit 2a4b60b): A3 AI-router + A4 ML-features**
+- **A3**: `core/ai_router.py` — call_ai(), get_active_provider(), get_providers_status()
+  Centraliserat routing-lager (deepseek → gemini → claude) med fallback-kedja
+- **A4**: `core/ml_features.py` — compute_features_at(), RSI, MACD, Hurst, serial_corr etc.
+  Extraherat från ml_predictor.py för enklare testning och modulär återanvändning
+
+**Nya filer totalt (Sprint 8-11):** core/metrics.py, core/feature_flags.py, core/data_provider.py,
+core/settings.py, core/ai_router.py, core/ml_features.py, core/pipeline_helpers.py,
+core/pipeline_performance.py, tests/test_chaos.py, web/pages/admin_tabs/metrics.py,
+data/feature_flags.json
 
 ### 2026-06-04 — Komplett systemaudit + Sprint 1–3 fixes (commit 31f6466)
 
