@@ -14,7 +14,8 @@ def page_backtesting():
     from web.ui.components import page_header
     page_header("Backtesting", "backtest", subtitle="Historisk simulering av momentum-strategin mot index.")
 
-    with st.expander("ℹ️ Hur funkar backtesting? (klicka för att läsa)", expanded=False):
+    st.caption("⚠️ **Survivorship bias** och transaktionskostnader kan blåsa upp resultaten — dra av ~10–15 % per år för realistisk uppskattning. Se detaljer nedan.")
+    with st.expander("ℹ️ Hur funkar backtesting & feltolkningar att undvika (klicka för mer)", expanded=False):
         st.markdown("""
 ### Vad är backtesting?
 

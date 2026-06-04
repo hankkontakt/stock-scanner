@@ -43,9 +43,9 @@ COMMODITY_DISCOUNT     = 0.90  # Multiplikator för råvarubolag
 # att kliva in/ur utan onödig spread och slippage.
 MIN_DAILY_TURNOVER_USD = 50_000
 
-# Ungefärliga konverteringsfaktorer lokal valuta -> USD (uppdateras sällan).
-# Används ENBART för likviditetsestimering, inte för kursjämförelser.
-_CCY_TO_USD = {
+# P4-FIX: Hårdkodade FX-rates används som FALLBACK om live-hämtning misslyckas.
+# Live-rates hämtas via _get_ccy_to_usd() med 24h TTL.
+_CCY_TO_USD_FALLBACK = {
     "SEK": 0.095,   # 1 SEK ≈ 0.095 USD (1 USD ≈ 10.5 SEK)
     "NOK": 0.093,
     "DKK": 0.143,
@@ -65,6 +65,48 @@ _CCY_TO_USD = {
     "CNY": 0.138,
     "USD": 1.0,
 }
+# Bakåtkompatibilitet (externa importörer)
+_CCY_TO_USD = _CCY_TO_USD_FALLBACK
+
+_FX_CACHE: dict = {}   # {"rates": {...}, "ts": float}
+_FX_CACHE_TTL_S = 86400  # 24h
+
+def _get_ccy_to_usd() -> dict:
+    """Returnerar valuta→USD-tabell. Försöker hämta live-rates med 24h TTL.
+    Fallback till _CCY_TO_USD_FALLBACK om yfinance är otillgängligt."""
+    import time as _t
+    now = _t.time()
+    if _FX_CACHE.get("ts", 0) + _FX_CACHE_TTL_S > now:
+        return _FX_CACHE["rates"]
+    try:
+        import yfinance as _yf
+        # Hämta de viktigaste par mot USD
+        _PAIRS = ["SEKUSD=X", "NOKUSD=X", "DKKUSD=X", "EURUSD=X", "GBPUSD=X",
+                  "JPYUSD=X", "HKDUSD=X", "AUDUSD=X", "CADUSD=X", "CHFUSD=X",
+                  "CNHUSD=X", "INRUSD=X", "BRLUSD=X", "SGDUSD=X", "TWDUSD=X"]
+        _CCY_MAP = {
+            "SEKUSD=X": "SEK", "NOKUSD=X": "NOK", "DKKUSD=X": "DKK",
+            "EURUSD=X": "EUR", "GBPUSD=X": "GBP", "JPYUSD=X": "JPY",
+            "HKDUSD=X": "HKD", "AUDUSD=X": "AUD", "CADUSD=X": "CAD",
+            "CHFUSD=X": "CHF", "CNHUSD=X": "CNY", "INRUSD=X": "INR",
+            "BRLUSD=X": "BRL", "SGDUSD=X": "SGD", "TWDUSD=X": "TWD",
+        }
+        data = _yf.download(_PAIRS, period="2d", progress=False, auto_adjust=True)
+        rates = dict(_CCY_TO_USD_FALLBACK)  # börja med fallback
+        rates["USD"] = 1.0
+        if not data.empty:
+            close = data["Close"] if "Close" in data.columns else data
+            for pair, ccy in _CCY_MAP.items():
+                if pair in close.columns:
+                    val = close[pair].dropna().iloc[-1] if not close[pair].dropna().empty else None
+                    if val and val > 0:
+                        rates[ccy] = float(val)
+        _FX_CACHE["rates"] = rates
+        _FX_CACHE["ts"] = now
+        return rates
+    except Exception:
+        # Hämtning misslyckades — använd fallback
+        return dict(_CCY_TO_USD_FALLBACK)
 
 HOLDING_INDUSTRIES = {
     "asset management", "diversified investments", "investment trusts",
@@ -231,9 +273,12 @@ def _estimate_daily_turnover_usd(df: pd.DataFrame) -> pd.Series:
         return pd.Series(np.nan, index=df.index)
     price = df[price_col]
 
+    # P4-FIX: Hämta live FX-rates (24h TTL, fallback till statisk tabell)
+    _live_fx = _get_ccy_to_usd()
+
     # FX-konvertering
     if "currency" in df.columns:
-        fx = df["currency"].map(_CCY_TO_USD).fillna(1.0)
+        fx = df["currency"].map(_live_fx).fillna(1.0)
     else:
         # Ingen valutakolumn: anta USD för US, SEK för .ST, annars 1.0
         if "ticker" in df.columns:
@@ -249,7 +294,7 @@ def _estimate_daily_turnover_usd(df: pd.DataFrame) -> pd.Series:
                             "LatAm": "BRL", "Singapore": "SGD",
                         }
                         ccy = _grp_ccy.get(grp, "USD")
-                        return _CCY_TO_USD.get(ccy, 1.0)
+                        return _live_fx.get(ccy, 1.0)
                 return 1.0  # US
             fx = df["ticker"].apply(_guess_fx)
         else:
@@ -853,6 +898,11 @@ def score_universe_sector_neutralized(df: pd.DataFrame, regime: str = "OSÄKER")
     df = df.copy()
 
     # ── Steg 1: Region-neutralisering ────────────────────────────────────────
+    # D5-FIX: Rensa idempotens-flaggan innan neutralisering.
+    # Om df laddades från en tidigare scorad CSV (staleness-merge) har den
+    # _fundamentals_neutralized=True → utan detta hoppas re-neutralisering över
+    # och fundamenta blir upp till 24h gamla relativt nya priser.
+    df = df.drop(columns=["_fundamentals_neutralized"], errors="ignore")
     df = _region_neutralize_fundamentals(df)
 
     # ── Steg 2: Sektor-neutralisering (ovanpå region-justerade värden) ───────
@@ -907,6 +957,8 @@ def score_universe(df: pd.DataFrame, regime: str = "OSÄKER") -> pd.DataFrame:
     df = df.copy()
 
     # ── Steg 1: Region-neutralisera fundamentala metrics ─────────────────────
+    # D5-FIX: Rensa flaggan (se score_universe_sector_neutralized för förklaring)
+    df = df.drop(columns=["_fundamentals_neutralized"], errors="ignore")
     df = _region_neutralize_fundamentals(df)
 
     # ── Steg 2: Faktorscore + rabatter + rank ─────────────────────────────────

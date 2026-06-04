@@ -202,8 +202,14 @@ class MeanVarianceOptimizer:
         )
 
         if not result.success:
-            logger.warning(f"Optimering konvergerade inte: {result.message}")
-            # Fallback: returnera constrained equal weight
+            # M3-FIX: Explicit varning med tydlig text om equal-weight fallback.
+            # Användaren ser INTE detta (bara logging) men det syns i pipeline-loggar.
+            logger.warning(
+                "Portföljoptimering misslyckades (%s) — returnerar equal-weight fallback. "
+                "Kontrollera kovariansmatrisen (singulär?) eller utöka historikfönstret.",
+                result.message,
+            )
+            # Fallback: equal weight med bounds (INTE optimerat)
             weights = np.clip(initial_guess, min_weight, max_weight)
             return weights / np.sum(weights)
 
