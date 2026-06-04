@@ -53,19 +53,14 @@ def _apply_sc_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     if "debt_to_equity" in out.columns:
         out = out[out["debt_to_equity"].fillna(0) <= max_de]
 
-    # Landfilter
+    # A6-FIX: använd centraliserad apply_country_filter() istf lokal kopia
+    from web.utils import apply_country_filter as _acf
     if filters.get("sc_only_swedish") and "ticker" in out.columns:
         out = out[out["ticker"].str.endswith(".ST", na=False)]
     else:
         sel_countries = filters.get("sc_countries", [])
         if sel_countries and "ticker" in out.columns:
-            us_sel   = "🇺🇸 USA" in sel_countries
-            suffixes = [_COUNTRY_SUFFIX_MAP[c] for c in sel_countries if c in _COUNTRY_SUFFIX_MAP]
-            def _cm(t: str) -> bool:
-                if any(t.endswith(s) for s in suffixes):   return True
-                if us_sel and not any(t.endswith(s) for s in _ALL_NON_US_SUFFIXES): return True
-                return False
-            out = out[out["ticker"].apply(_cm)]
+            out = _acf(out, sel_countries)
 
     return out.reset_index(drop=True)
 

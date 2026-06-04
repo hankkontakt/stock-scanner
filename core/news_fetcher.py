@@ -330,11 +330,15 @@ def fetch_global_market_news(api_key: str, max_articles: int = 5) -> list:
                         source = source_name
                     if not headline:
                         continue
-                    link_el = item.find("link") or item.find("atom:link", ns)
+                    link_el = item.find("link") if item.find("link") is not None else item.find("atom:link", ns)
                     url = (link_el.get("href") or link_el.text or "").strip() if link_el is not None else ""
                     if not url:
                         continue
-                    pub_el = item.find("pubDate") or item.find("published") or item.find("atom:published", ns)
+                    pub_el = (item.find("pubDate")
+                              if item.find("pubDate") is not None
+                              else (item.find("published")
+                                    if item.find("published") is not None
+                                    else item.find("atom:published", ns)))
                     age_h, dt_s = 999, "—"
                     if pub_el is not None and pub_el.text:
                         try:
@@ -410,7 +414,7 @@ def fetch_swedish_market_news(max_articles: int = 5) -> list:
                     continue
 
                 # URL
-                link_el = item.find("link") or item.find("atom:link", ns)
+                link_el = item.find("link") if item.find("link") is not None else item.find("atom:link", ns)
                 if link_el is not None:
                     url = (link_el.get("href") or link_el.text or "").strip()
                 else:

@@ -76,20 +76,11 @@ def _apply_weekly_filters(df: pd.DataFrame, filters: dict,
     if filters.get("only_improving") and "score_delta_4w" in out.columns:
         out = out[out["score_delta_4w"].fillna(0) >= 5]
 
-    from core.suffix_map import COUNTRY_SUFFIXES as _SUFFIX_MAP
-    _ALL_NON_US = set(_SUFFIX_MAP.values())
+    # A6-FIX: använd centraliserad apply_country_filter() istf lokal kopia
+    from web.utils import apply_country_filter as _acf
     selected_countries = filters.get("countries", [])
     if selected_countries:
-        us_sel = "🇺🇸 USA" in selected_countries
-        suffixes = [_SUFFIX_MAP[c] for c in selected_countries if c in _SUFFIX_MAP]
-        def _country_match(t: str) -> bool:
-            t = str(t)
-            if any(t.endswith(s) for s in suffixes):
-                return True
-            if us_sel and not any(t.endswith(s) for s in _ALL_NON_US):
-                return True
-            return False
-        out = out[out["ticker"].apply(_country_match)]
+        out = _acf(out, selected_countries)
 
     return out.reset_index(drop=True)
 

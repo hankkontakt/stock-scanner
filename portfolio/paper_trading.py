@@ -43,16 +43,30 @@ BENCHMARK      = "SPY"
 DEFAULT_CAPITAL = 100_000  # SEK per vecka
 
 # ── Standardparametrar för riskhantering ───────────────────────────────────
-STOP_LOSS_PCT       = -10.0   # Sälj om -10% från inköp
-TAKE_PROFIT_PCT     = 25.0    # Sälj allt vid +25%
-PARTIAL_PROFIT_PCT  = 12.0    # Sälj 50% vid +12%
-PARTIAL_SELL_FRAC   = 0.50    # Andel att sälja vid delvinst
-TRAILING_ACTIVATE   = 8.0     # Aktivera trailing när vinsten nått +8%
-TRAILING_DISTANCE   = 8.0     # Trail:a stop:et 8% under högsta setts
-DCA_TRIGGER         = -8.0    # Köp mer om priset fallit -8% från inköp
-DCA_MULTIPLIER      = 1.5     # Köp 1.5x mer vid DCA
-MAX_DCA_PER_TICKER  = 2       # Max antal DCA-köp per ticker
-CLOSE_AFTER_WEEKS   = 8       # Stäng position efter N veckor oavsett
+# M5-FIX: Läs från data/paper_trading_config.json om filen finns.
+# Annars används dessa defaults. Format (alla fält är valfria):
+#   {"stop_loss_pct": -12, "take_profit_pct": 30, "close_after_weeks": 12}
+def _load_pt_config() -> dict:
+    _cfg_path = _ROOT / "data" / "paper_trading_config.json"
+    if _cfg_path.exists():
+        try:
+            return json.loads(_cfg_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+_PT_CFG = _load_pt_config()
+
+STOP_LOSS_PCT       = float(_PT_CFG.get("stop_loss_pct",       -10.0))   # Sälj om -10% från inköp
+TAKE_PROFIT_PCT     = float(_PT_CFG.get("take_profit_pct",      25.0))   # Sälj allt vid +25%
+PARTIAL_PROFIT_PCT  = float(_PT_CFG.get("partial_profit_pct",   12.0))   # Sälj 50% vid +12%
+PARTIAL_SELL_FRAC   = float(_PT_CFG.get("partial_sell_frac",     0.50))  # Andel att sälja vid delvinst
+TRAILING_ACTIVATE   = float(_PT_CFG.get("trailing_activate",     8.0))   # Aktivera trailing vid +8%
+TRAILING_DISTANCE   = float(_PT_CFG.get("trailing_distance",     8.0))   # Trail 8% under högsta
+DCA_TRIGGER         = float(_PT_CFG.get("dca_trigger",          -8.0))   # DCA vid -8%
+DCA_MULTIPLIER      = float(_PT_CFG.get("dca_multiplier",        1.5))   # 1.5x vid DCA
+MAX_DCA_PER_TICKER  = int(  _PT_CFG.get("max_dca_per_ticker",      2))   # Max antal DCA
+CLOSE_AFTER_WEEKS   = int(  _PT_CFG.get("close_after_weeks",       8))   # Stäng efter N veckor
 
 # ── Transaktionskostnader (slippage + courtage) ────────────────────────────
 # Modellerar realistiska friktionskostnader för att undvika överoptimism.
