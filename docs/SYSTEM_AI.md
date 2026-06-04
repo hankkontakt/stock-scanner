@@ -1110,6 +1110,45 @@ All 10 massive projects above (§17.2) are **COMPLETE**. Full system transformat
 
 > Lägg nyaste överst. Format: `YYYY-MM-DD — beskrivning (fil:rad)`.
 
+### 2026-06-04 — STEG 2b: AI-synliga diagnostikrapporter (commit e5b780d)
+
+**Syfte:** Lösa det faktiska problemet — systemet kör på GitHub Actions och Streamlit Cloud,
+inte lokalt. AI behöver kunna se vad som händer DÄR utan att logga in eller köra appen.
+
+**Lösning: CI commitar status-filer till repo som AI kan läsa med Read-verktyget:**
+- `data/health/health_YYYY-MM-DD.json` — redan existerande, health per dag
+- `data/ci_reports/last_daily_scan.json` — NY: sparas av `daily_scan.yml` after every run
+- `data/ci_reports/last_test_run.json` — NY: sparas av `tests.yml` with coverage
+- `data/ci_reports/latest_failure.json` — Skapas av `fetch_ci_logs.py --save`
+- `data/streamlit_errors.jsonl` — NY: skrivs av `streamlit_app.py` vid sidkraschar
+
+**Nya filer:**
+- `scripts/ai_debug.py` — **MASTER BRIEFING** (kör detta FÖRST i ny session). Läser alla
+  data/*-statusfiler och ger ett strukturerat nuläge på 0.2s: pipeline, CI-fel, Streamlit-fel,
+  metrics, fetch-fel, diagnos-historik, git-status.
+- `scripts/fetch_ci_logs.py` — Laddar ned EXAKTA GitHub Actions-loggar via API. Filtrerar
+  felrader, visar fil:rad-annotationer. `--save` sparar till `data/ci_reports/latest_failure.txt`
+- `docs/AI_QUICKSTART.md` — Felsökningsguide: vad man kollar i ordning, snabbreferens, alla kommandon.
+
+**Uppdaterade filer:**
+- `web/streamlit_app.py` — `_safe_render()` loggar nu sidkraschar till `data/streamlit_errors.jsonl`
+- `.github/workflows/daily_scan.yml` — Steg "Spara CI-körningsrapport" commitar JSON efter varje run
+- `.github/workflows/tests.yml` — Steg "Spara pytest-resultat" commitar täckning+status JSON
+
+**Hur AI ska börja varje session:**
+```bash
+python scripts/ai_debug.py --quick    # 0.2s — pipeline, fel, git-status
+python scripts/ai_debug.py --github  # + GitHub Actions live-status
+```
+**Om något är sönder:**
+```bash
+python scripts/fetch_ci_logs.py --save   # Ladda ned exakta CI-loggar
+cat data/ci_reports/latest_failure.txt  # Läs felen
+cat data/streamlit_errors.jsonl          # Streamlit-appfel
+```
+
+---
+
 ### 2026-06-04 — STEG 2: Komplett självdiagnos & testinfrastruktur (commit a72c6bb)
 
 **Syfte:** Bygga ett stort projekt för att AI-agenter (och människor) enkelt ska kunna
