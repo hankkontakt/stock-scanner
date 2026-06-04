@@ -200,16 +200,18 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
         # användarens tillbaka-knapp) uppdateras session_state i nästa rerun.
 
         # Kända sidor och deras URL-nycklar
+        # U2-FIX: ikoner MÅSTE stämma med _SECTIONS nedan — annars matchar inte
+        # session_state["nav_page"] och sidan markeras aldrig som aktiv i sidopanelen.
         _known_pages = {
             "overview":       "📊 Översikt",
             "guide":          "📚 Guide & Hjälp",
             "weekly-scan":    "🔍 Veckoscanner",
             "smallcap":       "🏦 Småbolag",
-            "stock-search":   "🔍 Aktie-sök",
+            "stock-search":   "🔎 Aktie-sök",        # 🔎 ≠ 🔍 (Veckoscanner)
             "watchlist":      "⭐ Bevakningar",
             "global-markets": "🌍 Globala marknader",
             "sector-rotation":"🏭 Sektorrotation",
-            "backtesting":    "📈 Backtesting",
+            "backtesting":    "🧪 Backtesting",       # 🧪 ≠ 📈 (Teknisk analys)
             "options":        "📊 Options & Derivator",
             "portfolio":      "💼 Portfölj",
             "portfolio-analysis":  "💼 Portföljanalys",
@@ -219,12 +221,12 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             "ai-paper-trading":"🤖 AI Paper Trading",
             "alerts":         "🚨 Larm & Notiser",
             "settings":       "⚙️ Inställningar",
-            "technical":      "📈 Teknisk analys",
+            "technical":      "📉 Teknisk analys",    # 📉 ≠ 📈 (Backtesting)
             "ai":             "🤖 AI",
             "admin":          "🔧 Admin",
             "ai-journal":     "📓 AI Journal",
             "universe":       "🔭 Universe Explorer",
-            "strategy":       "🔧 Strategy Builder",
+            "strategy":       "⚙️ Strategy Builder",  # ⚙️ ≠ 🔧 (Admin)
             "stock-compare":  "🔀 Stock Comparison",
         }
         _reverse_map = {v: k for k, v in _known_pages.items()}
@@ -339,7 +341,7 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
                 ("📄 Paper Trading",    "Paper Trading",     "paper"),
                 ("🤖 AI Paper Trading", "AI Paper Trading",  "simulation"),
                 ("🧪 Backtesting",      "Backtesting",       "backtest"),
-                ("🔧 Strategy Builder", "Strategy Builder",   "strategy"),
+                ("⚙️ Strategy Builder", "Strategy Builder",   "strategy"),
             ]),
             ("AI & LARM", False, [
                 ("🚨 Larm & Notiser",   "Larm & Notiser",    "alerts"),
@@ -760,8 +762,12 @@ def _handle_password_reset_flow() -> bool:
     </div>
     """, unsafe_allow_html=True)
 
+    import hashlib as _hl
     tokens = _load_reset_tokens()
-    token_data = tokens.get(token_from_url)
+    # S2-FIX: URL innehåller klartext-token; fil lagrar SHA-256-hash.
+    # Slå upp via hash (constant-time jämförelse via dict-lookup på hex-sträng).
+    _token_hash = _hl.sha256(token_from_url.encode()).hexdigest()
+    token_data = tokens.get(_token_hash)
 
     if not token_data:
         st.error("❌ Ogiltig eller redan använd återställningslänk.")
@@ -822,7 +828,9 @@ def _handle_password_reset_flow() -> bool:
                 if not new_hash:
                     st.error("❌ Kunde inte hasha lösenordet. Kontakta administratören.")
                 elif _update_user_password(username, new_hash):
-                    tokens.pop(token_from_url, None)
+                    # S2-FIX: ta bort via hash-nyckel (URL-token matchar aldrig direkt)
+                    import hashlib as _hl2
+                    tokens.pop(_hl2.sha256(token_from_url.encode()).hexdigest(), None)
                     _save_reset_tokens(tokens)
                     st.success("✅ Lösenordet har uppdaterats! Du kan nu logga in.")
                     st.query_params.clear()
@@ -851,7 +859,13 @@ def _show_forgot_password_form():
                     # Alltid samma meddelande (undviker user enumeration)
                     st.success("Om e-postadressen finns registrerad skickar vi en länk inom kort.")
                     if uname is not None:
-                        token = str(uuid.uuid4())
+                        # S2-FIX: kryptografiskt säker token (secrets) + bara hash sparas i fil.
+                        # Klartext-token skickas i e-postlänken och hålls aldrig på disk →
+                        # en läckt password_reset_tokens.json kan inte användas för kontoövertagande.
+                        import secrets as _sec
+                        import hashlib as _hl
+                        token = _sec.token_hex(32)          # 256 bitar entropy
+                        token_hash = _hl.sha256(token.encode()).hexdigest()
                         now_utc = datetime.now(timezone.utc)
                         expires = (now_utc + timedelta(hours=1)).isoformat()
                         tokens = _load_reset_tokens()
@@ -865,7 +879,7 @@ def _show_forgot_password_form():
                             except Exception:
                                 return False
                         tokens = {k: v for k, v in tokens.items() if _is_valid_token(v)}
-                        tokens[token] = {"username": uname, "expires": expires}
+                        tokens[token_hash] = {"username": uname, "expires": expires}
                         _save_reset_tokens(tokens)
                         _send_reset_email(reset_email.strip(), uname, token)
 

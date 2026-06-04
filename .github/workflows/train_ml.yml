@@ -56,8 +56,12 @@ jobs:
           path: |
             data/ml
             data/cache
-          key: ml-cache-${{ runner.os }}-${{ github.event.inputs.years || '5' }}
+          # CI3-FIX: inkludera universe-typ i cache-nyckeln så att byte av universum
+          # inte återanvänder cachad data från ett annat universum (gammal bugg: bara
+          # years ingick, inte universe → "smallcap" fick "universe"-cache vid träning).
+          key: ml-cache-${{ runner.os }}-${{ github.event.inputs.universe || 'both' }}-${{ github.event.inputs.years || '5' }}
           restore-keys: |
+            ml-cache-${{ runner.os }}-${{ github.event.inputs.universe || 'both' }}-
             ml-cache-${{ runner.os }}-
 
       - name: 🏗️  Bygg dataset (universum)

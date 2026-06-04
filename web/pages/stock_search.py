@@ -7,6 +7,7 @@ import yfinance as yf
 from datetime import date, datetime
 
 from web.utils import kpi_row, load_watchlist, load_portfolio, _get_provider, _get_depth
+from web.ui.components import page_header
 from core import ai_analysis
 
 
@@ -23,8 +24,7 @@ def _search_ticker_yfinance(query: str):
 def page_stock_search():
     """🔍 Aktie-sök - sök på VILKEN aktie som helst.
     Förbättrad: linjegraf, AI-chatt, yfinance news, add to watchlist/portfolio."""
-    st.title("🔍 Aktie-sök")
-    st.caption("Sök på vilken aktie som helst (även utanför ditt universum) och få prisgraf, AI-analys, nyheter.")
+    page_header("Aktie-sök", "search", subtitle="Sök på vilken aktie som helst (även utanför ditt universum) och få prisgraf, AI-analys och nyheter.")
 
     default_ticker = st.session_state.get("search_ticker", "")
     if default_ticker:

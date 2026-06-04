@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from web.utils import kpi_row, load_portfolio, load_watchlist, _load_nth_latest_scored
-from web.ui.components import clickable_stock_table
+from web.ui.components import clickable_stock_table, page_header
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -190,7 +190,7 @@ def _get_insider_alerts(df: pd.DataFrame) -> pd.DataFrame:
 
 def page_alerts_notices(df: pd.DataFrame):
     """Larm & Notiser - ombyggd för bättre läsbarhet."""
-    st.title("🚨 Larm & Notiser")
+    page_header("Larm & Notiser", "alerts", subtitle="Prisvarningar, score-rörelser och portföljnotiser.")
 
     holdings = load_portfolio()
     watchlist = load_watchlist()

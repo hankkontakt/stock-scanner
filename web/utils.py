@@ -30,6 +30,50 @@ from core import config
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# U9: DATAFRÄSCHHET — centraliserad kontroll + prominent varning
+# ══════════════════════════════════════════════════════════════════════════════
+
+@st.cache_data(ttl=300)
+def scan_data_age_hours() -> float:
+    """Returnerar antal timmar sedan senaste scored_universe-filen skrevs.
+    Returnerar 9999.0 om ingen fil finns."""
+    files = sorted(REPORT_DIR.glob("scored_universe_*.parquet"), reverse=True)
+    if not files:
+        files = sorted(REPORT_DIR.glob("scored_universe_*.csv"), reverse=True)
+    if not files:
+        return 9999.0
+    try:
+        return (datetime.now() - datetime.fromtimestamp(os.path.getmtime(files[0]))).total_seconds() / 3600
+    except Exception:
+        return 9999.0
+
+
+def show_stale_data_warning(age_h: float | None = None) -> None:
+    """Visar prominent st.warning om scandata är äldre än 36h.
+    Döljer STARK-signaler i meddelandet om data är äldre än 48h.
+
+    Anropa i toppen av varje sida som visar scanresultat.
+    """
+    if age_h is None:
+        age_h = scan_data_age_hours()
+    if age_h >= 9000:
+        st.warning("⚠️ **Ingen scandata hittades.** Kör en scan via Admin → Starta scan.", icon="🔍")
+    elif age_h > 48:
+        st.warning(
+            f"⚠️ **Scandata är {age_h / 24:.0f} dagar gammal** ({age_h:.0f}h). "
+            "STARK-signaler kan vara missvisande — data reflekterar inte aktuella priser. "
+            "Utlös ett nytt scan via Admin → Starta scan.",
+            icon="🕐",
+        )
+    elif age_h > 36:
+        st.info(
+            f"ℹ️ **Scandata är {age_h:.0f}h gammal.** Nästa automatiska scan körs "
+            "imorgon kl 09:05 CEST.",
+            icon="📅",
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # DATALADDNING
 # ══════════════════════════════════════════════════════════════════════════════
 

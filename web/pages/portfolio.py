@@ -61,7 +61,10 @@ def _load_konton() -> dict:
 def _save_konton(konton: dict):
     _KONTON_PATH.parent.mkdir(parents=True, exist_ok=True)
     content = json.dumps(konton, indent=2, ensure_ascii=False)
-    _KONTON_PATH.write_text(content, encoding="utf-8")
+    # U8-FIX: atomic write (tmp → rename) skyddar mot korruption vid parallella Streamlit-reruns.
+    _tmp = _KONTON_PATH.with_suffix(".tmp.json")
+    _tmp.write_text(content, encoding="utf-8")
+    _tmp.replace(_KONTON_PATH)
     # Committa till GitHub -- Streamlit Cloud har ephemeral filsystem
     try:
         from web.pages.admin import _get_github_token, _github_commit_file
@@ -267,7 +270,11 @@ def _save_holdings_user(df: pd.DataFrame):
         user_dir = _active_data_dir()
         user_dir.mkdir(parents=True, exist_ok=True)
         csv_content = df.to_csv(index=False)
-        (user_dir / "holdings.csv").write_text(csv_content, encoding="utf-8")
+        # U8-FIX: atomic write (tmp → rename) skyddar mot korruption vid parallella reruns
+        _h_path = user_dir / "holdings.csv"
+        _h_tmp = _h_path.with_suffix(".tmp.csv")
+        _h_tmp.write_text(csv_content, encoding="utf-8")
+        _h_tmp.replace(_h_path)
         # Commit till GitHub så pipeline kan läsa data för personliga e-postutskick
         try:
             from web.pages.admin import _get_github_token, _github_commit_file
@@ -2655,7 +2662,7 @@ def page_portfolio(df: pd.DataFrame = None, holdings: pd.DataFrame = None,
     holdings = load_portfolio()
     score_data = _build_score_data(holdings, df, sc_df)
 
-    st.title("💼 Portfölj")
+    page_header("Portfölj", "holdings", subtitle="Dina positioner, avkastning och portföljanalys.")
     _show_scan_pending_notifications()
 
     if holdings.empty:

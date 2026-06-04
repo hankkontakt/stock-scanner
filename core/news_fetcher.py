@@ -319,7 +319,7 @@ def fetch_global_market_news(api_key: str, max_articles: int = 5) -> list:
                 for item in items:
                     if len(results) >= max_articles:
                         break
-                    title_el = item.find("title") or item.find("atom:title", ns)
+                    title_el = item.find("title") if item.find("title") is not None else item.find("atom:title", ns)
                     headline = (title_el.text or "").strip() if title_el is not None else ""
                     # Google News encodes source in title as "Headline - Source"
                     if " - " in headline:
@@ -404,7 +404,7 @@ def fetch_swedish_market_news(max_articles: int = 5) -> list:
                     break
 
                 # Rubrik
-                title_el = item.find("title") or item.find("atom:title", ns)
+                title_el = item.find("title") if item.find("title") is not None else item.find("atom:title", ns)
                 headline = (title_el.text or "").strip() if title_el is not None else ""
                 if not headline:
                     continue
@@ -761,7 +761,8 @@ def fetch_yfinance_news(ticker: str, max_items: int = 5) -> list:
         import yfinance as yf
         t = yf.Ticker(ticker)
         news_items = t.news or []
-        now = datetime.utcnow()
+        from datetime import timezone as _tz
+        now = datetime.now(_tz.utc)
         for item in news_items[:max_items]:
             content = item.get("content") or {}
             if content:
