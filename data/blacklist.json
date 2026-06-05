@@ -142,5 +142,41 @@
     "RAD": {
         "reason": "Rite Aid Chapter 11 - delisted from NYSE",
         "date": "2026-06-02"
+    },
+    "EXAS": {
+        "reason": "Exact Sciences - misslyckas i 4/4 körningar, Yahoo hittar ingen data",
+        "date": "2026-06-05"
+    },
+    "PHNX.L": {
+        "reason": "Phoenix Group Holdings (LSE) - misslyckas i 4/4 körningar",
+        "date": "2026-06-05"
+    },
+    "6406.T": {
+        "reason": "Fujitec Co (TSE Japan) - misslyckas i 4/4 körningar, Yahoo ticker trasig",
+        "date": "2026-06-05"
+    },
+    "0011.HK": {
+        "reason": "Hang Seng Bank (HKEX) - misslyckas i 4/4 körningar",
+        "date": "2026-06-05"
+    },
+    "TATAMOTORS.NS": {
+        "reason": "Tata Motors (NSE India) - misslyckas i 4/4 körningar, Yahoo .NS-ticker strulig",
+        "date": "2026-06-05"
+    },
+    "BRFS3.SA": {
+        "reason": "BRF S.A. (B3 Brasilien) - misslyckas i 4/4 körningar",
+        "date": "2026-06-05"
+    },
+    "EMBR3.SA": {
+        "reason": "Embraer (B3 Brasilien) - misslyckas i 4/4 körningar",
+        "date": "2026-06-05"
+    },
+    "AZUL4.SA": {
+        "reason": "Azul Airlines (B3 Brasilien) - misslyckas i 4/4 körningar",
+        "date": "2026-06-05"
+    },
+    "CENY.BR": {
+        "reason": "Okänd Belgisk ticker - misslyckas i 4/4 körningar, symbol ogiltig",
+        "date": "2026-06-05"
     }
 }
