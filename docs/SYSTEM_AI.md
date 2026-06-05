@@ -664,32 +664,33 @@ Professional reusable UI components replacing ad-hoc inline HTML. All styling is
 
 ### 9.4 Admin tab system (`web/pages/admin_tabs/`)
 
-Admin-sidan (`admin_page.py`) renderar en tab-flik per fil i `admin_tabs/`:
+**Ombyggd 2026-06-04:** 18 kaotiska flikar → 5 väldefinierade sektioner.
+Admin-sidan (`admin_page.py`) renderar `st.tabs()` med 5 moduler.
 
-| Tab | File | Lines | Function |
+| Flik | Fil | Rader | Innehåll |
 |---|---|---|---|
-| Översikt | `overview.py` | 128 | Admin overview + system status |
-| Scans | `scans.py` | 72 | Scan history timeline |
-| Health | `health.py` | 131 | Universe health metrics |
-| Innehav | `holdings.py` | 100 | Portfolio holdings CRUD |
-| Bevakningar | `watchlist.py` | 87 | Watchlist editor |
-| Användare | `users.py` | 120 | Multi-user config |
-| E-post | `email_tab.py` | 94 | Email subscriber management |
-| Cache | `cache_tab.py` | 109 | AI cache management |
-| Config | `config_tab.py` | 48 | Read-only config viewer |
-| Import | `import_tab.py` | 65 | Avanza CSV import UI |
-| Debug | `debug_tab.py` | 254 | *** Debug dashboard: API keys, data coverage, pipeline status, blacklist, strikes, FAQ *** |
+| 🟢 System | `tab_system.py` | 461 | Statusbanner (st.success/warning/error), 4 KPI-kort (st.metric), GitHub Actions-monitor, API-nyckelstatus, diagnostikverktyg, fellog |
+| ▶️ Pipeline | `tab_pipeline.py` | 358 | Kör 7 scan-lägen (knappar med confirm-flöde), körningshistorik med filter, cache-hantering |
+| 🌐 Universe | `tab_universe.py` | 682 | Täckning, kandidater (godkänn/avvisa), strikes & blacklist, datakvalitet |
+| ⚙️ Inställningar | `tab_settings.py` | 295 | Faktorvikter, feature flags, API-nycklar, användare, e-post |
+| 📊 Metrics | `tab_metrics.py` | 188 | Pipeline-prestanda, AI-tokens, score-distribution, fetch-fel |
+
+CSS-design injiceras via `_ADMIN_CSS` i `admin_page.py` (status-badges, KPI-cards).
+KPI-korten använder `st.metric()` (theme-aware — fungerar i dark/light mode).
+**Borttagna gamla filer:** overview.py, diagnostics.py, debug_tab.py, scans.py, cache_tab.py, health.py, universe_discovery.py, strikes_health.py, data_quality.py, config_tab.py, users.py, email_tab.py, import_tab.py, metrics.py, watchlist.py, holdings.py.
 
 ### 9.5 Stock detail page
 
 `web/stock_detail.py:render_stock_detail(ticker, df)` provides:
-- Quick data cards (7 KPIs with tooltips)
+- **Quick data cards** — 7 KPIs: Score, Entry, Trend, RSI, P/E, ROE, Piotroski. Om `predicted_return` finns i row → 8:e kort "🤖 ML 30d" visas automatiskt med ML-prediktion i %.
 - Interactive Plotly candlestick chart (period selector, MA50/MA200)
 - Radar chart of 8-factor profile
 - Detail data in 5 tabs (Värdering, Kvalitet, Momentum, Tillväxt, Sentiment)
-- AI analysis with depth selector + live news context
+- AI analysis: använder `SYSTEM_PROMPT_STOCK_ANALYSIS` (korrekt aktieanalysprompt med entry-signal-tolkning + 4-horisont avkastningstabell 1v/1m/6m/1år)
 - Custom AI chat with news injection
 - Multi-source news section
+
+**OBS:** `_ai_analysis_panel()` anropar `ai_chat()` med `system_prompt_override=SYSTEM_PROMPT_STOCK_ANALYSIS` — INTE den generiska SYSTEM_PROMPT_CHAT. Ändrades 2026-06-05 efter buggreport om att AI inte tolkade entry-signal korrekt.
 
 ---
 
@@ -908,7 +909,7 @@ totalt (kör `pytest tests/`).
 | Strike system | `core/filters.py:update_ticker_health()` | Auto-blacklist tickers after 3 failed fetches |
 | Diagnose failure | `core/filters.py:diagnose_failure()` | Per-ticker failure analysis |
 | Debug flag | `core/news_alerts.py` | `--debug` flag for dry-run |
-| Debug page | `web/pages/admin_tabs/debug_tab.py` | Admin-only debug dashboard (API keys, coverage, pipeline status, FAQ) |
+| Debug page | `web/pages/admin_tabs/tab_system.py` | Admin System-flik: GitHub Actions, API-nycklar, diagnostik (debug_tab.py borttagen 2026-06-04) |
 | API key check | Debug page | Red/green per API key |
 | Data coverage | Debug page | % coverage per factor |
 | Pipeline status | Debug page | Last run status, error history |
@@ -932,7 +933,7 @@ totalt (kör `pytest tests/`).
 | Issue | Severity | Location | Notes |
 |---|---|---|---|
 | `daily_pipeline.py` 81KB | MEDIUM | `core/daily_pipeline.py` | Does data loading, scoring, reporting, email — but already partially split into pipeline_report.py + pipeline_alerts.py |
-| `admin_page.py` 80KB + `admin.py` 79KB | MEDIUM | `web/pages/` | Tab-based single-page pattern, hard to navigate |
+| `admin_page.py` + `admin_tabs/` | DONE ✅ | `web/pages/` | Ombyggd 2026-06-04: 18 flikar → 5 sektioner, 1984 rader i 5 moduler |
 | `portfolio.py` page 92KB | LOW | `web/pages/portfolio.py` | Single largest Streamlit page, but logically cohesive |
 | `config.py` 26KB | LOW | `core/config.py` | Mostly ticker lists, few constants |
 | `streamlit_app.py` 51KB | LOW | `web/streamlit_app.py` | 51KB with sidebar logic + page routing |
@@ -2392,6 +2393,63 @@ Detta avsnitt listar de 50 mest betydande förändringarna (nya funktioner, bugg
 ### 2026-06-01 — Unicode-tecken som orsakade SyntaxError i Python 3.12+
 **Vad:** Ersatte alla Unicode-punctuationstecken (en-dash `–`, pil `→`, multiplikation `×`, större-än-eller-lika `≥`) i kommentarer och docstrings i 90+ Python-filer.
 **Varför:** Python 3.12+ förbjöd vissa Unicode-punctuationstecken utanför string-literals i tokenizern. Detta blockerade import av `core/__init__.py` och därigenom HELA appen. Upptäcktes vid testkörning efter dodkodsrensningen.
+
+### 2026-06-05 — Admin KPI-kort: native Streamlit-komponenter ersätter custom HTML
+**Vad:** `tab_system.py` — `st.metric()` istf `<div class="kpi-card">`, `st.success/warning/error()` istf `<div style="background:rgba(...)">`. CSS-klasser via `st.markdown` är opålitliga i Streamlit Cloud.
+**Varför:** Vita klumpar syntes mot mörk bakgrund pga att Streamlit's egna containrar applicerar vit bakgrund som rgba-transparens blandar med.
+
+### 2026-06-05 — Admin CSS kontrast-fix för mörkt tema
+**Vad:** `admin_page.py` — alla hårdkodade ljusa färger (`#f8f9fa`, `color:#666`, `#28a745`) byttes till `rgba(255,255,255,0.05)`, `opacity:0.55`, `#4ade80`/`#f87171` (pastell).
+**Varför:** Högt kontrast-problem i Streamlit dark mode.
+
+### 2026-06-05 — 64 ruff-lint-fel fixade (CI lint-steg passerade inte)
+**Vad:** F821 (`np`/`pd`/`scored_df` undefined) i `portfolio.py`, `app.py`, `daily_pipeline.py`. F823 (lokal `go` re-import) i `backtesting_page.py`. 41 F541 f-strängar utan platshållare (auto-fix). E401 split-import.
+**Filer:** `web/app.py`, `web/pages/portfolio.py`, `web/pages/backtesting_page.py`, `core/daily_pipeline.py`, `tests/test_daily_pipeline.py` + 13 filer F541.
+
+### 2026-06-05 — StreamlitDuplicateElementKey i overview.py fixad
+**Vad:** `_goto("🔍 Veckoscanner")` anropades 2 gånger → identisk key. `_goto()` fick `_suffix: str = ""` parameter. Anropas som `_goto("🔍 Veckoscanner", "_buy")` resp. `"_rise"`.
+**Fil:** `web/pages/overview.py:22`
+
+### 2026-06-05 — DST-säker schemaläggning för börsmejl
+**Vad:** `daily_scan.yml` — dubbla crons per tidskritiskt läge (CEST + CET). Morning: `10 7` (CEST) + `10 8` (CET) = 09:10 lokal tid. Evening: `40 15` (CEST) + `40 16` (CET) = 17:40 lokal tid. Mode-detektionen kontrollerar `Europe/Stockholm` lokal tid via `zoneinfo` och returnerar `"skip"` om cron triggar utanför giltigt tidsfönster (DST-dubblering).
+**Varför:** Gamla schema `5 7` = 09:05 CEST (sommar) men 08:05 CET (vinter) — 55 min fel. GitHub Actions kör alltid i UTC.
+**Fil:** `.github/workflows/daily_scan.yml:mode-detektion`
+
+### 2026-06-05 — 9 kroniska felmisslyckanden blacklistade
+**Vad:** `data/blacklist.json` — EXAS, PHNX.L, 6406.T, 0011.HK, TATAMOTORS.NS, BRFS3.SA, EMBR3.SA, AZUL4.SA, CENY.BR. Alla misslyckades i 4/4 körningar.
+**Varför:** Sparar tid per scan-körning.
+
+### 2026-06-05 — Smallcap-sidan: parquet-stöd i load_smallcap_reports()
+**Vad:** `web/utils.py:load_smallcap_reports()` globade bara `*.csv` men pipelinen sparar `*.parquet`. Lade till parquet-inläsning som prioritet, CSV som fallback.
+**Varför:** sc_df alltid tom → "Småbolagsdata håller på att laddas in"-meddelande.
+
+### 2026-06-05 — Sidebar: Favoriter och Senaste sidor borttagna
+**Vad:** `web/streamlit_app.py` — tog bort `_recent_pages`/`_pinned_pages` session-state-spårning + UI-block (ca 45 rader).
+**Varför:** Användaren ville ha renare sidebar.
+
+### 2026-06-05 — Stock Comparison: sök på bolagsnamn
+**Vad:** `web/pages/stock_comparison.py` — bygger `ticker_label = {ticker: "TSLA — Tesla, Inc."}` och använder `format_func=lambda t: ticker_label.get(t, t)` i `st.multiselect`. Streamlit söker på hela display-strängen inkl. bolagsnamnet.
+**Varför:** Sökning matchade bara ticker-strängar (TSLA) inte bolagsnamn (tesla).
+
+### 2026-06-05 — AI-prompt: korrekt systemprompt i stock_detail
+**Vad:** `web/stock_detail.py:_ai_analysis_panel()` anropade `ai_chat()` med generisk `SYSTEM_PROMPT_CHAT`. Bytt till `system_prompt_override=SYSTEM_PROMPT_STOCK_ANALYSIS` som instruerar AI att tolka entry-signal och ge strukturerad rekommendation.
+**Fil:** `web/stock_detail.py:963`
+
+### 2026-06-05 — Dubblettdefinition av SYSTEM_PROMPT_SECTOR_ANALYSIS borttagen
+**Vad:** `core/ai_prompts.py` definierade variabeln 2 gånger — den sämre första versionen överskrevs alltid. Tog bort den redundanta.
+
+### 2026-06-05 — AI-prompt utökad med tidshorisontsanalys
+**Vad:** `core/ai_prompts.py:SYSTEM_PROMPT_STOCK_ANALYSIS` — ny punkt 6 "Framåtblickande avkastningsbedömning": AI ger kvalitativ riktning+drivare+risk som tabell för 1 vecka, 1 månad, 6 månader, 1 år.
+
+### 2026-06-05 — ML-prediktion som snabb-kort i aktiedetaljvy
+**Vad:** `web/stock_detail.py:_quick_data_cards()` — om `predicted_return` finns i row visas 8:e kort "🤖 ML 30d" med procentvärde.
+
+### 2026-06-05 — Enhetliga tabeller: Småbolag ≈ Veckoscanner
+**Vad:** `web/pages/smallcap.py` — Dag%/Vecka%/6m%/12m% byter från pct_fmt()-strängar till raw float×100 + `NumberColumn(format="%.1f%%")`. Alla kolumner fick `column_config` med hjälptexter identiska med weekly scanner-stilen. ProgressColumn för Poäng och AI rank.
+
+### 2026-06-05 — Admin admin-sida ombyggd (SLUTFÖRD från föregående session)
+**Vad:** 18 kaotiska flikar → 5 sektioner. Se §9.4 för fullständig dokumentation.
+**Commit:** `6f69a82`
 
 ### 2026-06-01 — SYSTEM_AI.md: fullständig gapanalys och uppdatering
 **Vad:** Lade till 6 tidigare odokumenterade filer, 12 admin_tabs-filer, web/ui-paketet, korrigerade filstorlekar och antal (core 35/660KB, portfolio 8, web ~35/1.1MB, 19 sidor). Borttog referenser till 3 icke-existerande filer.
