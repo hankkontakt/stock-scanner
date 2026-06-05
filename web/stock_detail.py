@@ -960,12 +960,18 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame, company_na
                     )
                     question = f"Aktie: {ticker}\n\n{custom_prompt}"
 
+                # Använd SYSTEM_PROMPT_STOCK_ANALYSIS (ej den generiska CHAT-prompten)
+                # så att AI:n vet hur entry_signal ska tolkas, ger strukturerad
+                # rekommendation (STARKT KÖP/KÖP/BEVAKA/UNDVIK/SÄLJ) och analyserar
+                # de 8 faktorblocken korrekt.
+                from core.ai_prompts import SYSTEM_PROMPT_STOCK_ANALYSIS
                 result = ai_analysis.ai_chat(
                     question,
                     context=full_context,
                     force_refresh=force_refresh,
                     provider=provider,
                     depth=depth,
+                    system_prompt_override=SYSTEM_PROMPT_STOCK_ANALYSIS,
                 )
                 with st.container(border=True):
                     st.markdown(result)

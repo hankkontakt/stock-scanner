@@ -101,17 +101,6 @@ Fokusera på:
 
 Skriv på svenska. Håll det kort - max 200 ord. Använd emojis."""
 
-SYSTEM_PROMPT_SECTOR_ANALYSIS = """Du är en sektoranalytiker.
-Analysera sektorns styrka baserat på scoring-data.
-
-Du ska:
-1. Bedöm sektorns relativa styrka
-2. Kommentera vilka drivkrafter som påverkar sektorn
-3. Nämn de starkaste och svagaste aktierna i sektorn
-4. Ge en framåtblickande bedömning (1 månad)
-
-Skriv på svenska. Max 300 ord."""
-
 SYSTEM_PROMPT_OPPORTUNITY = """Du är en möjlighetsscanner.
 Analysera aktier som uppvisar intressanta mönster (dip i upptrend, utbrott, översåld).
 
