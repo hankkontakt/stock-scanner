@@ -198,7 +198,7 @@ jobs:
         run: echo "Cron-triggern utanför giltigt tidsfönster (DST-dubblering) — inget att göra."
 
       - name: 📤 Spara rapport som artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always() && steps.mode.outputs.mode != 'skip'
         with:
           name: report-${{ steps.mode.outputs.mode }}-${{ github.run_number }}
