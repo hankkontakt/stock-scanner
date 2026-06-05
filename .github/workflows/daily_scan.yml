@@ -2,21 +2,31 @@ name: 📊 MarketScan Pipeline (Daily)
 
 on:
   schedule:
-    # Morgon: 07:05 UTC = 09:05 CEST (5 min efter Stockholmsbörsen öppnar 09:00)
-    - cron: "5 7 * * 1-5"
-    # Kväll: 15:30 UTC = 17:30 CEST (precis när Stockholmsbörsen stänger)
-    - cron: "30 15 * * 1-5"
-    # Veckoscan lördag: 07:00 UTC = 09:00 CEST
+    # ── Morgonscan: 10 min efter Stockholmsbörsen öppnar (09:00) ────────────────
+    # Mål: pipeline STARTAR 08:50 lokal tid → tar ~10 min → email ~09:00-09:10
+    # GitHub Actions kan vara 5-10 min sen, därav 10 min marginal.
+    # CEST (sommar, sista mars – sista okt, UTC+2): 06:50 UTC = 08:50 CEST
+    - cron: "50 6 * * 1-5"
+    # CET  (vinter, sista okt – sista mars, UTC+1): 07:50 UTC = 08:50 CET
+    - cron: "50 7 * * 1-5"
+    # ── Kvällsscan: email ~10 min efter stängning (17:30) ───────────────────────
+    # Mål: pipeline STARTAR 17:20 lokal tid → tar ~10 min → email ~17:30-17:40
+    # CEST (sommar, UTC+2): 15:20 UTC = 17:20 CEST
+    - cron: "20 15 * * 1-5"
+    # CET  (vinter, UTC+1): 16:20 UTC = 17:20 CET
+    - cron: "20 16 * * 1-5"
+    # ── Övriga scheman (ej DST-känsliga) ────────────────────────────────────────
+    # Veckoscan lördag: 07:00 UTC = 09:00 CEST / 08:00 CET
     - cron: "0 7 * * 6"
-    # Retry rate-limitade (lördag): 11:00 UTC = 13:00 CEST (4h efter veckoscan)
+    # Retry rate-limitade (lördag): 11:00 UTC = 13:00 CEST / 12:00 CET
     - cron: "0 11 * * 6"
-    # Småbolag måndag: 07:15 UTC = 09:15 CEST
+    # Småbolag måndag: 07:15 UTC = 09:15 CEST / 08:15 CET
     - cron: "15 7 * * 1"
-    # Retry rate-limitade (måndag): 11:00 UTC = 13:00 CEST (4h efter småbolagsscan)
+    # Retry rate-limitade (måndag): 11:00 UTC = 13:00 CEST / 12:00 CET
     - cron: "0 11 * * 1"
-    # Portfolio price refresh: 11:10 UTC = 13:10 CEST
+    # Portfolio price refresh: 11:10 UTC (ej tidskritisk)
     - cron: "10 11 * * 1-5"
-    # Refresh missing data: 08:00 + 15:00 UTC = 10:00 + 17:00 CEST
+    # Refresh missing data: 08:00 + 15:00 UTC (ej tidskritisk)
     - cron: "0 8,15 * * 1-5"
 
   workflow_dispatch:
@@ -94,51 +104,77 @@ jobs:
 
       - name: 🔄 Bestäm körläge
         id: mode
-        # P1/CI1-FIX: Centraliserad lookup-tabell istf if/elif-kedja.
-        # Lägg till nytt schema = lägg till ny rad i MODE_MAP nedan.
-        # Ingen risk att kedjan "glömmer" att uppdateras vid schema-ändring.
+        # DST-säker mode-detektion:
+        #   - Två crons per tidskritiskt läge (CEST + CET).
+        #   - Felaktig säsongscron (dubbel-trigger vid DST-övergång) → "skip".
+        #   - Stockholm-lokal tid avgör om cron-triggern är i rätt tidsfönster.
         #
-        # Schema (UTC) → mode-mappning:
-        #   "5 7 * * 1-5"    → morning           (mån-fre 09:05 CEST)
-        #   "30 15 * * 1-5"  → evening            (mån-fre 17:30 CEST)
-        #   "0 7 * * 6"      → weekly             (lör 09:00 CEST)
-        #   "0 11 * * 6"     → retry_rate_limited (lör 13:00 CEST)
-        #   "15 7 * * 1"     → smallcap           (mån 09:15 CEST)
-        #   "0 11 * * 1"     → retry_rate_limited (mån 13:00 CEST)
-        #   "10 11 * * 1-5"  → portfolio_refresh  (mån-fre 13:10 CEST)
-        #   "0 8,15 * * 1-5" → refresh_missing    (mån-fre 10:00+17:00 CEST)
+        # Schema → mode (båda CEST+CET pekerar på samma mode):
+        #   "50 6 * * 1-5"   → morning  (CEST: 08:50)
+        #   "50 7 * * 1-5"   → morning  (CET:  08:50)
+        #   "20 15 * * 1-5"  → evening  (CEST: 17:20)
+        #   "20 16 * * 1-5"  → evening  (CET:  17:20)
+        #   "0 7 * * 6"      → weekly
+        #   "0 11 * * 6"     → retry_rate_limited
+        #   "15 7 * * 1"     → smallcap
+        #   "0 11 * * 1"     → retry_rate_limited
+        #   "10 11 * * 1-5"  → portfolio_refresh
+        #   "0 8,15 * * 1-5" → refresh_missing
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
             echo "tickers=${{ github.event.inputs.tickers }}" >> $GITHUB_OUTPUT
           else
-            # Lookup-tabell (Python): en rad per schema = tydlig underhåll
             SCHED="${{ github.event.schedule }}"
-            MODE=$(python3 -c "
+            MODE=$(python3 - <<'PYEOF' "$SCHED"
           import sys
+          from zoneinfo import ZoneInfo
+          from datetime import datetime
+
+          tz  = ZoneInfo("Europe/Stockholm")
+          now = datetime.now(tz)
+          h   = now.hour  # Lokal stockholmstid
+
           MODE_MAP = {
-              '5 7 * * 1-5':    'morning',
-              '30 15 * * 1-5':  'evening',
-              '0 7 * * 6':      'weekly',
-              '0 11 * * 6':     'retry_rate_limited',
-              '15 7 * * 1':     'smallcap',
-              '0 11 * * 1':     'retry_rate_limited',
-              '10 11 * * 1-5':  'portfolio_refresh',
-              '0 8,15 * * 1-5': 'refresh_missing',
+              "50 6 * * 1-5":    "morning",
+              "50 7 * * 1-5":    "morning",
+              "20 15 * * 1-5":   "evening",
+              "20 16 * * 1-5":   "evening",
+              "0 7 * * 6":       "weekly",
+              "0 11 * * 6":      "retry_rate_limited",
+              "15 7 * * 1":      "smallcap",
+              "0 11 * * 1":      "retry_rate_limited",
+              "10 11 * * 1-5":   "portfolio_refresh",
+              "0 8,15 * * 1-5":  "refresh_missing",
           }
+
           sched = sys.argv[1]
-          mode = MODE_MAP.get(sched)
+          mode  = MODE_MAP.get(sched)
+
           if mode is None:
-              print(f'WARNING: Okänt cron-schema \"{sched}\" — fallback till morning', file=sys.stderr)
-              mode = 'morning'
+              print(f'WARNING: Okänt cron-schema "{sched}" — fallback morning', file=sys.stderr)
+              mode = "morning"
+
+          # DST-safeguard: om cron triggar i fel säsong (dubbel-trigger) → hoppa.
+          # morning-fönster: 08:00-10:00 Stockholm (täcker 08:50 + GH-dröjsmål)
+          # evening-fönster: 17:00-19:00 Stockholm (täcker 17:20 + GH-dröjsmål)
+          if mode == "morning" and not (8 <= h < 10):
+              print(f"INFO: morning-cron triggar utanför fönstret (Stockholm {now.strftime('%H:%M')}) — DST-dubblering, skippar", file=sys.stderr)
+              mode = "skip"
+          elif mode == "evening" and not (17 <= h < 19):
+              print(f"INFO: evening-cron triggar utanför fönstret (Stockholm {now.strftime('%H:%M')}) — DST-dubblering, skippar", file=sys.stderr)
+              mode = "skip"
+
           print(mode)
-          " "$SCHED")
+          PYEOF
+            )
             echo "mode=$MODE" >> $GITHUB_OUTPUT
             echo "tickers=" >> $GITHUB_OUTPUT
           fi
           echo "Valt körläge: $(grep 'mode=' $GITHUB_OUTPUT | head -1 | cut -d= -f2)"
 
       - name: 🚀 Kör pipeline
+        if: steps.mode.outputs.mode != 'skip'
         env:
           EMAIL_SENDER:     ${{ secrets.EMAIL_SENDER }}
           EMAIL_PASSWORD:   ${{ secrets.EMAIL_PASSWORD }}
@@ -157,15 +193,20 @@ jobs:
           echo "▶️ Kör pipeline i läge: ${{ steps.mode.outputs.mode }}"
           python -c "from core.daily_pipeline import run_pipeline; run_pipeline('${{ steps.mode.outputs.mode }}')"
 
+      - name: ⏭️ Avbryt (DST-dubbel-trigger skippad)
+        if: steps.mode.outputs.mode == 'skip'
+        run: echo "Cron-triggern utanför giltigt tidsfönster (DST-dubblering) — inget att göra."
+
       - name: 📤 Spara rapport som artifact
         uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.mode.outputs.mode != 'skip'
         with:
           name: report-${{ steps.mode.outputs.mode }}-${{ github.run_number }}
           path: reports/*.md
           retention-days: 30
 
       - name: 🧹 Rensa gamla rapporter (>14 dagar)
+        if: steps.mode.outputs.mode != 'skip'
         run: |
           find reports/ -name "scored_universe_*.csv" -mtime +14 -delete 2>/dev/null || true
           find reports/ -name "scored_universe_*.parquet" -mtime +14 -delete 2>/dev/null || true
@@ -175,6 +216,7 @@ jobs:
           echo "🧹 Retention policy executed"
 
       - name: 💾 Committa CSV- och rapportdata
+        if: steps.mode.outputs.mode != 'skip'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "MarketScan Bot"
