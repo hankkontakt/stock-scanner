@@ -29,7 +29,7 @@ def load_holdings(path: str = None) -> pd.DataFrame:
 
     if not Path(path).exists():
         print(f"  ℹ No holdings file at {path} - skipping portfolio analysis")
-        print(f"    (Create one with columns: ticker,shares,cost_basis)")
+        print("    (Create one with columns: ticker,shares,cost_basis)")
         return pd.DataFrame()
 
     try:
@@ -38,7 +38,7 @@ def load_holdings(path: str = None) -> pd.DataFrame:
         df.columns = df.columns.str.lower().str.strip()
         required = {"ticker", "shares"}
         if not required.issubset(set(df.columns)):
-            print(f"  ⚠ Holdings file must have columns: ticker, shares (cost_basis optional)")
+            print("  ⚠ Holdings file must have columns: ticker, shares (cost_basis optional)")
             return pd.DataFrame()
 
         # cost_basis is optional
@@ -420,7 +420,7 @@ def build_correlation_section(corr_info: dict) -> str:
     if corr_info.get("max_corr_pair") and corr_info.get("max_corr_value"):
         pair = corr_info["max_corr_pair"]
         val  = corr_info["max_corr_value"]
-        lines.append(f"### Mest korrelerade par")
+        lines.append("### Mest korrelerade par")
         lines.append(f"- `{pair[0]}` ↔ `{pair[1]}` - korrelation **{val:.2f}**")
         lines.append("")
 

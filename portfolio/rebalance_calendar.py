@@ -453,7 +453,7 @@ if __name__ == "__main__":
     portfolio = {"AAPL": 0.30, "MSFT": 0.25, "GOOGL": 0.25, "AMZN": 0.20}
     target = {"AAPL": 0.25, "MSFT": 0.25, "GOOGL": 0.25, "AMZN": 0.25}
     drift_df = cal.calculate_drift(portfolio, target)
-    print(f"\nDrift-analys:")
+    print("\nDrift-analys:")
     print(drift_df.to_string())
 
     # Rebalance check
@@ -463,7 +463,7 @@ if __name__ == "__main__":
 
     # Trade suggestions
     trades = cal.suggest_rebalance_trades(portfolio, target, portfolio_value=1000000)
-    print(f"\nTrade-förslag:")
+    print("\nTrade-förslag:")
     print(trades.to_string() if not trades.empty else "Inga trades")
 
     # Tax estimate

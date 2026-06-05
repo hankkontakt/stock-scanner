@@ -25,6 +25,7 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
 import requests
 from nacl import encoding, public
 
@@ -847,13 +848,13 @@ def webhook_stats():
 if __name__ == "__main__":
     port = 5001
     url  = f"http://localhost:{port}"
-    print(f"\n🚀 Portfolio Manager startar...")
+    print("\n🚀 Portfolio Manager startar...")
     print(f"   Web UI:     {url}")
     print(f"   API v1:     {url}/api/v1/")
     print(f"   API Docs:   {url}/api/v1/docs")
     print(f"   Swagger:    {url}/api/v1/swagger.json")
     print(f"   Health:     {url}/api/v1/health")
-    print(f"   Stoppa: Ctrl+C\n")
+    print("   Stoppa: Ctrl+C\n")
 
     # Öppna webbläsaren automatiskt efter 1.5s
     def open_browser():

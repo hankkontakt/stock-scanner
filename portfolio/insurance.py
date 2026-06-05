@@ -473,5 +473,5 @@ if __name__ == "__main__":
         "sector": ["Technology", "Financial Services", "Energy"],
     })
     stress = stress_test(pf)
-    print(f"\nStress-test resultat:")
+    print("\nStress-test resultat:")
     print(stress.to_string())

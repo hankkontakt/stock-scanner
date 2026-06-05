@@ -492,7 +492,7 @@ def check_streamlit(report: DiagnosticReport, quick: bool = False):
             else:
                 report.warn("Innehall", f"Overraskande svar ({len(resp.text)} bytes)")
         elif status == 503:
-            report.warn("HTTP-status", f"503 Service Unavailable — appen startar kanske upp",
+            report.warn("HTTP-status", "503 Service Unavailable — appen startar kanske upp",
                        fix="Vanta 30s och prova igen")
         else:
             report.error("HTTP-status", f"HTTP {status} — {app_url[:50]}",

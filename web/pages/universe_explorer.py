@@ -134,7 +134,7 @@ def page_universe_explorer(df=None):
                             st.caption(f"AI: {ai_rea[:120]}")
                         # Bevaknings-knapp (alla användare kan lägga på sin bevakningslista)
                         if df is not None and not df.empty:
-                            if st.button(f"⭐ Bevaka", key=f"ue_watch_{c['ticker']}"):
+                            if st.button("⭐ Bevaka", key=f"ue_watch_{c['ticker']}"):
                                 st.info(f"Öppna Bevakningslistan och lägg till {c['ticker']} manuellt för nu.")
 
     # ── Tab 2: Nyligen tillagda ───────────────────────────────────────────────
