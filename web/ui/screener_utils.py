@@ -474,3 +474,128 @@ def render_enhanced_screener_bar(
         result["show_changes_only"] = render_changes_toggle(key=f"{key}_chg")
 
     return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NATURSPRAKLIG SCREENER-FRAGA
+# ══════════════════════════════════════════════════════════════════════════════
+
+_NL_SECTORS = [
+    "Technology", "Healthcare", "Financials", "Energy", "Industrials",
+    "Consumer Discretionary", "Consumer Staples", "Materials",
+    "Real Estate", "Utilities", "Communication Services",
+]
+
+_NL_SYSTEM_PROMPT = (
+    "Du är ett filterparsningssystem för en aktie-screener. "
+    "Din uppgift: konvertera en naturspråksfråga om aktier till exakta filterparametrar i JSON. "
+    "Svara ENBART med ett JSON-objekt — inga förklaringar, ingen text utanför JSON. "
+    "\n\nTillgängliga filterparametrar (sätt null om okänt/ej nämnt):"
+    "\n- score_min (number 0-100): minsta poäng"
+    "\n- score_max (number 0-100): högsta poäng"
+    "\n- sector (array of strings): en eller flera av: " + ", ".join(_NL_SECTORS)
+    + "\n- entry (array): en eller flera av [STARK, OK, VÄNTA, EJ AKTUELL]"
+    "\n- trend (string eller null): UPPTREND / SIDLED / NEDTREND"
+    "\n- piotroski_min (integer 0-9): minsta Piotroski F-Score"
+    "\n- only_swedish (boolean): bara svenska (.ST) aktier"
+    "\n- only_improving (boolean): bara aktier med förbättrad score (+5p)"
+    "\n- preset_used (string eller null): vilket av [Value, Growth, High Quality, Technically Strong, Oversold, Momentum, Low Volatility] som matchade bäst"
+    "\n\nTolkningsregler:"
+    "\n- 'undervärderade' → score_min: 55, preset_used: 'Value'"
+    "\n- 'tillväxt' → preset_used: 'Growth'"
+    "\n- 'momentum' / 'stark trend' → entry: ['STARK'], trend: 'UPPTREND'"
+    "\n- 'köpsignal' → entry: ['STARK', 'OK']"
+    "\n- 'låg risk' → score_min: 60 (high quality)"
+    "\n- 'svenska' / 'Stockholm' / 'nordiska' → only_swedish: true"
+    "\n- 'förbättrande' → only_improving: true"
+    "\nOm frågan är för vag, returnera tomt objekt {}."
+)
+
+
+def parse_nl_filter_query(query: str) -> dict:
+    """
+    Konverterar en naturspråksfråga till filterparametrar för weekly_scan.
+
+    Args:
+        query: Naturspråksfråga, t.ex. "undervärderade svenska techbolag med starkt momentum"
+
+    Returns:
+        dict med filterparametrar (null-värden utelämnade).
+        Tomt dict vid fel eller för vag fråga.
+    """
+    if not query or len(query.strip()) < 3:
+        return {}
+
+    try:
+        import json
+        from core import ai_analysis
+        from core.ai_prompts import SYSTEM_PROMPT_FILTER_PARSER
+
+        raw = ai_analysis.ai_chat(
+            question=query,
+            context="",
+            system_prompt_override=SYSTEM_PROMPT_FILTER_PARSER,
+            depth="Snabb",
+        )
+
+        # Rensa eventuell markdown-formattering runt JSON
+        raw = raw.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        raw = raw.strip()
+
+        parsed = json.loads(raw)
+
+        # Rensa null-värden och returnera bara satta parametrar
+        return {k: v for k, v in parsed.items() if v is not None}
+
+    except Exception:
+        return {}
+
+
+def render_nl_filter_bar(key: str = "nl") -> dict:
+    """
+    Renderar naturspråksfält + knapp. Returnerar parsade filterparametrar
+    om en fråga ställts, annars tomt dict.
+    """
+    col_input, col_btn = st.columns([5, 1])
+    with col_input:
+        query = st.text_input(
+            "Beskriv vad du letar efter",
+            placeholder="t.ex. 'undervärderade svenska techbolag med starkt momentum'",
+            label_visibility="collapsed",
+            key=f"{key}_nl_query",
+        )
+    with col_btn:
+        search = st.button("🔍 Sök", key=f"{key}_nl_btn", use_container_width=True)
+
+    if search and query.strip():
+        with st.spinner("Tolkar frågan med AI..."):
+            result = parse_nl_filter_query(query.strip())
+
+        if result:
+            # Visa tolkad filter som caption
+            parts = []
+            if result.get("score_min"):
+                parts.append(f"poäng ≥ {result['score_min']}")
+            if result.get("sector"):
+                parts.append(f"sektor: {', '.join(result['sector'])}")
+            if result.get("entry"):
+                parts.append(f"entry: {', '.join(result['entry'])}")
+            if result.get("trend"):
+                parts.append(f"trend: {result['trend']}")
+            if result.get("only_swedish"):
+                parts.append("bara svenska")
+            if result.get("only_improving"):
+                parts.append("förbättrande")
+            if result.get("preset_used"):
+                parts.append(f"preset: {result['preset_used']}")
+            if parts:
+                st.caption(f"↳ Tolkad som: {' · '.join(parts)}")
+            return result
+        else:
+            st.caption("↳ Kunde inte tolka frågan — prova att vara mer specifik.")
+
+    return {}

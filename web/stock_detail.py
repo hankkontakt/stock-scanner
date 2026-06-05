@@ -26,6 +26,7 @@ from plotly.subplots import make_subplots
 
 from core import config, data_fetcher
 from core import ai_analysis
+from core.ai_prompts import SYSTEM_PROMPT_EARNINGS_SUMMARY
 
 try:
     from core.news_fetcher import fetch_company_news as _fetch_news
@@ -1025,6 +1026,210 @@ def _ai_analysis_panel(ticker: str, row: pd.Series, df: pd.DataFrame, company_na
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# KVARTALSDATA + RAPPORTTOLKNING (portföljinnehav)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_earnings_detail(ticker: str) -> dict:
+    """
+    Haemtar kvartalsvisa earnings-data via yfinance.
+    Returnerar dict med quarterly_financials, earnings_dates, eps m.m.
+    Cachat 1h -- data aendras bara vid ny rapport.
+    """
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker)
+        info = t.info or {}
+
+        # Kvartalsvisa finanser (Revenue, Gross Profit, EBIT, Net Income)
+        q_fin = t.quarterly_financials
+        q_inc = t.quarterly_income_stmt
+
+        # Earnings dates: actual vs estimate EPS
+        try:
+            ed = t.earnings_dates
+        except Exception:
+            ed = None
+
+        # Historisk EPS-berakning (earnings_history)
+        try:
+            eh = t.earnings_history
+        except Exception:
+            eh = None
+
+        return {
+            "quarterly_financials": q_fin,
+            "quarterly_income":     q_inc,
+            "earnings_dates":       ed,
+            "earnings_history":     eh,
+            "eps_trailing":         info.get("trailingEps"),
+            "eps_forward":          info.get("forwardEps"),
+            "revenue_growth":       info.get("revenueGrowth"),
+            "earnings_growth":      info.get("earningsGrowth"),
+            "gross_margins":        info.get("grossMargins"),
+            "operating_margins":    info.get("operatingMargins"),
+            "profit_margins":       info.get("profitMargins"),
+        }
+    except Exception:
+        return {}
+
+
+def _quarterly_section(ticker: str, company_name: str, news_articles: list):
+    """
+    Renderar kvartalsdata-sektionen med 'Summera rapport'-knapp.
+    Visas bara nar ticker finns i portfoeljen (anropas villkorligt).
+    """
+    st.markdown("### 📊 Kvartalsrapporter")
+
+    with st.spinner("Haemtar kvartalsdata..."):
+        data = _fetch_earnings_detail(ticker)
+
+    if not data:
+        st.info("Kvartalsdata ej tillgaenglig via yfinance for denna aktie.")
+        return
+
+    # ── Tabell: senaste 4 kvartal ─────────────────────────────────────────────
+    q_fin = data.get("quarterly_financials")
+    rows_table = []
+    if q_fin is not None and not q_fin.empty:
+        # Transponera saa att kvartal = rader, nycketal = kolumner
+        q_t = q_fin.T.sort_index(ascending=False).head(5)
+        for period, row_q in q_t.iterrows():
+            period_str = period.strftime("%Y-Q%q") if hasattr(period, "strftime") else str(period)[:7]
+            rev = row_q.get("Total Revenue") or row_q.get("TotalRevenue") or row_q.get("Revenue")
+            gp  = row_q.get("Gross Profit") or row_q.get("GrossProfit")
+            ni  = row_q.get("Net Income") or row_q.get("NetIncome")
+
+            def _fmt_num(v):
+                if v is None or (hasattr(v, "__float__") and pd.isna(float(v))):
+                    return "--"
+                try:
+                    v = float(v)
+                    if abs(v) >= 1e9:
+                        return f"{v/1e9:.1f}B"
+                    if abs(v) >= 1e6:
+                        return f"{v/1e6:.0f}M"
+                    return f"{v:,.0f}"
+                except Exception:
+                    return "--"
+
+            rows_table.append({
+                "Kvartal":       period_str,
+                "Omsaettning":   _fmt_num(rev),
+                "Bruttovinst":   _fmt_num(gp),
+                "Nettoresultat": _fmt_num(ni),
+            })
+
+    # Earnings dates: lagg till EPS vs estimat
+    ed = data.get("earnings_dates")
+    eps_rows = []
+    if ed is not None and not ed.empty:
+        ed_sorted = ed.sort_index(ascending=False)
+        for period, row_e in ed_sorted.head(6).iterrows():
+            actual = row_e.get("Reported EPS") or row_e.get("EPS Actual")
+            est    = row_e.get("EPS Estimate")
+            period_str = period.strftime("%Y-%m-%d") if hasattr(period, "strftime") else str(period)[:10]
+            if actual is not None and est is not None:
+                try:
+                    actual_f = float(actual)
+                    est_f    = float(est)
+                    surp_pct = (actual_f - est_f) / abs(est_f) * 100 if abs(est_f) > 0.001 else 0
+                    icon     = "✅" if actual_f >= est_f else "❌"
+                    eps_rows.append({
+                        "Datum":      period_str,
+                        "EPS":        f"{actual_f:.2f}",
+                        "Estimat":    f"{est_f:.2f}",
+                        "Surprise":   f"{surp_pct:+.1f}%",
+                        "Beat/Miss":  icon,
+                    })
+                except Exception:
+                    pass
+
+    # Visa tabellerna
+    col_q, col_eps = st.columns(2)
+    with col_q:
+        if rows_table:
+            st.caption("**Kvartalsvisa nyckeltal** (yfinance)")
+            st.dataframe(pd.DataFrame(rows_table), use_container_width=True, hide_index=True)
+        else:
+            st.caption("Kvartalsvisa nyckeltal ej tillgaengliga")
+
+    with col_eps:
+        if eps_rows:
+            st.caption("**EPS vs estimat** (senaste 6 kvartal)")
+            st.dataframe(pd.DataFrame(eps_rows), use_container_width=True, hide_index=True)
+        else:
+            st.caption("EPS-historik ej tillgaenglig")
+
+    # Nyckeltalsrad
+    meta_cols = st.columns(4)
+    with meta_cols[0]:
+        eps_t = data.get("eps_trailing")
+        st.metric("EPS trailing", f"{eps_t:.2f}" if eps_t else "--")
+    with meta_cols[1]:
+        eps_f = data.get("eps_forward")
+        st.metric("EPS forward", f"{eps_f:.2f}" if eps_f else "--")
+    with meta_cols[2]:
+        rev_g = data.get("revenue_growth")
+        st.metric("Omsaettningstillvaext", f"{rev_g*100:.1f}%" if rev_g else "--")
+    with meta_cols[3]:
+        earn_g = data.get("earnings_growth")
+        st.metric("Vinsttillvaext", f"{earn_g*100:.1f}%" if earn_g else "--")
+
+    st.caption("⚠️ Data haemtad via yfinance. Verifiera mot bolagets officiella rapport.")
+
+    # ── "Summera rapport"-knapp ───────────────────────────────────────────────
+    st.markdown("---")
+    if st.button("📋 Summera senaste rapporten med AI", key=f"earn_sum_{ticker}"):
+        # Bygg fullstaendigt kontext med FAKTISK data — AI ska inte gissa
+        ctx_parts = [f"KVARTALSANALYS FÖR {ticker} ({company_name})\n"]
+        ctx_parts.append("OBS: Analysera ENBART informationen nedan. Fabricera INGA siffror.\n")
+
+        if rows_table:
+            ctx_parts.append("\nKVARTALSVISA NYCKELTAL (faktisk data):")
+            for r in rows_table[:4]:
+                ctx_parts.append(f"  {r['Kvartal']}: Omsaettning {r['Omsaettning']}, Bruttovinst {r['Bruttovinst']}, Nettoresultat {r['Nettoresultat']}")
+
+        if eps_rows:
+            ctx_parts.append("\nEPS VS ESTIMAT (faktisk data):")
+            for r in eps_rows[:4]:
+                ctx_parts.append(f"  {r['Datum']}: EPS {r['EPS']} vs estimat {r['Estimat']} ({r['Surprise']}) {r['Beat/Miss']}")
+
+        eps_t = data.get("eps_trailing")
+        eps_f = data.get("eps_forward")
+        rev_g = data.get("revenue_growth")
+        earn_g = data.get("earnings_growth")
+        ctx_parts.append(f"\nNYCKELTAL (faktisk data):")
+        ctx_parts.append(f"  EPS trailing: {eps_t if eps_t else 'ej tillgaenglig'}")
+        ctx_parts.append(f"  EPS forward: {eps_f if eps_f else 'ej tillgaenglig'}")
+        ctx_parts.append(f"  Omsaettningstillvaxt: {f'{rev_g*100:.1f}%' if rev_g else 'ej tillgaenglig'}")
+        ctx_parts.append(f"  Vinsttillvaxt: {f'{earn_g*100:.1f}%' if earn_g else 'ej tillgaenglig'}")
+
+        if news_articles:
+            ctx_parts.append("\nSENASTE NYHETER (7 dagar):")
+            for art in news_articles[:5]:
+                headline = art.get("headline", art.get("title", "")).strip()
+                if headline:
+                    ctx_parts.append(f"  - {headline} ({art.get('source', '')})")
+
+        context = "\n".join(ctx_parts)
+
+        with st.spinner("AI analyserar rapporten..."):
+            try:
+                from core.ai_prompts import SYSTEM_PROMPT_EARNINGS_SUMMARY
+                result = ai_analysis.ai_chat(
+                    question="Sammanfatta senaste kvartalsrapporten. Vad var det viktigaste? Slog bolaget estimaten? Ser trenden bra ut? Roda flaggor?",
+                    context=context,
+                    system_prompt_override=SYSTEM_PROMPT_EARNINGS_SUMMARY,
+                )
+                with st.container(border=True):
+                    st.markdown(result)
+                st.caption("⚠️ AI-sammanfattning baserad pa yfinance-data. Kontrollera mot bolagets officiella rapport pa deras IR-sida.")
+            except Exception as e:
+                st.error(f"AI-fel: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # HUVUDKOMPONENT - render_stock_detail
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1100,7 +1305,33 @@ def render_stock_detail(
     if show_detail_data and row is not None and not row.empty:
         _detail_table(row)
 
-    # ── Sektion 4: Nyhetsflöde + AI sida vid sida ─────────────────────────
+    # ── Sektion 4: Kvartalsrapporter (bara portföljinnehav) ────────────────
+    try:
+        from web.utils import load_portfolio as _load_portfolio
+        _portfolio = _load_portfolio()
+        _portfolio_tickers = set()
+        for _account in _portfolio.values():
+            for _h in _account.get("holdings", []):
+                _t = _h.get("ticker", "").upper().strip()
+                if _t:
+                    _portfolio_tickers.add(_t)
+    except Exception:
+        _portfolio_tickers = set()
+
+    _in_portfolio = ticker.upper() in _portfolio_tickers
+
+    if _in_portfolio:
+        st.markdown("---")
+        # Haemta nyheter for kvartalsanalys-kontexten (återanvaend om redan haemtade)
+        _news_for_earnings = []
+        if _fetch_news is not None:
+            try:
+                _news_for_earnings = _fetch_news(ticker, days_back=7, company_name=company_name) or []
+            except Exception:
+                pass
+        _quarterly_section(ticker, company_name, _news_for_earnings)
+
+    # ── Sektion 5: Nyhetsflöde + AI sida vid sida ─────────────────────────
     col_news, col_ai = st.columns([1, 1])
 
     with col_news:

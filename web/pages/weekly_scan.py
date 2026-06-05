@@ -24,6 +24,8 @@ from web.ui.screener_utils import (
     render_pagination as _ws_pagination,
     render_export_buttons as _ws_export,
     filter_changed_rows as _ws_filter_changed,
+    render_nl_filter_bar as _ws_nl_bar,
+    parse_nl_filter_query as _ws_parse_nl,
 )
 from core.country_flags import ticker_display as _ticker_display
 
@@ -136,7 +138,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         "score_total", "_score_trend", "_score_delta", "predicted_return", "ml_rank",
         "entry_signal", "confidence_label", "trend_signal",
         "delta_flag", "piotroski_f", "low_liquidity",
-        "data_stale_days",
+        "data_stale_days", "_earnings_flag",
     ]
     # Nybörjarläge: visa bara de viktigaste kolumnerna
     _beginner_cols = ["rank", "ticker", "name", "sector", "score_total", "entry_signal", "trend_signal", "data_stale_days"]
@@ -152,10 +154,16 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
     if "Ticker" in display.columns:
         # Lägg till varningsikon för illikvida aktier direkt i ticker-kolumnen
         _illiq = display.pop("low_liquidity") if "low_liquidity" in display.columns else None
+        _earn = display.pop("_earnings_flag") if "_earnings_flag" in display.columns else None
         display["Ticker"] = display["Ticker"].apply(_ticker_display)
         if _illiq is not None:
             display["Ticker"] = display.apply(
                 lambda r: r["Ticker"] + " [låg liq.]" if _illiq.get(r.name, False) else r["Ticker"],
+                axis=1,
+            )
+        if _earn is not None:
+            display["Ticker"] = display.apply(
+                lambda r: r["Ticker"] + " 📊" if _earn.get(r.name, False) else r["Ticker"],
                 axis=1,
             )
     display = display.rename(columns={
@@ -188,7 +196,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
 
     col_cfg = {
         "Rank": st.column_config.NumberColumn("Rank", help="Position i rankinglistan. Rank 1 = bäst poäng i det filtrerade urvalet.", format="%d"),
-        "Ticker": st.column_config.TextColumn("Ticker", help="Börsticker. 💧 = illikvid (dagsomsättning < $50k). ⏱ = data från förra scan (Yahoo rate-limitad denna körning)."),
+        "Ticker": st.column_config.TextColumn("Ticker", help="Börsticker. 📊 = rapporterar earnings idag. 💧 = illikvid (dagsomsättning < $50k). ⏱ = data från förra scan (Yahoo rate-limitad denna körning)."),
         "Bolag": st.column_config.TextColumn("Bolag", help="Bolagets fullständiga namn."),
         "Status": st.column_config.TextColumn("Status", help="💼 = du äger aktien * ⭐ = du bevakar den"),
         "Sektor": st.column_config.TextColumn("Sektor", help="Vilken bransch bolaget tillhör. Sektorrotation är viktigt -- starka sektorer presterar ofta bättre."),
@@ -384,6 +392,37 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
     if _trend_map and "ticker" in df.columns:
         df = df.copy()
         df["_score_trend"] = df["ticker"].map(_trend_map).fillna("→")
+
+    # ── Earnings-flagg: markera aktier som rapporterar idag ──────────────────
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def _get_earnings_today() -> set:
+        """Returnerar set av tickers som rapporterar earnings idag."""
+        try:
+            from core.news_fetcher import fetch_todays_earnings
+            all_tickers = set(df["ticker"].tolist()) if "ticker" in df.columns else set()
+            surprises = fetch_todays_earnings(all_tickers)
+            return {s["ticker"] for s in surprises}
+        except Exception:
+            return set()
+
+    _earnings_today = _get_earnings_today()
+    if _earnings_today and "ticker" in df.columns:
+        if "_score_trend" not in df.columns:
+            df = df.copy()
+        df["_earnings_flag"] = df["ticker"].isin(_earnings_today)
+
+    # ── Naturspråksfält ───────────────────────────────────────────────────────
+    with st.expander("🔍 Sök med naturligt språk (AI-tolkning)", expanded=False):
+        st.caption("Beskriv vad du letar efter i fritext — AI tolkar det till filterparametrar.")
+        _nl_result = _ws_nl_bar(key="ws_nl")
+        if _nl_result:
+            # Ta bort preset_used (ej ett direkt filterparameter)
+            _preset = _nl_result.pop("preset_used", None)
+            # Slå ihop med befintliga filters (NL-resultatet tar prioritet)
+            filters = {**filters, **_nl_result}
+            # Om preset angavs, applicera det via session state
+            if _preset and _preset in _WS_QF:
+                st.session_state["ws_quick_filter"] = _preset
 
     filt_df = _apply_weekly_filters(df, filters, holdings, watchlist)
 

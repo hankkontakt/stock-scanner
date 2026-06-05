@@ -1646,6 +1646,27 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
             except Exception as _cal_err:
                 logger.debug(f"  Kalenderdata kunde inte hämtas: {_cal_err}")
 
+            # ── Earnings Surprise ────────────────────────────────────────────
+            try:
+                from core.news_fetcher import fetch_todays_earnings
+                _universe_tickers = set(scored["ticker"].tolist()) if not scored.empty else set()
+                _universe_tickers.update(h.get("ticker", "") for h in (enriched or []))
+                _surprises = fetch_todays_earnings(_universe_tickers)
+                _big_surprises = [s for s in _surprises if abs(s.get("surprise_pct", 0)) > 10]
+                if _big_surprises:
+                    report_lines.append(_section_header("📊 Dagens earnings-rapporter"))
+                    for s in _big_surprises[:8]:
+                        icon = "🟢" if s["surprise_pct"] > 0 else "🔴"
+                        surprise_str = f"{s['surprise_pct']:+.1f}%"
+                        eps_str = f"EPS {s['actual_eps']:.2f} vs est. {s['estimate_eps']:.2f}"
+                        report_lines.append(
+                            f"- {icon} **{flag_for_ticker(s['ticker'])} {s['ticker']}** ({s['company']}) — {eps_str} (surprise: {surprise_str})"
+                        )
+                    report_lines.append("")
+                    logger.info(f"  📊 Earnings-surprises: {len(_big_surprises)} bolag (>10% avvikelse)")
+            except Exception as _earn_err:
+                logger.debug(f"  Earnings-surprise fetch misslyckades: {_earn_err}")
+
             # ── Nyheter ──────────────────────────────────────────────────────
             report_lines.append(_section_header("📰 Nyheter"))
             report_lines.append("*(Nyheter hämtas via nyhetslarm - se separat mail)*")
