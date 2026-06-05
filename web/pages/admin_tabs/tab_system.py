@@ -57,10 +57,11 @@ def _render_status_banner(scan_log: list):
 
     st.markdown(
         f'<div style="display:flex;align-items:center;gap:12px;padding:16px;'
-        f'background:#f8f9fa;border-radius:8px;margin-bottom:16px;">'
+        f'background:rgba(255,255,255,0.05);border-radius:8px;margin-bottom:16px;'
+        f'border:1px solid rgba(255,255,255,0.10);">'
         f'<span style="font-size:2em;">{badge}</span>'
         f'<div><span style="font-size:1.2em;font-weight:700;">{status_text}</span><br>'
-        f'<span style="color:#666;font-size:0.9em;">{desc}</span></div></div>',
+        f'<span style="opacity:0.6;font-size:0.9em;">{desc}</span></div></div>',
         unsafe_allow_html=True,
     )
 
@@ -89,14 +90,14 @@ def _render_kpi_cards(scan_log: list):
         last_ts = last.get("timestamp", "")[:16].replace("T", " ")
         icon = "OK" if last_status == "OK" else "FEL" if last_status == "ERROR" else "?"
         c1.markdown(
-            f'<div class="kpi-card"><span style="font-size:0.8em;color:#666;">Senaste scan</span><br>'
+            f'<div class="kpi-card"><span style="font-size:0.8em;opacity:0.55;">Senaste scan</span><br>'
             f'<span style="font-size:1.2em;font-weight:700;">{last_type}</span><br>'
             f'<span style="font-size:0.85em;">{icon} {last_ts}</span></div>',
             unsafe_allow_html=True,
         )
     else:
         c1.markdown(
-            '<div class="kpi-card"><span style="font-size:0.8em;color:#666;">Senaste scan</span><br>'
+            '<div class="kpi-card"><span style="font-size:0.8em;opacity:0.55;">Senaste scan</span><br>'
             '<span style="font-size:1.2em;font-weight:700;">—</span><br>'
             '<span style="font-size:0.85em;">Ingen data</span></div>',
             unsafe_allow_html=True,
@@ -109,7 +110,7 @@ def _render_kpi_cards(scan_log: list):
             mtime = parquet_files[-1].stat().st_mtime
             age_h = (time.time() - mtime) / 3600
             age_str = f"{age_h:.1f}h"
-            color = "#28a745" if age_h < 24 else "#f0a500" if age_h < 48 else "#dc3545"
+            color = "#4ade80" if age_h < 24 else "#fbbf24" if age_h < 48 else "#f87171"
         else:
             age_str = "—"
             color = "#888"
@@ -117,7 +118,7 @@ def _render_kpi_cards(scan_log: list):
         age_str = "—"
         color = "#888"
     c2.markdown(
-        f'<div class="kpi-card"><span style="font-size:0.8em;color:#666;">Data-ålder</span><br>'
+        f'<div class="kpi-card"><span style="font-size:0.8em;opacity:0.55;">Data-ålder</span><br>'
         f'<span style="font-size:1.2em;font-weight:700;color:{color};">{age_str}</span><br>'
         f'<span style="font-size:0.85em;">Senaste scan-resultat</span></div>',
         unsafe_allow_html=True,
@@ -140,7 +141,7 @@ def _render_kpi_cards(scan_log: list):
     except Exception:
         pass
     c3.markdown(
-        f'<div class="kpi-card"><span style="font-size:0.8em;color:#666;">ML-modell</span><br>'
+        f'<div class="kpi-card"><span style="font-size:0.8em;opacity:0.55;">ML-modell</span><br>'
         f'<span style="font-size:1.2em;font-weight:700;">{ml_age}</span><br>'
         f'<span style="font-size:0.85em;">Tränad</span></div>',
         unsafe_allow_html=True,
@@ -149,8 +150,8 @@ def _render_kpi_cards(scan_log: list):
     # Aktiva fel
     n_errors = sum(1 for e in scan_log if e.get("status") == "ERROR") if scan_log else 0
     c4.markdown(
-        f'<div class="kpi-card"><span style="font-size:0.8em;color:#666;">Aktiva fel</span><br>'
-        f'<span style="font-size:1.2em;font-weight:700;color:{"#dc3545" if n_errors > 0 else "#28a745"};">'
+        f'<div class="kpi-card"><span style="font-size:0.8em;opacity:0.55;">Aktiva fel</span><br>'
+        f'<span style="font-size:1.2em;font-weight:700;color:{"#f87171" if n_errors > 0 else "#4ade80"};">'
         f'{n_errors}</span><br>'
         f'<span style="font-size:0.85em;">I pipeline-loggen</span></div>',
         unsafe_allow_html=True,
