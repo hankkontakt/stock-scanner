@@ -1195,3 +1195,101 @@ def format_nasdaq_nordic_section_md(news: list, max_items: int = 8) -> str:
         lines.append(f"{icon} {title}  \n   {meta}\n")
 
     return "\n".join(lines)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EARNINGS SURPRISE TRACKER
+# ══════════════════════════════════════════════════════════════════════════════
+
+def fetch_todays_earnings(universe_tickers: set) -> list:
+    """
+    Haemtar dagens earnings-rapporter via Finnhub earnings_calendar.
+
+    Returnerar lista av:
+        {ticker, company, actual_eps, estimate_eps, surprise_pct, revenue, revenue_estimate}
+    Filtrerat pa tickers i universe_tickers. Tom lista om inget match eller Finnhub saknas.
+    """
+    import os
+    from zoneinfo import ZoneInfo
+    from core import config as _cfg
+
+    api_key = getattr(_cfg, "FINNHUB_API_KEY", "") or os.getenv("FINNHUB_API_KEY", "")
+    if not api_key:
+        return []
+
+    date_str = datetime.now(ZoneInfo("Europe/Stockholm")).strftime("%Y-%m-%d")
+    cache_key = f"earnings_cal:{date_str}"
+    cached = _read_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        resp = requests.get(
+            "https://finnhub.io/api/v1/calendar/earnings",
+            params={"from": date_str, "to": date_str, "token": api_key},
+            timeout=10,
+        )
+        if resp.status_code == 429:
+            time.sleep(61)
+            resp = requests.get(
+                "https://finnhub.io/api/v1/calendar/earnings",
+                params={"from": date_str, "to": date_str, "token": api_key},
+                timeout=10,
+            )
+        if not resp.ok:
+            _write_cache(cache_key, [])
+            return []
+
+        calendar = resp.json().get("earningsCalendar", [])
+    except Exception:
+        return []
+
+    results = []
+    for item in calendar:
+        raw_ticker = (item.get("symbol") or "").strip()
+        if not raw_ticker:
+            continue
+
+        # Matcha mot universums tickers (Finnhub returnerar US-format t.ex. "AAPL")
+        matched = False
+        matched_ticker = raw_ticker
+        if raw_ticker in universe_tickers:
+            matched = True
+        else:
+            for t in universe_tickers:
+                base = t.split(".")[0].upper()
+                if base == raw_ticker.upper():
+                    matched = True
+                    matched_ticker = t
+                    break
+
+        if not matched:
+            continue
+
+        actual = item.get("epsActual")
+        estimate = item.get("epsEstimate")
+        if actual is None or estimate is None:
+            continue
+        try:
+            actual = float(actual)
+            estimate = float(estimate)
+        except (TypeError, ValueError):
+            continue
+        if abs(estimate) < 0.001:
+            continue
+
+        surprise_pct = (actual - estimate) / abs(estimate) * 100.0
+
+        results.append({
+            "ticker":           matched_ticker,
+            "company":          item.get("company", raw_ticker),
+            "actual_eps":       actual,
+            "estimate_eps":     estimate,
+            "surprise_pct":     surprise_pct,
+            "revenue":          item.get("revenueActual"),
+            "revenue_estimate": item.get("revenueEstimate"),
+            "report_date":      date_str,
+        })
+
+    _write_cache(cache_key, results)
+    return results
