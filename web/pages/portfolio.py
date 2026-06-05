@@ -18,6 +18,7 @@ from web.utils import (
     portfolio_value_chart, calc_period_returns, save_portfolio_snapshot,
 )
 from core import ai_analysis
+from core.ai_prompts import SYSTEM_PROMPT_PORTFOLIO
 from web.ui.components import page_header, empty_state, clickable_stock_table
 
 @st.cache_data(ttl=3600)
@@ -1795,8 +1796,10 @@ def _portfolio_ai_chat(holdings_view: pd.DataFrame, score_data: dict, df: pd.Dat
     quick_q = [
         "Vad bör jag sälja baserat på nuvarande signaler?",
         "Hur diversifierad är min portfölj?",
-        "Vad är min portföljs totala risk?",
+        "Vilket innehav har störst nedsidesrisk?",
         "Vilka aktier har starkast momentum just nu?",
+        "Sammanfatta portföljens styrkor och svagheter.",
+        "Bör jag öka eller minska tech-exponering?",
     ]
     st.caption("Snabbfrågor:")
     q_cols = st.columns(len(quick_q))
@@ -1841,12 +1844,29 @@ def _portfolio_ai_chat(holdings_view: pd.DataFrame, score_data: dict, df: pd.Dat
 
         provider = st.session_state.get("ai_provider", "auto")
 
+        # Bygg rikare kontext: sektordistribution + portföljbeta
+        try:
+            hv = holdings_view.copy()
+            if "market_value" in hv.columns and "sector" in hv.columns:
+                mv_total = hv["market_value"].sum()
+                if mv_total > 0:
+                    sector_dist = (hv.groupby("sector")["market_value"].sum() / mv_total * 100).round(1)
+                    portfolio_context += f"\n\nSEKTORDISTRIBUTION (% av portföljvärde):\n{sector_dist.to_string()}"
+            if "beta" in hv.columns and "market_value" in hv.columns and hv["market_value"].sum() > 0:
+                weights = hv["market_value"] / hv["market_value"].sum()
+                port_beta = (hv["beta"].fillna(1.0) * weights).sum()
+                portfolio_context += f"\n\nPORTFÖLJ-BETA (marknadskänslighet): {port_beta:.2f}"
+        except Exception:
+            pass  # rikare kontext är bonus — fel ska inte stoppa chatten
+
         with st.chat_message("assistant"):
             with st.spinner("Analyserar…"):
                 try:
                     resp = ai_analysis.ai_chat(
-                        messages=history,
-                        system=f"Du är en portföljrådgivare. Här är användarens innehav:\n\n{portfolio_context}",
+                        question=last_q,
+                        context=portfolio_context,
+                        history=history[:-1],  # Alla meddelanden utom den aktuella frågan
+                        system_prompt_override=SYSTEM_PROMPT_PORTFOLIO,
                         provider=provider,
                     )
                     st.markdown(resp)

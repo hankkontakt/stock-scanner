@@ -12,6 +12,7 @@ from web.utils import (
     scatter_momentum_value, pct_fmt, REPORT_DIR,
     conviction_meter_chart, conviction_meter_breakdown,
     show_stale_data_warning, scan_data_age_hours,
+    load_scan_reports, build_score_history_map, score_trend_arrow,
 )
 from web.stock_detail import render_stock_detail
 from web.ui.components import clickable_stock_table, page_header, section
@@ -132,7 +133,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
 
     _all_cols = [
         "rank", "ticker", "name", "_status", "sector",
-        "score_total", "_score_delta", "predicted_return", "ml_rank",
+        "score_total", "_score_trend", "_score_delta", "predicted_return", "ml_rank",
         "entry_signal", "confidence_label", "trend_signal",
         "delta_flag", "piotroski_f", "low_liquidity",
         "data_stale_days",
@@ -162,6 +163,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         "_status":           "Status",
         "sector":            "Sektor",
         "score_total":       "Score",
+        "_score_trend":      "8v trend",
         "_score_delta":      "Score Δ",
         "predicted_return":  "AI 30d-ret",
         "ml_rank":           "AI rank",
@@ -190,6 +192,7 @@ def _main_ranking_table(df: pd.DataFrame, holdings: pd.DataFrame, watchlist: lis
         "Bolag": st.column_config.TextColumn("Bolag", help="Bolagets fullständiga namn."),
         "Status": st.column_config.TextColumn("Status", help="💼 = du äger aktien * ⭐ = du bevakar den"),
         "Sektor": st.column_config.TextColumn("Sektor", help="Vilken bransch bolaget tillhör. Sektorrotation är viktigt -- starka sektorer presterar ofta bättre."),
+        "8v trend": st.column_config.TextColumn("8v trend", help="Scoreutveckling senaste 8 veckorna jämfört med snittet. ↑↑ = starkt stigande (>+8p). ↑ = stigande (+3–8p). → = sidledes. ↓ = fallande. ↓↓ = kraftigt fallande."),
         "Score Δ": st.column_config.TextColumn("Score Δ", help="Förändring i totalscore sedan förra veckans scan. ▲ = förbättring ≥5p. ▼ = försämring ≥5p. ─ = oförändrad."),
         "Entry": st.column_config.TextColumn("Entry", help="Köpsignal baserad på momentum och volym. STARK = tydlig uppåtrörelse med hög konfidensgrad. OK = måttlig signal. --= ingen signal just nu."),
         "Konf.": st.column_config.TextColumn("Konf.", help="Konfidensnivå för entry-signalen. HÖG = starka indikatorer samstämmer. MEDEL = blandat. LÅG = svag signal."),
@@ -363,6 +366,24 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
         )
     else:
         rank_mode = "Klassisk score"
+
+    # ── Score-historik: ladda snapshots och bygg trendpilar ──────────────────
+    @st.cache_data(ttl=1800, show_spinner=False)
+    def _get_score_trends() -> dict:
+        """Laddar historiska score-snapshots och returnerar {ticker: trendpil}."""
+        try:
+            rpts = load_scan_reports()
+            if len(rpts) >= 2:
+                hist = build_score_history_map(rpts)
+                return {t: score_trend_arrow(s) for t, s in hist.items()}
+        except Exception:
+            pass
+        return {}
+
+    _trend_map = _get_score_trends()
+    if _trend_map and "ticker" in df.columns:
+        df = df.copy()
+        df["_score_trend"] = df["ticker"].map(_trend_map).fillna("→")
 
     filt_df = _apply_weekly_filters(df, filters, holdings, watchlist)
 

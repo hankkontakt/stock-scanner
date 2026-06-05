@@ -79,7 +79,7 @@ def show_stale_data_warning(age_h: float | None = None) -> None:
 
 @st.cache_data(ttl=300)
 def load_scan_reports() -> dict:
-    """Returnerar {datum_str: DataFrame} för alla vecko-scan CSVer."""
+    """Returnerar {datum_str: DataFrame} för alla vecko-scan-rapporter (parquet + CSV)."""
     _OPTIONAL_COLS = [
         "score_value", "score_quality", "score_momentum", "score_growth",
         "score_risk", "score_size", "score_dividend", "score_sentiment",
@@ -97,9 +97,26 @@ def load_scan_reports() -> dict:
         "name", "industry", "country",
     ]
     result = {}
+    seen: set = set()
+    # Parquet har prioritet (nyare pipeline sparar parquet)
+    for f in sorted(REPORT_DIR.glob("scored_universe_*.parquet"), reverse=True):
+        try:
+            d = f.stem.replace("scored_universe_", "")
+            df = pd.read_parquet(f)
+            df.columns = df.columns.str.strip()
+            for col in _OPTIONAL_COLS:
+                if col not in df.columns:
+                    df[col] = np.nan
+            result[d] = df
+            seen.add(d)
+        except Exception:
+            pass
+    # CSV-fallback för datum som inte finns i parquet
     for f in sorted(REPORT_DIR.glob("scored_universe_*.csv"), reverse=True):
         try:
-            d  = f.stem.replace("scored_universe_", "")
+            d = f.stem.replace("scored_universe_", "")
+            if d in seen:
+                continue
             df = pd.read_csv(f, low_memory=False)
             df.columns = df.columns.str.strip()
             for col in _OPTIONAL_COLS:
@@ -109,6 +126,54 @@ def load_scan_reports() -> dict:
         except Exception:
             pass
     return result
+
+
+def build_score_history_map(reports: dict, max_snapshots: int = 10) -> dict:
+    """
+    Bygger en score-historik per ticker från snapshot-rapporter.
+
+    Args:
+        reports: {datum_str: DataFrame} från load_scan_reports()
+        max_snapshots: Max antal snapshots att inkludera (äldsta → nyaste)
+
+    Returns:
+        {ticker: [score_dag1, score_dag2, ...]} sorterat från äldst till nyast.
+        Tickers med bara 1 datapunkt inkluderas ej (ej meningsfullt att visa trend).
+    """
+    dates = sorted(reports.keys())[-max_snapshots:]
+    score_map: dict = {}
+    for date in dates:
+        df = reports[date]
+        if "ticker" not in df.columns or "score_total" not in df.columns:
+            continue
+        subset = df[["ticker", "score_total"]].dropna()
+        for _, row in subset.iterrows():
+            score_map.setdefault(row["ticker"], []).append(round(float(row["score_total"]), 1))
+    # Filtrera bort tickers med bara ett värde (ingen trend att visa)
+    return {t: scores for t, scores in score_map.items() if len(scores) >= 2}
+
+
+def score_trend_arrow(scores: list) -> str:
+    """
+    Konverterar score-historik till en Unicode-trendpil.
+
+    Logik: jämför senaste värde med genomsnittet av de äldre värdena.
+    Returnerar: ↑↑ / ↑ / → / ↓ / ↓↓ (baserat på trenden)
+    """
+    if not scores or len(scores) < 2:
+        return "→"
+    latest = scores[-1]
+    baseline = sum(scores[:-1]) / len(scores[:-1])
+    delta = latest - baseline
+    if delta >= 8:
+        return "↑↑"
+    if delta >= 3:
+        return "↑"
+    if delta <= -8:
+        return "↓↓"
+    if delta <= -3:
+        return "↓"
+    return "→"
 
 
 @st.cache_data(ttl=300)
