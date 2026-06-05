@@ -82,6 +82,16 @@ def _render_kpi_cards(scan_log: list):
 
     c1, c2, c3, c4 = st.columns(4)
 
+    # Inline-stil för alla KPI-kort (CSS-klasser är opålitliga i Streamlit)
+    _K = (
+        "background:rgba(255,255,255,0.06);"
+        "border-left:3px solid rgba(99,153,255,0.50);"
+        "padding:12px 16px;border-radius:8px;margin:4px 0;"
+    )
+    _LBL = "font-size:0.8em;opacity:0.55;"
+    _VAL = "font-size:1.2em;font-weight:700;"
+    _SUB = "font-size:0.82em;opacity:0.55;"
+
     # Senaste scan
     if scan_log:
         last = scan_log[-1]
@@ -90,16 +100,16 @@ def _render_kpi_cards(scan_log: list):
         last_ts = last.get("timestamp", "")[:16].replace("T", " ")
         icon = "OK" if last_status == "OK" else "FEL" if last_status == "ERROR" else "?"
         c1.markdown(
-            f'<div class="kpi-card"><span style="font-size:0.8em;opacity:0.55;">Senaste scan</span><br>'
-            f'<span style="font-size:1.2em;font-weight:700;">{last_type}</span><br>'
-            f'<span style="font-size:0.85em;">{icon} {last_ts}</span></div>',
+            f'<div style="{_K}"><span style="{_LBL}">Senaste scan</span><br>'
+            f'<span style="{_VAL}">{last_type}</span><br>'
+            f'<span style="{_SUB}">{icon} {last_ts}</span></div>',
             unsafe_allow_html=True,
         )
     else:
         c1.markdown(
-            '<div class="kpi-card"><span style="font-size:0.8em;opacity:0.55;">Senaste scan</span><br>'
-            '<span style="font-size:1.2em;font-weight:700;">—</span><br>'
-            '<span style="font-size:0.85em;">Ingen data</span></div>',
+            f'<div style="{_K}"><span style="{_LBL}">Senaste scan</span><br>'
+            f'<span style="{_VAL}">—</span><br>'
+            f'<span style="{_SUB}">Ingen data</span></div>',
             unsafe_allow_html=True,
         )
 
@@ -110,17 +120,17 @@ def _render_kpi_cards(scan_log: list):
             mtime = parquet_files[-1].stat().st_mtime
             age_h = (time.time() - mtime) / 3600
             age_str = f"{age_h:.1f}h"
-            color = "#4ade80" if age_h < 24 else "#fbbf24" if age_h < 48 else "#f87171"
+            age_color = "#4ade80" if age_h < 24 else "#fbbf24" if age_h < 48 else "#f87171"
         else:
             age_str = "—"
-            color = "#888"
+            age_color = "#888"
     except Exception:
         age_str = "—"
-        color = "#888"
+        age_color = "#888"
     c2.markdown(
-        f'<div class="kpi-card"><span style="font-size:0.8em;opacity:0.55;">Data-ålder</span><br>'
-        f'<span style="font-size:1.2em;font-weight:700;color:{color};">{age_str}</span><br>'
-        f'<span style="font-size:0.85em;">Senaste scan-resultat</span></div>',
+        f'<div style="{_K}"><span style="{_LBL}">Data-ålder</span><br>'
+        f'<span style="{_VAL}color:{age_color};">{age_str}</span><br>'
+        f'<span style="{_SUB}">Senaste scan-resultat</span></div>',
         unsafe_allow_html=True,
     )
 
@@ -141,19 +151,19 @@ def _render_kpi_cards(scan_log: list):
     except Exception:
         pass
     c3.markdown(
-        f'<div class="kpi-card"><span style="font-size:0.8em;opacity:0.55;">ML-modell</span><br>'
-        f'<span style="font-size:1.2em;font-weight:700;">{ml_age}</span><br>'
-        f'<span style="font-size:0.85em;">Tränad</span></div>',
+        f'<div style="{_K}"><span style="{_LBL}">ML-modell</span><br>'
+        f'<span style="{_VAL}">{ml_age}</span><br>'
+        f'<span style="{_SUB}">Tränad</span></div>',
         unsafe_allow_html=True,
     )
 
     # Aktiva fel
     n_errors = sum(1 for e in scan_log if e.get("status") == "ERROR") if scan_log else 0
+    err_color = "#f87171" if n_errors > 0 else "#4ade80"
     c4.markdown(
-        f'<div class="kpi-card"><span style="font-size:0.8em;opacity:0.55;">Aktiva fel</span><br>'
-        f'<span style="font-size:1.2em;font-weight:700;color:{"#f87171" if n_errors > 0 else "#4ade80"};">'
-        f'{n_errors}</span><br>'
-        f'<span style="font-size:0.85em;">I pipeline-loggen</span></div>',
+        f'<div style="{_K}"><span style="{_LBL}">Aktiva fel</span><br>'
+        f'<span style="{_VAL}color:{err_color};">{n_errors}</span><br>'
+        f'<span style="{_SUB}">I pipeline-loggen</span></div>',
         unsafe_allow_html=True,
     )
 
