@@ -272,25 +272,33 @@ _QUICK_CARD_HELP = {
     "P/E":       "Pris/Vinst (trailing). Hur många kronor du betalar per vinstkrona. Lägre = billigare relativt vinst. Normalt 10-20. Negativt = bolaget går med förlust.",
     "ROE":       "Return on Equity -- avkastning på eget kapital. Visar hur effektivt bolaget använder ägarnas pengar. Över 15% = bra. Över 25% = utmärkt.",
     "Piotroski": "Piotroski F-Score (0-9). Nio nyckeltal för lönsamhet, skuldsättning och effektivitet. 7-9 = stark fundamenta. 4-6 = godkänd. 0-3 = svag.",
+    "ML 30d":    "ML-modellens (XGBoost) prediktion av avkastning kommande 30 dagar. Baseras enbart på tekniska prismönster. ⚠️ Modellkvalitet är låg (IC=0.03) — använd som en indikation, inte garanti.",
 }
 
 def _quick_data_cards(row: pd.Series):
     """Visa en rad med metrik-kort för aktuell aktie."""
-    cols = st.columns(7)
+    ml_pred = row.get("predicted_return")
+    has_ml  = ml_pred is not None and not pd.isna(ml_pred)
+
+    n_cols = 8 if has_ml else 7
+    cols = st.columns(n_cols)
 
     metrics = [
-        ("Score", row.get("score_total"), "dec0", "🎯"),
-        ("Entry", row.get("entry_signal"), None, "⚡"),
-        ("Trend", row.get("trend_signal"), None, "📈"),
-        ("RSI", row.get("rsi_14"), "dec0", "🌡️"),
-        ("P/E", row.get("pe_trailing"), "dec1", "💰"),
-        ("ROE", row.get("roe"), "pct", "📊"),
-        ("Piotroski", row.get("piotroski_f"), "ratio", "🔬"),
+        ("Score",     row.get("score_total"),  "dec0",  "🎯"),
+        ("Entry",     row.get("entry_signal"),  None,    "⚡"),
+        ("Trend",     row.get("trend_signal"),  None,    "📈"),
+        ("RSI",       row.get("rsi_14"),        "dec0",  "🌡️"),
+        ("P/E",       row.get("pe_trailing"),   "dec1",  "💰"),
+        ("ROE",       row.get("roe"),           "pct",   "📊"),
+        ("Piotroski", row.get("piotroski_f"),   "ratio", "🔬"),
     ]
+    if has_ml:
+        pct_str = f"{float(ml_pred)*100:+.1f}%"
+        metrics.append(("ML 30d", pct_str, None, "🤖"))
 
     for col, (label, val, fmt, icon) in zip(cols, metrics):
         with col:
-            formatted = _safe_val(val, fmt if fmt else "num")
+            formatted = val if fmt is None else _safe_val(val, fmt)
             st.metric(f"{icon} {label}", formatted, help=_QUICK_CARD_HELP.get(label))
 
 

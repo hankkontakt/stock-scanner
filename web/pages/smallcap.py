@@ -191,33 +191,58 @@ Systemet delar in bolagen i 1-5 stjärnor baserat på totalpoängen:
             }
             rank_disp = rank_disp.rename(columns=rename)
             if "Ticker" in rank_disp.columns:
-                rank_disp["Ticker"] = rank_disp["Ticker"].apply(
-                    _ticker_display
-                )
+                rank_disp["Ticker"] = rank_disp["Ticker"].apply(_ticker_display)
+
+            # Håll procent som råa floats ×100 — NumberColumn formaterar korrekt
             for c in ["Dag%", "Vecka%", "6m%", "12m%"]:
                 if c in rank_disp.columns:
-                    rank_disp[c] = rank_disp[c].apply(lambda v: pct_fmt(v))
+                    rank_disp[c] = pd.to_numeric(rank_disp[c], errors="coerce") * 100
+
             # Dölj AI-kolumner om >80% NaN (ML-modell ej tränad)
             for ai_col in ["AI 30d-ret", "AI rank"]:
                 if ai_col in rank_disp.columns and rank_disp[ai_col].isna().mean() > 0.8:
                     rank_disp = rank_disp.drop(columns=[ai_col])
             if "AI 30d-ret" in rank_disp.columns and not rank_disp["AI 30d-ret"].isna().all():
                 rank_disp["AI 30d-ret"] = rank_disp["AI 30d-ret"] * 100
-            col_cfg = {}
+
+            # ── Column config (matchar weekly scanner) ────────────────────────
+            col_cfg: dict = {
+                "Rank":   st.column_config.NumberColumn("Rank", format="%d",
+                    help="Position i rankinglistan. Rank 1 = bäst poäng."),
+                "Ticker": st.column_config.TextColumn("Ticker",
+                    help="Börsticker. Klicka på raden för full analys."),
+                "⭐":     st.column_config.TextColumn("⭐",
+                    help="Stjärnbetyg 1–5. ★★★★★ = stark på alla faktorer."),
+                "Insider": st.column_config.TextColumn("Insider",
+                    help="BUY = insiders har nyligen köpt egna aktier. Positivt signal."),
+                "Pris":   st.column_config.NumberColumn("Pris", format="%.2f",
+                    help="Senaste kurs i lokal valuta."),
+                "Piotroski": st.column_config.NumberColumn("Piotroski", format="%.0f/9",
+                    help="Piotroski F-Score 0–9. 7–9 = stark fundamenta. 0–3 = svag."),
+            }
             if "Poäng" in rank_disp.columns:
                 col_cfg["Poäng"] = st.column_config.ProgressColumn(
-                    "Poäng", min_value=0, max_value=100, format="%.0f"
-                )
+                    "Poäng", min_value=0, max_value=100, format="%.0f",
+                    help="Totalpoäng 0–100. 70+ = stark. 50–69 = neutral. <50 = svag.")
             if "AI rank" in rank_disp.columns:
                 col_cfg["AI rank"] = st.column_config.ProgressColumn(
-                    "AI rank", min_value=0, max_value=100, format="%.0f"
-                )
+                    "AI rank", min_value=0, max_value=100, format="%.0f",
+                    help="ML-modellens rangordning 0–100 baserad på tekniska prismönster.")
             if "AI 30d-ret" in rank_disp.columns:
                 col_cfg["AI 30d-ret"] = st.column_config.NumberColumn(
                     "AI 30d-ret", format="%.1f%%",
-                    help="ML-modellens prediktion av avkastning kommande 30 dagar"
-                )
-            _sc_height = min(600, max(150, len(rank_disp) * 36 + 38))
+                    help="ML-modellens prediktion av avkastning kommande 30 dagar. ⚠️ IC=0.03, låg signifikans.")
+            for pct_col, help_txt in [
+                ("Dag%",   "Prisförändring senaste handelsdagen."),
+                ("Vecka%", "Prisförändring senaste 5 handelsdagarna."),
+                ("6m%",    "Totalavkastning senaste 6 månader."),
+                ("12m%",   "Totalavkastning senaste 12 månader."),
+            ]:
+                if pct_col in rank_disp.columns:
+                    col_cfg[pct_col] = st.column_config.NumberColumn(
+                        pct_col, format="%.1f%%", help=help_txt)
+
+            _sc_height = min(700, max(200, len(rank_disp) * 36 + 40))
             sc_event = st.dataframe(rank_disp, use_container_width=True, hide_index=True,
                                     column_config=col_cfg, height=_sc_height,
                                     on_select="rerun", selection_mode="single-row",
