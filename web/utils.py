@@ -113,14 +113,25 @@ def load_scan_reports() -> dict:
 
 @st.cache_data(ttl=300)
 def load_smallcap_reports() -> dict:
-    """Returnerar {datum_str: DataFrame} för alla smallcap CSVer."""
+    """Returnerar {datum_str: DataFrame} för alla smallcap-filer (parquet + csv)."""
     result = {}
+    # Parquet har prioritet (nyare pipeline sparar bara parquet)
+    seen: set = set()
+    for f in sorted(REPORT_DIR.glob("smallcap_scored_*.parquet"), reverse=True):
+        try:
+            d = f.stem.replace("smallcap_scored_", "")
+            result[d] = pd.read_parquet(f)
+            seen.add(d)
+        except Exception:
+            pass
+    # CSV som fallback för äldre filer
     for f in sorted(REPORT_DIR.glob("smallcap_scored_*.csv"), reverse=True):
         try:
-            d   = f.stem.replace("smallcap_scored_", "")
-            df  = pd.read_csv(f, low_memory=False)
-            df.columns = df.columns.str.strip()
-            result[d] = df
+            d = f.stem.replace("smallcap_scored_", "")
+            if d not in seen:
+                df = pd.read_csv(f, low_memory=False)
+                df.columns = df.columns.str.strip()
+                result[d] = df
         except Exception:
             pass
     return result
