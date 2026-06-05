@@ -30,19 +30,28 @@ def page_stock_comparison(df: pd.DataFrame | None = None):
     st.title(f"{ic('stock')} Stock Comparison")
     st.caption("Compare 2-5 stocks side-by-side with metrics, charts, and AI analysis.")
 
-    # Get available tickers
-    available_tickers = []
+    # Bygg ticker → visningsnamn-karta så att sökning matchar på bolagsnamn
+    ticker_label: dict[str, str] = {}
     if df is not None and not df.empty and "ticker" in df.columns:
-        available_tickers = sorted(df["ticker"].dropna().unique().tolist())
+        name_col = "name" if "name" in df.columns else None
+        for _, row in df.drop_duplicates("ticker").iterrows():
+            t = str(row["ticker"])
+            if not t or t == "nan":
+                continue
+            n = str(row[name_col]).strip() if name_col else ""
+            ticker_label[t] = f"{t}  —  {n}" if n and n != "nan" else t
+    available_tickers = sorted(ticker_label.keys())
 
-    # Ticker selection
+    # Ticker selection — format_func gör att Streamlit söker på HELA strängen
+    # inkl. bolagsnamnet, så "tesla" hittar TSLA, "volvo" hittar VOLV-B.ST osv.
     col1, col2 = st.columns([3, 1])
     with col1:
         tickers = st.multiselect(
-            "Select 2-5 tickers to compare",
-            options=available_tickers if available_tickers else [],
+            "Välj 2–5 aktier att jämföra",
+            options=available_tickers,
+            format_func=lambda t: ticker_label.get(t, t),
             max_selections=5,
-            placeholder="Search and select tickers...",
+            placeholder="Sök på ticker eller bolagsnamn…",
             key="compare_tickers",
         )
     with col2:
