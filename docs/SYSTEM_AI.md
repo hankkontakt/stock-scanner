@@ -617,6 +617,12 @@ Ersatte `"5 7 * * 1-5"` med par: `"10 7"` (CEST) + `"10 8"` (CET) för morning, 
 F821 (`np`/`pd` undefined), F823 (lokal `go` re-import), F541 (41 f-strängar utan platshållare), E401 (split-import).
 `web/app.py`, `web/pages/portfolio.py`, `web/pages/backtesting_page.py`, `core/daily_pipeline.py` + 13 filer
 
+### 2026-06-05 — Sprint B: Naturspråksfrågor, earnings-tracker, rapporttolkning
+Item 1: `parse_nl_filter_query()` + `render_nl_filter_bar()` i `web/ui/screener_utils.py`. NL-sökruta i weekly_scan tolkar fritext → filterparametrar via AI. `SYSTEM_PROMPT_FILTER_PARSER` i `core/ai_prompts.py`.
+Item 4: `fetch_todays_earnings()` i `core/news_fetcher.py` (Finnhub earnings_calendar). Integrerad i morning-pipeline som ny e-postsektion. 📊-suffix på rapporterande tickers i weekly_scan.
+Item 7: `_fetch_earnings_detail()` + `_quarterly_section()` i `web/stock_detail.py`. Kvartalstabell + EPS vs estimat-tabell + AI-summering. Visas bara för portföljinnehav. `SYSTEM_PROMPT_EARNINGS_SUMMARY` i `core/ai_prompts.py`.
+`core/news_fetcher.py:1198`, `core/daily_pipeline.py:1649`, `web/stock_detail.py:1027`, `web/ui/screener_utils.py:473`
+
 ### 2026-06-05 — Sprint A: Portfolio AI fix, score sparklines, FUTURE_IDEAS
 Portfolio AI-chat (`_portfolio_ai_chat()`) hade fel parameternamn (`messages=/system=` → `question=/context=/history=/system_prompt_override=`) och fel systemprompt (SYSTEM_PROMPT_CHAT → SYSTEM_PROMPT_PORTFOLIO). Utökad kontext med sektordistribution % och portföljbeta. `load_scan_reports()` fick parquet-stöd (var CSV-only). Ny `build_score_history_map()` och `score_trend_arrow()` i `web/utils.py`. Ny "8v trend"-kolumn i weekly_scan ranking-tabell. Skapad `docs/FUTURE_IDEAS.md` med 6 sparade framtida idéer.
 `web/pages/portfolio.py:1792`, `web/utils.py:81`, `web/pages/weekly_scan.py:368`, `core/ai_prompts.py`, `docs/FUTURE_IDEAS.md`
