@@ -270,12 +270,6 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             st.session_state["nav_page"] = page_title
             qp_key = _reverse_map.get(page_title, "overview")
             st.query_params["p"] = qp_key
-            # Track recent pages
-            _recent = st.session_state.setdefault("_recent_pages", [])
-            if page_title in _recent:
-                _recent.remove(page_title)
-            _recent.insert(0, page_title)
-            st.session_state["_recent_pages"] = _recent[:10]
             st.rerun()
 
         def _nav_button(nav_key: str, display: str, icon_key: str):
@@ -292,50 +286,6 @@ def build_sidebar(scan_dates: list, sc_dates: list) -> tuple:
             label_visibility="collapsed",
         )
         _nav_q = _nav_search.strip().lower() if _nav_search else ""
-
-        # ── Recent pages (show last 3 visited) ────────────────────────────────
-        _recent = st.session_state.setdefault("_recent_pages", [])
-        if _recent and not _nav_q:
-            st.markdown("""
-<div style="font-size:9px;font-weight:700;color:#4a5568;letter-spacing:0.12em;text-transform:uppercase;margin:8px 0 4px;">
-  Senaste sidor
-</div>
-""", unsafe_allow_html=True)
-            for _rp in _recent[:3]:
-                if _rp in _reverse_map:
-                    if st.button(f"• {_rp}", key=f"recent_{_reverse_map[_rp]}", use_container_width=True):
-                        _navigate_to(_rp)
-            st.markdown('<div style="height:1px;background:linear-gradient(to right,transparent,#2d3250 30%,#2d3250 70%,transparent);margin:6px 0;"></div>', unsafe_allow_html=True)
-
-        # ── Pinned pages (⭐) ─────────────────────────────────────────────────
-        _pinned = st.session_state.setdefault("_pinned_pages", ["\U0001f4ca Översikt", "\U0001f50d Veckoscanner"])
-        if _pinned and not _nav_q:
-            st.markdown("""
-<div style="font-size:9px;font-weight:700;color:#4a5568;letter-spacing:0.12em;text-transform:uppercase;margin:8px 0 4px;">
-  Favoriter
-</div>
-""", unsafe_allow_html=True)
-            for _pp in _pinned[:5]:
-                if _pp in _reverse_map:
-                    _pk = _reverse_map[_pp]
-                    if st.button(f"⭐ {_pp}", key=f"pin_{_pk}", use_container_width=True):
-                        _navigate_to(_pp)
-            st.markdown('<div style="height:1px;background:linear-gradient(to right,transparent,#2d3250 30%,#2d3250 70%,transparent);margin:6px 0;"></div>', unsafe_allow_html=True)
-
-        # ── Pin/unpin current page toggle ─────────────────────────────────────
-        _current_page = st.session_state.get("nav_page", "\U0001f4ca Översikt")
-        _is_pinned = _current_page in _pinned
-        if st.button(
-            f"{'⭐' if _is_pinned else '☆'} {'Avfäst sida' if _is_pinned else 'Fäst sida'}",
-            key="nav_toggle_pin",
-            use_container_width=True,
-            help="Fäst/avfäst sidan i favoriter högst upp i sidebaren.",
-        ):
-            if _is_pinned:
-                _pinned.remove(_current_page)
-            else:
-                _pinned.insert(0, _current_page)
-            st.session_state["_pinned_pages"] = _pinned[:10]
 
         # ── Sektioner med collapse state ──────────────────────────────────────
         # Collapse all sections by default (persist expand/collapse state)
