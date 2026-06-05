@@ -499,6 +499,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-05",
+      "ticker": "035420.KS",
+      "name": "NAVER Corporation",
+      "entry_price": 280500.0,
+      "predicted_return": 1.1336132287979126,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-05",
+      "ticker": "HIVE",
+      "name": "HIVE Digital Technologies Ltd.",
+      "entry_price": 4.539999961853027,
+      "predicted_return": 0.4893631637096405,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-05",
+      "ticker": "MARA",
+      "name": "MARA Holdings, Inc.",
+      "entry_price": 14.279999732971191,
+      "predicted_return": 0.301446795463562,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-05",
+      "ticker": "6976.T",
+      "name": "Taiyo Yuden Co., Ltd.",
+      "entry_price": 16750.0,
+      "predicted_return": 0.29020175337791443,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-05",
+      "ticker": "TRENT.NS",
+      "name": "Trent Limited",
+      "entry_price": 4257.60009765625,
+      "predicted_return": 0.2857767939567566,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-05",
+      "ticker": "028260.KS",
+      "name": "Samsung C&T Corporation",
+      "entry_price": 485500.0,
+      "predicted_return": 0.27365535497665405,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-05",
+      "ticker": "6098.T",
+      "name": "Recruit Holdings Co., Ltd.",
+      "entry_price": 10920.0,
+      "predicted_return": 0.2694493532180786,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-05",
+      "ticker": "6954.T",
+      "name": "Fanuc Corporation",
+      "entry_price": 7975.0,
+      "predicted_return": 0.24198420345783234,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-05",
+      "ticker": "2914.T",
+      "name": "Japan Tobacco Inc.",
+      "entry_price": 6112.0,
+      "predicted_return": 0.24140974879264832,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-05",
+      "ticker": "5801.T",
+      "name": "Furukawa Electric Co., Ltd.",
+      "entry_price": 53100.0,
+      "predicted_return": 0.23898880183696747,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -526,6 +626,11 @@
       "date": "2026-06-04",
       "equity": 100000.0,
       "n_open": 50
+    },
+    {
+      "date": "2026-06-05",
+      "equity": 100000.0,
+      "n_open": 60
     }
   ]
 }
