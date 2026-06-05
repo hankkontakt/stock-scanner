@@ -138,7 +138,7 @@ def render():
     st.markdown("""
     <div style="margin-bottom:4px">
       <span style="font-size:1.15em;font-weight:700;">Starta pipeline-körning</span><br>
-      <span style="color:#6b7280;font-size:0.88em;">
+      <span style="opacity:0.55;font-size:0.88em;">
         Alla lägen körs via GitHub Actions — du behöver inte vara inloggad i GitHub.
         Resultat visas i körningshistoriken nedan inom några minuter.
       </span>
@@ -231,7 +231,7 @@ def render():
     st.markdown("---")
     st.markdown("""
     <span style="font-size:1.1em;font-weight:700;">Körningshistorik</span>
-    <span style="color:#6b7280;font-size:0.85em;margin-left:8px;">— senaste pipeline-körningar</span>
+    <span style="opacity:0.55;font-size:0.85em;margin-left:8px;">— senaste pipeline-körningar</span>
     """, unsafe_allow_html=True)
 
     scan_log = _load_scan_log()

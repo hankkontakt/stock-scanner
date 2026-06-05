@@ -35,35 +35,39 @@ from web.pages.admin import (
 
 _ADMIN_CSS = """
 <style>
-/* Status-badges */
-.status-ok    { background:#28a745; color:#fff; padding:3px 10px; border-radius:20px; font-size:0.85em; }
-.status-warn  { background:#f0a500; color:#fff; padding:3px 10px; border-radius:20px; font-size:0.85em; }
-.status-error { background:#dc3545; color:#fff; padding:3px 10px; border-radius:20px; font-size:0.85em; }
+/* Status-badges — färg syns men är inte brutal */
+.status-ok    { background:rgba(40,167,69,0.20);  color:#4ade80; padding:3px 10px; border-radius:20px; font-size:0.85em; border:1px solid rgba(40,167,69,0.35); }
+.status-warn  { background:rgba(240,165,0,0.18);  color:#fbbf24; padding:3px 10px; border-radius:20px; font-size:0.85em; border:1px solid rgba(240,165,0,0.35); }
+.status-error { background:rgba(220,53,69,0.18);  color:#f87171; padding:3px 10px; border-radius:20px; font-size:0.85em; border:1px solid rgba(220,53,69,0.35); }
 
-/* KPI-kort */
+/* KPI-kort — transparent yta, ingen vit klump */
 .kpi-card {
-    background:#f8f9fa; border-left:4px solid #2563eb;
-    padding:12px 16px; border-radius:6px; margin:4px 0;
+    background: rgba(255,255,255,0.05);
+    border-left: 3px solid rgba(99,153,255,0.55);
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin: 4px 0;
 }
 
 /* Sektion-rubrik */
 .section-header {
-    font-size:1.15em; font-weight:700; color:#1e293b;
-    border-bottom:2px solid #e2e8f0; padding-bottom:6px; margin-bottom:4px;
+    font-size: 1.1em; font-weight: 700;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+    padding-bottom: 6px; margin-bottom: 4px;
 }
 .section-desc {
-    font-size:0.88em; color:#64748b; margin-top:2px; margin-bottom:16px;
+    font-size: 0.88em; opacity: 0.6; margin-top: 2px; margin-bottom: 16px;
 }
 
 /* Compact tables */
 [data-testid="stDataFrame"] {
-    font-size:0.85em;
+    font-size: 0.85em;
 }
 
-/* Badges for metric cards */
-kpi-badge {
-    display:inline-block; padding:2px 8px; border-radius:12px;
-    font-size:0.78em; font-weight:600;
+/* Badge chip */
+.kpi-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 12px;
+    font-size: 0.78em; font-weight: 600;
 }
 </style>
 """
