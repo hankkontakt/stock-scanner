@@ -235,7 +235,7 @@ def print_endpoint_check(url: str, label: str = "",
                     else:
                         print(f"  [XX ] SSL-cert löper ut om {days} dagar — förnya OMEDELBART")
                 else:
-                    print(f"  [OK ] SSL OK")
+                    print("  [OK ] SSL OK")
             else:
                 print(f"  [XX ] SSL-fel: {ssl_result.get('error', '?')}")
         except Exception:
@@ -261,7 +261,7 @@ def print_report(urls: dict[str, str] | None = None,
     endpoints = urls or DEFAULT_ENDPOINTS
 
     print("=" * 70)
-    print(f"  Webbapp Hälsokontroll")
+    print("  Webbapp Hälsokontroll")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 

@@ -488,7 +488,8 @@ class TestCleanupOldReports:
 
     def test_cleanup_removes_old_files(self, tmp_path, monkeypatch):
         """Filer äldre än max_days tas bort."""
-        import os, time
+        import os
+        import time
         from core import daily_pipeline
         monkeypatch.setattr(daily_pipeline, "REPORT_DIR", tmp_path)
 

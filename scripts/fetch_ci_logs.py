@@ -280,7 +280,7 @@ def print_report(report: dict) -> None:
             print(f"  [{lvl}] {file}:{line} — {msg}")
 
     if report.get("error_lines"):
-        print(f"\n-- Felrader (filtrerade från loggar) ----------------------------------")
+        print("\n-- Felrader (filtrerade från loggar) ----------------------------------")
         for block in report["error_lines"][:30]:
             print()
             for line in block.splitlines():

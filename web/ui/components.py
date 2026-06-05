@@ -491,6 +491,6 @@ class AIStreamDisplay:
             f'{_html.escape(self._text)}'
             f'</div>'
             + ('<div class="ms-pulse" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#4c9be8;margin-top:4px;"></div>' if not final else '')
-            + f'</div>',
+            + '</div>',
             unsafe_allow_html=True,
         )

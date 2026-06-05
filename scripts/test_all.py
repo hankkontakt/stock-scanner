@@ -104,7 +104,7 @@ def run_pytest(path: str = "tests/", verbose: bool = False) -> dict:
 def run_lint() -> dict:
     """Kör ruff lint på all Python-kod."""
     print(f"\n{'='*60}")
-    print(f"  Ruff Lint")
+    print("  Ruff Lint")
     print(f"{'='*60}")
 
     cmd = [sys.executable, "-m", "ruff", "check",
@@ -131,7 +131,7 @@ def run_lint() -> dict:
 def print_summary(results: dict[str, dict], total_s: float) -> bool:
     """Skriv ut slutsammanfattning, returnera True om allt OK."""
     print(f"\n{'='*60}")
-    print(f"  SAMMANFATTNING")
+    print("  SAMMANFATTNING")
     print(f"{'='*60}")
 
     all_ok = True
@@ -176,9 +176,9 @@ def main() -> int:
     args = parser.parse_args()
 
     print(f"{'='*60}")
-    print(f"  MarketScan — Test Runner")
+    print("  MarketScan — Test Runner")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"  (Tester körs också automatiskt via CI på push)")
+    print("  (Tester körs också automatiskt via CI på push)")
     print(f"{'='*60}")
 
     t0 = time.perf_counter()

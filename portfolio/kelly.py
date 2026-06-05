@@ -319,12 +319,12 @@ if __name__ == "__main__":
     probs = np.array([0.6, 0.55, 0.7, 0.5])
     ers = np.array([0.05, 0.03, 0.08, 0.01])
     weights = kc.kelly_for_portfolio(probs, ers)
-    print(f"\nMulti-asset Kelly:")
+    print("\nMulti-asset Kelly:")
     for i, w in enumerate(weights):
         print(f"  Asset {i}: {w:.2%}")
 
     # Sizing guide
     guide = kc.sizing_guide(75, 0.8, 0.28, 100000)
-    print(f"\nSizing guide:")
+    print("\nSizing guide:")
     for k, v in guide.items():
         print(f"  {k}: {v}")

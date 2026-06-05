@@ -714,7 +714,7 @@ def print_status(verbose: bool = True):
     print(f"  Stängda positioner: {len(closed_trades)}")
 
     if open_trades:
-        print(f"\n  Öppna positioner:")
+        print("\n  Öppna positioner:")
         print(f"  {'Ticker':<14} {'Köp':>8} {'Senast':>8} {'P&L%':>8}  {'SL':>8} {'TP':>8} {'Trail':>8}")
         print(f"  {'─'*14} {'─'*8} {'─'*8} {'─'*8}  {'─'*8} {'─'*8} {'─'*8}")
         for t in sorted(open_trades, key=lambda x: x["week"], reverse=True):
@@ -747,7 +747,7 @@ def print_status(verbose: bool = True):
 
         # Exit reason fördelning
         if stats.get("exit_reasons"):
-            print(f"\n  Exit-anledningar:")
+            print("\n  Exit-anledningar:")
             for reason, count in sorted(stats["exit_reasons"].items(), key=lambda x: -x[1]):
                 reason_name = {
                     f"stop_loss_{STOP_LOSS_PCT:.0f}%": f"🚫 Stop-loss ({STOP_LOSS_PCT:.0f}%)",

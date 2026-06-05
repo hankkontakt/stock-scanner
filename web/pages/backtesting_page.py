@@ -348,7 +348,6 @@ men garanterar ingenting om framtiden.
                 c4.metric("Hit rate", f"{snap_result['hit_rate']:.0f}%",
                           help="% av perioder där portföljen slog benchmark")
 
-                import plotly.graph_objects as go
                 eq_df = pd.DataFrame(snap_result["equity_curve"])
                 if not eq_df.empty:
                     fig = go.Figure(go.Scatter(

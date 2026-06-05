@@ -147,7 +147,7 @@ def analyze_cash_runway(
         n_critical = (result["runway_status"] == "🔴 KRITISK").sum()
         n_warning = (result["runway_status"] == "🟡 VARNING").sum()
         n_ok = (result["runway_status"] == "🟢 OK").sum()
-        print(f"\n  💰 Cash Runway Watch:")
+        print("\n  💰 Cash Runway Watch:")
         print(f"    🔴 Kritisk (< {CRITICAL_MONTHS}m): {n_critical} bolag")
         print(f"    🟡 Varning (< {WARNING_MONTHS}m): {n_warning} bolag")
         print(f"    🟢 OK (>= {WARNING_MONTHS}m): {n_ok} bolag")
@@ -155,7 +155,7 @@ def analyze_cash_runway(
         # Visa de mest kritiska
         critical = result[result["runway_status"] == "🔴 KRITISK"].head(5)
         if not critical.empty:
-            print(f"\n    Mest akuta emissionsrisker:")
+            print("\n    Mest akuta emissionsrisker:")
             for _, r in critical.iterrows():
                 print(f"      {r['ticker']:12s} - {r['runway_months']:.0f}m kvar, "
                       f"bränner {r['monthly_burn_msek']:.1f} MSEK/mån")

@@ -1000,9 +1000,9 @@ Om aktien sedan stiger tvingas blankarna köpa tillbaka -> **short squeeze** -> 
                 col = col1 if i % 2 == 0 else col2
                 status = channel_status.get(chan_id, False)
                 status_html = (
-                    f'<span style="color:#16a34a;font-weight:600">● Aktiv</span>'
+                    '<span style="color:#16a34a;font-weight:600">● Aktiv</span>'
                     if status else
-                    f'<span style="color:#94a3b8">○ Inaktiv</span>'
+                    '<span style="color:#94a3b8">○ Inaktiv</span>'
                 )
 
                 with col:
@@ -1054,7 +1054,7 @@ Om aktien sedan stiger tvingas blankarna köpa tillbaka -> **short squeeze** -> 
                                         f"[t.me/{bot_username}]({bot_url})"
                                     )
                                     st.markdown(
-                                        f"Skicka `/start` till botten för att aktivera."
+                                        "Skicka `/start` till botten för att aktivera."
                                     )
                         except Exception:
                             pass

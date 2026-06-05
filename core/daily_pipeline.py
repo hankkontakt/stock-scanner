@@ -2187,7 +2187,7 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
         # E3: Spara strukturerade metrics
         try:
             from core.metrics import record_pipeline_run
-            _n = len(scored_df) if "scored_df" in dir() and scored_df is not None and hasattr(scored_df, "__len__") else 0  # type: ignore[possibly-undefined]
+            _n = len(scored_df) if "scored_df" in dir() and scored_df is not None and hasattr(scored_df, "__len__") else 0  # type: ignore[possibly-undefined]  # noqa: F821
             _n_err = 1 if not pipeline_success else 0
             record_pipeline_run(mode=mode, duration_s=_elapsed, n_scored=_n, n_errors=_n_err)
         except Exception:

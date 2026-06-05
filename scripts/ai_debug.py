@@ -194,7 +194,7 @@ def section_pipeline_health(report: dict) -> None:
     scan_log = _read_json(DATA_DIR / "scan_log.json")
     if scan_log and isinstance(scan_log, list):
         recent = sorted(scan_log, key=lambda x: x.get("timestamp", ""), reverse=True)[:3]
-        print(f"\n  Senaste scan-körningar (scan_log.json):")
+        print("\n  Senaste scan-körningar (scan_log.json):")
         for entry in recent:
             ts    = entry.get("timestamp", "")
             # Stödjer scan_type eller mode
@@ -242,7 +242,7 @@ def section_ci_failures(report: dict, since_hours: float = 48) -> None:
                 print(f"       Misslyckade jobs: {', '.join(failed_jobs)}")
             anns = failure.get("annotations", [])
             if anns:
-                print(f"\n  Annotationer (fil:rad):")
+                print("\n  Annotationer (fil:rad):")
                 for ann in anns[:10]:
                     f_name = ann.get("file", "?")
                     line   = ann.get("line", "?")
@@ -425,7 +425,7 @@ def section_fetch_errors(report: dict, max_show: int = 10) -> None:
             ticker_fails[t] = ticker_fails.get(t, 0) + 1
     if ticker_fails:
         top = sorted(ticker_fails.items(), key=lambda x: -x[1])[:8]
-        print(f"\n  Tickers som oftast misslyckas:")
+        print("\n  Tickers som oftast misslyckas:")
         for ticker, count in top:
             print(f"    [{count:3d}x] {ticker}")
 
@@ -521,7 +521,7 @@ def section_github_status(report: dict) -> None:
 
         # Visa senaste av varje workflow
         seen_workflows = set()
-        print(f"\n  Senaste körning per workflow:")
+        print("\n  Senaste körning per workflow:")
         for run in runs:
             wf_name = run.get("name", "?")
             if wf_name not in seen_workflows:
@@ -636,7 +636,7 @@ def print_summary(report: dict, total_s: float) -> None:
     # CI
     ci = report.get("ci_failures", [])
     if ci:
-        issues.append(f"CI-fel: senaste körning misslyckades")
+        issues.append("CI-fel: senaste körning misslyckades")
 
     # Streamlit
     sl_err = report.get("streamlit_errors", [])
@@ -663,10 +663,10 @@ def print_summary(report: dict, total_s: float) -> None:
     print(f"\n  Briefing-tid: {total_s:.1f}s")
     print(f"  Genererad: {_now_utc().strftime('%Y-%m-%d %H:%M UTC')}")
 
-    print(f"\n  Nästa steg om det finns problem:")
-    print(f"    python scripts/fetch_ci_logs.py --save     # Ladda ned CI-loggar")
-    print(f"    python scripts/diagnose.py --section ml    # Djupdiagnos ML-modeller")
-    print(f"    python scripts/check_github.py --jobs      # GitHub med job-detaljer")
+    print("\n  Nästa steg om det finns problem:")
+    print("    python scripts/fetch_ci_logs.py --save     # Ladda ned CI-loggar")
+    print("    python scripts/diagnose.py --section ml    # Djupdiagnos ML-modeller")
+    print("    python scripts/check_github.py --jobs      # GitHub med job-detaljer")
 
 
 # ── main() ────────────────────────────────────────────────────────────────────
@@ -689,7 +689,7 @@ def main() -> int:
     args = parser.parse_args()
 
     print("=" * 70)
-    print(f"  MarketScan — AI Debug Briefing")
+    print("  MarketScan — AI Debug Briefing")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  Repo: {ROOT}")
     print("=" * 70)

@@ -563,12 +563,12 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Test 1: Legacy API
-    print(f"\nTestar legacy API...")
+    print("\nTestar legacy API...")
     result1 = black_litterman_weights(df)
     print(result1.head(10))
 
     # Test 2: Class API
-    print(f"\nTestar BlackLittermanOptimizer klass...")
+    print("\nTestar BlackLittermanOptimizer klass...")
     blo = BlackLittermanOptimizer()
     result2 = blo.optimize_posterior(df)
     print(result2.head(10))
