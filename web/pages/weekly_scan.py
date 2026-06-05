@@ -349,11 +349,16 @@ def page_weekly_scan(df: pd.DataFrame, filters: dict,
             key="weekly_rank_mode",
             help=(
                 "**Klassisk score** rankar på fundamenta + värdering + momentum (bred, stabil).\n\n"
-                "**AI prediction** (XGBoost) rankar på tekniska mönster i prishistorik -- "
-                "förutspår 30-dagars avkastning. Modellen kan prioritera aktier annorlunda "
-                "än klassisk score: t.ex. en aktie med stark teknisk momentum men svag "
-                "fundamental kan hamna högt i AI-ranken och tvärtom. "
-                "Använd helst **Båda** för att jämföra."
+                "**AI prediction** (XGBoost) rankar enbart på tekniska prismönster (momentum, "
+                "volatilitet, RSI etc.) och förutspår 30-dagars avkastning. Modellen ser inga "
+                "fundamenta.\n\n"
+                "⚠️ **ML-modellens nuvarande kvalitet:** IC = 0.03 (branschkrav > 0.05), "
+                "DSR = 0.0 (ingen statistisk signifikans). AI-ranken är en indikation men bör "
+                "inte ses som ett tillförlitligt köpsignal — använd den för att identifiera "
+                "momentum-vs-värde-konflikter, inte som absolut sanning.\n\n"
+                "**Typisk konflikt:** Hög klassisk score + låg AI-rank = billigt bolag med "
+                "negativt momentum (potentiell värdefälla). Låg klassisk score + hög AI-rank = "
+                "dyr aktie med starkt momentum."
             )
         )
     else:
@@ -601,7 +606,12 @@ Tekniska indikatorer hjälper dig förstå **hur aktien rör sig** och om det ä
             # Feature 4: ML caption
             has_ml_data = "predicted_return" in filt_df.columns and filt_df["predicted_return"].notna().any()
             if has_ml_data:
-                st.caption("AI rank = ML-modellens 30-dagars avkastningsprediktion. Lägre rank = bättre förutsagd avkastning.")
+                st.caption(
+                    "AI rank = ML-modellens 30-dagars avkastningsprediktion (enbart tekniska mönster, inga fundamenta). "
+                    "Lägre rank = bättre förutsagd avkastning. "
+                    "⚠️ Modellkvalitet: IC 0.03, DSR 0.0 — låg statistisk signifikans. Hög klassisk score + låg AI-rank "
+                    "= billig aktie med negativt momentum (potentiell värdefälla)."
+                )
             score_cols_map = {
                 "score_value":    "Värdering",
                 "score_quality":  "Kvalitet",
