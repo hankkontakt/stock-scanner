@@ -55,15 +55,15 @@ def _render_status_banner(scan_log: list):
         status_text = "INGEN DATA"
         desc = "Inga pipeline-körningar har loggats ännu."
 
-    st.markdown(
-        f'<div style="display:flex;align-items:center;gap:12px;padding:16px;'
-        f'background:rgba(255,255,255,0.05);border-radius:8px;margin-bottom:16px;'
-        f'border:1px solid rgba(255,255,255,0.10);">'
-        f'<span style="font-size:2em;">{badge}</span>'
-        f'<div><span style="font-size:1.2em;font-weight:700;">{status_text}</span><br>'
-        f'<span style="opacity:0.6;font-size:0.9em;">{desc}</span></div></div>',
-        unsafe_allow_html=True,
-    )
+    # Använd Streamlit's inbyggda meddelande-komponenter — hanterar tema automatiskt
+    if has_error:
+        st.error(f"**{status_text}** — {desc}")
+    elif has_warn:
+        st.warning(f"**{status_text}** — {desc}")
+    elif has_data:
+        st.success(f"**{status_text}** — {desc}")
+    else:
+        st.info(f"**{status_text}** — {desc}")
 
     if scan_log:
         last = scan_log[-1]
@@ -82,36 +82,18 @@ def _render_kpi_cards(scan_log: list):
 
     c1, c2, c3, c4 = st.columns(4)
 
-    # Inline-stil för alla KPI-kort (CSS-klasser är opålitliga i Streamlit)
-    _K = (
-        "background:rgba(255,255,255,0.06);"
-        "border-left:3px solid rgba(99,153,255,0.50);"
-        "padding:12px 16px;border-radius:8px;margin:4px 0;"
-    )
-    _LBL = "font-size:0.8em;opacity:0.55;"
-    _VAL = "font-size:1.2em;font-weight:700;"
-    _SUB = "font-size:0.82em;opacity:0.55;"
-
+    # KPI-kort med st.metric() — hanterar dark/light-tema automatiskt
     # Senaste scan
     if scan_log:
         last = scan_log[-1]
         last_type = last.get("scan_type", "--")
         last_status = last.get("status", "?")
         last_ts = last.get("timestamp", "")[:16].replace("T", " ")
-        icon = "OK" if last_status == "OK" else "FEL" if last_status == "ERROR" else "?"
-        c1.markdown(
-            f'<div style="{_K}"><span style="{_LBL}">Senaste scan</span><br>'
-            f'<span style="{_VAL}">{last_type}</span><br>'
-            f'<span style="{_SUB}">{icon} {last_ts}</span></div>',
-            unsafe_allow_html=True,
-        )
+        status_delta = f"✅ {last_ts}" if last_status == "OK" else f"❌ {last_ts}"
+        c1.metric("Senaste scan", last_type, status_delta, delta_color="off",
+                  help="Typ och tidpunkt för senaste pipeline-körning.")
     else:
-        c1.markdown(
-            f'<div style="{_K}"><span style="{_LBL}">Senaste scan</span><br>'
-            f'<span style="{_VAL}">—</span><br>'
-            f'<span style="{_SUB}">Ingen data</span></div>',
-            unsafe_allow_html=True,
-        )
+        c1.metric("Senaste scan", "—", "Ingen data", delta_color="off")
 
     # Data-ålder
     try:
@@ -120,52 +102,37 @@ def _render_kpi_cards(scan_log: list):
             mtime = parquet_files[-1].stat().st_mtime
             age_h = (time.time() - mtime) / 3600
             age_str = f"{age_h:.1f}h"
-            age_color = "#4ade80" if age_h < 24 else "#fbbf24" if age_h < 48 else "#f87171"
+            age_delta = "Färsk ✅" if age_h < 24 else "Gammal ⚠️" if age_h < 48 else "Mycket gammal 🔴"
         else:
-            age_str = "—"
-            age_color = "#888"
+            age_str, age_delta = "—", "Ingen parquet-fil"
     except Exception:
-        age_str = "—"
-        age_color = "#888"
-    c2.markdown(
-        f'<div style="{_K}"><span style="{_LBL}">Data-ålder</span><br>'
-        f'<span style="{_VAL}color:{age_color};">{age_str}</span><br>'
-        f'<span style="{_SUB}">Senaste scan-resultat</span></div>',
-        unsafe_allow_html=True,
-    )
+        age_str, age_delta = "—", "Fel vid läsning"
+    c2.metric("Data-ålder", age_str, age_delta, delta_color="off",
+              help="Ålder på senaste scored_universe parquet-fil.")
 
     # ML-modell
     ml_path = ROOT / "models" / "ml_universe_metrics.json"
     ml_age = "—"
+    ml_delta = "Okänd"
     try:
         if ml_path.exists():
             metrics = json.loads(ml_path.read_text(encoding="utf-8"))
             trained = metrics.get("trained_date", metrics.get("timestamp", ""))
             if trained:
-                try:
-                    trained_dt = datetime.fromisoformat(trained[:19])
-                    days = (datetime.now() - trained_dt).days
-                    ml_age = f"{days}d sedan"
-                except Exception:
-                    ml_age = trained[:10]
+                trained_dt = datetime.fromisoformat(trained[:19])
+                days = (datetime.now() - trained_dt).days
+                ml_age = f"{days}d sedan"
+                ml_delta = "OK ✅" if days < 30 else "Gammal ⚠️"
     except Exception:
         pass
-    c3.markdown(
-        f'<div style="{_K}"><span style="{_LBL}">ML-modell</span><br>'
-        f'<span style="{_VAL}">{ml_age}</span><br>'
-        f'<span style="{_SUB}">Tränad</span></div>',
-        unsafe_allow_html=True,
-    )
+    c3.metric("ML-modell", ml_age, ml_delta, delta_color="off",
+              help="Antal dagar sedan ML-modellen senast tränades.")
 
     # Aktiva fel
     n_errors = sum(1 for e in scan_log if e.get("status") == "ERROR") if scan_log else 0
-    err_color = "#f87171" if n_errors > 0 else "#4ade80"
-    c4.markdown(
-        f'<div style="{_K}"><span style="{_LBL}">Aktiva fel</span><br>'
-        f'<span style="{_VAL}color:{err_color};">{n_errors}</span><br>'
-        f'<span style="{_SUB}">I pipeline-loggen</span></div>',
-        unsafe_allow_html=True,
-    )
+    err_delta = "Inga fel ✅" if n_errors == 0 else f"{n_errors} fel 🔴"
+    c4.metric("Aktiva fel", str(n_errors), err_delta, delta_color="off",
+              help="Antal felade körningar i pipeline-loggen.")
 
 
 # ── GitHub Actions ────────────────────────────────────────────────────────────
