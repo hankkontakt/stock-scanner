@@ -599,6 +599,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-06",
+      "ticker": "SOUN",
+      "name": "SoundHound AI, Inc.",
+      "entry_price": 7.389999866485596,
+      "predicted_return": 0.3181130886077881,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-06",
+      "ticker": "FLNC",
+      "name": "Fluence Energy, Inc.",
+      "entry_price": 22.90999984741211,
+      "predicted_return": 0.3057405650615692,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-06",
+      "ticker": "INTC",
+      "name": "Intel Corporation",
+      "entry_price": 114.68000030517578,
+      "predicted_return": 0.29831719398498535,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-06",
+      "ticker": "HIVE",
+      "name": "HIVE Digital Technologies Ltd.",
+      "entry_price": 3.7699999809265137,
+      "predicted_return": 0.2746279835700989,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-06",
+      "ticker": "PLUG",
+      "name": "Plug Power Inc.",
+      "entry_price": 3.2200000286102295,
+      "predicted_return": 0.2366613745689392,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-06",
+      "ticker": "ACCON.ST",
+      "name": "Acconeer AB (publ)",
+      "entry_price": 23.649999618530273,
+      "predicted_return": 0.19397644698619843,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-06",
+      "ticker": "DDOG",
+      "name": "Datadog, Inc.",
+      "entry_price": 234.11000061035156,
+      "predicted_return": 0.19059255719184875,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-06",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 54.63999938964844,
+      "predicted_return": 0.17993484437465668,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-06",
+      "ticker": "AG",
+      "name": "First Majestic Silver Corp.",
+      "entry_price": 16.989999771118164,
+      "predicted_return": 0.1731559932231903,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-06",
+      "ticker": "ON",
+      "name": "ON Semiconductor Corporation",
+      "entry_price": 117.26000213623047,
+      "predicted_return": 0.16562125086784363,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -631,6 +731,11 @@
       "date": "2026-06-05",
       "equity": 100000.0,
       "n_open": 60
+    },
+    {
+      "date": "2026-06-06",
+      "equity": 100000.0,
+      "n_open": 70
     }
   ]
 }

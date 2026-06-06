@@ -106,5 +106,23 @@
       "QCOM",
       "BESI.AS"
     ]
+  },
+  "2026-06-06": {
+    "capital": 100000,
+    "universe": "universe",
+    "n_picks": 10,
+    "benchmark_buy": 737.5499877929688,
+    "tickers": [
+      "000660.KS",
+      "005930.KS",
+      "CRDO",
+      "CDNS",
+      "2330.TW",
+      "EXEL",
+      "KO",
+      "MU",
+      "AVGO",
+      "B3SA3.SA"
+    ]
   }
 }
