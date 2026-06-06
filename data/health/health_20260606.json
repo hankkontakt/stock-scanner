@@ -6,8 +6,8 @@
     "finnhub": "ok"
   },
   "data_freshness": {
-    "latest_scan": "2026-06-06 09:50",
-    "age_hours": 0.0,
+    "latest_scan": "2026-06-06 12:07",
+    "age_hours": 0.5,
     "file": "scored_universe_2026-06-06.parquet",
     "stale": false
   },
@@ -17,11 +17,11 @@
     "model_file": "ml_universe.pkl"
   },
   "disk_usage": {
-    "data_dir_mb": 29.5,
+    "data_dir_mb": 1.8,
     "reports_dir_mb": 5.0,
     "models_dir_mb": 5.7,
-    "total_mb": 40.3,
-    "total_gb": 0.04,
+    "total_mb": 12.5,
+    "total_gb": 0.01,
     "free_gb": 13.6,
     "total_gb_disk": 71.6
   },
@@ -37,11 +37,11 @@
     "n_open_trades": 0
   },
   "last_pipeline_run": {
-    "mode": "weekly",
+    "mode": "retry_rate_limited",
     "status": "OK",
-    "duration": 1303.7,
-    "timestamp": "2026-06-06T09:51:22"
+    "duration": 1680.1,
+    "timestamp": "2026-06-06T12:35:59"
   },
   "degraded_components": [],
-  "checked_at": "2026-06-06T09:51:23.072131"
+  "checked_at": "2026-06-06T12:35:59.872902"
 }
