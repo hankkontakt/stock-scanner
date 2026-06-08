@@ -299,5 +299,14 @@
       "scan_type": "retry_rate_limited",
       "elapsed_seconds": 1680.1
     }
+  },
+  {
+    "timestamp": "2026-06-08T12:09:03",
+    "scan_type": "smallcap",
+    "status": "ERROR",
+    "details": {
+      "scan_type": "smallcap",
+      "elapsed_seconds": 1.2
+    }
   }
 ]

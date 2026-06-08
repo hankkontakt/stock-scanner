@@ -1,0 +1,29 @@
+{
+  "pipeline_duration_seconds": {
+    "smallcap": [
+      1.192946434020996
+    ]
+  },
+  "fetch_duration_seconds": [],
+  "scoring_duration_seconds": [],
+  "tickers_fetched_total": 0,
+  "tickers_failed_total": 0,
+  "ai_calls_total": 0,
+  "ai_tokens_input_total": 0,
+  "ai_tokens_output_total": 0,
+  "email_sent_total": {},
+  "cache_hits_total": 0,
+  "cache_misses_total": 0,
+  "pipeline_success_total": {},
+  "pipeline_failure_total": {
+    "smallcap": 1
+  },
+  "scoring_distribution": {
+    "0.5": null,
+    "0.75": null,
+    "0.9": null,
+    "0.95": null
+  },
+  "latest_scan_timestamp": null,
+  "exported_at": "2026-06-08T12:09:03.020500"
+}
