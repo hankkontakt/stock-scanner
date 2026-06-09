@@ -353,5 +353,14 @@
       "scan_type": "portfolio_refresh",
       "elapsed_seconds": 0.5
     }
+  },
+  {
+    "timestamp": "2026-06-09T17:18:58",
+    "scan_type": "refresh_missing",
+    "status": "OK",
+    "details": {
+      "scan_type": "refresh_missing",
+      "elapsed_seconds": 0.0
+    }
   }
 ]
