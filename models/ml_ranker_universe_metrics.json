@@ -1,7 +1,7 @@
 {
   "universe": "universe",
-  "trained_at": "2026-06-09T18:23:33.048406",
-  "n_rows": 25911,
+  "trained_at": "2026-06-09T19:08:38.247330",
+  "n_rows": 52572,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -31,15 +31,43 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "wf_avg_ic": 0.0,
-    "ic": 0.0,
-    "wf_avg_spread": 0.0,
-    "wf_avg_hit_rate": 0.0,
-    "hit_rate": 0.0,
-    "n_folds": 0,
-    "n_train_total": 25911,
+    "wf_avg_ic": 0.0526,
+    "ic": 0.0526,
+    "wf_avg_spread": 0.0344,
+    "wf_avg_hit_rate": 0.5052,
+    "hit_rate": 0.5052,
+    "n_folds": 3,
+    "n_train_total": 52572,
     "model_type": "lightgbm_lambdarank",
     "n_features": 26,
-    "wf_folds": []
+    "wf_folds": [
+      {
+        "train_end": "2024-05-31",
+        "test_start": "2024-05-31",
+        "test_end": "2024-11-30",
+        "ic": 0.0742,
+        "decile_spread": 0.0417,
+        "hit_rate": 0.5053,
+        "n_test": 6749
+      },
+      {
+        "train_end": "2024-11-30",
+        "test_start": "2024-11-30",
+        "test_end": "2025-05-30",
+        "ic": 0.0522,
+        "decile_spread": 0.0441,
+        "hit_rate": 0.5067,
+        "n_test": 6730
+      },
+      {
+        "train_end": "2025-05-30",
+        "test_start": "2025-05-30",
+        "test_end": "2025-11-30",
+        "ic": 0.0313,
+        "decile_spread": 0.0174,
+        "hit_rate": 0.5035,
+        "n_test": 6753
+      }
+    ]
   }
 }
