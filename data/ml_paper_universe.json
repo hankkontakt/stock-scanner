@@ -699,6 +699,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "6871.T",
+      "name": "Micronics Japan Co., Ltd.",
+      "entry_price": 14310.0,
+      "predicted_return": 0.9968138337135315,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "6861.T",
+      "name": "Keyence Corporation",
+      "entry_price": 78070.0,
+      "predicted_return": 0.9289151430130005,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "2303.TW",
+      "name": "United Microelectronics Corporation",
+      "entry_price": 144.5,
+      "predicted_return": 0.9178130626678467,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "2308.TW",
+      "name": "Delta Electronics, Inc.",
+      "entry_price": 2300.0,
+      "predicted_return": 0.807607889175415,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "2454.TW",
+      "name": "MediaTek Inc.",
+      "entry_price": 4300.0,
+      "predicted_return": 0.8035843968391418,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "6976.T",
+      "name": "Taiyo Yuden Co., Ltd.",
+      "entry_price": 15850.0,
+      "predicted_return": 0.8008270263671875,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "2330.TW",
+      "name": "Taiwan Semiconductor Manufacturing Company Limited",
+      "entry_price": 2365.0,
+      "predicted_return": 0.7100117802619934,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "OPEN",
+      "name": "Opendoor Technologies Inc.",
+      "entry_price": 4.420000076293945,
+      "predicted_return": 0.43117547035217285,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 54.63999938964844,
+      "predicted_return": 0.38871052861213684,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-09",
+      "ticker": "ACCON.ST",
+      "name": "Acconeer AB (publ)",
+      "entry_price": 23.649999618530273,
+      "predicted_return": 0.35173314809799194,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -736,6 +836,11 @@
       "date": "2026-06-06",
       "equity": 100000.0,
       "n_open": 70
+    },
+    {
+      "date": "2026-06-09",
+      "equity": 100000.0,
+      "n_open": 80
     }
   ]
 }
