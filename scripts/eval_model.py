@@ -65,9 +65,17 @@ def _run_objective_comparison(df: pd.DataFrame, universe: str) -> list[dict]:
         icir = mean_ic / std_ic if std_ic > 0 else 0.0
         mean_spread = float(np.mean(spread_values)) if spread_values else 0.0
 
-        # DSR: estimate from number of trials
+        # DSR: use proper Sharpe-equivalent from IC values.
+        # IC is a daily cross-sectional correlation; annualize as IC_mean/IC_std * sqrt(252).
+        if ic_values:
+            ic_mean = float(np.mean(ic_values))
+            ic_std = float(np.std(ic_values))
+            sharpe_equiv = (ic_mean / max(ic_std, 1e-8)) * np.sqrt(252) if ic_std > 0 else 0.0
+        else:
+            sharpe_equiv = 0.0
+
         dsr = deflated_sharpe_ratio(
-            observed_sharpe=icir,
+            observed_sharpe=sharpe_equiv,
             num_trials=max(len(wf_results), 3),
             T=len(ic_values) * 21,  # approx trading days
         )
@@ -156,9 +164,6 @@ def cmd_permutation_importance(args):
         logger.error("Kunde inte träna modell för permutation-importance")
         return
 
-    X = df[feature_cols].fillna(0).values.astype(np.float32)
-    y = df.groupby("date")["forward_return_30d"].rank(pct=True).values
-
     # Baslinje-IC via walk-forward
     wf_results = _walk_forward_validate(df, feature_cols)
     baseline_ic = float(np.mean([r["ic"] for r in wf_results])) if wf_results else 0.0
@@ -221,10 +226,15 @@ def cmd_gate(args):
     new_ic = float(np.mean([r["ic"] for r in wf_results])) if wf_results else 0.0
     new_spread = float(np.mean([r["decile_spread"] for r in wf_results])) if wf_results else 0.0
 
-    # Beräkna DSR
+    # Beräkna DSR from proper Sharpe-equivalent
     ic_values = [r["ic"] for r in wf_results if r.get("ic") is not None]
-    icir = float(np.mean(ic_values) / np.std(ic_values)) if len(ic_values) > 1 else 0.0
-    dsr = deflated_sharpe_ratio(icir, max(len(wf_results), 3), len(ic_values) * 21)
+    if ic_values:
+        ic_mean = float(np.mean(ic_values))
+        ic_std = float(np.std(ic_values))
+        sharpe_equiv = (ic_mean / max(ic_std, 1e-8)) * np.sqrt(252) if ic_std > 0 else 0.0
+    else:
+        sharpe_equiv = 0.0
+    dsr = deflated_sharpe_ratio(sharpe_equiv, max(len(wf_results), 3), len(ic_values) * 21)
 
     deploy = (new_ic > old_ic) and (new_spread > old_spread) and (dsr > 0.5)
 
