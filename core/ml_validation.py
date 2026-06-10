@@ -28,6 +28,91 @@ FORWARD_HORIZON_DAYS: int = 30
 EMBARGO_DAYS: int = 35  # 30d horisont + 5 handelsdagars marginal
 
 
+def label_uniqueness(dates: pd.Series, horizon_days: int = 30) -> pd.Series:
+    """Andel av varje rads [date, date+horizon] som inte överlappar andra labels.
+    1 = helt unik, ~0 = mycket samtidighet. Vikt ∝ uniqueness.
+
+    Räkna samtidiga öppna labels per kalenderdag; varje rads vikt = mean(1/concurrency)
+    över sitt fönster. Effektiv implementation: sortera datum, glidande räkning.
+    """
+    # Input-safety: om dates är en sträng (inte list-lik), wrappa i lista
+    if isinstance(dates, str):
+        dates = pd.Series([dates])
+
+    if not isinstance(dates, (pd.Series, pd.DatetimeIndex)):
+        dates = pd.Series(dates)
+
+    if len(dates) < 2:
+        return pd.Series([1.0] * len(dates), index=getattr(dates, 'index', pd.RangeIndex(len(dates))))
+
+    # Normalisera till pd.Series med int-index för att undvika DatetimeIndex-index-problemet
+    if isinstance(dates, pd.DatetimeIndex):
+        orig_input_index = pd.RangeIndex(len(dates))
+        dts_series = pd.Series(dates, index=orig_input_index)
+    elif isinstance(dates, pd.Series):
+        orig_input_index = dates.index
+        dts_series = pd.to_datetime(pd.Series(dates), errors="coerce")
+    else:
+        orig_input_index = pd.RangeIndex(len(dates))
+        dts_series = pd.to_datetime(pd.Series(dates), errors="coerce")
+
+    # Ta bort NaN-datum
+    nan_mask = dts_series.isna()
+    if nan_mask.any():
+        logger.warning("label_uniqueness: %d NaN-datum borttagna", nan_mask.sum())
+        dts_series = dts_series.dropna()
+
+    if len(dts_series) < 2:
+        return pd.Series([1.0] * len(dates), index=orig_input_index)
+    original_order = dts_series.index.copy()
+    dts_series_sorted = dts_series.sort_values()
+    dts = dts_series_sorted.values  # numpy array for iteration
+
+    n = len(dts)
+    events = []
+    for i, dt in enumerate(dts):
+        events.append((dt, 1, i))
+        events.append((dt + pd.Timedelta(days=horizon_days), -1, i))
+
+    events.sort(key=lambda x: (x[0], -x[1]))
+
+    concurrency = 0
+    uniqueness = {}
+    for ev in events:
+        dt, delta, idx = ev
+        if delta == 1:
+            concurrency += 1
+            uniqueness[idx] = 1.0 / max(concurrency, 1)
+        else:
+            concurrency -= 1
+
+    # Mappa uniqueness från sorterad position [0..n-1] tillbaka till original-index
+    # original_order har ursprungsindexen i sorterad ordning
+    result = pd.Series(1.0, index=orig_input_index, dtype=float)
+    if nan_mask.any():
+        # Sätt NaN-rader till neutralt 1.0 (de har inget datum att beräkna uniqueness på)
+        pass  # result är redan 1.0 som default
+    for sorted_pos, orig_idx in enumerate(original_order):
+        result[orig_idx] = uniqueness.get(sorted_pos, 1.0)
+    return result
+
+
+def combine_weights(time_decay: pd.Series, uniqueness: pd.Series) -> pd.Series:
+    """Kombinera tidsvikt och uniqueness-vikt.
+
+    w = time_decay * uniqueness, normerad så att mean(w) ≈ 1.
+    """
+    if len(time_decay) != len(uniqueness):
+        raise ValueError(
+            f"Length mismatch: time_decay={len(time_decay)}, uniqueness={len(uniqueness)}"
+        )
+    w = time_decay * uniqueness
+    mean_w = w.mean()
+    if mean_w > 0:
+        w = w / mean_w
+    return w
+
+
 @dataclass
 class WalkForwardFold:
     train_start: pd.Timestamp
