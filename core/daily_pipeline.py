@@ -1243,6 +1243,19 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 scored = score_universe(raw_df, regime=regime)
                 logger.info(f"  ✅ Scorat {len(scored)} tickers")
 
+            # MEWS Multi-Bagger Early Warning Score (#3)
+            try:
+                from smallcap.mews import score_mews
+                mews_scored = score_mews(scored)
+                for col in ["mews_score", "mews_flag", "mews_fcf_yield", "mews_small_size",
+                            "mews_low_ps", "mews_operating_leverage", "mews_revenue_accel",
+                            "mews_clean_accruals"]:
+                    if col in mews_scored.columns:
+                        scored[col] = mews_scored[col]
+                logger.info(f"  ✅ MEWS beräknat: {scored['mews_flag'].sum()} mångdubblar-kandidater")
+            except Exception as _mews_e:
+                logger.warning(f"  ⚠ MEWS misslyckades: {_mews_e}")
+
             # Piotroski F-Score (fundamental quality 0-9)
             try:
                 from core import piotroski as _piotroski
@@ -1380,22 +1393,37 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
 
         # =========================================================================
         # 1c. ML-PREDIKTION (om modell finns)
-        #     Lagger till predicted_return + ml_rank-kolumner och sparar back.
+        #     Tries: ensemble → ranker → XGBoost fallback
         # =========================================================================
         if _ml_universe and not scored.empty and "ticker" in scored.columns:
             try:
-                from core.ml_predictor import predict_returns_sector
-                scored_ml = predict_returns_sector(scored, default_universe=_ml_universe)
-                if "predicted_return" in scored_ml.columns:
-                    scored = scored_ml
-                    logger.info(f"  ML-prediktioner tillagda for {_ml_universe} ({len(scored)} rader)")
-                    if _ml_universe == "universe":
-                        csv_path = REPORT_DIR / f"scored_universe_{date_str}"
+                # Try ensemble first (regime-weighted ensemble of two models)
+                from core.regime_ensemble import predict_ensemble, load_ensemble
+                ensemble = load_ensemble(_ml_universe)
+                if ensemble is not None:
+                    scored_ml = predict_ensemble(scored, ensemble=ensemble, universe=_ml_universe)
+                    if scored_ml is not None and "ml_uncertainty" in scored_ml.columns:
+                        scored = scored_ml
+                        logger.info(f"  Ensemble-prediktioner för {_ml_universe} ({len(scored)} rader)")
                     else:
-                        csv_path = REPORT_DIR / f"smallcap_scored_{date_str}"
-                    _save_scored(scored, csv_path)
-            except Exception as e:
-                logger.warning(f"  ML-prediktion hoppades over: {e}")
+                        raise ValueError("Ensemble returned no ml_uncertainty")
+                else:
+                    raise FileNotFoundError("No ensemble model")
+            except Exception as ensemble_err:
+                logger.info(f"  Ensemble ej tillgänglig (%s) — faller tillbaka till ranker", ensemble_err)
+                try:
+                    from core.ml_ranker import predict_ranker
+                    scored_ml = predict_ranker(scored, _ml_universe)
+                    if scored_ml is not None:
+                        scored = scored_ml
+                        logger.info(f"  Ranker-prediktioner för {_ml_universe} ({len(scored)} rader)")
+                    else:
+                        raise ValueError("predict_ranker returned None")
+                except Exception as ranker_err:
+                    logger.info(f"  Ranker ej tillgänglig (%s) — faller tillbaka till XGBoost", ranker_err)
+                    from core.ml_predictor import predict_returns_sector
+                    scored = predict_returns_sector(scored, default_universe=_ml_universe)
+                    logger.info(f"  XGBoost-prediktioner för {_ml_universe}")
 
         # =========================================================================
         # 1d. ML PAPER TRADING (om modell finns)

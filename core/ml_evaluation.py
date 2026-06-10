@@ -1,6 +1,5 @@
 """
 ml_evaluation.py — Rigorös modell-utvärdering för MarketScan ML
-================================================================
 
 Jämför gamla XGBoost-regressorn mot nya LightGBM-rankern med:
   - Per-datum Spearman IC (rankkorrelation)
@@ -16,8 +15,9 @@ Gate-kriterier för deployment:
 Anrop:
     python -m scripts.eval_model
     python -m scripts.eval_model --universe smallcap --plot
-"""
 
+Modified: evaluate_model uses purged_walk_forward_folds (Lopez de Prado embargo).
+"""
 from __future__ import annotations
 
 import logging
@@ -26,6 +26,8 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
+
+from core.ml_validation import purged_walk_forward_folds
 
 logger = logging.getLogger(__name__)
 
@@ -203,34 +205,30 @@ def evaluate_model(
             m.fit(X, y)
             return m, "xgboost"
 
-    df["date_dt"] = pd.to_datetime(df["date"])
-    min_date = df["date_dt"].min()
-    max_date = df["date_dt"].max()
-
     all_preds_rows = []
-    fold_ics = []
 
-    train_end = min_date + pd.DateOffset(months=initial_months)
-    while train_end + pd.DateOffset(months=test_months) <= max_date + pd.DateOffset(days=1):
-        test_end = train_end + pd.DateOffset(months=test_months)
+    folds = purged_walk_forward_folds(
+        df, date_col="date",
+        initial_months=initial_months,
+        test_months=test_months,
+        step_months=step_months,
+    )
 
-        train_df = df[df["date_dt"] < train_end].copy()
-        test_df  = df[(df["date_dt"] >= train_end) & (df["date_dt"] < test_end)].copy()
+    for fold in folds:
+        train_df = df.loc[fold.train_idx].copy()
+        test_df = df.loc[fold.test_idx].copy()
 
         if len(train_df) < 200 or len(test_df) < 20:
-            train_end += pd.DateOffset(months=step_months)
             continue
 
         model, _ = fit_fn(train_df, feature_cols)
         if model is None:
-            train_end += pd.DateOffset(months=step_months)
             continue
 
         X_test = test_df[feature_cols].fillna(0).values.astype(np.float32)
         try:
             preds = model.predict(X_test)
         except Exception:
-            train_end += pd.DateOffset(months=step_months)
             continue
 
         for i, (idx, row) in enumerate(test_df.iterrows()):
@@ -239,8 +237,6 @@ def evaluate_model(
                 "pred":   float(preds[i]),
                 "actual": float(row["forward_return_30d"]),
             })
-
-        train_end += pd.DateOffset(months=step_months)
 
     if not all_preds_rows:
         logger.warning("Inga walk-forward-prediktioner för %s/%s", universe, model_type)

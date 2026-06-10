@@ -711,6 +711,17 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         "total_debt": info.get("totalDebt"),
         "enterprise_value": info.get("enterpriseValue"),
 
+        # Financial statement data (populated from yfinance financials/BS/CF)
+        "total_assets":            None,
+        "total_assets_prev":       None,
+        "revenue_ttm":             None,
+        "revenue_prev":            None,
+        "revenue_2y_ago":          None,
+        "operating_income_ttm":    None,
+        "operating_income_prev":   None,
+        "net_income_ttm":          None,
+        "operating_cashflow_ttm":  None,
+
         # Dividend
         "dividend_yield":       info.get("dividendYield"),
         "payout_ratio":         info.get("payoutRatio"),
@@ -850,6 +861,39 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
         if metrics.get("revenue_growth") is None and fmp_fund.get("fmp_revenue_growth"):
             metrics["revenue_growth"] = fmp_fund["fmp_revenue_growth"]
 
+    # ── Financial statement data för MEWS (#3) ────────────────────────────────
+    # Hämtar balansräkning, resultaträkning och kassaflöde från yfinance.
+    # Alla fält är best-effort: om något misslyckas blir värdet None/NaN.
+    try:
+        stock = yf.Ticker(ticker)
+
+        bs = stock.balance_sheet
+        if bs is not None and not bs.empty:
+            total_assets = _safe_fin_val(bs, "Total Assets")
+            if total_assets is not None:
+                metrics["total_assets"] = total_assets
+            # Previous year
+            if len(bs.columns) > 1:
+                metrics["total_assets_prev"] = _safe_fin_val(bs.iloc[:, 1], "Total Assets")
+
+        inc = stock.financials
+        if inc is not None and not inc.empty:
+            metrics["revenue_ttm"]         = _safe_fin_val(inc, "Total Revenue")
+            metrics["operating_income_ttm"] = _safe_fin_val(inc, "Operating Income")
+            metrics["net_income_ttm"]       = _safe_fin_val(inc, "Net Income")
+            # Previous year values
+            if len(inc.columns) > 1:
+                metrics["revenue_prev"]         = _safe_fin_val(inc.iloc[:, 1], "Total Revenue")
+                metrics["operating_income_prev"] = _safe_fin_val(inc.iloc[:, 1], "Operating Income")
+            if len(inc.columns) > 2:
+                metrics["revenue_2y_ago"] = _safe_fin_val(inc.iloc[:, 2], "Total Revenue")
+
+        cf = stock.cashflow
+        if cf is not None and not cf.empty:
+            metrics["operating_cashflow_ttm"] = _safe_fin_val(cf, "Operating Cash Flow")
+    except Exception:
+        pass  # Best-effort: missing financials never crash scoring
+
     # Insiderhandel-signaler (VD/CFO-köp & cluster-detektion)
     # Görs sist så timeout inte blockerar övrig datahämtning
     ins = _get_insider_signal(ticker)
@@ -938,6 +982,21 @@ def _calc_rsi(prices: pd.Series, period: int = 14):
         return 100 - (100 / (1 + rs))
     except Exception:
         return None
+
+
+def _safe_fin_val(df, label: str) -> float | None:
+    """Safely extract a value from yfinance financials/BS/CF dataframe by index label.
+
+    Returns None (never crashes) if label is missing, value is NaN/None,
+    or any other error occurs.
+    """
+    try:
+        if df is not None and label in df.index:
+            val = df.loc[label].iloc[0]
+            return float(val) if pd.notna(val) else None
+    except Exception:
+        return None
+    return None
 
 
 # ── Rate-limited semaphore för parallell yfinance ─────────────────────
