@@ -73,8 +73,38 @@ FACTOR_SCORE_FEATURES: list[str] = [
 # Makro-regim (0.0 = björn, 1.0 = tjur, 0.5 = neutral)
 REGIME_FEATURES: list[str] = ["regime_score"]
 
-# Alla ranker-features (35 totalt vs 26 för XGBoost)
-RANKER_FEATURES: list[str] = TECH_FEATURES + FACTOR_SCORE_FEATURES + REGIME_FEATURES
+# Extra signalfeatures från andra system (#5 FI-insiderkluster, #3 MEWS, #7 kvalitativ analys)
+# Dessa läggs till i RANKER_FEATURES OM de finns i datasetet.
+# VIKTIGT: Dessa är bara backtest-säkra om historiskt laggade värden finns.
+# Se BACKTEST_SAFE_FEATURES för detaljer.
+EXTRA_SIGNAL_FEATURES: list[str] = [
+    "insider_cluster",    # 0/1 — FI insiderkluster (#5)
+    "cluster_score",      # kontinuerlig — klusterstyrka (#5)
+    "qualitative_score",  # 0–100 — rapportkvalitet (#7)
+    "mews_score",         # 0–100 — MEWS mångdubblar-score (#3)
+]
+
+# Features som är säkra att använda i backtest (historik finns).
+# EXTRA_SIGNAL_FEATURES är ENDAST backtest-säkra om historiskt laggade data finns
+# i träningsdatasetet. I live-inference används de alltid om kolumnen finns.
+# Om en feature INTE är BACKTEST_SAFE, används den ENDAST i live-inference.
+BACKTEST_SAFE_FEATURES: list[str] = [
+    # Tekniska features är alltid backtest-säkra (beräknas från OHLCV-historia)
+    *TECH_FEATURES,
+    # Factor scores från scoring.py — beräknade vid varje historiskt datum
+    *FACTOR_SCORE_FEATURES,
+    # Regim-score från macro_regime — historiskt beräkningsbar
+    *REGIME_FEATURES,
+    # MEWS: historiskt laggade värden om datasetet har dem
+    "mews_score",
+    # Insider-kluster: ENDAST om datasetet har historiskt laggade värden
+    # (annars endast live-inference)
+]
+
+# Alla ranker-features (35 baseline + extra signaler om de finns i datasetet)
+RANKER_FEATURES: list[str] = list(dict.fromkeys(
+    TECH_FEATURES + FACTOR_SCORE_FEATURES + REGIME_FEATURES + EXTRA_SIGNAL_FEATURES
+))
 
 # Halvlivstid för exponentiell tidsviktning
 RANKER_HALFLIFE_YEARS: float = 2.0
@@ -246,13 +276,17 @@ def train_ranker(
     )
 
 
-def _fit_model(df: pd.DataFrame, feature_cols: list[str], objective_mode: str = "lambdarank_ndcg") -> tuple:
+def _fit_model(df: pd.DataFrame, feature_cols: list[str],
+                objective_mode: str = "lambdarank_ndcg",
+                use_uniqueness: bool = True) -> tuple:
     """Tränar LightGBM LambdaRank. Fallback till XGBoost om LGBM saknas.
 
     Args:
         objective_mode: "lambdarank_ndcg" (default, nuvarande),
                         "rank_ic" (per-datum rankad target),
                         "xgboost_cs" (XGBoost cross-sectional target).
+        use_uniqueness: Applicera Lopez de Prado uniqueness-viktning för att
+                        kompensera för överlappande 30d-labels (S1).
     Returns:
         (model, model_type_str)
     """
@@ -265,6 +299,18 @@ def _fit_model(df: pd.DataFrame, feature_cols: list[str], objective_mode: str = 
     ).values
     weights = np.exp(-np.log(2) / RANKER_HALFLIFE_YEARS * (age_days / 365.25))
     weights = weights / weights.mean()
+
+    # ── Uniqueness-viktning (S1, Lopez de Prado) ────────────────────────────
+    # Överlappande 30d-labels är ej IID; vikta ner samtidiga labels.
+    if use_uniqueness and "date" in df.columns:
+        try:
+            from core.ml_validation import combine_weights, label_uniqueness
+            uniqueness = label_uniqueness(df["date"], horizon_days=30)
+            weights = combine_weights(pd.Series(weights, index=df.index), uniqueness)
+            logger.info("  Uniqueness weighting applied: uniqueness mean=%.4f (1.0=IID)",
+                        uniqueness.mean())
+        except Exception as e:
+            logger.warning("Uniqueness weighting failed (proceeding without): %s", e)
 
     X = df[feature_cols].fillna(0).values.astype(np.float32)
 

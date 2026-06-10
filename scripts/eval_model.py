@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 from core.ml_evaluation import compare_models, evaluate_model, per_date_ic, ic_significance, decile_spread
-from core.ml_ranker import RANKER_FEATURES, TECH_FEATURES, MODELS_DIR, load_ranker_metrics, _fit_model, _walk_forward_validate
+from core.ml_ranker import RANKER_FEATURES, EXTRA_SIGNAL_FEATURES, BACKTEST_SAFE_FEATURES, TECH_FEATURES, MODELS_DIR, load_ranker_metrics, _fit_model, _walk_forward_validate
 from core.ml_validation import purged_walk_forward_folds, deflated_sharpe_ratio
 
 logger = logging.getLogger(__name__)
@@ -145,6 +145,62 @@ def cmd_compare_all(args):
     print("="*60)
 
 
+def cmd_permutation_importance(args):
+    """Kör permutation-importance OOS för att identifiera brusiga features (S5 gate)."""
+    df = _load_data(args.universe)
+    feature_cols = [c for c in RANKER_FEATURES if c in df.columns]
+
+    # Träna modell på all data
+    model, model_type = _fit_model(df, feature_cols, objective_mode="lambdarank_ndcg")
+    if model is None:
+        logger.error("Kunde inte träna modell för permutation-importance")
+        return
+
+    X = df[feature_cols].fillna(0).values.astype(np.float32)
+    y = df.groupby("date")["forward_return_30d"].rank(pct=True).values
+
+    # Baslinje-IC via walk-forward
+    wf_results = _walk_forward_validate(df, feature_cols)
+    baseline_ic = float(np.mean([r["ic"] for r in wf_results])) if wf_results else 0.0
+
+    print(f"\n  PERMUTATION IMPORTANCE — {args.universe}")
+    print(f"  Baslinje IC (OOS): {baseline_ic:.4f}")
+    print(f"  ({len(feature_cols)} features)\n")
+
+    importance = []
+    for col in feature_cols:
+        df_perm = df.copy()
+        idx = feature_cols.index(col)
+        # Shuffle kolumnen för att bryta sambandet
+        df_perm[col] = df_perm[col].sample(frac=1, random_state=42).values
+        perm_results = _walk_forward_validate(df_perm, feature_cols)
+        perm_ic = float(np.mean([r["ic"] for r in perm_results])) if perm_results else 0.0
+        drop = baseline_ic - perm_ic
+        importance.append({"feature": col, "baseline_ic": round(baseline_ic, 4),
+                           "permuted_ic": round(perm_ic, 4), "drop": round(drop, 4)})
+
+    importance.sort(key=lambda r: r["drop"])
+    print(f"  {'Feature':<35} {'Baseline IC':<12} {'Permuted IC':<12} {'Drop':<10}")
+    print(f"  {'─'*35} {'─'*12} {'─'*12} {'─'*10}")
+    for r in importance:
+        drop_str = f"{r['drop']:+.4f}"
+        print(f"  {r['feature']:<35} {r['baseline_ic']:<12.4f} {r['permuted_ic']:<12.4f} {drop_str:<10}")
+
+    # Features med negativt bidrag (drop ≤ 0) rekommenderas att tas bort
+    negative = [r for r in importance if r["drop"] <= 0]
+    if negative:
+        print(f"\n  ⚠ Features med noll/negativt bidrag (överväg att ta bort):")
+        for r in negative:
+            print(f"    • {r['feature']} (drop={r['drop']:+.4f})")
+    else:
+        print(f"\n  ✅ Alla features har positivt bidrag.")
+
+    # Spara
+    out = MODELS_DIR / f"permutation_importance_{args.universe}.json"
+    out.write_text(json.dumps(importance, indent=2, ensure_ascii=False))
+    logger.info("Permutation importance sparad: %s", out.name)
+
+
 def cmd_gate(args):
     """Deploy-gate: jämför ny modell mot deployad och avgör om deploy."""
     df = _load_data(args.universe)
@@ -192,6 +248,7 @@ def main():
     sub.add_parser("compare-objectives", help="Jämför ndcg vs rank_ic vs xgboost")
     sub.add_parser("compare-all", help="Jämför ranker vs XGBoost vs Ensemble")
     sub.add_parser("gate", help="Deploy-gate")
+    sub.add_parser("permutation-importance", help="Kör permutation importance OOS")
 
     args = parser.parse_args()
 
@@ -201,6 +258,8 @@ def main():
         cmd_compare_all(args)
     elif args.command == "gate":
         cmd_gate(args)
+    elif args.command == "permutation-importance":
+        cmd_permutation_importance(args)
     else:
         cmd_eval(args)
 
