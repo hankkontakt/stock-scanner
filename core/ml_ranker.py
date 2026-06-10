@@ -246,9 +246,13 @@ def train_ranker(
     )
 
 
-def _fit_model(df: pd.DataFrame, feature_cols: list[str]) -> tuple:
+def _fit_model(df: pd.DataFrame, feature_cols: list[str], objective_mode: str = "lambdarank_ndcg") -> tuple:
     """Tränar LightGBM LambdaRank. Fallback till XGBoost om LGBM saknas.
 
+    Args:
+        objective_mode: "lambdarank_ndcg" (default, nuvarande),
+                        "rank_ic" (per-datum rankad target),
+                        "xgboost_cs" (XGBoost cross-sectional target).
     Returns:
         (model, model_type_str)
     """
@@ -264,36 +268,80 @@ def _fit_model(df: pd.DataFrame, feature_cols: list[str]) -> tuple:
 
     X = df[feature_cols].fillna(0).values.astype(np.float32)
 
-    # ── Försök LightGBM LambdaRank ───────────────────────────────────────────
+    # ── XGBoost fallback (enkel regressor) ──────────────────────────────────
+    if objective_mode == "xgboost_cs":
+        try:
+            import xgboost as xgb
+            date_mean = df.groupby("date")["forward_return_30d"].transform("mean")
+            y_cs = (df["forward_return_30d"] - date_mean).values
+            model = xgb.XGBRegressor(
+                n_estimators=400, max_depth=5, learning_rate=0.05,
+                subsample=0.8, colsample_bytree=0.8,
+                random_state=42, n_jobs=-1, verbosity=0,
+            )
+            model.fit(X, y_cs, sample_weight=weights)
+            return model, "xgboost_regressor"
+        except ImportError:
+            logger.error("XGBoost ej installerat")
+
+    # ── LightGBM LambdaRank ────────────────────────────────────────────────
     try:
         import lightgbm as lgb
 
-        # Quintile-etiketter per datum-grupp
-        df["label"] = df.groupby("date")["forward_return_30d"].transform(_quintile_label)
-        group_sizes = df.groupby("date", sort=False).size().values.tolist()
-        y = df["label"].values.astype(np.float32)
+        if objective_mode == "rank_ic":
+            # rank_ic: per-datum rankad target (0..1), regressivt,
+            # approximerar direkt IC-optimering
+            df["label_rank"] = df.groupby("date")["forward_return_30d"].rank(pct=True)
+            y = df["label_rank"].values.astype(np.float32)
+            # Använd regression för rank_ic-läget
+            params = {
+                "objective":         "regression",
+                "metric":            "rmse",
+                "learning_rate":     0.05,
+                "num_leaves":        63,
+                "max_depth":         6,
+                "min_child_samples": 10,
+                "feature_fraction":  0.8,
+                "bagging_fraction":  0.8,
+                "bagging_freq":      5,
+                "lambda_l1":         0.1,
+                "lambda_l2":         0.1,
+                "n_jobs":            -1,
+                "verbosity":         -1,
+                "seed":              42,
+            }
+            # NOTE: En full custom LambdaRankIC-loss (arXiv:2605.00501) kräver
+            # gradient-hack i LightGBM. Per-datum-rankad regression ger 80%
+            # av effekten till 20% av komplexiteten. Custom loss kan testas i batch 2.
+            logger.info("  Using rank_ic objective (per-date ranked target)")
+        else:
+            # Default: lambdarank_ndcg — quintile-etiketter
+            df["label"] = df.groupby("date")["forward_return_30d"].transform(_quintile_label)
+            group_sizes = df.groupby("date", sort=False).size().values.tolist()
+            y = df["label"].values.astype(np.float32)
+            params = {
+                "objective":         "lambdarank",
+                "metric":            "ndcg",
+                "ndcg_eval_at":      [1, 3, 5, 10],
+                "learning_rate":     0.05,
+                "num_leaves":        63,
+                "max_depth":         6,
+                "min_child_samples": 10,
+                "feature_fraction":  0.8,
+                "bagging_fraction":  0.8,
+                "bagging_freq":      5,
+                "lambda_l1":         0.1,
+                "lambda_l2":         0.1,
+                "n_jobs":            -1,
+                "verbosity":         -1,
+                "seed":              42,
+            }
 
-        params = {
-            "objective":         "lambdarank",
-            "metric":            "ndcg",
-            "ndcg_eval_at":      [1, 3, 5, 10],
-            "learning_rate":     0.05,
-            "num_leaves":        63,
-            "max_depth":         6,
-            "min_child_samples": 10,
-            "feature_fraction":  0.8,
-            "bagging_fraction":  0.8,
-            "bagging_freq":      5,
-            "lambda_l1":         0.1,
-            "lambda_l2":         0.1,
-            "n_jobs":            -1,
-            "verbosity":         -1,
-            "seed":              42,
-        }
+        group_sizes = df.groupby("date", sort=False).size().values.tolist()
 
         train_ds = lgb.Dataset(
             X, label=y,
-            group=group_sizes,
+            group=group_sizes if objective_mode == "lambdarank_ndcg" else None,
             weight=weights,
             feature_name=feature_cols,
             free_raw_data=False,
@@ -304,7 +352,7 @@ def _fit_model(df: pd.DataFrame, feature_cols: list[str]) -> tuple:
             num_boost_round=400,
             callbacks=[lgb.log_evaluation(period=100)],
         )
-        return model, "lightgbm_lambdarank"
+        return model, f"lightgbm_{objective_mode}"
 
     except ImportError:
         logger.warning("LightGBM ej installerat — faller tillbaka till XGBoost-regressor")
@@ -312,11 +360,10 @@ def _fit_model(df: pd.DataFrame, feature_cols: list[str]) -> tuple:
     except Exception as e:
         logger.warning("LightGBM-träning misslyckades (%s) — faller tillbaka till XGBoost", e)
 
-    # ── Fallback: XGBoost-regressor (samma som ml_predictor.py) ─────────────
+    # ── Fallback: XGBoost-regressor ──────────────────────────────────────────
     try:
         import xgboost as xgb
 
-        # Cross-sectional demeaned target (tar bort marknadsfaktor)
         date_mean = df.groupby("date")["forward_return_30d"].transform("mean")
         y_cs = (df["forward_return_30d"] - date_mean).values
 
@@ -339,29 +386,32 @@ def _walk_forward_validate(
     initial_months: int = 24,
     test_months: int = 6,
     step_months: int = 6,
+    objective_mode: str = "lambdarank_ndcg",
 ) -> list[dict]:
-    """Walk-forward validering: rullande träna→testa.
+    """Walk-forward validering: rullande träna→testa med purged folds.
 
-    Tidsserieriktig: tränar alltid på äldre data, testar på nyare.
+    Använder purged walk-forward (Lopez de Prado) för att eliminera
+    label-läckage. Träningsrader vars 30d-label-fönster överlappar
+    testperioden exkluderas.
+
     Varje fold: IC + decil-spread (topp vs botten 20%) + hit-rate.
     """
-    df = df.copy()
-    df["date_dt"] = pd.to_datetime(df["date"])
+    from core.ml_validation import purged_walk_forward_folds
 
-    min_date = df["date_dt"].min()
-    max_date = df["date_dt"].max()
+    df = df.copy()
+    folds = purged_walk_forward_folds(
+        df, date_col="date",
+        initial_months=initial_months,
+        test_months=test_months,
+        step_months=step_months,
+    )
 
     results = []
-    train_end = min_date + pd.DateOffset(months=initial_months)
-
-    while train_end + pd.DateOffset(months=test_months) <= max_date + pd.DateOffset(days=1):
-        test_end = train_end + pd.DateOffset(months=test_months)
-
-        train_df = df[df["date_dt"] < train_end].copy()
-        test_df  = df[(df["date_dt"] >= train_end) & (df["date_dt"] < test_end)].copy()
+    for fold in folds:
+        train_df = df.loc[fold.train_idx].copy()
+        test_df  = df.loc[fold.test_idx].copy()
 
         if len(train_df) < 200 or len(test_df) < 50:
-            train_end += pd.DateOffset(months=step_months)
             continue
 
         # Filtrera testgrupper med för få aktier
@@ -369,13 +419,11 @@ def _walk_forward_validate(
         test_df = test_df[test_counts >= MIN_GROUP_SIZE].copy()
 
         if len(test_df) < 20:
-            train_end += pd.DateOffset(months=step_months)
             continue
 
-        # Träna fold-modell
-        fold_model, _ = _fit_model(train_df, feature_cols)
+        # Träna fold-modell med angivet objektiv
+        fold_model, _ = _fit_model(train_df, feature_cols, objective_mode=objective_mode)
         if fold_model is None:
-            train_end += pd.DateOffset(months=step_months)
             continue
 
         # Predictera på test-fold
@@ -383,7 +431,6 @@ def _walk_forward_validate(
         try:
             preds = fold_model.predict(X_test)
         except Exception:
-            train_end += pd.DateOffset(months=step_months)
             continue
 
         # Per-datum IC (Spearman rank correlation)
@@ -398,10 +445,13 @@ def _walk_forward_validate(
         preds_s = pd.Series(preds, index=cs_actual.index)
         hit_rate = float(((preds_s > preds_s.median()) == (cs_actual > 0)).mean())
 
+        test_start_str = fold.test_start.strftime("%Y-%m-%d")
+        test_end_str = fold.test_end.strftime("%Y-%m-%d")
+
         results.append({
-            "train_end":    train_end.strftime("%Y-%m-%d"),
-            "test_start":   train_end.strftime("%Y-%m-%d"),
-            "test_end":     test_end.strftime("%Y-%m-%d"),
+            "train_end":    test_start_str,
+            "test_start":   test_start_str,
+            "test_end":     test_end_str,
             "ic":           round(ic, 4),
             "decile_spread": round(spread, 4),
             "hit_rate":     round(hit_rate, 4),
@@ -409,10 +459,11 @@ def _walk_forward_validate(
         })
 
         logger.info("  WF fold [%s→%s]: IC=%.4f, spread=%.4f, hit=%.4f, n=%d",
-                    train_end.strftime("%Y-%m"), test_end.strftime("%Y-%m"),
+                    test_start_str[:7], test_end_str[:7],
                     ic, spread, hit_rate, len(test_df))
 
-        train_end += pd.DateOffset(months=step_months)
+    if not results:
+        logger.warning("Inga folds genererades för walk-forward-validering")
 
     return results
 
