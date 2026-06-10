@@ -1,7 +1,7 @@
 {
   "universe": "universe",
-  "trained_at": "2026-06-09T19:08:38.247330",
-  "n_rows": 52572,
+  "trained_at": "2026-06-10T18:37:42.467074",
+  "n_rows": 52522,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -31,42 +31,42 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "wf_avg_ic": 0.0526,
-    "ic": 0.0526,
-    "wf_avg_spread": 0.0344,
-    "wf_avg_hit_rate": 0.5052,
-    "hit_rate": 0.5052,
+    "wf_avg_ic": 0.021,
+    "ic": 0.021,
+    "wf_avg_spread": 0.0113,
+    "wf_avg_hit_rate": 0.5094,
+    "hit_rate": 0.5094,
     "n_folds": 3,
-    "n_train_total": 52572,
-    "model_type": "lightgbm_lambdarank",
+    "n_train_total": 52522,
+    "model_type": "lightgbm_lambdarank_ndcg",
     "n_features": 26,
     "wf_folds": [
       {
-        "train_end": "2024-05-31",
-        "test_start": "2024-05-31",
-        "test_end": "2024-11-30",
-        "ic": 0.0742,
-        "decile_spread": 0.0417,
-        "hit_rate": 0.5053,
-        "n_test": 6749
+        "train_end": "2024-06-01",
+        "test_start": "2024-06-01",
+        "test_end": "2024-12-01",
+        "ic": 0.0078,
+        "decile_spread": 0.0102,
+        "hit_rate": 0.508,
+        "n_test": 6721
       },
       {
-        "train_end": "2024-11-30",
-        "test_start": "2024-11-30",
-        "test_end": "2025-05-30",
-        "ic": 0.0522,
-        "decile_spread": 0.0441,
-        "hit_rate": 0.5067,
-        "n_test": 6730
+        "train_end": "2024-12-01",
+        "test_start": "2024-12-01",
+        "test_end": "2025-06-01",
+        "ic": 0.0192,
+        "decile_spread": 0.0082,
+        "hit_rate": 0.503,
+        "n_test": 6735
       },
       {
-        "train_end": "2025-05-30",
-        "test_start": "2025-05-30",
-        "test_end": "2025-11-30",
-        "ic": 0.0313,
-        "decile_spread": 0.0174,
-        "hit_rate": 0.5035,
-        "n_test": 6753
+        "train_end": "2025-06-01",
+        "test_start": "2025-06-01",
+        "test_end": "2025-12-01",
+        "ic": 0.036,
+        "decile_spread": 0.0154,
+        "hit_rate": 0.5171,
+        "n_test": 6761
       }
     ]
   }
