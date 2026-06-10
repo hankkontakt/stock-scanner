@@ -122,6 +122,8 @@ def train_meta_model(
     prices: pd.DataFrame,
     features: Optional[list[str]] = None,
     rank_col: str = "ml_rank",
+    ticker_col: str = "ticker",
+    date_col: str = "date",
     tp: float = DEFAULT_TP,
     sl: float = DEFAULT_SL,
     max_days: int = DEFAULT_MAX_DAYS,
@@ -135,6 +137,8 @@ def train_meta_model(
         prices: OHLCV-data för triple-barrier-beräkning.
         features: Feature-kolumner för meta-modellen. Default = auto-build.
         rank_col: Kolumn med ranker-output (percentil 0-100).
+        ticker_col: Kolumnnamn för ticker.
+        date_col: Kolumnnamn för datum.
 
     Returns:
         Tränad LightGBM-klassificerare, eller None om träning misslyckas.
@@ -151,10 +155,17 @@ def train_meta_model(
         logger.warning("För få KÖP-signaler (%d) för meta-model", len(buy_df))
         return None
 
-    # Beräkna triple-barrier-etiketter för KÖP-signalerna
-    buy_df["meta_target"] = triple_barrier_labels(
-        prices, tp=tp, sl=sl, max_days=max_days
+    # Beräkna triple-barrier-etiketter
+    labels = triple_barrier_labels(
+        prices, ticker_col=ticker_col, date_col=date_col,
+        tp=tp, sl=sl, max_days=max_days,
     )
+
+    # Align labels to buy_df via (ticker, date) merge instead of raw index
+    buy_df["meta_target"] = buy_df.merge(
+        prices[[ticker_col, date_col]].assign(_meta=labels.values),
+        on=[ticker_col, date_col], how="left"
+    )["_meta"]
 
     # Ta bort rader där vi inte kan beräkna target (slutet av pris-serien)
     buy_df = buy_df.dropna(subset=["meta_target"])
@@ -252,14 +263,25 @@ def apply_meta(scored_df: pd.DataFrame, meta_model) -> pd.DataFrame:
     if meta_model is None:
         return result
 
-    # Bygg features för meta-modellen
+    # Bygg features för meta-modellen i rätt ordning
     feature_cols = getattr(meta_model, "_feature_cols", None)
     if feature_cols is None:
         # Försök bygga auto
         meta_features = _build_meta_features(scored_df)
         feature_cols = meta_features.columns.tolist()
     else:
-        meta_features = scored_df[[c for c in feature_cols if c in scored_df.columns]].fillna(0)
+        # Säkerställ att kolumnordningen matchar träning
+        available = [c for c in feature_cols if c in scored_df.columns]
+        if len(available) != len(feature_cols):
+            missing = set(feature_cols) - set(available)
+            logger.warning("Missing features in inference: %s", missing)
+        meta_features = scored_df[available].fillna(0).copy()
+        # Pad missing columns with 0
+        for c in feature_cols:
+            if c not in available:
+                meta_features[c] = 0.0
+        # ENSURE correct order matching training
+        meta_features = meta_features[feature_cols]
 
     if meta_features.empty or len(meta_features.columns) == 0:
         return result

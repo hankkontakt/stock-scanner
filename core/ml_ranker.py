@@ -293,7 +293,7 @@ def _fit_model(df: pd.DataFrame, feature_cols: list[str],
     df = df.sort_values("date").copy()
 
     # ── Tidsviktning ─────────────────────────────────────────────────────────
-    today = datetime.date.today()
+    today = pd.to_datetime(df["date"]).max().date() if "date" in df.columns else datetime.date.today()
     age_days = pd.to_datetime(df["date"]).dt.date.apply(
         lambda d: (today - d).days
     ).values

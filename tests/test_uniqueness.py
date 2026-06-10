@@ -9,13 +9,14 @@ from core.ml_validation import combine_weights, label_uniqueness
 
 class TestLabelUniqueness:
     def test_single_date(self):
-        """Enstaka datum → första helt unik, andra delvis unik."""
+        """Två datum med överlapp → uniqueness varierar med concurrency."""
         dates = pd.Series(["2024-01-01", "2024-01-02"])
         u = label_uniqueness(dates, horizon_days=5)
-        # Första datumet har 1 samtidig (sig själv)
-        # Andra datumet startar medan första intervallet fortfarande är aktivt (concurrency=2)
-        assert u.iloc[0] == 1.0, "First date should be unique (concurrency=1 at start)"
-        assert u.iloc[1] < 1.0, "Second date overlaps with first → lower uniqueness"
+        # With horizon_days=5, second bar is inside first bar's interval
+        # New algorithm: uniqueness = time-averaged 1/concurrency, both bars get weight
+        # The second bar has lower concurrency towards the end, so uniqueness >= first
+        assert u.iloc[0] > 0, "First date should have non-zero uniqueness"
+        assert u.iloc[1] >= u.iloc[0], "Second bar ends later (less overlap at tail)"
 
     def test_low_uniqueness_for_simultaneous(self):
         """Många samtidiga labels → låg uniqueness."""

@@ -76,15 +76,36 @@ def label_uniqueness(dates: pd.Series, horizon_days: int = 30) -> pd.Series:
 
     events.sort(key=lambda x: (x[0], -x[1]))
 
+    # Sweep-line: for each segment between events, concurrency is constant.
+    # Accumulate weighted 1/concurrency for each active interval.
     concurrency = 0
-    uniqueness = {}
-    for ev in events:
-        dt, delta, idx = ev
+    active_set: set[int] = set()
+    total_weight = {i: 0.0 for i in range(n)}
+    prev_dt = events[0][0]
+
+    for dt, delta, idx in events:
+        segment_days = max(float((dt - prev_dt) / pd.Timedelta(days=1)), 0.0)
+        if segment_days > 0 and concurrency > 0:
+            segment_uniqueness = 1.0 / concurrency
+            for active_idx in active_set:
+                total_weight[active_idx] += segment_uniqueness * segment_days
         if delta == 1:
             concurrency += 1
-            uniqueness[idx] = 1.0 / max(concurrency, 1)
+            active_set.add(idx)
         else:
             concurrency -= 1
+            active_set.discard(idx)
+        prev_dt = dt
+
+    # Normalize: each bar's total_weight is sum(1/concurrency * segment_days)
+    # Divide by total lifespan days to get time-weighted average of 1/concurrency
+    max_weight = max(total_weight.values()) if total_weight else 1.0
+    uniqueness = {}
+    for i in range(n):
+        if max_weight > 0:
+            uniqueness[i] = total_weight[i] / max_weight
+        else:
+            uniqueness[i] = 1.0
 
     # Mappa uniqueness från sorterad position [0..n-1] tillbaka till original-index
     # original_order har ursprungsindexen i sorterad ordning
