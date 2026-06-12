@@ -799,6 +799,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-12",
+      "ticker": "KLAC",
+      "name": "KLA Corporation",
+      "entry_price": 1929.199951171875,
+      "predicted_return": 1.9727138372843898,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-12",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 271.3999938964844,
+      "predicted_return": 1.7160348278039415,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-12",
+      "ticker": "AMAT",
+      "name": "Applied Materials, Inc.",
+      "entry_price": 453.010009765625,
+      "predicted_return": 1.5864640595895514,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-12",
+      "ticker": "FLNC",
+      "name": "Fluence Energy, Inc.",
+      "entry_price": 22.90999984741211,
+      "predicted_return": 1.5770879768949921,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-12",
+      "ticker": "BE",
+      "name": "Bloom Energy Corporation",
+      "entry_price": 263.6099853515625,
+      "predicted_return": 1.5288997745345012,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-12",
+      "ticker": "HIVE",
+      "name": "HIVE Digital Technologies Ltd.",
+      "entry_price": 3.7699999809265137,
+      "predicted_return": 1.5161207613327738,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-12",
+      "ticker": "NVMI",
+      "name": "Nova Ltd.",
+      "entry_price": 475.760009765625,
+      "predicted_return": 1.4016618532442668,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-12",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 24.0,
+      "predicted_return": 1.1150258723041988,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-12",
+      "ticker": "LRCX",
+      "name": "Lam Research Corporation",
+      "entry_price": 303.2799987792969,
+      "predicted_return": 1.1022354865151427,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-12",
+      "ticker": "RIOT",
+      "name": "Riot Platforms, Inc.",
+      "entry_price": 24.65999984741211,
+      "predicted_return": 1.0190768584105103,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -841,6 +941,11 @@
       "date": "2026-06-09",
       "equity": 100000.0,
       "n_open": 80
+    },
+    {
+      "date": "2026-06-12",
+      "equity": 100000.0,
+      "n_open": 90
     }
   ]
 }
