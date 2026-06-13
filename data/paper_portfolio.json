@@ -124,5 +124,23 @@
       "AVGO",
       "B3SA3.SA"
     ]
+  },
+  "2026-06-13": {
+    "capital": 100000,
+    "universe": "universe",
+    "n_picks": 10,
+    "benchmark_buy": 741.75,
+    "tickers": [
+      "000660.KS",
+      "CRDO",
+      "NVDA",
+      "MU",
+      "2330.TW",
+      "005930.KS",
+      "WDC",
+      "CDNS",
+      "FTNT",
+      "LLY"
+    ]
   }
 }

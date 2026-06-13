@@ -899,6 +899,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-13",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 317.0,
+      "predicted_return": 1.7160348278039415,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-13",
+      "ticker": "S92.DE",
+      "name": "SMA Solar Technology AG",
+      "entry_price": 49.5,
+      "predicted_return": 1.691536985926344,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-13",
+      "ticker": "NESTE.HE",
+      "name": "Neste Oyj",
+      "entry_price": 27.709999084472656,
+      "predicted_return": 1.1316297278544187,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-13",
+      "ticker": "ELG.DE",
+      "name": "Elmos Semiconductor SE",
+      "entry_price": 180.8000030517578,
+      "predicted_return": 1.0918661383139863,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-13",
+      "ticker": "LUN.TO",
+      "name": "Lundin Mining Corporation",
+      "entry_price": 37.86000061035156,
+      "predicted_return": 1.0697270728777235,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-13",
+      "ticker": "AMAT",
+      "name": "Applied Materials, Inc.",
+      "entry_price": 567.25,
+      "predicted_return": 1.0348313384796133,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-13",
+      "ticker": "IMO.TO",
+      "name": "Imperial Oil Limited",
+      "entry_price": 169.77000427246094,
+      "predicted_return": 1.018033540593956,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-13",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 0.9359999895095825,
+      "predicted_return": 0.9835254773906654,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-13",
+      "ticker": "BTE.TO",
+      "name": "Baytex Energy Corp.",
+      "entry_price": 6.46999979019165,
+      "predicted_return": 0.9676216998411774,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-13",
+      "ticker": "FM.TO",
+      "name": "First Quantum Minerals Ltd.",
+      "entry_price": 46.130001068115234,
+      "predicted_return": 0.8442514950567817,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -946,6 +1046,11 @@
       "date": "2026-06-12",
       "equity": 100000.0,
       "n_open": 90
+    },
+    {
+      "date": "2026-06-13",
+      "equity": 100000.0,
+      "n_open": 100
     }
   ]
 }
