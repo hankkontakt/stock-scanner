@@ -470,5 +470,14 @@
       "scan_type": "weekly",
       "elapsed_seconds": 1864.0
     }
+  },
+  {
+    "timestamp": "2026-06-13T12:56:58",
+    "scan_type": "retry_rate_limited",
+    "status": "OK",
+    "details": {
+      "scan_type": "retry_rate_limited",
+      "elapsed_seconds": 1680.1
+    }
   }
 ]
