@@ -1,8 +1,8 @@
 {
   "universe": "sector_tech",
   "sector": "Technology",
-  "trained_at": "2026-06-07T07:16:57.275709",
-  "n_rows": 5868,
+  "trained_at": "2026-06-14T07:31:54.481878",
+  "n_rows": 5870,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -32,13 +32,13 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "cpcv_avg_ic": 0.0101,
-    "ic": 0.0101,
-    "cpcv_avg_hitrate": 0.514,
-    "hit_rate": 0.514,
+    "cpcv_avg_ic": -0.0347,
+    "ic": -0.0347,
+    "cpcv_avg_hitrate": 0.5092,
+    "hit_rate": 0.5092,
     "dsr": 0.0,
     "target": "cross_sectional_demeaned",
     "n_folds": 6,
-    "n_train_total": 5868
+    "n_train_total": 5870
   }
 }
