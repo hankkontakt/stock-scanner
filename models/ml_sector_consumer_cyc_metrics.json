@@ -1,8 +1,8 @@
 {
   "universe": "sector_consumer_cyc",
   "sector": "Consumer Cyclical",
-  "trained_at": "2026-06-07T07:17:17.549735",
-  "n_rows": 2234,
+  "trained_at": "2026-06-14T07:32:08.584054",
+  "n_rows": 2330,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -32,13 +32,13 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "cpcv_avg_ic": -0.02,
-    "ic": -0.02,
-    "cpcv_avg_hitrate": 0.4941,
-    "hit_rate": 0.4941,
-    "dsr": 0.0,
+    "cpcv_avg_ic": 0.0272,
+    "ic": 0.0272,
+    "cpcv_avg_hitrate": 0.4983,
+    "hit_rate": 0.4983,
+    "dsr": 0.0036,
     "target": "cross_sectional_demeaned",
     "n_folds": 6,
-    "n_train_total": 2234
+    "n_train_total": 2330
   }
 }

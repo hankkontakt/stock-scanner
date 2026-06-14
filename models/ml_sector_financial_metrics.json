@@ -1,7 +1,7 @@
 {
   "universe": "sector_financial",
   "sector": "Financial Services",
-  "trained_at": "2026-06-07T07:17:11.341886",
+  "trained_at": "2026-06-14T07:32:04.080410",
   "n_rows": 7316,
   "feature_cols": [
     "ret_1m",
@@ -32,10 +32,10 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "cpcv_avg_ic": -0.0019,
-    "ic": -0.0019,
-    "cpcv_avg_hitrate": 0.4944,
-    "hit_rate": 0.4944,
+    "cpcv_avg_ic": 0.0254,
+    "ic": 0.0254,
+    "cpcv_avg_hitrate": 0.5093,
+    "hit_rate": 0.5093,
     "dsr": 0.0,
     "target": "cross_sectional_demeaned",
     "n_folds": 6,

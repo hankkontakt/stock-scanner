@@ -1,8 +1,8 @@
 {
   "universe": "sector_materials",
   "sector": "Basic Materials",
-  "trained_at": "2026-06-07T07:17:30.820521",
-  "n_rows": 2057,
+  "trained_at": "2026-06-14T07:32:18.120977",
+  "n_rows": 2056,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -32,13 +32,13 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "cpcv_avg_ic": 0.0069,
-    "ic": 0.0069,
-    "cpcv_avg_hitrate": 0.5162,
-    "hit_rate": 0.5162,
-    "dsr": 0.0036,
+    "cpcv_avg_ic": 0.0316,
+    "ic": 0.0316,
+    "cpcv_avg_hitrate": 0.5088,
+    "hit_rate": 0.5088,
+    "dsr": 0.0,
     "target": "cross_sectional_demeaned",
     "n_folds": 6,
-    "n_train_total": 2057
+    "n_train_total": 2056
   }
 }
