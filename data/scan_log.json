@@ -488,5 +488,14 @@
       "scan_type": "smallcap",
       "elapsed_seconds": 82.5
     }
+  },
+  {
+    "timestamp": "2026-06-15T13:48:09",
+    "scan_type": "refresh_missing",
+    "status": "OK",
+    "details": {
+      "scan_type": "refresh_missing",
+      "elapsed_seconds": 0.0
+    }
   }
 ]
