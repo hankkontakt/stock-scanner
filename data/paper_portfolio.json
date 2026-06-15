@@ -142,5 +142,23 @@
       "FTNT",
       "LLY"
     ]
+  },
+  "2026-06-15_smallcap": {
+    "capital": 100000,
+    "universe": "smallcap",
+    "n_picks": 10,
+    "benchmark_buy": 741.75,
+    "tickers": [
+      "MAGI.ST",
+      "CTM.ST",
+      "MEKKO.HE",
+      "TAGM-B.ST",
+      "ALCA.ST",
+      "ADMCM.HE",
+      "CANTA.ST",
+      "ADTR.ST",
+      "UPSALE.ST",
+      "ENRO.ST"
+    ]
   }
 }

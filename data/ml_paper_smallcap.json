@@ -299,6 +299,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "FING-B.ST",
+      "name": "Fingerprint Cards AB (publ)",
+      "entry_price": 13.76,
+      "predicted_return": 0.14375151693820953,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "SUSG.ST",
+      "name": "Sustainion Group AB",
+      "entry_price": 1.795,
+      "predicted_return": 0.10003538429737091,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "NIL-B.ST",
+      "name": "Nilörngruppen AB (publ)",
+      "entry_price": 74.0,
+      "predicted_return": 0.07816373556852341,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "QLIRO.ST",
+      "name": "Qliro AB (publ)",
+      "entry_price": 18.5,
+      "predicted_return": 0.06210719794034958,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "DICOT.ST",
+      "name": "Dicot Pharma AB",
+      "entry_price": 0.2648,
+      "predicted_return": 0.057035453617572784,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "TOBII.ST",
+      "name": "Tobii AB (publ)",
+      "entry_price": 2.612,
+      "predicted_return": 0.05573664605617523,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "XBRANE.ST",
+      "name": "Xbrane Biopharma AB (publ)",
+      "entry_price": 10.8,
+      "predicted_return": 0.04620986431837082,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "ANGL.ST",
+      "name": "Angler Gaming plc",
+      "entry_price": 4.28,
+      "predicted_return": 0.03843770548701286,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "FREETR.ST",
+      "name": "nan",
+      "entry_price": 32.2,
+      "predicted_return": 0.0379384309053421,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-15",
+      "ticker": "B3.ST",
+      "name": "B3 Consulting Group AB (publ)",
+      "entry_price": 23.7,
+      "predicted_return": 0.03751404955983162,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -316,6 +416,11 @@
       "date": "2026-06-02",
       "equity": 100000.0,
       "n_open": 30
+    },
+    {
+      "date": "2026-06-15",
+      "equity": 100000.0,
+      "n_open": 40
     }
   ]
 }
