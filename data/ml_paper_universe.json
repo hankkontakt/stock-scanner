@@ -999,6 +999,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-19",
+      "ticker": "ADSK",
+      "name": "Autodesk, Inc.",
+      "entry_price": 198.42999267578125,
+      "predicted_return": 1.159222009074054,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-19",
+      "ticker": "MIGI",
+      "name": "Big Digital Energy Inc",
+      "entry_price": 7.375,
+      "predicted_return": 1.156799738836685,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-19",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 317.0,
+      "predicted_return": 1.1450077983683211,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-19",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 57.0,
+      "predicted_return": 1.1234589932846668,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-19",
+      "ticker": "SAN.MC",
+      "name": "Banco Santander, S.A.",
+      "entry_price": 11.026000022888184,
+      "predicted_return": 1.0518870390096406,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-19",
+      "ticker": "ANTO.L",
+      "name": "Antofagasta plc",
+      "entry_price": 51122.22791290283,
+      "predicted_return": 0.9769544278117179,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-19",
+      "ticker": "CHWY",
+      "name": "Chewy, Inc.",
+      "entry_price": 19.309999465942383,
+      "predicted_return": 0.9447891731796444,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-19",
+      "ticker": "ASAN",
+      "name": "Asana, Inc.",
+      "entry_price": 7.389999866485596,
+      "predicted_return": 0.9146537728832923,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-19",
+      "ticker": "1818.HK",
+      "name": "Zhaojin Mining Industry Company Limited",
+      "entry_price": 20.040000915527344,
+      "predicted_return": 0.8469938573445395,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-19",
+      "ticker": "IFX.DE",
+      "name": "Infineon Technologies AG",
+      "entry_price": 80.05999755859375,
+      "predicted_return": 0.7988621477332569,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -1051,6 +1151,11 @@
       "date": "2026-06-13",
       "equity": 100000.0,
       "n_open": 100
+    },
+    {
+      "date": "2026-06-19",
+      "equity": 100000.0,
+      "n_open": 110
     }
   ]
 }
