@@ -178,5 +178,9 @@
     "CENY.BR": {
         "reason": "Okänd Belgisk ticker - misslyckas i 4/4 körningar, symbol ogiltig",
         "date": "2026-06-05"
+    },
+    "BITF": {
+        "reason": "Yahoo Finance hittar ingen data för denna ticker",
+        "date": "2026-06-20"
     }
 }
