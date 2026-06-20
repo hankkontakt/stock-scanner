@@ -1099,6 +1099,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-20",
+      "ticker": "ADBE",
+      "name": "Adobe Inc.",
+      "entry_price": 195.16000366210938,
+      "predicted_return": 1.7493443434383562,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-20",
+      "ticker": "S92.DE",
+      "name": "SMA Solar Technology AG",
+      "entry_price": 58.599998474121094,
+      "predicted_return": 1.657375374260357,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-20",
+      "ticker": "PLUG",
+      "name": "Plug Power Inc.",
+      "entry_price": 2.8499999046325684,
+      "predicted_return": 1.4697836735426109,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-20",
+      "ticker": "ADSK",
+      "name": "Autodesk, Inc.",
+      "entry_price": 193.82000732421875,
+      "predicted_return": 1.159222009074054,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-20",
+      "ticker": "MIGI",
+      "name": "Big Digital Energy Inc",
+      "entry_price": 7.375,
+      "predicted_return": 1.156799738836685,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-20",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 309.79998779296875,
+      "predicted_return": 1.1450077983683211,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-20",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 59.84000015258789,
+      "predicted_return": 1.1234589932846668,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-20",
+      "ticker": "SAN.MC",
+      "name": "Banco Santander, S.A.",
+      "entry_price": 11.802000045776367,
+      "predicted_return": 1.0518870390096406,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-20",
+      "ticker": "ANTO.L",
+      "name": "Antofagasta plc",
+      "entry_price": 49609.6379699707,
+      "predicted_return": 1.0076144637091173,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-20",
+      "ticker": "AKAM",
+      "name": "Akamai Technologies, Inc.",
+      "entry_price": 149.5399932861328,
+      "predicted_return": 0.9966892673734795,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -1156,6 +1256,11 @@
       "date": "2026-06-19",
       "equity": 100000.0,
       "n_open": 110
+    },
+    {
+      "date": "2026-06-20",
+      "equity": 100000.0,
+      "n_open": 120
     }
   ]
 }

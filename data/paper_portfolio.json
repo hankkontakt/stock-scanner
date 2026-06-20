@@ -160,5 +160,23 @@
       "UPSALE.ST",
       "ENRO.ST"
     ]
+  },
+  "2026-06-20": {
+    "capital": 100000,
+    "universe": "universe",
+    "n_picks": 10,
+    "benchmark_buy": 746.739990234375,
+    "tickers": [
+      "NVDA",
+      "LLY",
+      "AVGO",
+      "005930.KS",
+      "6861.T",
+      "CDNS",
+      "000660.KS",
+      "FTNT",
+      "MU",
+      "2330.TW"
+    ]
   }
 }

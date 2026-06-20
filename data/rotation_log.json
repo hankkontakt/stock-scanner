@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "date": "2026-06-20",
+    "removed": "BITF",
+    "added": null,
+    "reason": "3 strikes (auto-blacklist): Yahoo Finance hittar ingen data för denna ticker",
+    "score_removed": 0.0,
+    "score_added": 0.0,
+    "ai_reasoning": ""
+  }
+]
