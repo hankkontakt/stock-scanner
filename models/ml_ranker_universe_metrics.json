@@ -1,7 +1,7 @@
 {
   "universe": "universe",
-  "trained_at": "2026-06-14T12:01:02.570020",
-  "n_rows": 52537,
+  "trained_at": "2026-06-21T12:16:08.763210",
+  "n_rows": 52567,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -31,42 +31,42 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "wf_avg_ic": 0.0155,
-    "ic": 0.0155,
-    "wf_avg_spread": 0.0096,
-    "wf_avg_hit_rate": 0.5023,
-    "hit_rate": 0.5023,
+    "wf_avg_ic": 0.0199,
+    "ic": 0.0199,
+    "wf_avg_spread": 0.0196,
+    "wf_avg_hit_rate": 0.5118,
+    "hit_rate": 0.5118,
     "n_folds": 3,
-    "n_train_total": 52537,
+    "n_train_total": 52567,
     "model_type": "lightgbm_lambdarank_ndcg",
     "n_features": 26,
     "wf_folds": [
       {
-        "train_end": "2024-06-03",
-        "test_start": "2024-06-03",
-        "test_end": "2024-12-03",
-        "ic": 0.0008,
-        "decile_spread": 0.0147,
-        "hit_rate": 0.4982,
-        "n_test": 6714
+        "train_end": "2024-06-10",
+        "test_start": "2024-06-10",
+        "test_end": "2024-12-10",
+        "ic": -0.0029,
+        "decile_spread": 0.0277,
+        "hit_rate": 0.5038,
+        "n_test": 6741
       },
       {
-        "train_end": "2024-12-03",
-        "test_start": "2024-12-03",
-        "test_end": "2025-06-03",
-        "ic": -0.0062,
-        "decile_spread": -0.0039,
-        "hit_rate": 0.5002,
+        "train_end": "2024-12-10",
+        "test_start": "2024-12-10",
+        "test_end": "2025-06-10",
+        "ic": 0.0187,
+        "decile_spread": 0.0054,
+        "hit_rate": 0.5198,
         "n_test": 6743
       },
       {
-        "train_end": "2025-06-03",
-        "test_start": "2025-06-03",
-        "test_end": "2025-12-03",
-        "ic": 0.052,
-        "decile_spread": 0.0179,
-        "hit_rate": 0.5085,
-        "n_test": 6767
+        "train_end": "2025-06-10",
+        "test_start": "2025-06-10",
+        "test_end": "2025-12-10",
+        "ic": 0.0439,
+        "decile_spread": 0.0258,
+        "hit_rate": 0.5118,
+        "n_test": 6759
       }
     ]
   }
