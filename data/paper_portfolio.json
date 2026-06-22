@@ -178,5 +178,23 @@
       "MU",
       "2330.TW"
     ]
+  },
+  "2026-06-22_smallcap": {
+    "capital": 100000,
+    "universe": "smallcap",
+    "n_picks": 10,
+    "benchmark_buy": 746.739990234375,
+    "tickers": [
+      "MAGI.ST",
+      "TAGM-B.ST",
+      "CTM.ST",
+      "CANTA.ST",
+      "MEKKO.HE",
+      "ADMCM.HE",
+      "ALCA.ST",
+      "NTEK-B.ST",
+      "SINT.ST",
+      "SAFETY-B.ST"
+    ]
   }
 }

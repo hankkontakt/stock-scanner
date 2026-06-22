@@ -399,6 +399,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-22",
+      "ticker": "IMMU.ST",
+      "name": "Mendus AB (publ)",
+      "entry_price": 5.65,
+      "predicted_return": 0.116151824593544,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-22",
+      "ticker": "ADTR.ST",
+      "name": "Adtraction Group AB",
+      "entry_price": 39.5,
+      "predicted_return": 0.07088647037744522,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-22",
+      "ticker": "IMPC.ST",
+      "name": "Impact Coatings AB (publ)",
+      "entry_price": 4.25,
+      "predicted_return": 0.06279437243938446,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-22",
+      "ticker": "B3.ST",
+      "name": "B3 Consulting Group AB (publ)",
+      "entry_price": 21.9,
+      "predicted_return": 0.046143777668476105,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-22",
+      "ticker": "FING-B.ST",
+      "name": "Fingerprint Cards AB (publ)",
+      "entry_price": 14.34,
+      "predicted_return": 0.04560118541121483,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-22",
+      "ticker": "ADVE.ST",
+      "name": "Advenica AB (publ)",
+      "entry_price": 19.34,
+      "predicted_return": 0.044634394347667694,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-22",
+      "ticker": "CANTA.ST",
+      "name": "Cantargia AB (publ)",
+      "entry_price": 2.146,
+      "predicted_return": 0.040967486798763275,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-22",
+      "ticker": "ACTI.ST",
+      "name": "Active Biotech AB (publ)",
+      "entry_price": 6.0,
+      "predicted_return": 0.03752509504556656,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-22",
+      "ticker": "NTEK-B.ST",
+      "name": "Novotek AB",
+      "entry_price": 52.7,
+      "predicted_return": 0.036919452250003815,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-22",
+      "ticker": "ENZY.ST",
+      "name": "Enzymatica AB (publ)",
+      "entry_price": 2.52,
+      "predicted_return": 0.03646153584122658,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -421,6 +521,11 @@
       "date": "2026-06-15",
       "equity": 100000.0,
       "n_open": 40
+    },
+    {
+      "date": "2026-06-22",
+      "equity": 100000.0,
+      "n_open": 50
     }
   ]
 }

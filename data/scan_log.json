@@ -650,5 +650,14 @@
       "scan_type": "retry_rate_limited",
       "elapsed_seconds": 0.0
     }
+  },
+  {
+    "timestamp": "2026-06-22T13:08:17",
+    "scan_type": "smallcap",
+    "status": "OK",
+    "details": {
+      "scan_type": "smallcap",
+      "elapsed_seconds": 89.1
+    }
   }
 ]
