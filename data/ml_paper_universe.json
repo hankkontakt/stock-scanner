@@ -1199,6 +1199,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-23",
+      "ticker": "ASTS",
+      "name": "AST SpaceMobile, Inc.",
+      "entry_price": 80.66000366210938,
+      "predicted_return": 1.9665638275380652,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-23",
+      "ticker": "RKLB",
+      "name": "Rocket Lab Corporation",
+      "entry_price": 107.23999786376953,
+      "predicted_return": 1.5864592993606454,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-23",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 309.79998779296875,
+      "predicted_return": 1.4466873771607989,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-23",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 28.979999542236328,
+      "predicted_return": 1.3096436157251596,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-23",
+      "ticker": "RY.TO",
+      "name": "Royal Bank of Canada",
+      "entry_price": 284.0799865722656,
+      "predicted_return": 1.2960488005803985,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-23",
+      "ticker": "PODD",
+      "name": "Insulet Corporation",
+      "entry_price": 145.75999450683594,
+      "predicted_return": 1.1821523262381037,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-23",
+      "ticker": "O39.SI",
+      "name": "Oversea-Chinese Banking Corporation Limited",
+      "entry_price": 24.6299991607666,
+      "predicted_return": 1.1801949737673816,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-23",
+      "ticker": "CAMT",
+      "name": "Camtek Ltd.",
+      "entry_price": 195.16000366210938,
+      "predicted_return": 1.1421781989634867,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-23",
+      "ticker": "BNS.TO",
+      "name": "The Bank of Nova Scotia",
+      "entry_price": 123.4800033569336,
+      "predicted_return": 1.1168478094977037,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-23",
+      "ticker": "MKTX",
+      "name": "MarketAxess Holdings Inc.",
+      "entry_price": 120.33000183105469,
+      "predicted_return": 0.9688098549605965,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -1261,6 +1361,11 @@
       "date": "2026-06-20",
       "equity": 100000.0,
       "n_open": 120
+    },
+    {
+      "date": "2026-06-23",
+      "equity": 100000.0,
+      "n_open": 130
     }
   ]
 }
