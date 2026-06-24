@@ -1299,6 +1299,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-24",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 59.84000015258789,
+      "predicted_return": 2.1050545762200445,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-24",
+      "ticker": "035720.KS",
+      "name": "Kakao Corp.",
+      "entry_price": 37750.0,
+      "predicted_return": 1.467734946568926,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-24",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 309.79998779296875,
+      "predicted_return": 1.3187111791743011,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-24",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 28.979999542236328,
+      "predicted_return": 1.2127175921832611,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-24",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 0.8420000076293945,
+      "predicted_return": 1.199816193942868,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-24",
+      "ticker": "POWL",
+      "name": "Powell Industries, Inc.",
+      "entry_price": 297.20001220703125,
+      "predicted_return": 1.1588402836572775,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-24",
+      "ticker": "ASTS",
+      "name": "AST SpaceMobile, Inc.",
+      "entry_price": 80.66000366210938,
+      "predicted_return": 1.1073360205096971,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-24",
+      "ticker": "HUT",
+      "name": "Hut 8 Corp.",
+      "entry_price": 124.44000244140625,
+      "predicted_return": 1.10139418706271,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-24",
+      "ticker": "ENVA",
+      "name": "Enova International, Inc.",
+      "entry_price": 202.5500030517578,
+      "predicted_return": 1.0435946156241893,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-24",
+      "ticker": "RKLB",
+      "name": "Rocket Lab Corporation",
+      "entry_price": 107.23999786376953,
+      "predicted_return": 1.0153675477311506,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -1366,6 +1466,11 @@
       "date": "2026-06-23",
       "equity": 100000.0,
       "n_open": 130
+    },
+    {
+      "date": "2026-06-24",
+      "equity": 100000.0,
+      "n_open": 140
     }
   ]
 }

@@ -749,5 +749,14 @@
       "scan_type": "refresh_missing",
       "elapsed_seconds": 0.0
     }
+  },
+  {
+    "timestamp": "2026-06-24T17:37:45",
+    "scan_type": "evening",
+    "status": "OK",
+    "details": {
+      "scan_type": "evening",
+      "elapsed_seconds": 396.7
+    }
   }
 ]
