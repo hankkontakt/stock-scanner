@@ -1399,6 +1399,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 59.84000015258789,
+      "predicted_return": 2.118479321952651,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "O39.SI",
+      "name": "Oversea-Chinese Banking Corporation Limited",
+      "entry_price": 24.6299991607666,
+      "predicted_return": 1.4579239228402736,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "PLTR",
+      "name": "Palantir Technologies Inc.",
+      "entry_price": 128.47000122070312,
+      "predicted_return": 1.4040707982427765,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "MKTX",
+      "name": "MarketAxess Holdings Inc.",
+      "entry_price": 120.33000183105469,
+      "predicted_return": 1.2800934222581688,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "PRAA",
+      "name": "PRA Group, Inc.",
+      "entry_price": 14.9399995803833,
+      "predicted_return": 1.1266940103107899,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "RY.TO",
+      "name": "Royal Bank of Canada",
+      "entry_price": 284.0799865722656,
+      "predicted_return": 1.1016875135781752,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 309.79998779296875,
+      "predicted_return": 1.0902572356068758,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "HUT",
+      "name": "Hut 8 Corp.",
+      "entry_price": 124.44000244140625,
+      "predicted_return": 1.0871052371336165,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "1818.HK",
+      "name": "Zhaojin Mining Industry Company Limited",
+      "entry_price": 19.770000457763672,
+      "predicted_return": 1.0544344556883265,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-25",
+      "ticker": "CPG.L",
+      "name": "Compass Group PLC",
+      "entry_price": 408.34109930526756,
+      "predicted_return": 0.9545995285278629,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -1471,6 +1571,11 @@
       "date": "2026-06-24",
       "equity": 100000.0,
       "n_open": 140
+    },
+    {
+      "date": "2026-06-25",
+      "equity": 100000.0,
+      "n_open": 150
     }
   ]
 }
