@@ -1499,6 +1499,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-26",
+      "ticker": "RKLB",
+      "name": "Rocket Lab Corporation",
+      "entry_price": 107.23999786376953,
+      "predicted_return": 1.8811827608849665,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-26",
+      "ticker": "POWL",
+      "name": "Powell Industries, Inc.",
+      "entry_price": 297.20001220703125,
+      "predicted_return": 1.6525000345014729,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-26",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 59.84000015258789,
+      "predicted_return": 1.419673013134037,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-26",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 309.79998779296875,
+      "predicted_return": 1.3557333932424969,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-26",
+      "ticker": "MKTX",
+      "name": "MarketAxess Holdings Inc.",
+      "entry_price": 120.33000183105469,
+      "predicted_return": 1.0577820343213908,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-26",
+      "ticker": "BE",
+      "name": "Bloom Energy Corporation",
+      "entry_price": 328.9100036621094,
+      "predicted_return": 0.987503721002845,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-26",
+      "ticker": "ENVA",
+      "name": "Enova International, Inc.",
+      "entry_price": 202.5500030517578,
+      "predicted_return": 0.9524152052047442,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-26",
+      "ticker": "OPEN",
+      "name": "Opendoor Technologies Inc.",
+      "entry_price": 4.46999979019165,
+      "predicted_return": 0.9114345962023961,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-26",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 0.8420000076293945,
+      "predicted_return": 0.9068779789493545,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-26",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 28.979999542236328,
+      "predicted_return": 0.8729362172709787,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -1576,6 +1676,11 @@
       "date": "2026-06-25",
       "equity": 100000.0,
       "n_open": 150
+    },
+    {
+      "date": "2026-06-26",
+      "equity": 100000.0,
+      "n_open": 160
     }
   ]
 }
