@@ -1599,6 +1599,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-27",
+      "ticker": "S92.DE",
+      "name": "SMA Solar Technology AG",
+      "entry_price": 53.95000076293945,
+      "predicted_return": 2.001929080313662,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-27",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 52.119998931884766,
+      "predicted_return": 1.419673013134037,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-27",
+      "ticker": "STMPA.PA",
+      "name": "STMicroelectronics N.V.",
+      "entry_price": 58.95000076293945,
+      "predicted_return": 1.3962803455570945,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-27",
+      "ticker": "INTU",
+      "name": "Intuit Inc.",
+      "entry_price": 331.5299987792969,
+      "predicted_return": 1.3885092453739494,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-27",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 282.70001220703125,
+      "predicted_return": 1.3557333932424969,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-27",
+      "ticker": "SOUN",
+      "name": "SoundHound AI, Inc.",
+      "entry_price": 6.409999847412109,
+      "predicted_return": 1.286772624056203,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-27",
+      "ticker": "EDIT",
+      "name": "Editas Medicine, Inc.",
+      "entry_price": 2.8499999046325684,
+      "predicted_return": 1.244255172855025,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-27",
+      "ticker": "RKLB",
+      "name": "Rocket Lab Corporation",
+      "entry_price": 84.54000091552734,
+      "predicted_return": 1.2117654957504218,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-27",
+      "ticker": "BAH",
+      "name": "Booz Allen Hamilton Holding Corporation",
+      "entry_price": 62.220001220703125,
+      "predicted_return": 1.1736718861734503,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-27",
+      "ticker": "MKTX",
+      "name": "MarketAxess Holdings Inc.",
+      "entry_price": 112.54000091552734,
+      "predicted_return": 1.1668513690722928,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -1681,6 +1781,11 @@
       "date": "2026-06-26",
       "equity": 100000.0,
       "n_open": 160
+    },
+    {
+      "date": "2026-06-27",
+      "equity": 100000.0,
+      "n_open": 170
     }
   ]
 }

@@ -196,5 +196,23 @@
       "SINT.ST",
       "SAFETY-B.ST"
     ]
+  },
+  "2026-06-27": {
+    "capital": 100000,
+    "universe": "universe",
+    "n_picks": 10,
+    "benchmark_buy": 728.989990234375,
+    "tickers": [
+      "000660.KS",
+      "MU",
+      "V",
+      "6861.T",
+      "005930.KS",
+      "2330.TW",
+      "CDNS",
+      "LLY",
+      "FTNT",
+      "KO"
+    ]
   }
 }
