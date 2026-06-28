@@ -1,10 +1,10 @@
 {
-  "ranker_ic": 0.0023,
-  "xgboost_ic": 0.0291,
-  "ic_improvement": -0.0268,
-  "ranker_spread": 0.0145,
-  "xgboost_spread": 0.017,
-  "ranker_significant": false,
+  "ranker_ic": 0.0325,
+  "xgboost_ic": 0.0562,
+  "ic_improvement": -0.0237,
+  "ranker_spread": 0.0201,
+  "xgboost_spread": 0.0354,
+  "ranker_significant": true,
   "winner": "xgboost",
   "deploy_ranker": false
 }
