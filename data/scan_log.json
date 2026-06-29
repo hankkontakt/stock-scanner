@@ -1,20 +1,5 @@
 [
   {
-    "timestamp": "2026-05-14T10:57:05",
-    "scan_type": "morning",
-    "status": "OK",
-    "details": {
-      "scan_type": "morning",
-      "n_holdings": 0,
-      "n_prices": 0,
-      "n_crash": 0,
-      "n_surge": 0,
-      "n_opportunities": 0,
-      "report_path": "reports/morning_2026-05-14.md",
-      "elapsed_seconds": 0.0
-    }
-  },
-  {
     "timestamp": "2026-05-14T11:58:15",
     "scan_type": "morning",
     "status": "OK",
@@ -847,6 +832,15 @@
     "details": {
       "scan_type": "retry_rate_limited",
       "elapsed_seconds": 0.0
+    }
+  },
+  {
+    "timestamp": "2026-06-29T12:11:15",
+    "scan_type": "smallcap",
+    "status": "OK",
+    "details": {
+      "scan_type": "smallcap",
+      "elapsed_seconds": 85.9
     }
   }
 ]

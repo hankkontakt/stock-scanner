@@ -499,6 +499,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-06-29",
+      "ticker": "ELIC.ST",
+      "name": "Elicera Therapeutics AB (publ)",
+      "entry_price": 2.66,
+      "predicted_return": 0.11411908268928528,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-29",
+      "ticker": "IMPC.ST",
+      "name": "Impact Coatings AB (publ)",
+      "entry_price": 3.64,
+      "predicted_return": 0.10542723536491394,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-29",
+      "ticker": "TOBII.ST",
+      "name": "Tobii AB (publ)",
+      "entry_price": 1.921,
+      "predicted_return": 0.09887290745973587,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-29",
+      "ticker": "ADVE.ST",
+      "name": "Advenica AB (publ)",
+      "entry_price": 19.5,
+      "predicted_return": 0.07528766244649887,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-29",
+      "ticker": "FNM.ST",
+      "name": "Ferronordic AB (publ)",
+      "entry_price": 61.2,
+      "predicted_return": 0.06052228808403015,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-29",
+      "ticker": "NIL-B.ST",
+      "name": "Nilörngruppen AB (publ)",
+      "entry_price": 74.5,
+      "predicted_return": 0.058863043785095215,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-29",
+      "ticker": "TAGM-B.ST",
+      "name": "TagMaster AB (publ)",
+      "entry_price": 39.5,
+      "predicted_return": 0.055962882936000824,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-29",
+      "ticker": "OGUN-B.ST",
+      "name": "Ogunsen AB (publ)",
+      "entry_price": 24.7,
+      "predicted_return": 0.05543966218829155,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-29",
+      "ticker": "CANTA.ST",
+      "name": "Cantargia AB (publ)",
+      "entry_price": 2.176,
+      "predicted_return": 0.050459008663892746,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-06-29",
+      "ticker": "B3.ST",
+      "name": "B3 Consulting Group AB (publ)",
+      "entry_price": 20.2,
+      "predicted_return": 0.04990174621343613,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -526,6 +626,11 @@
       "date": "2026-06-22",
       "equity": 100000.0,
       "n_open": 50
+    },
+    {
+      "date": "2026-06-29",
+      "equity": 100000.0,
+      "n_open": 60
     }
   ]
 }
