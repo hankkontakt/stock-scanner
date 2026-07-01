@@ -52,7 +52,7 @@ jobs:
           python -c "import yfinance; print('✓ yfinance OK')"
 
       - name: 📂 Återställ cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             data/cache
