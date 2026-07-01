@@ -21,7 +21,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: 📥 Hämta kod
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 🐍 Python 3.11
         uses: actions/setup-python@v5
@@ -43,7 +43,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: 📥 Hämta kod
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 🐍 Python 3.11
         uses: actions/setup-python@v5
@@ -78,7 +78,7 @@ jobs:
 
     steps:
       - name: 📥 Hämta kod
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 🐍 Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -158,7 +158,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: 📥 Hämta kod
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: 🐍 Python 3.11
         uses: actions/setup-python@v5
