@@ -1699,6 +1699,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 52.119998931884766,
+      "predicted_return": 1.7657549776461847,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 282.70001220703125,
+      "predicted_return": 1.5357819769210357,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "OPEN",
+      "name": "Opendoor Technologies Inc.",
+      "entry_price": 4.369999885559082,
+      "predicted_return": 1.390201009272069,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "PRAA",
+      "name": "PRA Group, Inc.",
+      "entry_price": 18.93000030517578,
+      "predicted_return": 1.159586891814824,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "FRES.L",
+      "name": "Fresnillo plc",
+      "entry_price": 36847.49113082886,
+      "predicted_return": 1.0980246598241246,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "1818.HK",
+      "name": "Zhaojin Mining Industry Company Limited",
+      "entry_price": 16.639999389648438,
+      "predicted_return": 1.0952580252400472,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "EDIT",
+      "name": "Editas Medicine, Inc.",
+      "entry_price": 2.8499999046325684,
+      "predicted_return": 1.0030152032118855,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "LRCX",
+      "name": "Lam Research Corporation",
+      "entry_price": 379.0899963378906,
+      "predicted_return": 0.9460788045615693,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "RKLB",
+      "name": "Rocket Lab Corporation",
+      "entry_price": 84.54000091552734,
+      "predicted_return": 0.9440720346170478,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-01",
+      "ticker": "ASTS",
+      "name": "AST SpaceMobile, Inc.",
+      "entry_price": 71.44999694824219,
+      "predicted_return": 0.9018907437158008,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -1786,6 +1886,11 @@
       "date": "2026-06-27",
       "equity": 100000.0,
       "n_open": 170
+    },
+    {
+      "date": "2026-07-01",
+      "equity": 100000.0,
+      "n_open": 180
     }
   ]
 }
