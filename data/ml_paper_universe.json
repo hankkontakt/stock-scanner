@@ -1799,6 +1799,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-02",
+      "ticker": "POWL",
+      "name": "Powell Industries, Inc.",
+      "entry_price": 279.7699890136719,
+      "predicted_return": 1.7573399619437717,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-02",
+      "ticker": "FRES.L",
+      "name": "Fresnillo plc",
+      "entry_price": 36847.49113082886,
+      "predicted_return": 1.6177702941317824,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-02",
+      "ticker": "PRAA",
+      "name": "PRA Group, Inc.",
+      "entry_price": 18.93000030517578,
+      "predicted_return": 1.1253172143940295,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-02",
+      "ticker": "AEHR",
+      "name": "Aehr Test Systems, Inc.",
+      "entry_price": 91.80999755859375,
+      "predicted_return": 1.1165256401685082,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-02",
+      "ticker": "058470.KQ",
+      "name": "LEENO Industrial Inc.",
+      "entry_price": 84300.0,
+      "predicted_return": 0.9990710334397657,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-02",
+      "ticker": "OPEN",
+      "name": "Opendoor Technologies Inc.",
+      "entry_price": 4.369999885559082,
+      "predicted_return": 0.9754737165419328,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-02",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 282.70001220703125,
+      "predicted_return": 0.9503803663838449,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-02",
+      "ticker": "RIOT",
+      "name": "Riot Platforms, Inc.",
+      "entry_price": 28.56999969482422,
+      "predicted_return": 0.9458090584593746,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-02",
+      "ticker": "EDIT",
+      "name": "Editas Medicine, Inc.",
+      "entry_price": 2.8499999046325684,
+      "predicted_return": 0.851574399242892,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-02",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 52.119998931884766,
+      "predicted_return": 0.8427904924936318,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -1891,6 +1991,11 @@
       "date": "2026-07-01",
       "equity": 100000.0,
       "n_open": 180
+    },
+    {
+      "date": "2026-07-02",
+      "equity": 100000.0,
+      "n_open": 190
     }
   ]
 }
