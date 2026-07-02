@@ -6,7 +6,7 @@
     "finnhub": "ok"
   },
   "data_freshness": {
-    "latest_scan": "2026-07-02 10:28",
+    "latest_scan": "2026-07-02 13:05",
     "age_hours": 0.0,
     "file": "scored_universe_2026-07-01.parquet",
     "stale": false
@@ -43,11 +43,11 @@
     "n_open_trades": 0
   },
   "last_pipeline_run": {
-    "mode": "refresh_missing",
+    "mode": "portfolio_refresh",
     "status": "OK",
-    "duration": 0.1,
-    "timestamp": "2026-07-02T10:29:32"
+    "duration": 0.3,
+    "timestamp": "2026-07-02T13:06:43"
   },
   "degraded_components": [],
-  "checked_at": "2026-07-02T10:29:32.789608"
+  "checked_at": "2026-07-02T13:06:43.408786"
 }
