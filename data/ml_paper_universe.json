@@ -1899,6 +1899,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-03",
+      "ticker": "FRES.L",
+      "name": "Fresnillo plc",
+      "entry_price": 36847.49113082886,
+      "predicted_return": 1.3974079137042457,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-03",
+      "ticker": "058470.KQ",
+      "name": "LEENO Industrial Inc.",
+      "entry_price": 84300.0,
+      "predicted_return": 1.3071035159354933,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-03",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 282.70001220703125,
+      "predicted_return": 1.1868622623252698,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-03",
+      "ticker": "RKLB",
+      "name": "Rocket Lab Corporation",
+      "entry_price": 84.54000091552734,
+      "predicted_return": 0.7929763020377806,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-03",
+      "ticker": "POWL",
+      "name": "Powell Industries, Inc.",
+      "entry_price": 279.7699890136719,
+      "predicted_return": 0.7867085278491336,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-03",
+      "ticker": "RBLX",
+      "name": "Roblox Corporation",
+      "entry_price": 47.560001373291016,
+      "predicted_return": 0.7228680513979717,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-03",
+      "ticker": "PRAA",
+      "name": "PRA Group, Inc.",
+      "entry_price": 18.93000030517578,
+      "predicted_return": 0.7195319525911686,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-03",
+      "ticker": "051910.KS",
+      "name": "LG Chem, Ltd.",
+      "entry_price": 271000.0,
+      "predicted_return": 0.7176017034593257,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-03",
+      "ticker": "7564.T",
+      "name": "Workman Co.,Ltd.",
+      "entry_price": 6740.0,
+      "predicted_return": 0.6643560870785774,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-03",
+      "ticker": "5801.T",
+      "name": "Furukawa Electric Co., Ltd.",
+      "entry_price": 4528.0,
+      "predicted_return": 0.6268182460264543,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -1996,6 +2096,11 @@
       "date": "2026-07-02",
       "equity": 100000.0,
       "n_open": 190
+    },
+    {
+      "date": "2026-07-03",
+      "equity": 100000.0,
+      "n_open": 200
     }
   ]
 }
