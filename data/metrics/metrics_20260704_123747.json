@@ -1,7 +1,7 @@
 {
   "pipeline_duration_seconds": {
-    "refresh_missing": [
-      0.037587881088256836
+    "retry_rate_limited": [
+      1680.0794386863708
     ]
   },
   "fetch_duration_seconds": [],
@@ -15,7 +15,7 @@
   "cache_hits_total": 0,
   "cache_misses_total": 0,
   "pipeline_success_total": {
-    "refresh_missing": 1
+    "retry_rate_limited": 1
   },
   "pipeline_failure_total": {},
   "scoring_distribution": {
@@ -24,6 +24,6 @@
     "0.9": null,
     "0.95": null
   },
-  "latest_scan_timestamp": 1780425195.6702535,
-  "exported_at": "2026-06-02T18:33:15.670288"
+  "latest_scan_timestamp": 1783168667.6567707,
+  "exported_at": "2026-07-04T12:37:47.656857"
 }
