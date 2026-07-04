@@ -1999,6 +1999,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-04",
+      "ticker": "FRES.L",
+      "name": "Fresnillo plc",
+      "entry_price": 37627.17877006531,
+      "predicted_return": 1.3735822045426047,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-04",
+      "ticker": "HUBS",
+      "name": "HubSpot, Inc.",
+      "entry_price": 262.20001220703125,
+      "predicted_return": 1.2471488851063288,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-04",
+      "ticker": "IFX.DE",
+      "name": "Infineon Technologies AG",
+      "entry_price": 77.37999725341797,
+      "predicted_return": 1.2074732218662227,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-04",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 273.1000061035156,
+      "predicted_return": 1.1868622623252698,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-04",
+      "ticker": "FOUR",
+      "name": "Shift4 Payments, Inc.",
+      "entry_price": 51.349998474121094,
+      "predicted_return": 1.130918201702409,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-04",
+      "ticker": "1818.HK",
+      "name": "Zhaojin Mining Industry Company Limited",
+      "entry_price": 19.170000076293945,
+      "predicted_return": 1.0926513784213878,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-04",
+      "ticker": "ELG.DE",
+      "name": "Elmos Semiconductor SE",
+      "entry_price": 174.60000610351562,
+      "predicted_return": 1.047448681547135,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-04",
+      "ticker": "058470.KQ",
+      "name": "LEENO Industrial Inc.",
+      "entry_price": 78600.0,
+      "predicted_return": 1.0343374825623977,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-04",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 49.279998779296875,
+      "predicted_return": 1.0327849525975878,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-04",
+      "ticker": "S92.DE",
+      "name": "SMA Solar Technology AG",
+      "entry_price": 60.150001525878906,
+      "predicted_return": 0.8218615988949511,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -2101,6 +2201,11 @@
       "date": "2026-07-03",
       "equity": 100000.0,
       "n_open": 200
+    },
+    {
+      "date": "2026-07-04",
+      "equity": 100000.0,
+      "n_open": 210
     }
   ]
 }
