@@ -2099,6 +2099,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 0.9800000190734863,
+      "predicted_return": 1.3855927148474276,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 49.279998779296875,
+      "predicted_return": 1.3372262897328164,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "S92.DE",
+      "name": "SMA Solar Technology AG",
+      "entry_price": 60.150001525878906,
+      "predicted_return": 1.1246863726261254,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 273.1000061035156,
+      "predicted_return": 0.974081624965206,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "IFX.DE",
+      "name": "Infineon Technologies AG",
+      "entry_price": 77.37999725341797,
+      "predicted_return": 0.966276833572518,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "IOT",
+      "name": "Samsara Inc.",
+      "entry_price": 35.93000030517578,
+      "predicted_return": 0.5283557038828325,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "ASM.AS",
+      "name": "ASM International NV",
+      "entry_price": 975.5999755859375,
+      "predicted_return": 0.4750415343374355,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "ADANIENT.NS",
+      "name": "Adani Enterprises Limited",
+      "entry_price": 3212.10009765625,
+      "predicted_return": 0.4249416888119403,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "SEDG",
+      "name": "SolarEdge Technologies, Inc.",
+      "entry_price": 52.380001068115234,
+      "predicted_return": 0.40871391358337006,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "CBOE",
+      "name": "Cboe Global Markets, Inc.",
+      "entry_price": 248.99000549316406,
+      "predicted_return": 0.3792121355037982,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -2206,6 +2306,11 @@
       "date": "2026-07-04",
       "equity": 100000.0,
       "n_open": 210
+    },
+    {
+      "date": "2026-07-06",
+      "equity": 100000.0,
+      "n_open": 220
     }
   ]
 }
