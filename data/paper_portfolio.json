@@ -250,5 +250,23 @@
       "2330.TW",
       "EXEL"
     ]
+  },
+  "2026-07-06_smallcap": {
+    "capital": 100000,
+    "universe": "smallcap",
+    "n_picks": 10,
+    "benchmark_buy": 744.780029296875,
+    "tickers": [
+      "MAGI.ST",
+      "TAGM-B.ST",
+      "CTM.ST",
+      "MEKKO.HE",
+      "ALCA.ST",
+      "ADMCM.HE",
+      "CANTA.ST",
+      "NTEK-B.ST",
+      "BULTEN.ST",
+      "UPSALE.ST"
+    ]
   }
 }

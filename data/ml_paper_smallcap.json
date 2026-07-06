@@ -599,6 +599,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "DMYD-B.ST",
+      "name": "Diamyd Medical AB (publ)",
+      "entry_price": 1.082,
+      "predicted_return": 0.2470916360616684,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "BUSER.ST",
+      "name": "Bambuser AB (publ)",
+      "entry_price": 22.4,
+      "predicted_return": 0.12392976135015488,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "UPSALE.ST",
+      "name": "Upsales Technology AB (publ)",
+      "entry_price": 23.1,
+      "predicted_return": 0.11863540858030319,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "B3.ST",
+      "name": "B3 Consulting Group AB (publ)",
+      "entry_price": 20.2,
+      "predicted_return": 0.07145830988883972,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "ADVE.ST",
+      "name": "Advenica AB (publ)",
+      "entry_price": 19.5,
+      "predicted_return": 0.04919065162539482,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "CANTA.ST",
+      "name": "Cantargia AB (publ)",
+      "entry_price": 2.176,
+      "predicted_return": 0.038683608174324036,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "ADTR.ST",
+      "name": "Adtraction Group AB",
+      "entry_price": 40.8,
+      "predicted_return": 0.029330983757972717,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "SAFETY-B.ST",
+      "name": "mySafety Group AB",
+      "entry_price": 18.0,
+      "predicted_return": 0.026880009099841118,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "DICOT.ST",
+      "name": "Dicot Pharma AB",
+      "entry_price": 0.206,
+      "predicted_return": 0.023803040385246277,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-06",
+      "ticker": "HARVIA.HE",
+      "name": "Harvia Oyj",
+      "entry_price": 39.95,
+      "predicted_return": 0.020204374566674232,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -631,6 +731,11 @@
       "date": "2026-06-29",
       "equity": 100000.0,
       "n_open": 60
+    },
+    {
+      "date": "2026-07-06",
+      "equity": 100000.0,
+      "n_open": 70
     }
   ]
 }
