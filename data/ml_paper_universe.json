@@ -2199,6 +2199,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-07",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 49.279998779296875,
+      "predicted_return": 2.567786134266657,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-07",
+      "ticker": "OPEN",
+      "name": "Opendoor Technologies Inc.",
+      "entry_price": 4.900000095367432,
+      "predicted_return": 1.57791506479977,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-07",
+      "ticker": "CHWY",
+      "name": "Chewy, Inc.",
+      "entry_price": 20.850000381469727,
+      "predicted_return": 1.4235125644376474,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-07",
+      "ticker": "HIVE",
+      "name": "HIVE Digital Technologies Ltd.",
+      "entry_price": 3.240000009536743,
+      "predicted_return": 1.4016797057554218,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-07",
+      "ticker": "HUT",
+      "name": "Hut 8 Corp.",
+      "entry_price": 97.13999938964844,
+      "predicted_return": 1.3960818558590733,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-07",
+      "ticker": "POWL",
+      "name": "Powell Industries, Inc.",
+      "entry_price": 246.3300018310547,
+      "predicted_return": 1.329170254475541,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-07",
+      "ticker": "FIX",
+      "name": "Comfort Systems USA, Inc.",
+      "entry_price": 1741.300048828125,
+      "predicted_return": 1.1982583192518885,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-07",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 21.18000030517578,
+      "predicted_return": 1.1804644588990771,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-07",
+      "ticker": "EDIT",
+      "name": "Editas Medicine, Inc.",
+      "entry_price": 3.6500000953674316,
+      "predicted_return": 1.1510820961977637,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-07",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 0.9800000190734863,
+      "predicted_return": 1.0484142239771197,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -2311,6 +2411,11 @@
       "date": "2026-07-06",
       "equity": 100000.0,
       "n_open": 220
+    },
+    {
+      "date": "2026-07-07",
+      "equity": 100000.0,
+      "n_open": 230
     }
   ]
 }
