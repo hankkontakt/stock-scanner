@@ -2299,6 +2299,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-08",
+      "ticker": "LRCX",
+      "name": "Lam Research Corporation",
+      "entry_price": 351.4100036621094,
+      "predicted_return": 1.5995506638854875,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-08",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 0.9800000190734863,
+      "predicted_return": 1.4961057266091626,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-08",
+      "ticker": "FIX",
+      "name": "Comfort Systems USA, Inc.",
+      "entry_price": 1741.300048828125,
+      "predicted_return": 1.4828140629707733,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-08",
+      "ticker": "CRDO",
+      "name": "Credo Technology Group Holding Ltd",
+      "entry_price": 241.91000366210938,
+      "predicted_return": 1.4502365658626786,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-08",
+      "ticker": "EDIT",
+      "name": "Editas Medicine, Inc.",
+      "entry_price": 3.6500000953674316,
+      "predicted_return": 1.3606749889825243,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-08",
+      "ticker": "CHWY",
+      "name": "Chewy, Inc.",
+      "entry_price": 20.850000381469727,
+      "predicted_return": 1.313715207323896,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-08",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 21.18000030517578,
+      "predicted_return": 1.2574896825387498,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-08",
+      "ticker": "WDC",
+      "name": "Western Digital Corporation",
+      "entry_price": 539.0,
+      "predicted_return": 1.2482862771797152,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-08",
+      "ticker": "TEAM",
+      "name": "Atlassian Corporation",
+      "entry_price": 83.83999633789062,
+      "predicted_return": 1.1362034899369533,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-08",
+      "ticker": "POWL",
+      "name": "Powell Industries, Inc.",
+      "entry_price": 246.3300018310547,
+      "predicted_return": 1.1287496224142388,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -2416,6 +2516,11 @@
       "date": "2026-07-07",
       "equity": 100000.0,
       "n_open": 230
+    },
+    {
+      "date": "2026-07-08",
+      "equity": 100000.0,
+      "n_open": 240
     }
   ]
 }
