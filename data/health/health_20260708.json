@@ -6,7 +6,7 @@
     "finnhub": "ok"
   },
   "data_freshness": {
-    "latest_scan": "2026-07-08 12:50",
+    "latest_scan": "2026-07-08 16:24",
     "age_hours": 0.0,
     "file": "scored_universe_2026-07-07.parquet",
     "stale": false
@@ -22,16 +22,10 @@
     "models_dir_mb": 7.9,
     "total_mb": 30.0,
     "total_gb": 0.03,
-    "free_gb": 12.5,
+    "free_gb": 12.8,
     "total_gb_disk": 71.6
   },
-  "recent_errors": [
-    {
-      "timestamp": "2026-06-08T12:09:03",
-      "error": "",
-      "module": "smallcap"
-    }
-  ],
+  "recent_errors": [],
   "cache_stats": {
     "total_files": 0,
     "oldest_hours": 0,
@@ -43,11 +37,11 @@
     "n_open_trades": 0
   },
   "last_pipeline_run": {
-    "mode": "portfolio_refresh",
+    "mode": "refresh_missing",
     "status": "OK",
-    "duration": 0.4,
-    "timestamp": "2026-07-08T12:51:27"
+    "duration": 0.1,
+    "timestamp": "2026-07-08T16:25:39"
   },
   "degraded_components": [],
-  "checked_at": "2026-07-08T12:51:27.445074"
+  "checked_at": "2026-07-08T16:25:39.456840"
 }
