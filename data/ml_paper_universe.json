@@ -2499,6 +2499,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-10",
+      "ticker": "OPEN",
+      "name": "Opendoor Technologies Inc.",
+      "entry_price": 4.900000095367432,
+      "predicted_return": 1.6972045238476368,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-10",
+      "ticker": "CRDO",
+      "name": "Credo Technology Group Holding Ltd",
+      "entry_price": 241.91000366210938,
+      "predicted_return": 1.6408937876741487,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-10",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 0.9800000190734863,
+      "predicted_return": 1.6083847004387184,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-10",
+      "ticker": "IREN",
+      "name": "IREN Limited",
+      "entry_price": 38.81999969482422,
+      "predicted_return": 1.3817796934912618,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-10",
+      "ticker": "CHWY",
+      "name": "Chewy, Inc.",
+      "entry_price": 20.850000381469727,
+      "predicted_return": 1.3186771682690819,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-10",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 21.18000030517578,
+      "predicted_return": 1.2991967627983043,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-10",
+      "ticker": "HUT",
+      "name": "Hut 8 Corp.",
+      "entry_price": 97.13999938964844,
+      "predicted_return": 1.2620911389220617,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-10",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 273.1000061035156,
+      "predicted_return": 1.1816419526470396,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-10",
+      "ticker": "LRCX",
+      "name": "Lam Research Corporation",
+      "entry_price": 351.4100036621094,
+      "predicted_return": 1.173814546289645,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-10",
+      "ticker": "HIVE",
+      "name": "HIVE Digital Technologies Ltd.",
+      "entry_price": 3.240000009536743,
+      "predicted_return": 1.0464673400829285,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -2626,6 +2726,11 @@
       "date": "2026-07-09",
       "equity": 100000.0,
       "n_open": 250
+    },
+    {
+      "date": "2026-07-10",
+      "equity": 100000.0,
+      "n_open": 260
     }
   ]
 }
