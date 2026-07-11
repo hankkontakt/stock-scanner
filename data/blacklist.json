@@ -186,5 +186,9 @@
     "PSTG": {
         "reason": "Yahoo Finance hittar ingen data för denna ticker",
         "date": "2026-07-04"
+    },
+    "CRH.L": {
+        "reason": "Yahoo Finance hittar ingen data för denna ticker",
+        "date": "2026-07-11"
     }
 }

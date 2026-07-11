@@ -1040,5 +1040,32 @@
       }
     ],
     "delisted_tickers": []
+  },
+  {
+    "timestamp": "2026-07-11T09:11:27Z",
+    "total": 1201,
+    "n_ok": 1198,
+    "n_failed": 3,
+    "n_delisted": 0,
+    "n_rate_limited": 0,
+    "rate_limited_tickers": [],
+    "failed_tickers": [
+      {
+        "ticker": "CRH.L",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "7105.T",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "CENY.BR",
+        "status": "SKIPPED",
+        "pass": 1
+      }
+    ],
+    "delisted_tickers": []
   }
 ]

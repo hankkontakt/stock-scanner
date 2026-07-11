@@ -268,5 +268,23 @@
       "BULTEN.ST",
       "UPSALE.ST"
     ]
+  },
+  "2026-07-11": {
+    "capital": 100000,
+    "universe": "universe",
+    "n_picks": 10,
+    "benchmark_buy": 754.9500122070312,
+    "tickers": [
+      "NVDA",
+      "6861.T",
+      "CDNS",
+      "CRDO",
+      "FTNT",
+      "LLY",
+      "MU",
+      "KO",
+      "AVGO",
+      "2330.TW"
+    ]
   }
 }

@@ -16,5 +16,14 @@
     "score_removed": 0.0,
     "score_added": 0.0,
     "ai_reasoning": ""
+  },
+  {
+    "date": "2026-07-11",
+    "removed": "CRH.L",
+    "added": null,
+    "reason": "3 strikes (auto-blacklist): Yahoo Finance hittar ingen data för denna ticker",
+    "score_removed": 0.0,
+    "score_added": 0.0,
+    "ai_reasoning": ""
   }
 ]

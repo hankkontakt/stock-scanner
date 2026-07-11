@@ -2599,6 +2599,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-11",
+      "ticker": "S92.DE",
+      "name": "SMA Solar Technology AG",
+      "entry_price": 54.150001525878906,
+      "predicted_return": 1.7464826490003442,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-11",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 1.0950000286102295,
+      "predicted_return": 1.6083847004387184,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-11",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 43.630001068115234,
+      "predicted_return": 1.4993008486321084,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-11",
+      "ticker": "INTU",
+      "name": "Intuit Inc.",
+      "entry_price": 331.5299987792969,
+      "predicted_return": 1.36174566899122,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-11",
+      "ticker": "IFX.DE",
+      "name": "Infineon Technologies AG",
+      "entry_price": 72.4800033569336,
+      "predicted_return": 1.3568184303137207,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-11",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 255.3000030517578,
+      "predicted_return": 1.1816419526470396,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-11",
+      "ticker": "STMPA.PA",
+      "name": "STMicroelectronics N.V.",
+      "entry_price": 58.95000076293945,
+      "predicted_return": 1.087247523761687,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-11",
+      "ticker": "ELG.DE",
+      "name": "Elmos Semiconductor SE",
+      "entry_price": 174.60000610351562,
+      "predicted_return": 1.01631338714586,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-11",
+      "ticker": "HUBS",
+      "name": "HubSpot, Inc.",
+      "entry_price": 262.20001220703125,
+      "predicted_return": 0.8583493275776776,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-11",
+      "ticker": "AGI.TO",
+      "name": "Alamos Gold Inc.",
+      "entry_price": 41.689998626708984,
+      "predicted_return": 0.8541605101581771,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -2731,6 +2831,11 @@
       "date": "2026-07-10",
       "equity": 100000.0,
       "n_open": 260
+    },
+    {
+      "date": "2026-07-11",
+      "equity": 100000.0,
+      "n_open": 270
     }
   ]
 }
