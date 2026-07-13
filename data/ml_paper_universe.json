@@ -2699,6 +2699,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "AIXA.DE",
+      "name": "AIXTRON SE",
+      "entry_price": 43.630001068115234,
+      "predicted_return": 1.443724417908154,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "RMBS",
+      "name": "Rambus Inc.",
+      "entry_price": 112.0999984741211,
+      "predicted_return": 1.2855879328822961,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "042700.KS",
+      "name": "HANMI Semiconductor Co., Ltd.",
+      "entry_price": 222000.0,
+      "predicted_return": 1.2005638171933704,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "ASM.AS",
+      "name": "ASM International NV",
+      "entry_price": 910.4000244140625,
+      "predicted_return": 1.192096028014644,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "SEDG",
+      "name": "SolarEdge Technologies, Inc.",
+      "entry_price": 55.18000030517578,
+      "predicted_return": 1.1273837652675067,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "AEHR",
+      "name": "Aehr Test Systems, Inc.",
+      "entry_price": 72.5999984741211,
+      "predicted_return": 1.1102586517991535,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "005930.KS",
+      "name": "Samsung Electronics Co., Ltd.",
+      "entry_price": 285000.0,
+      "predicted_return": 1.0239607028178952,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 255.3000030517578,
+      "predicted_return": 0.9928534500913452,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "058470.KQ",
+      "name": "LEENO Industrial Inc.",
+      "entry_price": 73800.0,
+      "predicted_return": 0.9869060235295194,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "ASAN",
+      "name": "Asana, Inc.",
+      "entry_price": 7.329999923706055,
+      "predicted_return": 0.9496469246190643,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -2836,6 +2936,11 @@
       "date": "2026-07-11",
       "equity": 100000.0,
       "n_open": 270
+    },
+    {
+      "date": "2026-07-13",
+      "equity": 100000.0,
+      "n_open": 280
     }
   ]
 }
