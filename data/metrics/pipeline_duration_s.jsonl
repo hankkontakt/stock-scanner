@@ -110,3 +110,4 @@
 {"ts": "2026-07-13T10:50:56.493797+00:00", "v": 0.1, "tags": {"mode": "refresh_missing"}}
 {"ts": "2026-07-13T13:22:06.842764+00:00", "v": 0.0, "tags": {"mode": "retry_rate_limited"}}
 {"ts": "2026-07-13T13:34:03.642032+00:00", "v": 0.6, "tags": {"mode": "portfolio_refresh"}}
+{"ts": "2026-07-13T17:07:41.916217+00:00", "v": 0.1, "tags": {"mode": "refresh_missing"}}
