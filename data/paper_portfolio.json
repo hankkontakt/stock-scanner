@@ -286,5 +286,23 @@
       "AVGO",
       "2330.TW"
     ]
+  },
+  "2026-07-13_smallcap": {
+    "capital": 100000,
+    "universe": "smallcap",
+    "n_picks": 10,
+    "benchmark_buy": 754.9500122070312,
+    "tickers": [
+      "TAGM-B.ST",
+      "MAGI.ST",
+      "CANTA.ST",
+      "CTM.ST",
+      "MEKKO.HE",
+      "ADMCM.HE",
+      "NTEK-B.ST",
+      "OGUN-B.ST",
+      "SINT.ST",
+      "UPSALE.ST"
+    ]
   }
 }

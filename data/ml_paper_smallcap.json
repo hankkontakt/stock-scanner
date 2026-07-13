@@ -699,6 +699,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "DMYD-B.ST",
+      "name": "Diamyd Medical AB (publ)",
+      "entry_price": 1.128,
+      "predicted_return": 0.321414977312088,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "BUSER.ST",
+      "name": "Bambuser AB (publ)",
+      "entry_price": 21.0,
+      "predicted_return": 0.31403830647468567,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "FING-B.ST",
+      "name": "Fingerprint Cards AB (publ)",
+      "entry_price": 15.56,
+      "predicted_return": 0.1154971718788147,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "ADVE.ST",
+      "name": "Advenica AB (publ)",
+      "entry_price": 19.06,
+      "predicted_return": 0.05868392810225487,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "IMMU.ST",
+      "name": "Mendus AB (publ)",
+      "entry_price": 6.68,
+      "predicted_return": 0.05540268495678902,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "DICOT.ST",
+      "name": "Dicot Pharma AB",
+      "entry_price": 0.1895,
+      "predicted_return": 0.045809559524059296,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "PRIC-B.ST",
+      "name": "Pricer AB (publ)",
+      "entry_price": 3.325,
+      "predicted_return": 0.03406041860580444,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "ASTOR.ST",
+      "name": "Scandinavian Astor Group AB (publ)",
+      "entry_price": 11.08,
+      "predicted_return": 0.021014569327235222,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "MOB.ST",
+      "name": "Moberg Pharma AB (publ)",
+      "entry_price": 9.45,
+      "predicted_return": 0.017242001369595528,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-13",
+      "ticker": "ADTR.ST",
+      "name": "Adtraction Group AB",
+      "entry_price": 42.1,
+      "predicted_return": 0.016153767704963684,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -736,6 +836,11 @@
       "date": "2026-07-06",
       "equity": 100000.0,
       "n_open": 70
+    },
+    {
+      "date": "2026-07-13",
+      "equity": 100000.0,
+      "n_open": 80
     }
   ]
 }
