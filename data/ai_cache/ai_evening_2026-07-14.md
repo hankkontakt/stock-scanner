@@ -1,114 +1,95 @@
-Här är dagens kvällsrapport från MarketScan AI – din personliga börsanalytiker. 📊🌙
+# 📊 MarketScan AI – Kvällsrapport
+
+**Datum:** 10 juli 2026 | **Portfölj idag:** +8,83% 🚀
 
 ---
 
-## 📉 Marknadsläget – Blandat, men tekniken håller ställningarna
+## 🌍 Marknadsöversikt
 
-| Index | Förändring | Stängning |
-|-------|------------|-----------|
-| **S&P 500** | +0,30% | 7 537 |
-| **Nasdaq** | +0,86% | 26 096 |
-| **Dow Jones** | -0,22% | 52 383 |
-| **Nikkei 225** | -1,92% | 67 242 |
-| **Hang Seng** | +0,16% | 24 213 |
-| **VIX** | -2,91% | 16,66 |
+| Index | Förändring | Status |
+|-------|-----------|--------|
+| **Nasdaq** | +1,01% | 🟢 Teknikrally |
+| **S&P 500** | +0,40% | 🟢 Stabil |
+| **Nikkei 225** | −1,92% | 🔴 Tryck |
+| **KOSPI** | −8,95% | 🔴🔴 KRASCH! |
+| **Dow Jones** | −0,16% | 🟡 Neutral |
+| **VIX** | −4,55% → 16,38 | 🟢 Lugnare |
 
-**Sammanfattning:**  
-USA-index blandade – Nasdaq stark tack vare teknik, medan Dow backade. Asien tyngdes av Japan (-1,9%). VIX faller, vilket tyder på minskad oro. Europa var mestadels stilla. Inga större makrohändelser imorgon.
+**Kinas börs (SSE):** Data saknas – håll utkik.
 
 ---
 
-## 🏆 Topp 5 möjligheter (högst score)
+## 🏆 Topp 5 möjligheter idag
 
 | Ticker | Score | Signal |
 |--------|-------|--------|
-| **BNS.TO** (Bank of Nova Scotia) | 73,5 | 🚀 Utbrott – 0% från ATH |
-| **000660.KS** (SK Hynix) | 71,9 | Stark |
-| **V** (Visa) | 71,7 | 🚀 Utbrott – -0% från ATH |
-| **FTNT** (Fortinet) | 69,6 | 🚀 Utbrott – 0% från ATH |
-| **MYCR.ST** (Mycronic) | 69,3 | Stark |
+| **BNS.TO** (Bank of Nova Scotia) | **73,7** | 🚀 Utbrott – 0% från ATH |
+| **V** (Visa) | **72,3** | 🚀 Utbrott – ATH-nära |
+| **FTNT** (Fortinet) | **69,5** | 🚀 Utbrott |
+| **2330.TW** (TSMC) | **69,4** | Stark – AI-vind |
+| **LLY** (Eli Lilly) | **69,0** | Stark |
 
-**Kommentar:**  
-- **BNS.TO** – Nytt 1-årshögsta, men analytiker säger "Hold". Gå in försiktigt.  
-- **SK Hynix** – Barclays ser över 100% uppsida, men bolaget varnar för 2027. Risk/reward?  
-- **Visa** – Baird höjer riktkurs, JP Morgan uppgraderar. Starkt momentum.  
-- **Fortinet** – Expanderar AI-portföljen. Marknaden gillar det.  
-- **Mycronic** – Rusar på rapport, drar med sig Bure. "Levererar mer än väntat."
+**BNS.TO** och **V** har STARK entry-signal (score ≥72) – båda i utbrottsläge. **FTNT** expanderar AI-cybersäkerhet – positivt.
 
 ---
 
-## 📉 Botten 5 – Håll avstånd
+## 📉 Botten 5 – Varning
 
 | Ticker | Score | Kommentar |
 |--------|-------|-----------|
-| MIGI | 19,6 | Mycket svag |
-| NXE.TO | 26,4 | Uranbolag i motvind |
-| HOLX, RWI.L, COB.L m.fl. | 27,0 | Alla i botten – undvik |
+| **MIGI** | 19,8 | ⚠️ Undvik |
+| **NXE.TO** | 26,5 | ⚠️ Uran – svag |
+| **ALTM** | 26,9 | ⚠️ Lithium – press |
+| **X** (US Steel) | 26,9 | ⚠️ |
+| **CHK** | 26,9 | ⚠️ Energi – svag |
 
 ---
 
-## 🧾 Din portfölj – En riktig rysare idag! 🎢
+## 👤 Din portfölj – personlig analys
 
-| Innehav | Daglig förändring | Score | Entry-signal | Trend |
-|---------|-------------------|-------|--------------|-------|
-| **INVE-B.ST** (Investor B) | **+8,9%** 🚀 | 54,9 | EJ AKTUELL | UPPTREND |
-| **LÄNSFÖRSÄKRINGAR GLOBAL INDEX** | — | — | — | — |
-| **NCAB.ST** | **-1,6%** 😬 | 40,8 | EJ AKTUELL | ⚠️ VARNING |
-| **TAGM-B.ST** (TAGM) | **+19,2%** 🤯 | — | Överköpt | — |
+### Innehav idag:
 
-**Portföljens dagliga utveckling: +8,8%** – en kanondag! 🥳
+| Ticker | Idag | Score | Entry | Trend | RSI | Min analys |
+|--------|------|-------|-------|-------|-----|-----------|
+| **INVE-B.ST** | **+8,9%** | 55,4 | ⏸️ VÄNTA | 📈 UPPTREND | 52,6 | **Stark dag!** Men score 55 = svag. Nyheter: Chamath varnar för AI "tokenmaxxing" som kan skada intäkter. Vinsthemtagning? |
+| **LÄNSFÖRSÄKRINGAR GLOBAL** | — | — | — | — | — | Indexfond – stabil. Nyheter: "AI may now pose greatest risk" (NYT). Oroande rubrik, men långsiktigt OK. |
+| **NCAB.ST** | **−1,6%** | 41,1 | ❌ EJ AKTUELL | ⚠️ VARNING | 36,8 | **Undvik.** Score 41, RSI 36 (översåld men trend varning). Q1-rapport visar "strong growth amidst challenges" – men marknaden köper inte. |
+| **TAGM-B.ST** | **+19,2%** | — | 🔴 ÖVERKÖPT | — | 74,0 | **VARNING!** RSI 74 = extremt överköpt. +19% på en dag är ohållbart. Risk för kraftig rekyl. |
 
-### Analys per innehav:
+### 🚨 Akut varning: TAGM-B.ST
+RSI 74,0 och +19,2% på en dag – **överköpt signal**. Historiskt har sådana här dagar ofta följts av 5–10% nedgång inom 1–3 dagar. Överväg att sälja av en del.
 
-**INVE-B.ST (+8,9%)**  
-- **Systemet säger:** EJ AKTUELL (score 54,9 – under 55).  
-- **Min bedömning:** Trots låg score är trenden uppåtgående och RSI 52,6 är neutralt. Nyheterna är blandade – BofA varnar för för hög optimism, men globala investerare är fortsatt hajpade. **Håll, men var beredd på rekyl.**  
-
-**NCAB.ST (-1,6%)**  
-- **Systemet säger:** EJ AKTUELL (score 40,8) + VARNING-trend.  
-- **Min bedömning:** RSI 36,8 nära översålt, men trenden är negativ. Q1-rapporten visade "strong growth amidst challenges" – men marknaden köper det inte. **Avvakta – ingen brådska in.**  
-
-**TAGM-B.ST (+19,2%)**  
-- **Systemet säger:** Överköpt (RSI 74).  
-- **Min bedömning:** En enorm dag, men RSI signalerar överköpt. Risk för vinsthemtagning. **Överväg att ta hem viss vinst om du har överskott.**  
-
-**LÄNSFÖRSÄKRINGAR GLOBAL INDEX**  
-- Ingen daglig data, men fonden är bred och stabil. Inget att oroa sig för.
+### ✅ INVE-B.ST – bra men...
++8,9% är fantastiskt, men score 55,4 är för lågt för att vara "STARK". Nyheten om Chamaths AI-varning kan vara en varningssignal. Trenden är dock upp – behåll men sätt en stop-loss.
 
 ---
 
-## 🔍 Möjligheter att hålla koll på
+## 🎯 Rekommendationer för imorgon
 
-| Ticker | Typ | Varför? |
-|--------|-----|---------|
-| **BNS.TO** | 🚀 Utbrott | Ny ATH, men "Hold" från analytiker. Försiktig köp? |
-| **V** | 🚀 Utbrott | Starkt momentum, JP Morgan gillar. |
-| **FTNT** | 🚀 Utbrott | AI-expansion, marknaden gillar. |
+**Köpvärd:** **BNS.TO** (score 73,7 – utbrott, ATH-nära) och **V** (72,3 – utbrott). Båda har STARK entry-signal.
 
----
+**Sälj/trimma:** **TAGM-B.ST** (överköpt) och överväg att minska **INVE-B.ST** efter dagens rusning.
 
-## 📅 Imorgon: Inga makrohändelser eller rapporter
-
-Lugn dag på makrofronten. Fokus på enskilda aktier och sektorer.
+**Undvik:** **NCAB.ST** – EJ AKTUELL, varningstrend.
 
 ---
 
-## 🧠 Personlig sammanfattning till dig
+## 📰 Nyhetsflash
 
-**Dagens prestation:** +8,8% – en av dina bästa dagar! 🎉  
-**Största vinnare:** TAGM (+19,2%) och Investor (+8,9%).  
-**Största förlorare:** NCAB (-1,6%) – men den är liten i portföljen.
-
-**Rekommendation:**  
-- **INVE-B.ST** – Håll, men överväg att ta hem lite vinst om du är tung.  
-- **NCAB.ST** – Vänta på bättre entry. RSI nära översålt, men trenden är negativ.  
-- **TAGM-B.ST** – Överköpt – överväg att sälja av en del.  
-- **Fonden** – Fortsätt månadsspara som vanligt.
-
-**Tips:** Kolla in **Visa (V)** och **Fortinet (FTNT)** – båda har starka signaler och positiv nyhetsflow. Kan vara värda en plats på watchlist.
+- **TSMC** förväntas rapportera rekordvinst – AI-boomen fortsätter. Positivt för 2330.TW.
+- **Eli Lilly** – oroande trend i obesitasläkemedelsmarknaden. Värt att följa.
+- **Bank of Nova Scotia** – nytt ATH, går med i AI-infrastruktur-konsortium. 🚀
 
 ---
 
-Ha en bra kväll! Imorgon är en ny dag med nya möjligheter. 🚀📈
+## 📝 Sammanfattning
 
-*– MarketScan AI*
+**Dagens vinnare:** Din portfölj steg **+8,83%** – tack vare TAGM (+19%) och INVE (+9%). Grattis! 🎉
+
+**Men:** TAGM är överköpt och INVE har svag score. Var försiktig imorgon.
+
+**Bästa chansen:** BNS.TO och V – båda i utbrottsläge med STARK signal.
+
+**Makro imorgon:** Inga större händelser – marknaden kan röra sig på teknikmomentum.
+
+*Vill du ha djupare analys på någon aktie?* 🧠
