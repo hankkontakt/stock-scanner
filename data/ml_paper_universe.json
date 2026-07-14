@@ -2799,6 +2799,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-14",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 21.969999313354492,
+      "predicted_return": 1.6901079928169433,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-14",
+      "ticker": "FIX",
+      "name": "Comfort Systems USA, Inc.",
+      "entry_price": 1756.0899658203125,
+      "predicted_return": 1.6407911290358748,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-14",
+      "ticker": "HUT",
+      "name": "Hut 8 Corp.",
+      "entry_price": 102.22000122070312,
+      "predicted_return": 1.3908821351607845,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-14",
+      "ticker": "6976.T",
+      "name": "Taiyo Yuden Co., Ltd.",
+      "entry_price": 14730.0,
+      "predicted_return": 1.3471379759054705,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-14",
+      "ticker": "BE",
+      "name": "Bloom Energy Corporation",
+      "entry_price": 244.61000061035156,
+      "predicted_return": 1.287667105232304,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-14",
+      "ticker": "042700.KS",
+      "name": "HANMI Semiconductor Co., Ltd.",
+      "entry_price": 222000.0,
+      "predicted_return": 1.1987605344389238,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-14",
+      "ticker": "028260.KS",
+      "name": "Samsung C&T Corporation",
+      "entry_price": 391500.0,
+      "predicted_return": 1.195704403679466,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-14",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 255.3000030517578,
+      "predicted_return": 1.1180228542173865,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-14",
+      "ticker": "012330.KS",
+      "name": "Hyundai Mobis Co.,Ltd",
+      "entry_price": 488000.0,
+      "predicted_return": 1.097269933783157,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-14",
+      "ticker": "000660.KS",
+      "name": "SK hynix Inc.",
+      "entry_price": 2180000.0,
+      "predicted_return": 1.0727421160953197,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -2941,6 +3041,11 @@
       "date": "2026-07-13",
       "equity": 100000.0,
       "n_open": 280
+    },
+    {
+      "date": "2026-07-14",
+      "equity": 100000.0,
+      "n_open": 290
     }
   ]
 }
