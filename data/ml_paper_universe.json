@@ -2899,6 +2899,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "STX",
+      "name": "Seagate Technology Holdings plc",
+      "entry_price": 910.3400268554688,
+      "predicted_return": 1.805935744993641,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "CRDO",
+      "name": "Credo Technology Group Holding Ltd",
+      "entry_price": 257.7900085449219,
+      "predicted_return": 1.6128351868277753,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 255.3000030517578,
+      "predicted_return": 1.477155445288571,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "WDC",
+      "name": "Western Digital Corporation",
+      "entry_price": 582.5900268554688,
+      "predicted_return": 1.4548554970304195,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "000660.KS",
+      "name": "SK hynix Inc.",
+      "entry_price": 2180000.0,
+      "predicted_return": 1.4346653928972197,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "042700.KS",
+      "name": "HANMI Semiconductor Co., Ltd.",
+      "entry_price": 222000.0,
+      "predicted_return": 1.4295237184251368,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "FIX",
+      "name": "Comfort Systems USA, Inc.",
+      "entry_price": 1756.0899658203125,
+      "predicted_return": 1.4104968004445784,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "006400.KS",
+      "name": "Samsung SDI Co., Ltd.",
+      "entry_price": 434000.0,
+      "predicted_return": 1.3450495841687078,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "012330.KS",
+      "name": "Hyundai Mobis Co.,Ltd",
+      "entry_price": 488000.0,
+      "predicted_return": 1.2914183135834358,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-15",
+      "ticker": "BE",
+      "name": "Bloom Energy Corporation",
+      "entry_price": 244.61000061035156,
+      "predicted_return": 1.2616048248787517,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -3046,6 +3146,11 @@
       "date": "2026-07-14",
       "equity": 100000.0,
       "n_open": 290
+    },
+    {
+      "date": "2026-07-15",
+      "equity": 100000.0,
+      "n_open": 300
     }
   ]
 }
