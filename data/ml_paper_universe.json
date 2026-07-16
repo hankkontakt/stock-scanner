@@ -2999,6 +2999,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-16",
+      "ticker": "STX",
+      "name": "Seagate Technology Holdings plc",
+      "entry_price": 910.3400268554688,
+      "predicted_return": 1.8145333908013024,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-16",
+      "ticker": "BE",
+      "name": "Bloom Energy Corporation",
+      "entry_price": 244.61000061035156,
+      "predicted_return": 1.688231628736941,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-16",
+      "ticker": "HUT",
+      "name": "Hut 8 Corp.",
+      "entry_price": 102.22000122070312,
+      "predicted_return": 1.6584574156141951,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-16",
+      "ticker": "000660.KS",
+      "name": "SK hynix Inc.",
+      "entry_price": 2180000.0,
+      "predicted_return": 1.5640708611275782,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-16",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 255.3000030517578,
+      "predicted_return": 1.5514889720891594,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-16",
+      "ticker": "CRDO",
+      "name": "Credo Technology Group Holding Ltd",
+      "entry_price": 257.7900085449219,
+      "predicted_return": 1.486365929096688,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-16",
+      "ticker": "012330.KS",
+      "name": "Hyundai Mobis Co.,Ltd",
+      "entry_price": 488000.0,
+      "predicted_return": 1.4150068040275574,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-16",
+      "ticker": "FIX",
+      "name": "Comfort Systems USA, Inc.",
+      "entry_price": 1756.0899658203125,
+      "predicted_return": 1.2032772299429526,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-16",
+      "ticker": "AMAT",
+      "name": "Applied Materials, Inc.",
+      "entry_price": 602.5,
+      "predicted_return": 1.0941738687114984,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-16",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 1.0950000286102295,
+      "predicted_return": 1.0895308527531555,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -3151,6 +3251,11 @@
       "date": "2026-07-15",
       "equity": 100000.0,
       "n_open": 300
+    },
+    {
+      "date": "2026-07-16",
+      "equity": 100000.0,
+      "n_open": 310
     }
   ]
 }
