@@ -3099,6 +3099,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-17",
+      "ticker": "FIX",
+      "name": "Comfort Systems USA, Inc.",
+      "entry_price": 1756.0899658203125,
+      "predicted_return": 1.9411279295420678,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-17",
+      "ticker": "STX",
+      "name": "Seagate Technology Holdings plc",
+      "entry_price": 910.3400268554688,
+      "predicted_return": 1.5926097620176765,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-17",
+      "ticker": "BE",
+      "name": "Bloom Energy Corporation",
+      "entry_price": 244.61000061035156,
+      "predicted_return": 1.5868232323674774,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-17",
+      "ticker": "WDC",
+      "name": "Western Digital Corporation",
+      "entry_price": 582.5900268554688,
+      "predicted_return": 1.5584406568025369,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-17",
+      "ticker": "058470.KQ",
+      "name": "LEENO Industrial Inc.",
+      "entry_price": 73800.0,
+      "predicted_return": 1.4239113221266342,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-17",
+      "ticker": "028260.KS",
+      "name": "Samsung C&T Corporation",
+      "entry_price": 391500.0,
+      "predicted_return": 1.4217949410250896,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-17",
+      "ticker": "AMAT",
+      "name": "Applied Materials, Inc.",
+      "entry_price": 602.5,
+      "predicted_return": 1.3872791342414639,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-17",
+      "ticker": "006400.KS",
+      "name": "Samsung SDI Co., Ltd.",
+      "entry_price": 434000.0,
+      "predicted_return": 1.2656383922024408,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-17",
+      "ticker": "POWL",
+      "name": "Powell Industries, Inc.",
+      "entry_price": 232.19000244140625,
+      "predicted_return": 1.2503850075926353,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-17",
+      "ticker": "5801.T",
+      "name": "Furukawa Electric Co., Ltd.",
+      "entry_price": 3725.0,
+      "predicted_return": 1.1881471937416888,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -3256,6 +3356,11 @@
       "date": "2026-07-16",
       "equity": 100000.0,
       "n_open": 310
+    },
+    {
+      "date": "2026-07-17",
+      "equity": 100000.0,
+      "n_open": 320
     }
   ]
 }
