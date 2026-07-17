@@ -1,104 +1,77 @@
 # 📊 MarketScan AI – Kvällsrapport
 
-**Datum:** Idag  
-**Portfölj:** +1,9% 🟢  
-**Innehav:** 4 st (varav 1 fond)
+**Datum:** Idag | **Portfölj:** +1,9% 📈
 
 ---
 
-## 🌍 Marknadsläget – Blandat på globala börser
+## 🌍 Makroöversikt – Blandad världsbild
 
-| Index | Förändring | Kommentar |
-|-------|-----------|-----------|
-| 🇯🇵 Nikkei | **−2,79%** | Tung dag i Asien – oljepris oroar |
-| 🇰🇷 KOSPI | **−6,37%** | Rejält fall, sannolikt tekniknedgång |
-| 🇭🇰 Hang Seng | **+1,33%** | Positiv avvikelse i Asien |
-| 🇺🇸 S&P 500 | **−0,62%** | Svag dag på Wall Street |
-| 🇩🇪 DAX | **−0,34%** | Europeisk försiktighet |
-| 📈 VIX | **+7,71% → 18,02** | Oro stiger – håll ögonen öppna |
+| Index | Förändring | Status |
+|-------|-----------|--------|
+| 🇭🇰 **Hang Seng** | **+1,33%** | Styrka i Asien |
+| 🇯🇵 Nikkei 225 | −2,79% | Tekniknedgång |
+| 🇰🇷 KOSPI | **−6,37%** | 🚨 Kraftig smäll |
+| 🇮🇳 BSE Sensex | +1,25% | Positivt |
+| 🇺🇸 S&P 500 | −0,70% | Svaghet |
+| 🇩🇪 DAX | −0,34% | Stabilare |
+| 📊 **VIX** | **+5,98%** → 17,73 | Oro stiger |
 
-**Sammanfattning:** Asien tyngde, Europa och USA följde efter. VIX över 18 signalerar ökad nervositet – men inte panik.
-
----
-
-## 🏆 Dina innehav – analys
-
-### 🟢 **INVE-B.ST** – +8,9% idag! 🚀
-| Signal | Trend | RSI | Score |
-|--------|-------|-----|-------|
-| **VÄNTA** | UPPTREND | 50,0 | 56,5 |
-
-**Analys:** En riktig kanondag! Men systemet säger **VÄNTA** – trots upptrend. Varför? Score 56,5 är under tröskeln för OK (65). RSI 50 är neutralt, så inget överköpt. Nyheterna visar dock orosmoln: *"AI-boom byggd på skuld – investerarefterfrågan faller"* (Fortune). Det kan påverka Investor som exponerat mot AI-bolag.
-
-**Min bedömning:** Håll kvar, men var beredd på volatilitet. Upptrenden är stark, men nyhetsbilden är tudelad.
-
-### 🟡 **Länsförsäkringar Global Index** – Fond, ingen daglig data
-Nyheter: Asien faller, Japan −2,8%. Inget dramatiskt för en globalfond – fortsätt månadsspara.
-
-### 🔴 **NCAB.ST** – −0,9%
-| Signal | Trend | RSI |
-|--------|-------|-----|
-| Neutral | -- | 35,3 |
-
-**Analys:** RSI 35,3 – nära översålt. Q1-rapport ute idag: *"Strong Growth Amidst Challenges"* (GuruFocus). Bolaget visar tillväxt men utmaningar kvarstår. Priset nära botten – kan vara en intressant ingång om du tror på återhämtning.
-
-### 🔴 **TAGM-B.ST** – −2,3%
-| Signal | Trend | RSI |
-|--------|-------|-----|
-| Neutral | -- | 35,1 |
-
-**Analys:** Samma mönster som NCAB – RSI 35,1, översålt territorium. Ingen färsk nyhet. Håll koll på nästa rapport.
+**Analys:** Asien splittrat – Hongkong stark, medan Korea och Japan faller på teknikoron. USA-index backar brett, och VIX klättrar över 17 – tecken på ökad nervositet. Inga makrohändelser imorgon.
 
 ---
 
-## 🔭 Topp 5 möjligheter idag
+## 🏆 Topp 5 möjligheter (högst score)
 
-| Ticker | Score | Signal | Varför? |
-|--------|-------|--------|---------|
-| **V** (Visa) | **72,0** | 🚀 Utbrott | −0,0% från ATH! Starkast i dagens data |
-| **BNS.TO** (Bank of Nova Scotia) | **71,7** | 🚀 Utbrott | −0,7% från ATH, crypto-exponering |
-| **LLY** (Eli Lilly) | **70,2** | 🚀 Utbrott | −4,6% från ATH, GLP-1-franchise stark |
-| **2330.TW** (TSMC) | **69,4** | OK | AI-chipboom, höjd capex |
-| **AAPL** (Apple) | **69,1** | OK | Återtog världens mest värdefulla bolag |
+| Ticker | Score | Signal | Kommentar |
+|--------|-------|--------|-----------|
+| **V** | 72,0 | 🚀 Utbrott | −0% från ATH – starkt momentum |
+| **BNS.TO** | 71,3 | 🚀 Utbrott | −1% från ATH, bra utdelning |
+| **LLY** | 70,1 | 🚀 Utbrott | −4,8% från ATH, GLP-1-franchise |
+| **2330.TW** | 69,4 | OK | TSMC – AI-oro tynger, men starkt köpråd |
+| **MA** | 69,0 | OK | Stablecoin-satsning driver |
 
-**Min rekommendation:**  
-- **V** och **LLY** ser starkast ut – båda nära ATH med höga scores.  
-- **BNS.TO** har crypto-exponering (TeraWulf, CleanSpark) – hög risk, hög potential.
+**Min bedömning:** V och MA är intressanta – båda har stablecoin-nyheter som katalysator. LLY har långsiktig styrka i GLP-1. TSMC påverkas av AI-sentimentet men har starka fundamenta.
 
 ---
 
-## ⚠️ Botten 5 – Undvik just nu
+## 📉 Botten 5 – Undvik tillsvidare
 
-| Ticker | Score | Kommentar |
-|--------|-------|-----------|
-| MIGI | 19,8 | Mycket svag |
-| MOR.DE | 26,7 | Riskabel |
-| ALTM | 26,7 | Undvik |
-| JBSS3.SA | 26,7 | Brasiliansk risk |
-| SHG.L | 26,7 | London-noterad, svag |
+MIGI (19,8), MSY.L, HMED.ST, CRAYN.OL, JBSS3.SA – alla under 27 i score. **EJ AKTUELLA.**
 
 ---
 
-## 📰 Nyhetsflash – Viktigast för din portfölj
+## 💼 Din portfölj – Analys
 
-1. **INVE-B.ST:** *"AI-boom byggd på skuld – investerarefterfrågan faller"* ⚠️ Kan påverka Investor negativt framöver.
-2. **NCAB.ST:** Q1-rapport visar *"Strong Growth Amidst Challenges"* – positivt men priset reagerar inte än.
-3. **AAPL:** Återtog världens mest värdefulla bolag – AI-strategin får uppgradering.
-4. **LLY:** GLP-1-franchise hotas inte av generika enligt UBS – fortsatt stark.
+| Innehav | Daglig | Score | Entry | Trend | RSI | Min kommentar |
+|---------|--------|-------|-------|-------|-----|---------------|
+| **INVE-B.ST** 🟢 | **+8,9%** | 56,4 | ⏳ VÄNTA | UPPTREND | 50,0 | **Stark dag!** Q2-rapport visar starka aktieägaravkastningar. Men score 56,4 är under 65 – systemet säger VÄNTA. Jag håller med: trots uppgången är RSI neutral (50) och pullback från 52v-high är liten. **Behåll, men köp inte mer nu.** |
+| **LÄNSFÖRSÄKRINGAR GLOBAL** | — | — | — | — | — | Globalfond – följer marknaden. Ingen åtgärd. |
+| **NCAB.ST** 🔴 | −0,9% | — | Neutral | — | 35,3 | RSI 35,3 = nära översålt. Q1-rapport visar stark tillväxt. **Kan vara köpläge om du tror på återhämtning.** |
+| **TAGM-B.ST** 🔴 | −2,3% | — | Neutral | — | 35,1 | RSI 35,1 – också nära översålt. Ingen nyhetskatalysator synlig. **Avvakta.** |
+
+**Portfölj totalt: +1,9% idag** – drivet av Investors monsterdag! 🚀
 
 ---
 
-## 🧠 Personlig sammanfattning
+## 🔥 Dagens hetaste nyheter
 
-**Dagens prestation:** +1,9% – bra! 🎉  
-**Starkaste kortet:** INVE-B.ST med +8,9% – men var vaksam på AI-skuldsnyheten.  
-**Svagaste:** TAGM-B.ST och NCAB – båda i översålt läge, kan vara köpläge om du har is i magen.
+**INVE-B.ST:** Q2 2026 rapport – starka avkastningar. Styrelseförändringar sätter fokus på värdering. **Positivt.**
 
-**Rekommendation inför imorgon:**
-- **Behåll INVE-B.ST** men sätt en stop-loss om du är nervös.
-- **Kolla in V och LLY** – båda har utbrottspotential.
-- **Inga makrohändelser imorgon** – marknaden driver på egna nyheter.
+**V:** Stablecoin-plattform lanseras. "Can Visa Stock Compound Its Way Higher?" – flera analyser positiva. **Katalysator.**
 
-**Mitt råd:** Din portfölj är välbalanserad med en globalfond som stabilisator. Innehaven i NCAB och TAGM är i riskzonen men kan vända – håll koll på RSI och nästa rapporter.
+**LLY:** UBS ser begränsat generikahot för GLP-1. Aktien handlas över $1 200. **Långsiktigt stark.**
 
-**Lycka till imorgon! 🚀📈**
+**2330.TW:** AI-oro tynger sektorn – kinesisk startup släpper ny AI-modell. TSMC får ändå "Strong Buy" från Zacks. **Konträr möjlighet?**
+
+---
+
+## 🎯 Min personliga rekommendation
+
+1. **INVE-B.ST** – Grattis till dagens rally! Men VÄNTA med nya köp tills score når 65+ eller RSI dippar under 35.
+2. **NCAB & TAGM** – Båda nära översålt. Håll koll – om RSI når 30 kan det vara köpläge.
+3. **V** – Högst score i systemet, utbrott från ATH, starka nyheter. **Värt att titta närmare på.**
+4. **LLY** – Långsiktig kvalitet, men vänta på bättre entry (pullback närmare 10%).
+
+**Dagens lärdom:** Asien oroar, men din portfölj levererade. Investors +8,9% visar värdet av kvalitetsbolag i oroliga tider. 🛡️
+
+*Vill du ha djupare analys av någon aktie?*

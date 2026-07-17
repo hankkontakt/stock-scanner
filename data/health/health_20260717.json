@@ -6,7 +6,7 @@
     "finnhub": "ok"
   },
   "data_freshness": {
-    "latest_scan": "2026-07-17 16:44",
+    "latest_scan": "2026-07-17 17:44",
     "age_hours": 0.1,
     "file": "scored_universe_2026-07-17.parquet",
     "stale": false
@@ -39,9 +39,9 @@
   "last_pipeline_run": {
     "mode": "evening",
     "status": "OK",
-    "duration": 462.0,
-    "timestamp": "2026-07-17T16:51:56"
+    "duration": 496.2,
+    "timestamp": "2026-07-17T17:52:36"
   },
   "degraded_components": [],
-  "checked_at": "2026-07-17T16:51:56.621510"
+  "checked_at": "2026-07-17T17:52:36.253115"
 }
