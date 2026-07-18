@@ -304,5 +304,23 @@
       "SINT.ST",
       "UPSALE.ST"
     ]
+  },
+  "2026-07-18": {
+    "capital": 100000,
+    "universe": "universe",
+    "n_picks": 10,
+    "benchmark_buy": 743.2899780273438,
+    "tickers": [
+      "LLY",
+      "FTNT",
+      "NVDA",
+      "2330.TW",
+      "V",
+      "KO",
+      "EXEL",
+      "MNST",
+      "CPRX",
+      "INCY"
+    ]
   }
 }

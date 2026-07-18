@@ -3199,6 +3199,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-18",
+      "ticker": "SMHN.DE",
+      "name": "SUSS MicroTec SE",
+      "entry_price": 79.30000305175781,
+      "predicted_return": 2.3623141252814186,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-18",
+      "ticker": "S92.DE",
+      "name": "SMA Solar Technology AG",
+      "entry_price": 61.54999923706055,
+      "predicted_return": 2.2410111501124734,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-18",
+      "ticker": "5802.T",
+      "name": "Sumitomo Electric Industries, Ltd.",
+      "entry_price": 2249.0,
+      "predicted_return": 2.122513324817555,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-18",
+      "ticker": "6506.T",
+      "name": "YASKAWA Electric Corporation",
+      "entry_price": 5116.0,
+      "predicted_return": 1.7525983515674717,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-18",
+      "ticker": "STMPA.PA",
+      "name": "STMicroelectronics N.V.",
+      "entry_price": 58.95000076293945,
+      "predicted_return": 1.6911906752169026,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-18",
+      "ticker": "ACCON.ST",
+      "name": "Acconeer AB (publ)",
+      "entry_price": 19.440000534057617,
+      "predicted_return": 1.620849907248836,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-18",
+      "ticker": "AMKR",
+      "name": "Amkor Technology, Inc.",
+      "entry_price": 69.55999755859375,
+      "predicted_return": 1.612512371641148,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-18",
+      "ticker": "5801.T",
+      "name": "Furukawa Electric Co., Ltd.",
+      "entry_price": 3262.0,
+      "predicted_return": 1.594112688332725,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-18",
+      "ticker": "WDC",
+      "name": "Western Digital Corporation",
+      "entry_price": 477.2200012207031,
+      "predicted_return": 1.5559917733295803,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-18",
+      "ticker": "JOBY",
+      "name": "Joby Aviation, Inc.",
+      "entry_price": 8.829999923706055,
+      "predicted_return": 1.515924304185465,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -3361,6 +3461,11 @@
       "date": "2026-07-17",
       "equity": 100000.0,
       "n_open": 320
+    },
+    {
+      "date": "2026-07-18",
+      "equity": 100000.0,
+      "n_open": 330
     }
   ]
 }

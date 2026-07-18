@@ -1,0 +1,47 @@
+{
+  "status": "healthy",
+  "api_keys": {
+    "deepseek": "ok",
+    "gemini": "ok",
+    "finnhub": "ok"
+  },
+  "data_freshness": {
+    "latest_scan": "2026-07-18 09:21",
+    "age_hours": 0.0,
+    "file": "scored_universe_2026-07-18.parquet",
+    "stale": false
+  },
+  "model_status": {
+    "universe_model": "ok",
+    "days_since_training": 0,
+    "model_file": "ml_ranker_universe.pkl"
+  },
+  "disk_usage": {
+    "data_dir_mb": 30.2,
+    "reports_dir_mb": 28.0,
+    "models_dir_mb": 7.9,
+    "total_mb": 66.1,
+    "total_gb": 0.06,
+    "free_gb": 12.2,
+    "total_gb_disk": 71.6
+  },
+  "recent_errors": [],
+  "cache_stats": {
+    "total_files": 0,
+    "oldest_hours": 0,
+    "total_size_mb": 0
+  },
+  "portfolio_status": {
+    "n_holdings": 4,
+    "n_watchlist": 0,
+    "n_open_trades": 0
+  },
+  "last_pipeline_run": {
+    "mode": "weekly",
+    "status": "OK",
+    "duration": 1832.5,
+    "timestamp": "2026-07-18T09:23:37"
+  },
+  "degraded_components": [],
+  "checked_at": "2026-07-18T09:23:38.103116"
+}

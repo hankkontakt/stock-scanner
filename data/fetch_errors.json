@@ -1,155 +1,5 @@
 [
   {
-    "timestamp": "2026-06-02T09:45:47Z",
-    "total": 1211,
-    "n_ok": 1194,
-    "n_failed": 17,
-    "n_delisted": 0,
-    "n_rate_limited": 58,
-    "rate_limited_tickers": [
-      "006400.KS",
-      "9999.HK",
-      "SSAB-B.ST",
-      "NCAB.ST",
-      "TAGM-B.ST",
-      "RGLD",
-      "000270.KS",
-      "THULE.ST",
-      "068270.KS",
-      "051910.KS",
-      "AG",
-      "9988.HK",
-      "MP",
-      "SWEC-B.ST",
-      "035720.KS",
-      "1810.HK",
-      "ALFA.ST",
-      "DIOS.ST",
-      "HUSQ-B.ST",
-      "207940.KS",
-      "TMUS",
-      "2318.HK",
-      "086790.KS",
-      "VZ",
-      "T",
-      "012330.KS",
-      "PAAS",
-      "011070.KS",
-      "NCC-B.ST",
-      "ATCO-A.ST",
-      "ADDT-B.ST",
-      "HEXA-B.ST",
-      "0700.HK",
-      "LAGR-B.ST",
-      "WPM",
-      "GOLD",
-      "MSAB-B.ST",
-      "005380.KS",
-      "ATCO-B.ST",
-      "028260.KS",
-      "FNV",
-      "AEM",
-      "KGC",
-      "TROAX.ST",
-      "105560.KS",
-      "9618.HK",
-      "AFRY.ST",
-      "RBLX",
-      "3690.HK",
-      "SAND",
-      "RILBA.CO",
-      "SSAB-A.ST"
-    ],
-    "failed_tickers": [
-      {
-        "ticker": "EXAS",
-        "status": "FAILED",
-        "pass": 1
-      },
-      {
-        "ticker": "PHNX.L",
-        "status": "FAILED",
-        "pass": 1
-      },
-      {
-        "ticker": "RWI.L",
-        "status": "FAILED",
-        "pass": 1
-      },
-      {
-        "ticker": "6406.T",
-        "status": "FAILED",
-        "pass": 1
-      },
-      {
-        "ticker": "0011.HK",
-        "status": "FAILED",
-        "pass": 1
-      },
-      {
-        "ticker": "TATAMOTORS.NS",
-        "status": "FAILED",
-        "pass": 1
-      },
-      {
-        "ticker": "JBSS3.SA",
-        "status": "FAILED",
-        "pass": 1
-      },
-      {
-        "ticker": "BRFS3.SA",
-        "status": "FAILED",
-        "pass": 1
-      },
-      {
-        "ticker": "EMBR3.SA",
-        "status": "FAILED",
-        "pass": 1
-      },
-      {
-        "ticker": "AZUL4.SA",
-        "status": "FAILED",
-        "pass": 1
-      },
-      {
-        "ticker": "CENY.BR",
-        "status": "FAILED",
-        "pass": 1
-      },
-      {
-        "ticker": "X",
-        "status": "RATE_LIMITED",
-        "pass": 2
-      },
-      {
-        "ticker": "AA",
-        "status": "RATE_LIMITED",
-        "pass": 2
-      },
-      {
-        "ticker": "ALB",
-        "status": "RATE_LIMITED",
-        "pass": 2
-      },
-      {
-        "ticker": "STLD",
-        "status": "RATE_LIMITED",
-        "pass": 2
-      },
-      {
-        "ticker": "ALTM",
-        "status": "FAILED",
-        "pass": 2
-      },
-      {
-        "ticker": "CRAYN.OL",
-        "status": "FAILED",
-        "pass": 2
-      }
-    ],
-    "delisted_tickers": []
-  },
-  {
     "timestamp": "2026-06-02T10:30:39Z",
     "total": 1211,
     "n_ok": 1202,
@@ -1064,6 +914,162 @@
         "ticker": "CENY.BR",
         "status": "SKIPPED",
         "pass": 1
+      }
+    ],
+    "delisted_tickers": []
+  },
+  {
+    "timestamp": "2026-07-18T09:21:39Z",
+    "total": 1200,
+    "n_ok": 1192,
+    "n_failed": 8,
+    "n_delisted": 0,
+    "n_rate_limited": 105,
+    "rate_limited_tickers": [
+      "TTWO",
+      "HDFCBANK.NS",
+      "2333.HK",
+      "PLD",
+      "RELIANCE.NS",
+      "ROCK-A.CO",
+      "SNAP",
+      "GN.CO",
+      "GE",
+      "RBLX",
+      "ROKU",
+      "CAMT",
+      "HOLN.SW",
+      "TOM.OL",
+      "WBD",
+      "FLS.CO",
+      "DNB.OL",
+      "VAIAS.HE",
+      "2628.HK",
+      "NHY.OL",
+      "UPS",
+      "NOC",
+      "UMG.AS",
+      "HUBB",
+      "ZG",
+      "JYSK.CO",
+      "RTX",
+      "SALM.OL",
+      "PSA",
+      "BHARTIARTL.NS",
+      "WIPRO.NS",
+      "BA",
+      "KPN.AS",
+      "AXISBANK.NS",
+      "ISS.CO",
+      "LMT",
+      "2800.HK",
+      "EDP.LS",
+      "ROK",
+      "ENI.MI",
+      "FDX",
+      "MOWI.OL",
+      "FN",
+      "TCS.NS",
+      "WELL",
+      "MT.AS",
+      "ICICIBANK.NS",
+      "CCI",
+      "EQIX",
+      "SUNPHARMA.NS",
+      "PINS",
+      "PH",
+      "GD",
+      "RILBA.CO",
+      "MMM",
+      "DANSKE.CO",
+      "ITW",
+      "WKL.AS",
+      "TITAN.NS",
+      "ADANIENT.NS",
+      "LYV",
+      "MGA",
+      "POWL",
+      "ETN",
+      "ORK.OL",
+      "SPG",
+      "DLR",
+      "OMV.VI",
+      "NSIS-B.CO",
+      "YAR.OL",
+      "VOD.L",
+      "EQNR.OL",
+      "MSGS",
+      "INFY.NS",
+      "AMT",
+      "2382.HK",
+      "DE",
+      "AKZA.AS",
+      "PKN.WA",
+      "KOG.OL",
+      "COLO-B.CO",
+      "ENS",
+      "HCLTECH.NS",
+      "MOD",
+      "EMR",
+      "ENEL.MI",
+      "HON",
+      "SBIN.NS",
+      "PUB.PA",
+      "TM",
+      "AI.PA",
+      "KOTAKBANK.NS",
+      "IMCD.AS",
+      "O",
+      "NVMI",
+      "CAT",
+      "GALP.LS",
+      "TEL.OL",
+      "AKSO.OL",
+      "MARUTI.NS",
+      "EA",
+      "MTCH",
+      "TEF.MC"
+    ],
+    "failed_tickers": [
+      {
+        "ticker": "X",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "ALTM",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "RWI.L",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "7105.T",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "JBSS3.SA",
+        "status": "FAILED",
+        "pass": 1
+      },
+      {
+        "ticker": "CENY.BR",
+        "status": "SKIPPED",
+        "pass": 1
+      },
+      {
+        "ticker": "BWA",
+        "status": "RATE_LIMITED",
+        "pass": 2
+      },
+      {
+        "ticker": "CRAYN.OL",
+        "status": "FAILED",
+        "pass": 2
       }
     ],
     "delisted_tickers": []
