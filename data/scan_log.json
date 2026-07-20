@@ -1,14 +1,5 @@
 [
   {
-    "timestamp": "2026-06-22T16:00:47",
-    "scan_type": "portfolio_refresh",
-    "status": "OK",
-    "details": {
-      "scan_type": "portfolio_refresh",
-      "elapsed_seconds": 0.8
-    }
-  },
-  {
     "timestamp": "2026-06-22T18:41:20",
     "scan_type": "refresh_missing",
     "status": "OK",
@@ -807,6 +798,15 @@
     "details": {
       "scan_type": "smallcap",
       "elapsed_seconds": 98.0
+    }
+  },
+  {
+    "timestamp": "2026-07-20T10:42:39",
+    "scan_type": "refresh_missing",
+    "status": "OK",
+    "details": {
+      "scan_type": "refresh_missing",
+      "elapsed_seconds": 0.1
     }
   }
 ]
