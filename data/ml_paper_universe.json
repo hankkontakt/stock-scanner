@@ -3299,6 +3299,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "NVMI",
+      "name": "Nova Ltd.",
+      "entry_price": 437.4599914550781,
+      "predicted_return": 1.3076440263688134,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 1.1050000190734863,
+      "predicted_return": 1.3029498487442235,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 18.15999984741211,
+      "predicted_return": 1.1638758595474887,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "PRAA",
+      "name": "PRA Group, Inc.",
+      "entry_price": 18.1200008392334,
+      "predicted_return": 1.1209845514974721,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "CRDO",
+      "name": "Credo Technology Group Holding Ltd",
+      "entry_price": 202.67999267578125,
+      "predicted_return": 1.0590577194255588,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "5802.T",
+      "name": "Sumitomo Electric Industries, Ltd.",
+      "entry_price": 2249.0,
+      "predicted_return": 1.0023926659111102,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "MOD",
+      "name": "Modine Manufacturing Company",
+      "entry_price": 229.33999633789062,
+      "predicted_return": 0.8442491773709601,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "AMAT",
+      "name": "Applied Materials, Inc.",
+      "entry_price": 529.6599731445312,
+      "predicted_return": 0.8178395269499577,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "2395.TW",
+      "name": "Advantech Co., Ltd.",
+      "entry_price": 513.0,
+      "predicted_return": 0.7918815780587127,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "SEDG",
+      "name": "SolarEdge Technologies, Inc.",
+      "entry_price": 53.470001220703125,
+      "predicted_return": 0.7813794521282607,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -3466,6 +3566,11 @@
       "date": "2026-07-18",
       "equity": 100000.0,
       "n_open": 330
+    },
+    {
+      "date": "2026-07-20",
+      "equity": 100000.0,
+      "n_open": 340
     }
   ]
 }
