@@ -322,5 +322,23 @@
       "CPRX",
       "INCY"
     ]
+  },
+  "2026-07-20_smallcap": {
+    "capital": 100000,
+    "universe": "smallcap",
+    "n_picks": 10,
+    "benchmark_buy": 743.2899780273438,
+    "tickers": [
+      "CANTA.ST",
+      "TAGM-B.ST",
+      "MAGI.ST",
+      "CTM.ST",
+      "MEKKO.HE",
+      "MOB.ST",
+      "NAXS.ST",
+      "ADTR.ST",
+      "NTEK-B.ST",
+      "ALCA.ST"
+    ]
   }
 }

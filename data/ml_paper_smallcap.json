@@ -799,6 +799,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "ELIC.ST",
+      "name": "Elicera Therapeutics AB (publ)",
+      "entry_price": 2.665,
+      "predicted_return": 0.10765369981527328,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "DEDI.ST",
+      "name": "Dedicare AB (publ)",
+      "entry_price": 52.6,
+      "predicted_return": 0.0695754662156105,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "TOBII.ST",
+      "name": "Tobii AB (publ)",
+      "entry_price": 1.635,
+      "predicted_return": 0.06259337067604065,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "MOB.ST",
+      "name": "Moberg Pharma AB (publ)",
+      "entry_price": 9.25,
+      "predicted_return": 0.04727712646126747,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "NEXAM.ST",
+      "name": "Nexam Chemical Holding AB (publ)",
+      "entry_price": 3.52,
+      "predicted_return": 0.04615916311740875,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "IMPC.ST",
+      "name": "Impact Coatings AB (publ)",
+      "entry_price": 3.87,
+      "predicted_return": 0.03716897591948509,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "PRIC-B.ST",
+      "name": "Pricer AB (publ)",
+      "entry_price": 3.405,
+      "predicted_return": 0.03529036045074463,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "ASTOR.ST",
+      "name": "Scandinavian Astor Group AB (publ)",
+      "entry_price": 11.08,
+      "predicted_return": 0.03356066346168518,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "ORX.ST",
+      "name": "Orexo AB (publ)",
+      "entry_price": 22.95,
+      "predicted_return": 0.033031344413757324,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-20",
+      "ticker": "SUSG.ST",
+      "name": "Sustainion Group AB",
+      "entry_price": 1.8,
+      "predicted_return": 0.03222548961639404,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -841,6 +941,11 @@
       "date": "2026-07-13",
       "equity": 100000.0,
       "n_open": 80
+    },
+    {
+      "date": "2026-07-20",
+      "equity": 100000.0,
+      "n_open": 90
     }
   ]
 }
