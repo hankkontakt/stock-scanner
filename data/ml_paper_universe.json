@@ -3399,6 +3399,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-21",
+      "ticker": "AMD",
+      "name": "Advanced Micro Devices, Inc.",
+      "entry_price": 495.760009765625,
+      "predicted_return": 1.7901165213118346,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-21",
+      "ticker": "AMAT",
+      "name": "Applied Materials, Inc.",
+      "entry_price": 529.6599731445312,
+      "predicted_return": 1.7835780401716672,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-21",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 18.15999984741211,
+      "predicted_return": 1.5839462794410177,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-21",
+      "ticker": "CRDO",
+      "name": "Credo Technology Group Holding Ltd",
+      "entry_price": 202.67999267578125,
+      "predicted_return": 1.5037606695234131,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-21",
+      "ticker": "LRCX",
+      "name": "Lam Research Corporation",
+      "entry_price": 313.29998779296875,
+      "predicted_return": 1.4469635614512137,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-21",
+      "ticker": "PANW",
+      "name": "Palo Alto Networks, Inc.",
+      "entry_price": 358.67999267578125,
+      "predicted_return": 1.4289069273746176,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-21",
+      "ticker": "HUT",
+      "name": "Hut 8 Corp.",
+      "entry_price": 91.44999694824219,
+      "predicted_return": 1.4167755595493594,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-21",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 1.1050000190734863,
+      "predicted_return": 1.2451011038349382,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-21",
+      "ticker": "IREN",
+      "name": "IREN Limited",
+      "entry_price": 33.619998931884766,
+      "predicted_return": 1.2221426226054852,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-21",
+      "ticker": "POWL",
+      "name": "Powell Industries, Inc.",
+      "entry_price": 232.7899932861328,
+      "predicted_return": 1.219888342157837,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -3571,6 +3671,11 @@
       "date": "2026-07-20",
       "equity": 100000.0,
       "n_open": 340
+    },
+    {
+      "date": "2026-07-21",
+      "equity": 100000.0,
+      "n_open": 350
     }
   ]
 }

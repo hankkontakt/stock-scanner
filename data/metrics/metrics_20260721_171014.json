@@ -1,0 +1,33 @@
+{
+  "pipeline_duration_seconds": {
+    "evening": [
+      600.66486120224
+    ]
+  },
+  "fetch_duration_seconds": [],
+  "scoring_duration_seconds": [
+    4.022512912750244
+  ],
+  "tickers_fetched_total": 0,
+  "tickers_failed_total": 0,
+  "ai_calls_total": 1,
+  "ai_tokens_input_total": 2622,
+  "ai_tokens_output_total": 1685,
+  "email_sent_total": {
+    "evening_report": 1
+  },
+  "cache_hits_total": 0,
+  "cache_misses_total": 0,
+  "pipeline_success_total": {
+    "evening": 1
+  },
+  "pipeline_failure_total": {},
+  "scoring_distribution": {
+    "0.5": 49.585599925156274,
+    "0.75": 54.78299399807181,
+    "0.9": 58.940652451620515,
+    "0.95": 61.9517199008637
+  },
+  "latest_scan_timestamp": 1784653814.881151,
+  "exported_at": "2026-07-21T17:10:14.881193"
+}
