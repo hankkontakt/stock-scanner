@@ -1,103 +1,106 @@
-Här är din **kvällsrapport** för idag – en personlig sammanfattning med fokus på din portfölj, marknadsläget och morgondagens möjligheter. 📊🌙
+# 📊 Kvällsrapport – MarketScan AI
+
+Hej! Här är din personliga sammanfattning av dagens marknadsläge. 🧠📈
 
 ---
 
-## 🌍 Marknadsöversikt
+## 🌍 Makro & Index – Blandad kompott
 
 | Index | Förändring | Stängning |
-|-------|------------|-----------|
-| 🇺🇸 S&P 500 | **+0,93%** | 7 512 |
-| 🇺🇸 Nasdaq | **+1,38%** | 25 861 |
-| 🇺🇸 Dow Jones | **+0,99%** | 52 351 |
-| 🇯🇵 Nikkei 225 | **−4,03%** ⚠️ | 64 141 |
-| 🇭🇰 Hang Seng | **+2,36%** | 25 143 |
-| 🇩🇪 DAX | **+0,66%** | 25 011 |
-| 🇸🇪 OMX | **+0,39%** | 3 146 |
-| 🇮🇳 BSE Sensex | **−0,31%** | 77 470 |
-| 🇦🇺 ASX 200 | **−0,06%** | 8 791 |
-| 😱 VIX (rädsla) | **−8,26%** → 17,11 | Lugnare |
+|-------|-----------|-----------|
+| 🇰🇷 KOSPI (^KS11) | **-4.46%** 🔴 | 6 516 |
+| 🇯🇵 Nikkei 225 | **-4.03%** 🔴 | 64 141 |
+| 🇭🇰 Hang Seng | **+2.36%** 🟢 | 25 143 |
+| 🇺🇸 S&P 500 | **+0.91%** 🟢 | 7 511 |
+| 🇺🇸 Nasdaq | **+1.39%** 🟢 | 25 862 |
+| 🇩🇪 DAX | **+0.66%** 🟢 | 25 011 |
+| 🇸🇪 OMX | **+0.39%** 🟢 | 3 146 |
+| 🇺🇸 VIX | **-8.47%** 🟢 | 17.07 |
 
-**Sammanfattning:**  
-USA och Europa studsar fint efter gårdagens oro. Japan däremot fick en smäll (−4%) – troligen en reaktion på chiporon. Hang Seng sticker ut med +2,4% – Kina vaknar. VIX faller tillbaka under 18, vilket signalerar att paniken lägger sig. ✅
+**Analys:** Asien hade en tuff dag – Sydkorea och Japan föll kraftigt (troligen chip-exponering). Europa och USA återhämtade sig fint. VIX faller, vilket signalerar lugnare tider framöver. 😌
 
 ---
 
-## 💼 Din portfölj idag
+## 💼 Din portfölj – **+4.2% idag** 🚀
 
-| Innehav | Daglig förändring | Score | Signal | Trend | RSI |
-|---------|------------------|-------|--------|-------|-----|
-| **INVE-B.ST** | **+9,6%** 🚀 | 57,3 | VÄNTA | UPPTREND | 46,2 |
-| LÄNSFÖRSÄKRINGAR GLOBAL INDEX | — | — | — | — | — |
-| **NCAB.ST** | **−0,9%** | 41,5 | EJ AKTUELL | ⚠️ VARNING | 38,7 |
-| **TAGM-B.ST** | **+1,0%** | — | Översåld | — | 28,9 |
+| Innehav | Idag | Score | Entry | Trend | RSI |
+|--------|------|-------|-------|-------|-----|
+| **INVE-B.ST** | **+9.6%** 🟢 | 57.5 | ⏳ VÄNTA | UPPTREND | 46.2 |
+| Länsförsäkringar Global | — | — | — | — | — |
+| NCAB.ST | +2.0% 🟢 | — | Neutral | — | 38.7 |
+| TAGM-B.ST | +1.0% 🟢 | — | Översåld | — | **28.9** |
 
-**Portfölj totalt: +3,23% idag** 🎉
+### 🔥 INVE-B.ST – Dagens stjärna!
+**+9.6% på en dag!** Trots att systemet säger **VÄNTA** (score 57.5) har aktien en **UPPTREND** och RSI på 46.2 – perfekt neutralt. Nyheterna är blandade: CNBC varnar för dotcom-bubblan, men uppmanar samtidigt till att "buy the dip". Min bedömning: **Utbrottet är äkta** – håll kvar! 🎯
 
-### 🧠 Analys per innehav
-
-**INVE-B.ST (+9,6%)** – Dagens stjärna!  
-Nyheterna pratar om att ge chiptankar en andra chans och att köpa dippen i AI-aktier. Det verkar som att marknaden håller med. Din Investor-aktie studsade rejält. **Score 57,3** är dock bara "OK" – systemet säger VÄNTA. Jag håller med: RSI 46 är neutralt, upptrend är intakt, men köp inte på toppen. Låt den andas. 👀
-
-**NCAB.ST (−0,9%)** – Fortsatt tung.  
-Score 41,5 = EJ AKTUELL. RSI 38,7 nära översålt, men trenden är VARNING. Nyheterna nämner "strong growth amidst challenges" – men marknaden köper det inte än. **Mitt råd: ligg lågt.** Ingen brådska att öka.
-
-**TAGM-B.ST (+1,0%)** – Liten studs.  
-RSI 28,9 = översåld. Ingen score, men signalen är tydlig: **potentiell bottenfisk**. Nyheter saknas, så rörelsen är teknisk. Riskabelt, men om du gillar chansning – håll koll.
-
-**LÄNSFÖRSÄKRINGAR GLOBAL INDEX** – Ingen rörelsedata, men global indexfond går sannolikt upp med USA idag. Inget att oroa sig för.
+### ⚠️ TAGM-B.ST – Översåld
+RSI på **28.9** är djupt översålt. Historiskt brukar detta vara en köpsignal. Håll ögonen öppna!
 
 ---
 
-## 🔭 Dagens möjligheter (topp 5)
+## 🏆 Topp 5 möjligheter idag
 
-| Ticker | Score | Typ | Anledning |
-|--------|-------|-----|-----------|
-| **V** (Visa) | **72,5** 🚀 | Utbrott | −0,0% från ATH |
-| **000660.KS** (SK Hynix) | **72,5** 🔄 | Översåld studs | RSI 28 |
-| **2330.TW** (TSMC) | **68,9** | Stark | Höjer priser 10% 2027 |
-| **LLY** (Eli Lilly) | **68,8** | Stark | Stämning från Novo – men aktien reagerar inte negativt |
-| **MA** (Mastercard) | **68,2** 🚀 | Utbrott | −2,0% från ATH |
+| Ticker | Score | Signal |
+|--------|-------|--------|
+| **V** (Visa) | **72.8** 🟢 | 🚀 Utbrott – -0.0% från ATH |
+| **LLY** (Eli Lilly) | **70.0** 🟢 | Stark – Novo stämmer, men LLY fortsätter stark |
+| **MA** (Mastercard) | **69.0** 🟢 | 🚀 Utbrott – -2.4% från ATH |
+| **2330.TW** (TSMC) | **68.9** 🟢 | Höjer priser 10% – positivt! |
+| **MSAB-B.ST** | **66.8** 🟢 | 🚀 Utbrott – -0.7% från ATH |
 
-**V och MA** – Betalningsjättarna nära ATH. Nyheter om stablecoin-konkurrens (Open USD) kan skapa volatilitet, men båda har starka scores. **V är dagens hetaste köp-signal enligt systemet.** 🚀
+### 🚀 **Visa (V)** – Dagens hetaste!
+Score **72.8** (STARK), **-0.0% från ATH** – alltså i princip på rekordnivå. Nyheterna pratar om stablecoin-konkurrens från Open USD, men V:s compounding power hyllas. **Köp vid en liten rekyl!**
 
-**SK Hynix (000660.KS)** – Översåld studs med RSI 28. Nyheter om att de kan vinna på Kinas AI-satsning. **Hög risk, hög belöning** – om du tror på chippar.
+### 💊 **Eli Lilly (LLY)** – Rättsprocess, men stark
+Novo Nordisk stämmer LLY över GLP-1-reklam. Score 70.0 – marknaden verkar inte bry sig. LLY är en långsiktig vinnare.
+
+### 🏭 **TSMC (2330.TW)** – Prisuppgång
+Höjer priser med 10% till 2027 – insiderköp på $215K. Score 68.9. **Köp på dippen!**
 
 ---
 
-## ⚠️ Varningar (botten 5)
+## 📉 Botten 5 – Undvik
 
-| Ticker | Score | Kommentar |
-|--------|-------|-----------|
-| MIGI | 19,6 | 💀 |
-| IREN | 21,3 | 💀 |
-| NXE.TO | 25,1 | 💀 |
-| BTBT | 25,4 | 💀 |
-| MARA | 26,0 | 💀 |
+| Ticker | Score | Varning |
+|--------|-------|---------|
+| MIGI | 19.7 | 🔴 Mycket svag |
+| IREN | 22.0 | 🔴 Kryptorelaterad |
+| NXE.TO | 25.1 | 🔴 Uran – svag |
+| BTBT | 25.9 | 🔴 Bitcoin mining |
+| MARA | 26.8 | 🔴 Bitcoin mining |
 
-Alla är **krypto/bitcoin-relaterade** – marknaden straffar sektorn hårt. Håll dig borta om du inte är daytrader.
+**Gemensamt:** Krypto/bitcoin-exponering – marknaden straffar sektorn hårt.
+
+---
+
+## 🎯 Personlig rekommendation
+
+### 📌 Kortsiktigt (1-3 månader)
+1. **INVE-B.ST** – Håll kvar! +9.6% idag, upptrend intakt. RSI 46.2 = gott om plats uppåt.
+2. **TAGM-B.ST** – RSI 28.9 = översålt. **Köp på dagens nivåer** om du tror på bolaget.
+3. **NCAB.ST** – Q1 2026-rapport idag med "Strong Growth". RSI 38.7 – köpläge!
+
+### 📌 Långsiktigt (6-12 månader)
+1. **Visa (V)** – Score 72.8, ATH-nära. Vänta på rekyl till ~$350.
+2. **TSMC (2330.TW)** – Prisuppgång + insiderköp = stark signal.
+3. **MSAB-B.ST** – Utbrott vid ATH, score 66.8. Kolla in!
+
+### ⚠️ Varning
+- **Kryptoaktier** (MIGI, IREN, MARA, BTBT) – undvik tills vidare.
+- **Sydkorea/Japan** – dagens ras kan vara en köpmöjlighet, men vänta på stabilisering.
 
 ---
 
 ## 📅 Imorgon
-
-- **Makro:** Inga viktiga rapporter
-- **Rapporter:** Inga i din bevakning
-- **Risk:** Japansk smitta? Nikkei ras kan påverka Asien-handeln imorgon bitti. Håll koll på futures.
+- **Inga makrohändelser** – lugn dag.
+- **Inga rapporter** i din bevakning.
 
 ---
 
-## 🎯 Personlig sammanfattning
+## 🧠 Slutsats
 
-> **"En bra dag – men var inte girig."**
+> **"Asien blöder, väst återhämtar sig – din portfölj dansar i takt med INVE-B."**
 
-- **INVE-B.ST** är din motor. Låt den rulla, men överväg att ta hem lite vinst om den fortsätter upp 5–10% till.
-- **NCAB** är en sorgehistoria just nu. Vänta på bättre tider.
-- **TAGM** är en spekulation – om du gillar den, sätt en stop-loss.
-- **Globalfonden** är din trygga bas – orör bäst.
+Dagens **+4.2%** är fantastiskt! INVE-B är motorn. Håll kvar, men överväg att lätta lite om du är tungt exponerad. **TAGM-B** är en intressant "översåld"-möjlighet. **Visa** är dagens bästa nya idé.
 
-**Morgondagens span:** Håll koll på **Visa (V)** och **SK Hynix** – båda har starka signaler och kan ge fina intryck om marknaden fortsätter studsa.
-
----
-
-Ha en fin kväll! 🌙  
-– MarketScan AI
+**Vill du ha djupare analys av någon aktie?** 🚀
