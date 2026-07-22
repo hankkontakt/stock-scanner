@@ -1,66 +1,59 @@
-Här är din kvällsrapport för idag, klar och serverad! 🍸📊
+Här är din kvällsrapport för idag, med en personlig sammanfattning baserad på din portfölj och marknadsläget. 🚀
 
 ---
 
-## 📈 Dagens marknadsöversikt
+## 📊 Marknadsöversikt
 
-**Globalt:** Blandad dag. Asien visade styrka från Japan (+3,26%!) medan Indien backade. Europa och USA gick mestadels uppåt, om än blygsamt. VIX sjönk till 16,79 – lugn i luften.
+**Asien** gick starkt idag! 🇯🇵 Nikkei 225 (+3,26%) och 🇰🇷 KOSPI (+3,56) rusade. 🇮🇳 Indien backade dock -0,92%. **Europa** var mestadels positivt: 🇬🇧 FTSE +1,24%, 🇩🇪 DAX +0,58%. **USA** var blandat: S&P 500 +0,08%, Nasdaq -0,23%. VIX sjönk till 16,78 – lugn marknad.
 
-| Index | Förändring |
-|---|---|
-| 🇯🇵 Nikkei 225 | **+3,26%** 🚀 |
-| 🇺🇸 S&P 500 | +0,19% |
-| 🇪🇺 Euro Stoxx 50 | +0,50% |
-| 🇸🇪 OMX Stockholm | +1,26% |
-| 🇮🇳 BSE Sensex | -0,92% |
+**Dagens snackis:** Robotaxi-infrastruktur och AI-driven gasbrist varnar analytiker för – något som kan påverka din portfölj.
 
 ---
 
-## 🏆 Topp 5 möjligheter (högst score)
+## 👤 Din portfölj – Personlig sammanfattning
 
-| Ticker | Score | Signal |
-|---|---|---|
-| **V** (Visa) | **72,8** | 🚀 Utbrott, -0% från ATH |
-| **000660.KS** (SK Hynix) | **72,5** | Stark |
-| **LLY** (Eli Lilly) | **69,9** | OK |
-| **MA** (Mastercard) | **69,1** | 🚀 Utbrott, -3,2% från ATH |
-| **GTT.PA** (Gaztransport) | **69,0** | OK |
+**Total daglig avkastning: +6,8%** 🎉 En riktig pangdag!
 
-**Varning:** SK Hynix har haft en berg-och-dalbana idag – först fall, sen upp. Nyheterna är motstridiga. Var försiktig.
+| Innehav | Daglig förändring | Entry-signal | Trend | RSI | Kommentar |
+|---|---|---|---|---|---|
+| **INVE-B.ST** | **+9,6%** | VÄNTA | UPPTREND | 49,2 | 🚀 **Stjärnan idag!** Nyheterna talar om AI-investeringar och infrastruktur – precis i din smak. Trots "VÄNTA"-signalen (score 58,7) ser jag en stark upptrend. RSI 49,2 är neutralt – ingen överköpt risk än. **Behåll, men överväg att ta hem lite vinst om du är nervös.** |
+| **Länsförsäkringar Global** | N/A | -- | -- | -- | Inga dagliga data, men fonden följer världsindex. Med en sådan här dag borde den vara grön. **Tråkig men trygg.** |
+| **NCAB.ST** | **+5,9%** | Neutral | -- | 49,5 | Stark dag! Flera positiva earnings calls idag (Q2 2026, Q1 2026, Q4 2025) – bolaget visar robust tillväxt. RSI 49,5 är neutralt. **Ser bra ut på kort sikt.** |
+| **TAGM-B.ST** | **+4,9%** | Neutral | -- | 37,3 | Bra uppgång! RSI 37,3 är lågt – nära översålt. Kan vara en rekyl uppåt. **Håll ögonen öppna för en eventuell vändning.** |
+
+**Slutsats:** Din portfölj presterar exceptionellt idag, drivet av **INVE-B.ST** och **NCAB.ST**. Var dock medveten om att INVE-B har en "VÄNTA"-signal – systemet är lite skeptiskt, men din trend är stark. Jag skulle inte sälja, men kanske inte köpa mer just nu.
 
 ---
 
-## 🔍 Din portfölj – personlig analys
+## 🔍 Topp-5 möjligheter (högst score)
 
-**Total daglig avkastning: +6,8%** 🎉 En riktig kanondag!
-
-| Innehav | Daglig förändring | Entry-signal | Min kommentar |
+| Ticker | Score | Entry-signal | Kommentar |
 |---|---|---|---|
-| **INVE-B.ST** (Investor) | **+9,6%** | VÄNTA (score 58,8) | **Stark uppgång** men systemet säger VÄNTA. Varför? Score under 65 och RSI 49,2 – neutralt. Nyheterna handlar mest om Tesla och AI, inget direkt om Investor. **Jag håller med systemet:** ta inte in mer här, men njut av rallyt. |
-| **Länsförsäkringar Global** | — | — | Ingen data idag. Fortsätt månadsspara. |
-| **NCAB.ST** | **+5,9%** | Neutral | Bra dag! RSI 49,5 – neutralt läge. Nyheterna visar starka Q2-siffror och att aktien kan vara undervärderad. **Ser intressant ut** men inget köpläge än. |
-| **TAGM-B.ST** (TAG Mastercard) | **+4,9%** | Neutral | RSI 37,3 – **översålt territorium**! Det kan vara en köpchans om du tror på återhämtning. Håll koll. |
+| **V** (Visa) | **72,4** | STARK | 🚀 Utbrott! -0,0% från ATH. Betalningsjätten är het. |
+| **LLY** (Eli Lilly) | **69,9** | OK | GLP-1 krig med Novo Nordisk – men starkt bolag. |
+| **GTT.PA** | **68,9** | OK | Gasinfrastruktur – rekordintäkter. Utdelningsaktie. |
+| **MA** (Mastercard) | **68,7** | OK | 🚀 Utbrott! -3,7% från ATH. Betalningssektorn i fokus. |
+| **2330.TW** (TSMC) | **68,7** | OK | AI-efterfrågan driver, men aktien är ner 15% i månaden – insiderköp! |
 
-**Slutsats:** Din portfölj går som tåget. Investor sticker ut med +9,6% – men var medveten om att systemet flaggar försiktighet. NCAB och TAGM ser stabila ut.
-
----
-
-## ⚠️ Varningar & bottenlistan
-
-**Sämst score idag (undvik):**
-- MIGI (19,8), IREN (21,9), NXE.TO (25,1) – alla krypto/uran-relaterade. Håll dig borta.
-
-**Makro imorgon:** Inga viktiga händelser. Lugnt väder.
+**Botten-5:** Mestadels krypto/bitcoin-relaterade (MIGI, IREN, MARA) – undvik just nu.
 
 ---
 
-## 🎯 Min rekommendation till dig
+## ⚠️ Varningar & risker
 
-1. **Behåll Investor** – låt vinsten löpa, men följ VÄNTA-signalen.
-2. **Kika på TAGM-B.ST** – RSI 37,3 + neutral entry = potentiell studs.
-3. **Håll koll på Visa (V)** – utbrott från ATH, stark score. Kan vara värd en titt.
-4. **Fortsätt månadsspara i Länsförsäkringar Global** – tråkigt men vinnande.
+- **INVE-B.ST** har score 58,7 – under "STARK"-tröskeln. Systemet säger VÄNTA. Din upptrend är stark, men var beredd på en rekyl.
+- **NCAB.ST** har ingen entry-signal – men earnings är positiva. Håll koll på supply chain-risker.
+- **Makro imorgon:** Inga större händelser. Lugnt väder.
 
-**Dagens bästa råd:** Njut av +6,8%-dagen, men var inte girig. Marknaden är lugn – passa på att rebalansera om du är överviktad i något.
+---
 
-God kväll! 🌙📉📈
+## 🎯 Rekommendation
+
+- **Behåll INVE-B.ST** – men överväg att ta hem 10-20% vinst om du är riskavers.
+- **NCAB.ST** ser fortsatt stark ut – håll.
+- **TAGM-B.ST** – låg RSI, kan vara köpläge om du tror på bolaget.
+- **Kolla in V och MA** – båda i utbrott och högt score. Kan vara värda en titt för nya positioner.
+
+**Dagens lärdom:** AI och betalningsinfrastruktur är hetast just nu. Din portfölj är exponerad – grattis! 🥂
+
+Ha en bra kväll! 🌙
