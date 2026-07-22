@@ -3499,6 +3499,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-22",
+      "ticker": "LRCX",
+      "name": "Lam Research Corporation",
+      "entry_price": 313.29998779296875,
+      "predicted_return": 2.1548518003051553,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-22",
+      "ticker": "AMAT",
+      "name": "Applied Materials, Inc.",
+      "entry_price": 529.6599731445312,
+      "predicted_return": 2.0840126544036046,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-22",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 1.1050000190734863,
+      "predicted_return": 1.5037343245871397,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-22",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 18.15999984741211,
+      "predicted_return": 1.476884111556266,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-22",
+      "ticker": "CRDO",
+      "name": "Credo Technology Group Holding Ltd",
+      "entry_price": 202.67999267578125,
+      "predicted_return": 1.4585696515930981,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-22",
+      "ticker": "HUT",
+      "name": "Hut 8 Corp.",
+      "entry_price": 91.44999694824219,
+      "predicted_return": 1.3798962997688047,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-22",
+      "ticker": "AEHR",
+      "name": "Aehr Test Systems, Inc.",
+      "entry_price": 81.05000305175781,
+      "predicted_return": 1.1086420047027856,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-22",
+      "ticker": "TXN",
+      "name": "Texas Instruments Incorporated",
+      "entry_price": 284.0199890136719,
+      "predicted_return": 1.0833531284459565,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-22",
+      "ticker": "DDOG",
+      "name": "Datadog, Inc.",
+      "entry_price": 258.69000244140625,
+      "predicted_return": 1.0781381893633786,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-22",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 225.5,
+      "predicted_return": 1.0688545091997625,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -3676,6 +3776,11 @@
       "date": "2026-07-21",
       "equity": 100000.0,
       "n_open": 350
+    },
+    {
+      "date": "2026-07-22",
+      "equity": 100000.0,
+      "n_open": 360
     }
   ]
 }
