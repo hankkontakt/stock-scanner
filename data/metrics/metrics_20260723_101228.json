@@ -1,7 +1,7 @@
 {
   "pipeline_duration_seconds": {
     "refresh_missing": [
-      0.03807687759399414
+      0.06364154815673828
     ]
   },
   "fetch_duration_seconds": [],
@@ -24,6 +24,6 @@
     "0.9": null,
     "0.95": null
   },
-  "latest_scan_timestamp": 1782297705.1895108,
-  "exported_at": "2026-06-24T10:41:45.189553"
+  "latest_scan_timestamp": 1784801548.6514146,
+  "exported_at": "2026-07-23T10:12:28.651466"
 }
