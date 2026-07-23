@@ -1,14 +1,5 @@
 [
   {
-    "timestamp": "2026-06-26T17:26:43",
-    "scan_type": "evening",
-    "status": "OK",
-    "details": {
-      "scan_type": "evening",
-      "elapsed_seconds": 356.6
-    }
-  },
-  {
     "timestamp": "2026-06-27T10:03:16",
     "scan_type": "weekly",
     "status": "OK",
@@ -807,6 +798,15 @@
     "details": {
       "scan_type": "refresh_missing",
       "elapsed_seconds": 0.1
+    }
+  },
+  {
+    "timestamp": "2026-07-23T17:11:21",
+    "scan_type": "evening",
+    "status": "OK",
+    "details": {
+      "scan_type": "evening",
+      "elapsed_seconds": 419.8
     }
   }
 ]

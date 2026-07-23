@@ -3599,6 +3599,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-23",
+      "ticker": "LRCX",
+      "name": "Lam Research Corporation",
+      "entry_price": 313.29998779296875,
+      "predicted_return": 1.962549529990154,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-23",
+      "ticker": "AMAT",
+      "name": "Applied Materials, Inc.",
+      "entry_price": 529.6599731445312,
+      "predicted_return": 1.7544651935178166,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-23",
+      "ticker": "DDOG",
+      "name": "Datadog, Inc.",
+      "entry_price": 258.69000244140625,
+      "predicted_return": 1.4909063081573581,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-23",
+      "ticker": "AMD",
+      "name": "Advanced Micro Devices, Inc.",
+      "entry_price": 495.760009765625,
+      "predicted_return": 1.349252306059763,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-23",
+      "ticker": "CRDO",
+      "name": "Credo Technology Group Holding Ltd",
+      "entry_price": 202.67999267578125,
+      "predicted_return": 1.3330225827573743,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-23",
+      "ticker": "HUT",
+      "name": "Hut 8 Corp.",
+      "entry_price": 91.44999694824219,
+      "predicted_return": 1.2972013341406168,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-23",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 18.15999984741211,
+      "predicted_return": 1.29108065392051,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-23",
+      "ticker": "D05.SI",
+      "name": "DBS Group Holdings Ltd",
+      "entry_price": 71.95999908447266,
+      "predicted_return": 1.2428007527016762,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-23",
+      "ticker": "OPEN",
+      "name": "Opendoor Technologies Inc.",
+      "entry_price": 4.5,
+      "predicted_return": 1.2220938063088778,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-23",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 225.5,
+      "predicted_return": 1.1113174282192373,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -3781,6 +3881,11 @@
       "date": "2026-07-22",
       "equity": 100000.0,
       "n_open": 360
+    },
+    {
+      "date": "2026-07-23",
+      "equity": 100000.0,
+      "n_open": 370
     }
   ]
 }
