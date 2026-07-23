@@ -1,100 +1,90 @@
-Hej! 👋 Här kommer din kvällsrapport från MarketScan AI – en personlig sammanfattning av dagens marknadsläge, dina innehav och de hetaste möjligheterna.
+# 📊 Dagens Kvällsrapport – MarketScan AI
+
+## 🌍 Makroläget: Riskavstängning i USA & Europa
+
+| Index | Förändring | Status |
+|-------|-----------|--------|
+| 🇺🇸 S&P 500 | **-1.37%** | 🐻 Röd dag |
+| 🇺🇸 Nasdaq | **-2.29%** | 🔴 Teknikkross |
+| 🇪🇺 Euro Stoxx 50 | **-1.69%** | 🟡 Svag |
+| 🇸🇪 OMX | **-0.60%** | 🟢 Stabilast |
+| 🇯🇵 Nikkei | **-0.18%** | 🟡 Neutral |
+| 🇭🇰 Hang Seng | **-0.95%** | 🟡 Svag |
+| 🇮🇳 BSE Sensex | **-0.47%** | 🟡 Svag |
+
+**VIX** 🚀 **+17% → 19.47** – Rädslan är tillbaka. Marknaden straffar AI-bolag efter Alphabet & Teslas rapportmissar.
+
+> *"Alphabet falls 7%, Tesla sinks 13% as AI spending concerns spook investors"* – CNBC
 
 ---
 
-## 📊 Marknadsöversikt – En dag av två ansikten
+## 💼 Din Portfölj: **+6.97% idag** 🚀🔥
 
-Asienbörserna bjöd på blandade känslor: **Singapore** stack ut med en stark uppgång på **+1,24%**, medan **Hongkong** backade **-0,95%** och **Japan** var marginellt ned. **Indien** tappade också lite mark.
+| Innehav | Idag | Entry-signal | Trend | RSI |
+|--------|------|-------------|------|-----|
+| **INVE-B.ST** 🏆 | **+9.6%** | ⏳ VÄNTA | 📈 UPPTREND | 41.7 |
+| **NCAB.ST** | **+5.2%** | ⚖️ Neutral | -- | 42.8 |
+| **TAGM-B.ST** | **+6.1%** | ⚖️ Neutral | -- | 40.1 |
+| Länsförsäkringar Global | -- | -- | -- | -- |
 
-I Europa var det rött över hela linjen:
-- **Tyskland (DAX):** -1,56%
-- **Frankrike (CAC):** -1,64%
-- **Euro Stoxx 50:** -1,69%
-- **Storbritannien (FTSE):** -0,73%
+### 🧠 Min analys av portföljen:
 
-USA hade en tuff dag:
-- **S&P 500:** -1,17%
-- **Nasdaq:** -2,07% (tekniktungt fall)
-- **Dow Jones:** -0,90%
-- **VIX (rädsloindex):** +16,47% – nu på 19,38, vilket indikerar ökad oro.
+**INVE-B.ST (+9.6%)** – **Dagens stjärna!** ⭐ Trots att systemet säger **VÄNTA** (score 59, under 65-tröskeln) så rusar aktien. Varför? Nyheterna visar att Alphabet & Teslas AI-bekymmer *inte* smittar av sig på Investor – tvärtom. Marknaden ser Investor som en trygg hamn i oroliga tider. RSI på 41.7 är köpt, men scoren måste upp över 65 för att jag ska ge grönt ljus.
 
-**Sammanfattning:** Risk-off-stämning i väst, medan Asien var mer blandat. Oro för geopolitik och stigande oljepriser (se nyheten om $100 olja nedan) tynger marknaden.
+**NCAB (+5.2%)** – Stark dag! Q2-rapport idag med *"robust growth amidst supply chain"*. RSI 42.8 – fortfarande köpt territorium. Håll ögonen på detta.
 
----
-
-## 🏆 Topp 5 möjligheter (högst score)
-
-| Ticker | Score | Signal | Kommentar |
-|--------|-------|--------|-----------|
-| **V** (Visa) | **73,1** | 🚀 Utbrott | -0,0% från ATH – rekordnära! |
-| **000660.KS** (SK Hynix) | **72,3** | STARK | AI-investeringsoptimism, DRAM-flöden |
-| **LLY** (Eli Lilly) | **70,9** | 🚀 Utbrott | -4,4% från ATH, ny läkemedelsansökan 2027 |
-| **GTT.PA** (Gaztransport) | **70,6** | OK | Rekordintäkter, utdelning upp till 5,2% |
-| **MA** (Mastercard) | **68,7** | 🚀 Utbrott | -4,7% från ATH, rapport nästa vecka |
-
-**Min kommentar:** Visa och Mastercard är båda utbrottskandidater med starka scores. SK Hynix får draghjälp av AI-boomen. Eli Lilly har en spännande pipeline inom fetma-läkemedel.
+**TAGM-B (+6.1%)** – Fin uppgång. RSI 40.1 – mycket lågt, potential för rebound.
 
 ---
 
-## 📉 Botten 5 – Undvik eller bevaka
+## 🎯 Dagens Topp 5 (högst score)
 
-| Ticker | Score | Varning |
-|--------|-------|---------|
-| MIGI | 19,8 | Mycket låg score |
-| IREN | 22,8 | Kryptorelaterad, hög risk |
-| NXE.TO | 26,3 | Uran, svag momentum |
-| BTBT | 26,4 | Bitcoin-gruvbolag |
-| GKN.L m.fl. | 26,9 | Flera bolag med identisk låg score |
+| Ticker | Score | Entry | Varför? |
+|--------|-------|-------|---------|
+| **V** 🚀 | **73.0** | **STARK** | -0% från ATH, betalkortsvinnare |
+| **LLY** 🚀 | **71.1** | **STARK** | -4.2% från ATH, ny läkemedelsgodkännande |
+| **GTT.PA** | **70.8** | **OK** | LNG-transport, pullback |
+| **2330.TW** | **68.7** | **OK** | TSMC, AI-efterfrågan trots 15% nedgång |
+| **MA** 🚀 | **68.7** | **OK** | -4.8% från ATH, rapport nästa vecka |
 
-**Råd:** Håll dig borta från dessa tills de visar tecken på återhämtning.
-
----
-
-## 💼 Din portfölj – En riktig kanondag! 🚀
-
-**Portföljens dagliga utveckling: +6,97%** – fantastiskt!
-
-| Innehav | Daglig förändring | Score | Entry-signal | Trend | RSI |
-|---------|-------------------|-------|--------------|-------|-----|
-| **INVE-B.ST** (Investor) | **+9,6%** | 58,9 | ⏳ VÄNTA | UPPTREND | 41,7 |
-| Länsförsäkringar Global | – | – | – | – | – |
-| **NCAB.ST** | **+5,2%** | – | Neutral | – | 42,8 |
-| **TAGM-B.ST** (TagMaster) | **+6,1%** | – | Neutral | – | 40,1 |
-
-**Analys:**
-- **INVE-B.ST** rusade nästan 10%! Trots att entry-signalen är "VÄNTA" (score 58,9 – under 65), är trenden starkt uppåtgående och RSI på 41,7 är långt ifrån överköpt. **Min bedömning:** Håll kvar – upptrenden är intakt, men var beredd på volatilitet. Nyheten om $100 olja kan påverka Investor negativt via sina portföljbolag.
-- **NCAB** och **TAGM-B** båda upp över 5% – bra momentum. NCAB har nyligen haft starka rapporter (se nyheter). RSI runt 40-42 indikerar att de inte är överköpta.
-- **Länsförsäkringar Global** – ingen daglig data, men som globalfond följer den marknaden.
+### ⚠️ Botten 5 (undvik)
+MIGI (19.7), IREN (22.8), NXE.TO (26.4), BTBT (26.5), SAND (26.9) – alla kryptorelaterade eller spekulativa. **Håll dig borta.**
 
 ---
 
-## 🔍 Nyheter som påverkar din portfölj
+## 🔥 Möjligheter att bevaka
 
-**INVE-B.ST:**
-- ⚠️ **"Shortsighted stock market can no longer brush off war: 'It's too hard to ignore $100 oil'"** (CNBC, 1h sedan) – Detta är en varningssignal. Högre oljepriser kan pressa marginaler i Investors portföljbolag, särskilt inom industri och transport.
-- Övriga nyheter (Nicole Kidman, Temasek, Datavault) är irrelevanta för Investor.
-
-**NCAB.ST:**
-- Flera positiva rapportnyheter från Q1-Q2 2026 – "Robust Growth", "Strong Order Growth". Detta förklarar dagens uppgång.
-- Nämnd som en av "European Stocks That Might Be Trading At A Discount" – potential för ytterligare uppvärdering.
-
-**Visa & Mastercard:**
-- Båda omnämns som "översedda möjligheter" och har rapporter nästa vecka. Förväntad vinsttillväxt.
+| Ticker | Typ | Score | Kommentar |
+|--------|-----|-------|-----------|
+| **V** | 🚀 Utbrott | **73.0** | *"Is Visa an Overlooked Opportunity?"* – Yahoo. Stark entry-signal. |
+| **LLY** | 🚀 Utbrott | **71.1** | *"Another win for Lilly's triple-g agonist"* – ny läkemedelsdata. |
+| **MA** | 🚀 Utbrott | **68.7** | *"Does Mispricing Offer Opportunity?"* – rapport nästa vecka. |
 
 ---
 
-## 🎯 Slutsats & rekommendation
+## 📰 Nyhetsflash – Viktigast just nu
 
-**Dagens prestation:** ⭐⭐⭐⭐⭐ (fantastisk dag!)
+**INVE-B.ST:** Alphabet & Teslas AI-bekymmer → **positivt för Investor** (trygg hamn)
+**NCAB:** Q2-rapport idag – *"robust growth"* ✅
+**LLY:** Nytt läkemedel på väg – *"file for approval in early 2027"* ✅
+**V/MA:** Betalkortssektorn i fokus – rapporter nästa vecka
 
-**Att göra:**
-1. **INVE-B.ST** – Håll, men övervaka oljepriset. Om oljan fortsätter upp kan det bli en motvind.
-2. **NCAB & TAGM-B** – Bra momentum, håll kvar.
-3. **Kolla in Visa (V)** – Stark score, utbrottsnära, rapport nästa vecka. Kan vara ett köpläge.
-4. **Håll koll på VIX** – Om den fortsätter upp kan marknaden bli mer volatil.
+---
 
-**Makro imorgon:** Inga större händelser – marknaden kommer sannolikt att fokusera på geopolitik och oljepriset.
+## 🧠 Personlig sammanfattning
 
-Ha en fortsatt bra kväll! 🚀📈
+**Dagens prestation: 7/10** 🎯
 
-*/MarketScan AI*
+Din portfölj slog marknaden med hästlängder (+6.97% vs S&P -1.37%). **Investor** var dragloket – trots att systemet säger VÄNTA, så visar marknaden att den gillar bolaget i oroliga tider. **NCAB** och **TAGM** bidrog fint.
+
+**Min rekommendation:**
+- **INVE-B.ST** – Håll. Score måste upp, men trenden är din vän.
+- **NCAB** – Håll. Q2-rapporten ser stark ut.
+- **TAGM-B** – Håll. RSI 40 = köpt, men vänta på bekräftelse.
+- **Kolla in V & LLY** – Starka entry-signaler, bra timing inför rapporter.
+
+**Imorgon:** Inga makrohändelser eller rapporter. Marknaden smälter dagens AI-chock. Håll koll på VIX – över 20 = fortsatt oro.
+
+---
+
+*MarketScan AI – Din personliga börsanalytiker. Investeringsbeslut fattar du själv.* 📈🤖

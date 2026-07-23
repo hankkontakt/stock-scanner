@@ -6,7 +6,7 @@
     "finnhub": "ok"
   },
   "data_freshness": {
-    "latest_scan": "2026-07-23 17:04",
+    "latest_scan": "2026-07-23 17:59",
     "age_hours": 0.1,
     "file": "scored_universe_2026-07-23.parquet",
     "stale": false
@@ -14,7 +14,7 @@
   "model_status": {
     "universe_model": "ok",
     "days_since_training": 0,
-    "model_file": "ml_universe.pkl"
+    "model_file": "ml_ranker_universe.pkl"
   },
   "disk_usage": {
     "data_dir_mb": 9.1,
@@ -39,9 +39,9 @@
   "last_pipeline_run": {
     "mode": "evening",
     "status": "OK",
-    "duration": 419.8,
-    "timestamp": "2026-07-23T17:11:21"
+    "duration": 384.7,
+    "timestamp": "2026-07-23T18:06:12"
   },
   "degraded_components": [],
-  "checked_at": "2026-07-23T17:11:22.006517"
+  "checked_at": "2026-07-23T18:06:12.253030"
 }
