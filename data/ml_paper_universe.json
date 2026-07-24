@@ -3699,6 +3699,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "LRCX",
+      "name": "Lam Research Corporation",
+      "entry_price": 313.29998779296875,
+      "predicted_return": 2.061708652468431,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "AMAT",
+      "name": "Applied Materials, Inc.",
+      "entry_price": 529.6599731445312,
+      "predicted_return": 1.4903050752322489,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "CRDO",
+      "name": "Credo Technology Group Holding Ltd",
+      "entry_price": 202.67999267578125,
+      "predicted_return": 1.4475502014732606,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "DDOG",
+      "name": "Datadog, Inc.",
+      "entry_price": 258.69000244140625,
+      "predicted_return": 1.427650199384769,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "AMD",
+      "name": "Advanced Micro Devices, Inc.",
+      "entry_price": 495.760009765625,
+      "predicted_return": 1.4235954880757073,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "FTNT",
+      "name": "Fortinet, Inc.",
+      "entry_price": 161.61000061035156,
+      "predicted_return": 1.3607445528240474,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "D05.SI",
+      "name": "DBS Group Holdings Ltd",
+      "entry_price": 71.95999908447266,
+      "predicted_return": 1.3231935010873506,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "HUT",
+      "name": "Hut 8 Corp.",
+      "entry_price": 91.44999694824219,
+      "predicted_return": 1.260030546853663,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "O39.SI",
+      "name": "Oversea-Chinese Banking Corporation Limited",
+      "entry_price": 28.559999465942383,
+      "predicted_return": 1.1746545672652504,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-24",
+      "ticker": "MU",
+      "name": "Micron Technology, Inc.",
+      "entry_price": 848.9500122070312,
+      "predicted_return": 1.1720053023204569,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -3886,6 +3986,11 @@
       "date": "2026-07-23",
       "equity": 100000.0,
       "n_open": 370
+    },
+    {
+      "date": "2026-07-24",
+      "equity": 100000.0,
+      "n_open": 380
     }
   ]
 }
