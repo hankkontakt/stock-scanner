@@ -340,5 +340,23 @@
       "NTEK-B.ST",
       "ALCA.ST"
     ]
+  },
+  "2026-07-25": {
+    "capital": 100000,
+    "universe": "universe",
+    "n_picks": 10,
+    "benchmark_buy": 738.9299926757812,
+    "tickers": [
+      "FTNT",
+      "NVDA",
+      "2330.TW",
+      "TXN",
+      "LLY",
+      "V",
+      "MU",
+      "MSAB-B.ST",
+      "KO",
+      "EXEL"
+    ]
   }
 }

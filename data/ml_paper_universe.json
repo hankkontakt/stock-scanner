@@ -3799,6 +3799,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-25",
+      "ticker": "6963.T",
+      "name": "ROHM Co., Ltd.",
+      "entry_price": 5458.0,
+      "predicted_return": 1.5039220613691622,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-25",
+      "ticker": "CRDO",
+      "name": "Credo Technology Group Holding Ltd",
+      "entry_price": 213.14999389648438,
+      "predicted_return": 1.4147120615714375,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-25",
+      "ticker": "INTC",
+      "name": "Intel Corporation",
+      "entry_price": 114.68000030517578,
+      "predicted_return": 1.3520081412097802,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-25",
+      "ticker": "IFX.DE",
+      "name": "Infineon Technologies AG",
+      "entry_price": 64.41000366210938,
+      "predicted_return": 1.2745495457951748,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-25",
+      "ticker": "SMHN.DE",
+      "name": "SUSS MicroTec SE",
+      "entry_price": 79.1500015258789,
+      "predicted_return": 1.2477208884824544,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-25",
+      "ticker": "0268.HK",
+      "name": "Kingdee International Software Group Company Limited",
+      "entry_price": 7.269999980926514,
+      "predicted_return": 1.1895519225523112,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-25",
+      "ticker": "TMDX",
+      "name": "TransMedics Group, Inc.",
+      "entry_price": 72.26000213623047,
+      "predicted_return": 1.1412302270444605,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-25",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 18.459999084472656,
+      "predicted_return": 1.1396348630904782,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-25",
+      "ticker": "LRCX",
+      "name": "Lam Research Corporation",
+      "entry_price": 305.2099914550781,
+      "predicted_return": 1.028311870453705,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-25",
+      "ticker": "COHR",
+      "name": "Coherent Corp.",
+      "entry_price": 324.5,
+      "predicted_return": 1.0005730237360164,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -3991,6 +4091,11 @@
       "date": "2026-07-24",
       "equity": 100000.0,
       "n_open": 380
+    },
+    {
+      "date": "2026-07-25",
+      "equity": 100000.0,
+      "n_open": 390
     }
   ]
 }

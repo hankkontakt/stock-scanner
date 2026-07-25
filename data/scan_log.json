@@ -1,14 +1,5 @@
 [
   {
-    "timestamp": "2026-06-29T14:53:42",
-    "scan_type": "portfolio_refresh",
-    "status": "OK",
-    "details": {
-      "scan_type": "portfolio_refresh",
-      "elapsed_seconds": 0.3
-    }
-  },
-  {
     "timestamp": "2026-06-29T17:28:20",
     "scan_type": "refresh_missing",
     "status": "OK",
@@ -807,6 +798,15 @@
     "details": {
       "scan_type": "evening",
       "elapsed_seconds": 352.4
+    }
+  },
+  {
+    "timestamp": "2026-07-25T09:34:31",
+    "scan_type": "weekly",
+    "status": "OK",
+    "details": {
+      "scan_type": "weekly",
+      "elapsed_seconds": 1801.3
     }
   }
 ]
