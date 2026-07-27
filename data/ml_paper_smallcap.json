@@ -899,6 +899,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "ONCO.ST",
+      "name": "Oncopeptides AB (publ)",
+      "entry_price": 1.594,
+      "predicted_return": 0.19116269052028656,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "B3.ST",
+      "name": "B3 Consulting Group AB (publ)",
+      "entry_price": 20.0,
+      "predicted_return": 0.11112315207719803,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "DEDI.ST",
+      "name": "Dedicare AB (publ)",
+      "entry_price": 55.1,
+      "predicted_return": 0.08537808060646057,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "CANTA.ST",
+      "name": "Cantargia AB (publ)",
+      "entry_price": 1.879,
+      "predicted_return": 0.08486759662628174,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "NIL-B.ST",
+      "name": "Nilörngruppen AB (publ)",
+      "entry_price": 75.3,
+      "predicted_return": 0.0829872265458107,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "ANGL.ST",
+      "name": "Angler Gaming plc",
+      "entry_price": 4.22,
+      "predicted_return": 0.07968752086162567,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "TAGM-B.ST",
+      "name": "TagMaster AB (publ)",
+      "entry_price": 34.7,
+      "predicted_return": 0.06546149402856827,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "NEXAM.ST",
+      "name": "Nexam Chemical Holding AB (publ)",
+      "entry_price": 3.35,
+      "predicted_return": 0.05611687898635864,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "PRIC-B.ST",
+      "name": "Pricer AB (publ)",
+      "entry_price": 4.35,
+      "predicted_return": 0.04790632054209709,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "ORX.ST",
+      "name": "Orexo AB (publ)",
+      "entry_price": 15.78,
+      "predicted_return": 0.04032357782125473,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -946,6 +1046,11 @@
       "date": "2026-07-20",
       "equity": 100000.0,
       "n_open": 90
+    },
+    {
+      "date": "2026-07-27",
+      "equity": 100000.0,
+      "n_open": 100
     }
   ]
 }

@@ -358,5 +358,23 @@
       "KO",
       "EXEL"
     ]
+  },
+  "2026-07-27_smallcap": {
+    "capital": 100000,
+    "universe": "smallcap",
+    "n_picks": 10,
+    "benchmark_buy": 738.93,
+    "tickers": [
+      "CX.ST",
+      "CANTA.ST",
+      "TAGM-B.ST",
+      "MAGI.ST",
+      "EOLU-B.ST",
+      "CTM.ST",
+      "QLIRO.ST",
+      "MEKKO.HE",
+      "PRIC-B.ST",
+      "MOB.ST"
+    ]
   }
 }
