@@ -3899,6 +3899,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "PLTR",
+      "name": "Palantir Technologies Inc.",
+      "entry_price": 122.91999816894531,
+      "predicted_return": 1.1948442955844738,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "FLNC",
+      "name": "Fluence Energy, Inc.",
+      "entry_price": 13.4399995803833,
+      "predicted_return": 1.043870153349627,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "S92.DE",
+      "name": "SMA Solar Technology AG",
+      "entry_price": 56.849998474121094,
+      "predicted_return": 1.0183898795398159,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 18.459999084472656,
+      "predicted_return": 0.930150495355043,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "TEAM",
+      "name": "Atlassian Corporation",
+      "entry_price": 86.87999725341797,
+      "predicted_return": 0.9067844106546381,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "LRCX",
+      "name": "Lam Research Corporation",
+      "entry_price": 305.2099914550781,
+      "predicted_return": 0.8729653877055213,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "NVMI",
+      "name": "Nova Ltd.",
+      "entry_price": 437.9800109863281,
+      "predicted_return": 0.8262028094591991,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "CRDO",
+      "name": "Credo Technology Group Holding Ltd",
+      "entry_price": 213.14999389648438,
+      "predicted_return": 0.8202455399282473,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "5801.T",
+      "name": "Furukawa Electric Co., Ltd.",
+      "entry_price": 3388.0,
+      "predicted_return": 0.809006649407508,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-27",
+      "ticker": "2454.TW",
+      "name": "MediaTek Inc.",
+      "entry_price": 3750.0,
+      "predicted_return": 0.7549470137575188,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -4096,6 +4196,11 @@
       "date": "2026-07-25",
       "equity": 100000.0,
       "n_open": 390
+    },
+    {
+      "date": "2026-07-27",
+      "equity": 100000.0,
+      "n_open": 400
     }
   ]
 }
