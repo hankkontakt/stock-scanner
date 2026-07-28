@@ -3999,6 +3999,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-28",
+      "ticker": "VRT",
+      "name": "Vertiv Holdings Co",
+      "entry_price": 290.3599853515625,
+      "predicted_return": 1.4204430361250546,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-28",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 0.9879999756813049,
+      "predicted_return": 1.338747782471789,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-28",
+      "ticker": "BTBT",
+      "name": "Bit Digital, Inc.",
+      "entry_price": 1.3700000047683716,
+      "predicted_return": 1.2112434185796719,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-28",
+      "ticker": "RBLX",
+      "name": "Roblox Corporation",
+      "entry_price": 47.54999923706055,
+      "predicted_return": 1.1592530973311252,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-28",
+      "ticker": "STX",
+      "name": "Seagate Technology Holdings plc",
+      "entry_price": 851.6900024414062,
+      "predicted_return": 1.1004122618088905,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-28",
+      "ticker": "PLTR",
+      "name": "Palantir Technologies Inc.",
+      "entry_price": 122.91999816894531,
+      "predicted_return": 1.0802659042367913,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-28",
+      "ticker": "IREN",
+      "name": "IREN Limited",
+      "entry_price": 37.06999969482422,
+      "predicted_return": 0.9837447349188764,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-28",
+      "ticker": "HUT",
+      "name": "Hut 8 Corp.",
+      "entry_price": 109.98999786376953,
+      "predicted_return": 0.9799785451799293,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-28",
+      "ticker": "OPEN",
+      "name": "Opendoor Technologies Inc.",
+      "entry_price": 3.8350000381469727,
+      "predicted_return": 0.9343470438891414,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-28",
+      "ticker": "5801.T",
+      "name": "Furukawa Electric Co., Ltd.",
+      "entry_price": 3388.0,
+      "predicted_return": 0.9194764582774347,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -4201,6 +4301,11 @@
       "date": "2026-07-27",
       "equity": 100000.0,
       "n_open": 400
+    },
+    {
+      "date": "2026-07-28",
+      "equity": 100000.0,
+      "n_open": 410
     }
   ]
 }
