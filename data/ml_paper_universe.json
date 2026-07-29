@@ -4099,6 +4099,106 @@
       "exit_date": null,
       "exit_price": null,
       "realized_return": null
+    },
+    {
+      "date": "2026-07-29",
+      "ticker": "FIX",
+      "name": "Comfort Systems USA, Inc.",
+      "entry_price": 1733.5999755859375,
+      "predicted_return": 1.4970519579581212,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-29",
+      "ticker": "BRNK.DE",
+      "name": "Branicks Group AG",
+      "entry_price": 0.9879999756813049,
+      "predicted_return": 1.465307183657962,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-29",
+      "ticker": "BTBT",
+      "name": "Bit Digital, Inc.",
+      "entry_price": 1.3700000047683716,
+      "predicted_return": 1.4639666996084368,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-29",
+      "ticker": "STX",
+      "name": "Seagate Technology Holdings plc",
+      "entry_price": 851.6900024414062,
+      "predicted_return": 1.3051183369906219,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-29",
+      "ticker": "IREN",
+      "name": "IREN Limited",
+      "entry_price": 37.06999969482422,
+      "predicted_return": 1.2657262436720331,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-29",
+      "ticker": "MOD",
+      "name": "Modine Manufacturing Company",
+      "entry_price": 241.7899932861328,
+      "predicted_return": 1.035744622104297,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-29",
+      "ticker": "WULF",
+      "name": "TeraWulf Inc.",
+      "entry_price": 18.459999084472656,
+      "predicted_return": 0.9608715085960488,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-29",
+      "ticker": "PLTR",
+      "name": "Palantir Technologies Inc.",
+      "entry_price": 122.91999816894531,
+      "predicted_return": 0.9333674181702124,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-29",
+      "ticker": "BESI.AS",
+      "name": "BE Semiconductor Industries N.V.",
+      "entry_price": 227.0,
+      "predicted_return": 0.8845103327798728,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
+    },
+    {
+      "date": "2026-07-29",
+      "ticker": "5801.T",
+      "name": "Furukawa Electric Co., Ltd.",
+      "entry_price": 3388.0,
+      "predicted_return": 0.8350646077237506,
+      "exit_date": null,
+      "exit_price": null,
+      "realized_return": null
     }
   ],
   "equity_curve": [
@@ -4306,6 +4406,11 @@
       "date": "2026-07-28",
       "equity": 100000.0,
       "n_open": 410
+    },
+    {
+      "date": "2026-07-29",
+      "equity": 100000.0,
+      "n_open": 420
     }
   ]
 }
