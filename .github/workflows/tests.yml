@@ -112,7 +112,7 @@ jobs:
             -m slow || echo "Performance tests skipped (may be slow on CI)"
 
       - name: 📊 Ladda upp täckningsrapport
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
