@@ -1,7 +1,7 @@
 {
   "universe": "universe",
-  "trained_at": "2026-07-26T10:49:28.579418",
-  "n_rows": 52374,
+  "trained_at": "2026-08-02T10:50:02.045045",
+  "n_rows": 52379,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -31,41 +31,41 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "wf_avg_ic": 0.037,
-    "ic": 0.037,
-    "wf_avg_spread": 0.0242,
-    "wf_avg_hit_rate": 0.5153,
-    "hit_rate": 0.5153,
+    "wf_avg_ic": 0.0038,
+    "ic": 0.0038,
+    "wf_avg_spread": 0.013,
+    "wf_avg_hit_rate": 0.5145,
+    "hit_rate": 0.5145,
     "n_folds": 3,
-    "n_train_total": 52374,
+    "n_train_total": 52379,
     "model_type": "lightgbm_lambdarank_ndcg",
     "n_features": 26,
     "wf_folds": [
       {
-        "train_end": "2024-07-15",
-        "test_start": "2024-07-15",
-        "test_end": "2025-01-15",
-        "ic": 0.0387,
-        "decile_spread": 0.0224,
-        "hit_rate": 0.508,
-        "n_test": 6724
+        "train_end": "2024-07-22",
+        "test_start": "2024-07-22",
+        "test_end": "2025-01-22",
+        "ic": -0.0073,
+        "decile_spread": 0.0017,
+        "hit_rate": 0.5238,
+        "n_test": 6714
       },
       {
-        "train_end": "2025-01-15",
-        "test_start": "2025-01-15",
-        "test_end": "2025-07-15",
-        "ic": 0.0656,
-        "decile_spread": 0.0409,
-        "hit_rate": 0.5306,
-        "n_test": 6725
+        "train_end": "2025-01-22",
+        "test_start": "2025-01-22",
+        "test_end": "2025-07-22",
+        "ic": 0.0429,
+        "decile_spread": 0.0335,
+        "hit_rate": 0.5258,
+        "n_test": 6712
       },
       {
-        "train_end": "2025-07-15",
-        "test_start": "2025-07-15",
-        "test_end": "2026-01-15",
-        "ic": 0.0066,
-        "decile_spread": 0.0092,
-        "hit_rate": 0.5074,
+        "train_end": "2025-07-22",
+        "test_start": "2025-07-22",
+        "test_end": "2026-01-22",
+        "ic": -0.0243,
+        "decile_spread": 0.0038,
+        "hit_rate": 0.494,
         "n_test": 6727
       }
     ]
