@@ -194,5 +194,9 @@
     "7105.T": {
         "reason": "Yahoo Finance hittar ingen data för denna ticker",
         "date": "2026-07-18"
+    },
+    "MIGI": {
+        "reason": "Yahoo Finance hittar ingen data för denna ticker",
+        "date": "2026-08-08"
     }
 }
