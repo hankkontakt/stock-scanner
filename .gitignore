@@ -86,3 +86,41 @@ _test_write.txt
 data/piotroski_snapshots/
 # Email delivery log (auto-generated, causes merge conflicts)
 data/email_delivery_log.json
+
+# ── PUBLIKT REPO (2026-08-28): personlig data & state som ALDRIG får committas ──
+# Portfölj & konton (privata)
+data/holdings.csv
+data/konton.json
+data/paper_portfolio.json
+data/paper_trades.json
+data/ml_paper_smallcap.json
+data/ml_paper_universe.json
+# E-post & prenumeranter (PII)
+data/email_subscribers.json
+data/email_delivery_log.json
+# Alerts & state-loggar
+data/price_alerts.json
+data/alert_dedup.json
+data/alert_rate_limit.json
+data/news_alert_state.json
+data/stark_alert_state.json
+data/score_drift_state.json
+data/retry_pending.json
+data/scan_log.json
+data/fetch_errors.json
+data/diagnose_history.jsonl
+data/rotation_log.json
+data/strike_list.json
+data/ai_trade_journal.json
+data/smallcap_scores_prev.json
+data/universe_audit.json
+# Cacher & telemetri (regenereras)
+data/ai_cache/
+data/bt_snapshots/
+data/health/
+data/metrics/
+data/ml_backtest_results/
+data/insider_history/
+data/ci_reports/
+# Personlig portföljrapport
+reports/portfolio_report_*.csv

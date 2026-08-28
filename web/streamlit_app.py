@@ -1000,9 +1000,9 @@ def _run_auth() -> bool:
     <div style="text-align:center; margin-top:24px; padding: 0 20px;">
       <div style="font-size:12px; color:#64748b; line-height:1.9;">
         Inget konto? Kontakta
-        <a href="mailto:h.thurner@hotmail.com"
+        <a href="mailto:admin@marketscan.local"
            style="color:#4c9be8; text-decoration:none;">
-          h.thurner@hotmail.com
+          admin@marketscan.local
         </a>
         för att få tillgång.
       </div>
