@@ -1012,19 +1012,32 @@ def _sanity_check(metrics: dict) -> dict:
             warnings.append(f"{key}: {v} utanför giltigt intervall (1, 200] -> None")
             metrics[key] = None
 
-    # 2. Dividend yield: yfinance ger % i denna miljö (2.19 -> 0.0219)
+    # 2. Dividend yield: beräkna fraktion från dividendRate/currentPrice (robust,
+    #    ingen enhetsgissning — yfinance ger % för vissa, fraktion för andra).
+    #    Fallback: dividendYield > 0.1 tolkas som % (0.73 = 0.73 %; en äkta
+    #    fraktion 20-100 %-yield är orealistisk för alla seriösa aktier).
+    rate = metrics.get("dividend_rate")
+    price = metrics.get("current_price")
     v = metrics.get("dividend_yield")
-    if not _finite(v):
+    if _finite(rate) and rate is not None and price and price > 0:
+        computed = rate / price
+        metrics["dividend_yield"] = computed
+        if v is not None and _finite(v) and abs(v / 100.0 - computed) > 0.001:
+            warnings.append(
+                f"dividend_yield: dividendRate({rate})/pris({price:.2f}) = {computed:.6f} "
+                f"(yfinance-ytterligare {v} — rate-baserad vinner)"
+            )
+    elif not _finite(v):
         if v is not None:
             warnings.append("dividend_yield: icke-finit -> None")
         metrics["dividend_yield"] = None
     elif v < 0:
         warnings.append(f"dividend_yield: negativt ({v}) -> None")
         metrics["dividend_yield"] = None
-    elif v > 1:
+    elif v > 0.1:
         warnings.append(f"dividend_yield: {v} tolkas som % -> /100 = {v / 100:.6f}")
         metrics["dividend_yield"] = v / 100.0
-    # <= 1: redan fraktion, lämnas oförändrad
+    # <= 0.1: redan fraktion, lämnas oförändrad
 
     # 3. Debt-to-equity
     v = metrics.get("debt_to_equity")
