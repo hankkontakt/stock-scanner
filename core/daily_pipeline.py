@@ -860,6 +860,7 @@ def run_targeted(tickers: list[str]) -> int:
             logger.info(f"  ✓ {row['ticker']}: score={score:.1f}, entry={entry}")
 
     logger.info(f"\n✅ Targeted refresh klar -- {succeeded} ticker(s) uppdaterade\n")
+    return succeeded
 
 
 def run_portfolio_refresh(verbose: bool = True) -> dict:
