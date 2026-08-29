@@ -115,6 +115,10 @@ except Exception:
 _FX_CACHE = {}
 Path(config.CACHE_DIR).mkdir(parents=True, exist_ok=True)
 
+# Bakåtkompatibilitet: daily_pipeline.py:771 importerar `_CACHE_DIR` (gammalt namn
+# från en pre-refaktorering av cache-modulen). Nu lever konstanten i config.CACHE_DIR.
+_CACHE_DIR = config.CACHE_DIR
+
 # Fundamentala fält som bara ändras vid kvartalsrapporter -> 30 dagars cache
 _STATIC_FIELDS = frozenset({
     "longName", "shortName", "sector", "industry", "country", "currency",
