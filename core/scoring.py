@@ -35,6 +35,9 @@ MAX_DIVIDEND_YIELD     = 0.15  # Max dividend yield innan det är en fälla
 UNSUSTAINABLE_PAYOUT   = 1.0   # Payout ratio över detta = ohållbart
 HOLDING_DISCOUNT       = 0.85  # Multiplikator för holdingbolag
 COMMODITY_DISCOUNT     = 0.90  # Multiplikator för råvarubolag
+# Renormalisering vid delvis saknade faktorer — 1.5 cap; 3.0 blåste upp betyg
+# för datafattiga aktier.
+MAX_RENORMALIZATION    = 1.5
 
 # ── Likviditetsgräns ─────────────────────────────────────────────────────────
 # Uppskattad daglig omsättning i USD under denna gräns -> low_liquidity = True.
@@ -853,18 +856,27 @@ def _apply_scores_and_discounts(df: pd.DataFrame, w: dict) -> pd.DataFrame:
         vikterna renormaliseras så att saknad data inte sänker totalpoängen."""
         s          = pd.Series(0.0, index=df.index)
         w_used     = pd.Series(0.0, index=df.index)
+        n_used     = pd.Series(0, dtype=int, index=df.index)
         total_w    = sum(weights.get(wk, 0) for wk in _factor_map)
+        total_n    = 0
         for wkey, scol in _factor_map.items():
             wval = weights.get(wkey, 0)
             if wval == 0 or scol not in df.columns:
                 continue
+            total_n += 1
             valid = df[scol].notna()
             # Använd faktisk poäng där den finns, 0 annars (vikten räknas in ändå)
             s      = s + wval * df[scol].fillna(0)
             w_used = w_used + wval * valid.astype(float)
+            n_used = n_used + valid.astype(int)
         # Skala upp till hela viktomfånget (kompenserar för saknade faktorer).
         # Exempel: om 30% vikt saknas men rest är 60 -> skalat 60/0.70 = 85.7
-        scale = (total_w / w_used.clip(lower=1e-6)).clip(upper=3.0)
+        # Saknad data renormaliseras (fillna(0) + vikt räknas) — ENDAST cappen ändras.
+        raw_scale = total_w / w_used.clip(lower=1e-6)
+        scale     = raw_scale.clip(upper=MAX_RENORMALIZATION)
+        warn_rows = raw_scale[raw_scale > 1.2].index
+        for idx in warn_rows:
+            print(f"renormalization scale {scale.loc[idx]:.2f} for {n_used.loc[idx]}/{total_n} factors")
         return (s * scale).clip(0, 100)
 
     sector_profiles = getattr(config, "SECTOR_FACTOR_WEIGHTS", {})
@@ -876,14 +888,23 @@ def _apply_scores_and_discounts(df: pd.DataFrame, w: dict) -> pd.DataFrame:
             total_sw  = sum(sw.get(wk, 0) for wk in _factor_map)
             sub       = pd.Series(0.0, index=idx)
             w_used_s  = pd.Series(0.0, index=idx)
+            n_used_s  = pd.Series(0, dtype=int, index=idx)
+            total_sn  = 0
             for wkey, scol in _factor_map.items():
                 wval = sw.get(wkey, 0)
                 if wval == 0 or scol not in df.columns:
                     continue
+                total_sn += 1
                 valid     = df.loc[idx, scol].notna()
                 sub       = sub + wval * df.loc[idx, scol].fillna(0)
                 w_used_s  = w_used_s + wval * valid.astype(float)
-            scale_s         = (total_sw / w_used_s.clip(lower=1e-6)).clip(upper=3.0)
+                n_used_s  = n_used_s + valid.astype(int)
+            # Saknad data renormaliseras (fillna(0) + vikt räknas) — ENDAST cappen ändras.
+            raw_scale_s = total_sw / w_used_s.clip(lower=1e-6)
+            scale_s     = raw_scale_s.clip(upper=MAX_RENORMALIZATION)
+            warn_rows_s = raw_scale_s[raw_scale_s > 1.2].index
+            for i in warn_rows_s:
+                print(f"renormalization scale {scale_s.loc[i]:.2f} for {n_used_s.loc[i]}/{total_sn} factors")
             score_total.loc[idx] = (sub * scale_s).clip(0, 100)
         df["score_total"] = score_total
     else:

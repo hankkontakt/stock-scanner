@@ -84,6 +84,87 @@ class TestCalcPiotroski:
         assert isinstance(result["criteria"], dict)
 
 
+class TestFinancialsVariant:
+    """Financials-variant: banker/försäkring/REITs får ROE/profit-margin-baserade
+    kriterier i stället för industrimått (GM/CR är meningslösa för banker)."""
+
+    def test_seb_like_bank_scores_6_7(self):
+        """SEB-liknande bank (ROE 14%, PM 10%) -> f-score 6-7, inte 0."""
+        row = {
+            "sector": "Financial Services",
+            "roe": 0.14,
+            "roa": 0.015,
+            "profit_margin": 0.10,
+            "operating_margin": 0.06,
+            "gross_margin": -0.42,
+            "current_ratio": -0.10,
+            "debt_to_equity": 5.1,
+            "free_cash_flow": 1.5e9,
+            "operating_cashflow": 2.0e9,
+            "market_cap": 310e9,
+            "price_to_book": 1.2,
+            "revenue_growth": 0.05,
+            "earnings_growth": 0.08,
+            "shares_outstanding": 2.5e9,
+            "insider_pct": 0.02,
+        }
+        result = calc_piotroski(row, ticker="")
+        assert 6 <= result["f_score"] <= 7, \
+            f"SEB-liknande bank fick f-score {result['f_score']} — förväntat 6-7 (inte 0)"
+        # Financials-reglerna ska vara aktiva:
+        assert result["criteria"]["F1_roa_positive"] == 1          # ROE > 0
+        assert result["criteria"]["F6_better_liquidity"] == 1      # profit_margin > 0
+        assert result["criteria"]["F8_better_gross_margin"] == 1   # ROE > 0.10
+        assert result["criteria"]["F9_asset_turnover"] == 1        # OM > 0.05
+
+    def test_financials_missing_profit_margin_f6_fails(self):
+        """Financials utan profit_margin -> F6 = 0 (fail), inte 1."""
+        row = {
+            "sector": "Insurance",
+            "roe": 0.12,
+            "roa": 0.02,
+            "profit_margin": None,
+            "operating_margin": 0.06,
+            "gross_margin": None,
+            "current_ratio": None,
+            "debt_to_equity": 2.0,
+            "free_cash_flow": 1e9,
+            "operating_cashflow": 1.2e9,
+            "market_cap": 50e9,
+            "price_to_book": 1.5,
+            "revenue_growth": 0.03,
+            "earnings_growth": 0.05,
+        }
+        result = calc_piotroski(row, ticker="")
+        assert result["criteria"]["F6_better_liquidity"] == 0
+
+    def test_industrial_row_unchanged(self):
+        """Industrirad (icke-financials) -> kriterierna oförändrade
+        (F1=ROA, F6=CR, F8=GM, F9=OM — samma regler som före ändringen)."""
+        row = {
+            "sector": "Industrials",
+            "roa": 0.08,
+            "roe": 0.18,
+            "free_cash_flow": 1e9,
+            "operating_cashflow": 1.2e9,
+            "market_cap": 1e10,
+            "price_to_book": 2.5,
+            "debt_to_equity": 0.5,
+            "current_ratio": 2.0,
+            "gross_margin": 0.45,
+            "operating_margin": 0.15,
+            "revenue_growth": 0.10,
+            "earnings_growth": 0.12,
+            "insider_pct": 0.05,
+        }
+        result = calc_piotroski(row, ticker="")
+        assert result["criteria"]["F1_roa_positive"] == 1          # ROA > 0
+        assert result["criteria"]["F6_better_liquidity"] == 1      # CR > 1.5
+        assert result["criteria"]["F8_better_gross_margin"] == 1   # GM > 0.30
+        assert result["criteria"]["F9_asset_turnover"] == 0        # OM 0.15 > 0.15 = False
+        assert result["f_score"] == 8
+
+
 class TestSnapshotCache:
     """Testar snapshot cache for YoY-jamforelser."""
 

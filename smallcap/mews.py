@@ -32,16 +32,20 @@ def _f_fcf_yield(df: pd.DataFrame) -> pd.Series:
     mc = df["market_cap"].replace(0, np.nan)
     fcf = df["free_cash_flow"].clip(lower=0)  # Negativ FCF → 0
     ratio = fcf / mc
-    # Percentil-rank (högre = bättre)
-    return _percentile_score(ratio.fillna(0), ascending=True)
+    # Percentil-rank (högre = bättre). NaN (saknad data) flödar in i
+    # _percentile_score som median-fyller → neutral ~50 (aldrig 0 = "ren"/"billig").
+    return _percentile_score(ratio, ascending=True)
 
 
 def _f_small_size(df: pd.DataFrame) -> pd.Series:
     """Small size: invers av market_cap (mindre = högre).
-    Nollställ mikrobolag under likviditetsgräns."""
-    size_score = _percentile_score(df["market_cap"], ascending=False)
-    # Nollställ oinvesterbara
-    below_min = df["market_cap"] < MIN_MARKET_CAP_USD
+    Nollställ mikrobolag under likviditetsgräns. NaN/<=0 market_cap → NaN (saknad)."""
+    mc = df["market_cap"].replace(0, np.nan)
+    size_score = _percentile_score(mc, ascending=False)
+    # NaN/<=0 market_cap → NaN (saknad data, aldrig belönad som "litet")
+    size_score = size_score.where(mc.notna(), np.nan)
+    # Nollställ oinvesterbara mikrobolag
+    below_min = mc < MIN_MARKET_CAP_USD
     size_score = size_score.where(~below_min, np.nan)
     # NaN → neutral (50)
     return size_score.fillna(50.0)
@@ -49,18 +53,22 @@ def _f_small_size(df: pd.DataFrame) -> pd.Series:
 
 def _f_low_ps(df: pd.DataFrame) -> pd.Series:
     """Low P/S: lägre price_to_sales = högre poäng.
-    Klipp bort P/S <= 0 (orimligt) → median-fill."""
+    NaN/<= 0 → NaN (aldrig 0). Försäkringsbolag maskeras ut:
+    premieintäkter ≠ försäljning → strukturellt låg P/S skulle annars belönas."""
     ps = df.get("price_to_sales", pd.Series(np.nan, index=df.index))
-    # Ersätt <= 0 med NaN
+    # NaN/<= 0 → NaN (aldrig 0)
     ps = ps.where(ps > 0)
-    # Fyll NaN med median
-    ps = ps.fillna(ps.median() if not ps.isna().all() else 100)
+    # Maskera ut Financial Services / Insurance (premieintäkter ≠ försäljning)
+    if "sector" in df.columns:
+        fin = df["sector"].isin(["Financial Services", "Insurance"])
+        ps = ps.where(~fin)
+    # NaN flödar in i _percentile_score → median-fill → neutral ~50
     return _percentile_score(ps, ascending=False)
 
 
 def _f_operating_leverage(df: pd.DataFrame) -> pd.Series:
     """Operating leverage: op_income_growth / revenue_growth.
-    > 1 = expanderande marginal. Kräver rev_growth > 0."""
+    > 1 = expanderande marginal. Kräver rev_growth > 0 OCH positivt TTM-operating result."""
     rev_ttm = df.get("revenue_ttm", pd.Series(np.nan, index=df.index))
     rev_prev = df.get("revenue_prev", pd.Series(np.nan, index=df.index))
     opinc_ttm = df.get("operating_income_ttm", pd.Series(np.nan, index=df.index))
@@ -69,13 +77,15 @@ def _f_operating_leverage(df: pd.DataFrame) -> pd.Series:
     rev_growth = rev_ttm / rev_prev - 1.0
     opinc_growth = opinc_ttm / opinc_prev - 1.0
 
-    # Bara meningsfullt när rev_growth > 0
-    valid = (rev_growth > 0) & (rev_prev > 0) & (opinc_prev > 0)
+    # Bara meningsfullt när rev_growth > 0 och TTM-operating result är positivt
+    # (negativt TTM-operating result ska aldrig belönas)
+    valid = (rev_growth > 0) & (rev_prev > 0) & (opinc_prev > 0) & (opinc_ttm > 0)
     ratio = pd.Series(np.nan, index=df.index)
     ratio[valid] = opinc_growth[valid] / rev_growth[valid]
 
     ratio = ratio.clip(lower=0, upper=10)  # Hantera orimliga värden
-    return _percentile_score(ratio.fillna(0), ascending=True)
+    # NaN flödar in i _percentile_score → median-fill → neutral ~50
+    return _percentile_score(ratio, ascending=True)
 
 
 def _f_revenue_accel(df: pd.DataFrame) -> pd.Series:
@@ -102,7 +112,8 @@ def _f_revenue_accel(df: pd.DataFrame) -> pd.Series:
     cagr_2y = (rev_ttm / rev_2y_ago) ** 0.5 - 1.0
     accel[y_mask] = cagr_1y[y_mask] - cagr_2y[y_mask]
 
-    return _percentile_score(accel.fillna(0), ascending=True)
+    # NaN flödar in i _percentile_score → median-fill → neutral ~50
+    return _percentile_score(accel, ascending=True)
 
 
 def _f_clean_accruals(df: pd.DataFrame) -> pd.Series:
@@ -118,8 +129,9 @@ def _f_clean_accruals(df: pd.DataFrame) -> pd.Series:
     valid = ni.notna() & ocf.notna() & (avg_assets > 0)
     sloan[valid] = (ni[valid] - ocf[valid]) / avg_assets[valid]
 
-    # Lägre Sloan = bättre (ascending=False)
-    return _percentile_score(sloan.fillna(0), ascending=False).fillna(50.0)
+    # Lägre Sloan = bättre (ascending=False). NaN flödar in i _percentile_score
+    # (median-fill → neutral ~50); slut-fillna(50.0) täcker alla-NaN-kolumnen.
+    return _percentile_score(sloan, ascending=False).fillna(50.0)
 
 
 def score_mews(df: pd.DataFrame) -> pd.DataFrame:
@@ -144,5 +156,55 @@ def score_mews(df: pd.DataFrame) -> pd.DataFrame:
         out["mews_revenue_accel"]      * MEWS_WEIGHTS["revenue_accel"] +
         out["mews_clean_accruals"]     * MEWS_WEIGHTS["clean_accruals"]
     ).clip(0, 100).round(1)
-    out["mews_flag"] = out["mews_score"] >= MEWS_THRESHOLD
+
+    # ── Coverage: antal sub-signaler med ÄKTA rådata (0-6).
+    #    Beräknas på df-input-nivå (rådata), INTE på sub-score-nivå — median-fillade
+    #    sub-scores är icke-NaN och skulle annars räknas som "täckta".
+    coverage = pd.Series(0, index=df.index)
+    # fcf_yield-valid: free_cash_flow + market_cap finns
+    coverage += df["free_cash_flow"].notna() & df["market_cap"].notna()
+    # small_size-valid: market_cap finns och > 10M (över likviditetsgräns)
+    coverage += df["market_cap"].notna() & (df["market_cap"] > MIN_MARKET_CAP_USD)
+    # low_ps-valid: price_to_sales finns, > 0, och inte Financial Services/Insurance
+    ps = df.get("price_to_sales", pd.Series(np.nan, index=df.index))
+    ps_ok = ps.notna() & (ps > 0)
+    if "sector" in df.columns:
+        ps_ok = ps_ok & ~df["sector"].isin(["Financial Services", "Insurance"])
+    coverage += ps_ok
+    # op_leverage-valid: rev_prev, opinc_prev, opinc_ttm alla > 0 (samma mask som _f_operating_leverage)
+    rev_prev = df.get("revenue_prev", pd.Series(np.nan, index=df.index))
+    opinc_prev = df.get("operating_income_prev", pd.Series(np.nan, index=df.index))
+    opinc_ttm = df.get("operating_income_ttm", pd.Series(np.nan, index=df.index))
+    coverage += (rev_prev > 0) & (opinc_prev > 0) & (opinc_ttm > 0)
+    # revenue_accel-valid: kvartalsdata ELLER 1y/2y-rev-data finns
+    rev_growth_q = df.get("revenue_growth_q", pd.Series(np.nan, index=df.index))
+    rev_growth_q_prev = df.get("revenue_growth_q_prev", pd.Series(np.nan, index=df.index))
+    rev_ttm = df.get("revenue_ttm", pd.Series(np.nan, index=df.index))
+    rev_2y_ago = df.get("revenue_2y_ago", pd.Series(np.nan, index=df.index))
+    accel_ok = (rev_growth_q.notna() & rev_growth_q_prev.notna()) | (
+        rev_prev.notna() & rev_2y_ago.notna() & (rev_prev > 0) & (rev_2y_ago > 0)
+    )
+    coverage += accel_ok
+    # clean_accruals-valid: net_income_ttm, operating_cashflow_ttm, avg_assets > 0
+    ni = df.get("net_income_ttm", pd.Series(np.nan, index=df.index))
+    ocf = df.get("operating_cashflow_ttm", pd.Series(np.nan, index=df.index))
+    ta = df.get("total_assets", pd.Series(np.nan, index=df.index))
+    ta_prev = df.get("total_assets_prev", pd.Series(np.nan, index=df.index))
+    avg_assets = (ta + ta_prev) / 2
+    coverage += ni.notna() & ocf.notna() & (avg_assets > 0)
+
+    # ── Kvalitetsgate: Piotroski F >= 5 OCH positiv ROA, samt coverage >= 4.
+    #    Fallback om kolumn saknas → hoppa över den delen av gaten (gate ofullständig).
+    gate_ok = pd.Series(True, index=df.index)
+    if "piotroski_f" in df.columns:
+        gate_ok &= df["piotroski_f"] >= 5
+    # roa saknas → fallback till roe > 0
+    if "roa" in df.columns:
+        gate_ok &= df["roa"] > 0
+    elif "roe" in df.columns:
+        gate_ok &= df["roe"] > 0
+    gate_ok &= coverage >= 4
+    # fcf_yield är den starkaste prediktorn (vikt 0.25) — flagga kräver äkta FCF-data
+    gate_ok &= df["free_cash_flow"].notna() & df["market_cap"].notna()
+    out["mews_flag"] = (out["mews_score"] >= MEWS_THRESHOLD) & gate_ok
     return out

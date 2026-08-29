@@ -936,6 +936,158 @@ def extract_metrics(ticker: str, info: dict, history: pd.DataFrame) -> dict:
             pass  # Tyst -- yfinance returnerar ofta "Infinity" eller liknande
         metrics[key] = coerced
 
+    # ── Sanity-filter + enhetsnormalisering ──────────────────────────────
+    # Rensar yfinance-skräp (negativ P/E, D/E i %, dividend_yield i % etc.)
+    # som annars ger felaktiga rankingar. Körs SIST så att även FMP-fallback-
+    # värden och market_cap-överskrivningen (shares x pris) ovan passerar
+    # samma regler. Justeringar loggas i metrics["data_warnings"].
+    metrics = _sanity_check(metrics)
+
+    return metrics
+
+
+# ── Statisk FX-tabell för market_cap-normalisering (approximate FX) ────
+# Ungefärliga kurser mot USD. Används bara för att få jämförbara
+# market_cap-storlekar i rankingen -- ingen nätverkshämtning (no FX-fetch).
+_FX_TO_USD = {
+    "EUR": 1.08,
+    "GBP": 1.27,
+    "SEK": 0.095,
+    "NOK": 0.090,
+    "DKK": 0.145,
+    "INR": 0.012,
+    "JPY": 0.0068,
+    "KRW": 0.00073,
+    "PLN": 0.25,
+    "CHF": 1.04,
+    "CAD": 0.73,
+    "AUD": 0.65,
+}
+
+
+def _sanity_check(metrics: dict) -> dict:
+    """
+    Sanity-filter + enhetsnormalisering av yfinance-rådata.
+
+    yfinance levererar ibland skräp som ger felaktiga rankingar: negativ P/E,
+    negativ D/E, dividend_yield i % (2.19 istället för 0.0219), orimliga
+    ratios etc. Varje nollat/justerat värde loggas i metrics["data_warnings"]
+    (str-lista, tom lista om inget justerades).
+
+    Regler:
+    - pe_trailing/pe_forward: icke-finit eller <= 1 eller > 200 -> None
+      (fångar negativa AAPL/NVDA-värden och APP:s 0.39)
+    - dividend_yield: icke-finit -> None; > 1 -> /100 (yfinance ger % i denna
+      miljö: 2.19 -> 0.0219); <= 1 antas redan vara fraktion och lämnas;
+      negativt -> None
+    - debt_to_equity: icke-finit -> None; < 0 -> 0.0 (clip, INTE None --
+      bevara nettokassa-bolag); > 200 -> None
+    - current_ratio: icke-finit -> None; < 0 -> 0.0; > 20 -> None
+    - roa/roe/gross_margin/operating_margin/profit_margin: icke-finit -> None;
+      |v| > 5 -> None
+    - Financial Services / Real Estate / Insurance: gross_margin och
+      current_ratio sätts till None (meningslösa för banker/försäkring;
+      ROE + profit_margin behålls). Ingen ticker-suffix-heuristik.
+    - market_cap: om currency != USD -> konvertera med statisk FX-tabell.
+      Känd valuta utan tabellpost -> lämna oförändrad + varning.
+      Valuta None/blank -> lämna oförändrad.
+    """
+    warnings = []
+
+    def _finite(v) -> bool:
+        """True om v är ett ändligt tal (inte None/NaN/Inf)."""
+        try:
+            return v is not None and np.isfinite(float(v))
+        except (TypeError, ValueError):
+            return False
+
+    # 1. P/E-tal: fånga negativa AAPL/NVDA-värden och APP:s 0.39
+    for key in ("pe_trailing", "pe_forward"):
+        v = metrics.get(key)
+        if not _finite(v):
+            if v is not None:
+                warnings.append(f"{key}: icke-finit -> None")
+            metrics[key] = None
+        elif v <= 1 or v > 200:
+            warnings.append(f"{key}: {v} utanför giltigt intervall (1, 200] -> None")
+            metrics[key] = None
+
+    # 2. Dividend yield: yfinance ger % i denna miljö (2.19 -> 0.0219)
+    v = metrics.get("dividend_yield")
+    if not _finite(v):
+        if v is not None:
+            warnings.append("dividend_yield: icke-finit -> None")
+        metrics["dividend_yield"] = None
+    elif v < 0:
+        warnings.append(f"dividend_yield: negativt ({v}) -> None")
+        metrics["dividend_yield"] = None
+    elif v > 1:
+        warnings.append(f"dividend_yield: {v} tolkas som % -> /100 = {v / 100:.6f}")
+        metrics["dividend_yield"] = v / 100.0
+    # <= 1: redan fraktion, lämnas oförändrad
+
+    # 3. Debt-to-equity
+    v = metrics.get("debt_to_equity")
+    if not _finite(v):
+        if v is not None:
+            warnings.append("debt_to_equity: icke-finit -> None")
+        metrics["debt_to_equity"] = None
+    elif v < 0:
+        warnings.append(f"debt_to_equity: negativt ({v}) -> 0.0 (nettokassa-bolag)")
+        metrics["debt_to_equity"] = 0.0
+    elif v > 200:
+        warnings.append(f"debt_to_equity: {v} > 200 -> None")
+        metrics["debt_to_equity"] = None
+
+    # 4. Current ratio
+    v = metrics.get("current_ratio")
+    if not _finite(v):
+        if v is not None:
+            warnings.append("current_ratio: icke-finit -> None")
+        metrics["current_ratio"] = None
+    elif v < 0:
+        warnings.append(f"current_ratio: negativt ({v}) -> 0.0")
+        metrics["current_ratio"] = 0.0
+    elif v > 20:
+        warnings.append(f"current_ratio: {v} > 20 -> None")
+        metrics["current_ratio"] = None
+
+    # 5. Marginaler/avkastning: |v| > 5 är orimligt (t.ex. 5.43 = 543 %)
+    for key in ("roa", "roe", "gross_margin", "operating_margin", "profit_margin"):
+        v = metrics.get(key)
+        if not _finite(v):
+            if v is not None:
+                warnings.append(f"{key}: icke-finit -> None")
+            metrics[key] = None
+        elif abs(v) > 5:
+            warnings.append(f"{key}: |{v}| > 5 -> None")
+            metrics[key] = None
+
+    # 6. Finanssektorn: gross_margin/current_ratio är meningslösa för banker
+    sector = metrics.get("sector")
+    if sector in ("Financial Services", "Real Estate", "Insurance"):
+        if metrics.get("gross_margin") is not None:
+            warnings.append(f"gross_margin: None för sektor {sector}")
+            metrics["gross_margin"] = None
+        if metrics.get("current_ratio") is not None:
+            warnings.append(f"current_ratio: None för sektor {sector}")
+            metrics["current_ratio"] = None
+
+    # 7. market_cap: normalisera till USD med statisk FX-tabell
+    cap = metrics.get("market_cap")
+    currency = metrics.get("currency")
+    if _finite(cap) and currency and str(currency).strip().upper() != "USD":
+        fx = _FX_TO_USD.get(str(currency).strip().upper())
+        if fx is not None:
+            new_cap = float(cap) * fx
+            warnings.append(f"market_cap: {currency} -> USD (x{fx}) {cap} -> {new_cap:.0f}")
+            metrics["market_cap"] = new_cap
+        else:
+            warnings.append(
+                f"market_cap: valuta {currency} saknas i FX-tabell, lämnas oförändrad"
+            )
+
+    metrics["data_warnings"] = warnings
     return metrics
 
 

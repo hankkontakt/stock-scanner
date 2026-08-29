@@ -125,6 +125,14 @@ def calc_piotroski(row: pd.Series, ticker: str = "") -> dict:
     """
     criteria = {}
 
+    # ── Financials-variant ─────────────────────────────────────────────────
+    # financials: GM/CR är meningslösa — ersatt med ROE/profit-margin-standard
+    # (banker/försäkring/REITs har ingen COGS och current_ratio är NaN).
+    sector = row.get("sector")
+    is_financials = sector in ("Financial Services", "Real Estate", "Insurance")
+    roe = row.get("roe")
+    pm  = row.get("profit_margin")
+
     # ── Hämta nuvarande värden ───────────────────────────────────────────
     roa = row.get("roa")
     fcf = row.get("free_cash_flow")
@@ -146,7 +154,11 @@ def calc_piotroski(row: pd.Series, ticker: str = "") -> dict:
         total_assets = mc / pb
 
     # ── F1: ROA > 0 ──────────────────────────────────────────────────────
-    criteria["F1_roa_positive"] = int(pd.notna(roa) and roa > 0)
+    if is_financials:
+        # financials: banker har låg ROA per design — använd ROE > 0
+        criteria["F1_roa_positive"] = int(pd.notna(roe) and roe > 0)
+    else:
+        criteria["F1_roa_positive"] = int(pd.notna(roa) and roa > 0)
 
     # ── F2: ROA förbättrad (jämför med historisk snapshot) ───────────────
     if pd.notna(roa) and ticker:
@@ -196,7 +208,11 @@ def calc_piotroski(row: pd.Series, ticker: str = "") -> dict:
         criteria["F5_lower_leverage"] = 0
 
     # ── F6: Bättre likviditet (jämför med historisk snapshot) ───────────
-    if pd.notna(cr) and ticker:
+    if is_financials:
+        # financials: current_ratio är meningslös för banker (NaN) — kräv
+        # lönsamhet i stället; saknas profit_margin -> 0 (fail), inte 1
+        criteria["F6_better_liquidity"] = int(pd.notna(pm) and pm > 0)
+    elif pd.notna(cr) and ticker:
         prev = _load_snapshot(ticker, datetime.now().date())
         if prev and "current_ratio" in prev and prev["current_ratio"] is not None:
             criteria["F6_better_liquidity"] = int(cr > prev["current_ratio"])
@@ -227,7 +243,10 @@ def calc_piotroski(row: pd.Series, ticker: str = "") -> dict:
         criteria["F7_no_dilution"] = 1
 
     # ── F8: Bättre bruttomarginal (jämförbättring (jämför med snapshot) ────
-    if pd.notna(gm) and ticker:
+    if is_financials:
+        # financials: GM är NaN för banker — använd ROE > 10% i stället
+        criteria["F8_better_gross_margin"] = int(pd.notna(roe) and roe > 0.10)
+    elif pd.notna(gm) and ticker:
         prev = _load_snapshot(ticker, datetime.now().date())
         if prev and "gross_margin" in prev and prev["gross_margin"] is not None:
             criteria["F8_better_gross_margin"] = int(gm > prev["gross_margin"])
@@ -245,7 +264,10 @@ def calc_piotroski(row: pd.Series, ticker: str = "") -> dict:
 
     # ── F9: Bättre omsättningseffektivitet ───────────────────────────── ─
     # Approximera asset turnover-förbättring via om -> om historisk finns
-    if pd.notna(om) and ticker:
+    if is_financials:
+        # financials: bank-marginaler är lägre — 0.05 fångar lönsam bank
+        criteria["F9_asset_turnover"] = int(pd.notna(om) and om > 0.05)
+    elif pd.notna(om) and ticker:
         prev = _load_snapshot(ticker, datetime.now().date())
         if prev and "operating_margin" in prev and prev["operating_margin"] is not None:
             criteria["F9_asset_turnover"] = int(om > prev["operating_margin"])

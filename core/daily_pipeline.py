@@ -1243,7 +1243,17 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 scored = score_universe(raw_df, regime=regime)
                 logger.info(f"  ✅ Scorat {len(scored)} tickers")
 
+            # Piotroski F-Score (fundamental quality 0-9)
+            try:
+                from core import piotroski as _piotroski
+                scored = _piotroski.add_piotroski_to_universe(scored, verbose=True)
+                logger.info("  ✅ Piotroski beräknat")
+            except Exception as _pe:
+                logger.warning(f"  ⚠ Piotroski misslyckades: {_pe}")
+
             # MEWS Multi-Bagger Early Warning Score (#3)
+            # KÖRS EFTER Piotroski: mews-kvalitetsgaten kräver piotroski_f (>= 5) —
+            # med tidigare ordning var gaten alltid "ofullständig" (fallback aktiv).
             try:
                 from smallcap.mews import score_mews
                 mews_scored = score_mews(scored)
@@ -1255,14 +1265,6 @@ def run_pipeline(mode: str = "morning", force_refresh: bool = False):
                 logger.info(f"  ✅ MEWS beräknat: {scored['mews_flag'].sum()} mångdubblar-kandidater")
             except Exception as _mews_e:
                 logger.warning(f"  ⚠ MEWS misslyckades: {_mews_e}")
-
-            # Piotroski F-Score (fundamental quality 0-9)
-            try:
-                from core import piotroski as _piotroski
-                scored = _piotroski.add_piotroski_to_universe(scored, verbose=True)
-                logger.info("  ✅ Piotroski beräknat")
-            except Exception as _pe:
-                logger.warning(f"  ⚠ Piotroski misslyckades: {_pe}")
 
             # Entry-signal, trend-signal, confidence-label
             try:

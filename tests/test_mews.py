@@ -143,3 +143,35 @@ class TestScoreMews:
         df = pd.DataFrame()
         result = score_mews(df)
         assert len(result) == 0
+
+    def test_quality_gate_blocks_insurance_passes_healthcare(self):
+        """Kvalitetsgate: försäkringsbolag med låg kvalitet (negativ ROA + piotroski 3)
+        flaggas INTE trots låg P/S; hälsovårdsbolag med hög kvalitet flaggas."""
+        df = pd.DataFrame({
+            "ticker": ["INSUR", "HEALTH", "FILL1", "FILL2", "FILL3"],
+            "sector": ["Insurance", "Healthcare", "Technology", "Technology", "Technology"],
+            "market_cap": [50e9, 100e6, 1e9, 2e9, 3e9],
+            "free_cash_flow": [1e9, 20e6, 50e6, 80e6, 100e6],
+            "price_to_sales": [0.9, 0.5, 2.0, 3.0, 4.0],
+            "revenue_ttm": [10e9, 500e6, 1e9, 2e9, 3e9],
+            "revenue_prev": [10e9, 400e6, 900e6, 1.9e9, 2.9e9],
+            "revenue_2y_ago": [10e9, 350e6, 850e6, 1.8e9, 2.8e9],
+            "operating_income_ttm": [1e9, 100e6, 50e6, 80e6, 100e6],
+            "operating_income_prev": [1e9, 60e6, 60e6, 90e6, 110e6],
+            "net_income_ttm": [800e6, 50e6, 30e6, 40e6, 50e6],
+            "operating_cashflow_ttm": [900e6, 60e6, 20e6, 30e6, 40e6],
+            "total_assets": [100e9, 500e6, 2e9, 3e9, 4e9],
+            "total_assets_prev": [95e9, 480e6, 1.9e9, 2.9e9, 3.9e9],
+            "roa": [-0.05, 0.1, 0.03, 0.02, 0.01],
+            "roe": [-0.1, 0.2, 0.05, 0.04, 0.03],
+            "piotroski_f": [3, 6, 5, 4, 4],
+        })
+        result = score_mews(df)
+        insur = result[result["ticker"] == "INSUR"].iloc[0]
+        health = result[result["ticker"] == "HEALTH"].iloc[0]
+        assert not insur["mews_flag"], (
+            f"INSUR fick flagga trots negativ ROA + piotroski 3: score={insur['mews_score']}"
+        )
+        assert health["mews_flag"], (
+            f"HEALTH fick inte flagga: score={health['mews_score']}"
+        )
