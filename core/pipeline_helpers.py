@@ -95,6 +95,17 @@ def _apply_sanity(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             v = _is_num(df[col])
             df[col] = v.mask(~np.isfinite(v) | (v.abs() > 5))
+            # ROND 6: negativ gm för icke-finansiella -> NA (yfinance-skrap)
+            if col == "gross_margin":
+                sect = (
+                    df["sector"].fillna("").astype(str)
+                    if "sector" in df.columns
+                    else pd.Series("", index=df.index)
+                )
+                non_fin = ~sect.isin(
+                    ["Financial Services", "Real Estate", "Insurance"]
+                )
+                df[col] = df[col].mask((df[col] < 0) & non_fin)
 
     return df
 

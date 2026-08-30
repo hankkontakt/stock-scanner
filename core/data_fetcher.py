@@ -120,17 +120,25 @@ Path(config.CACHE_DIR).mkdir(parents=True, exist_ok=True)
 _CACHE_DIR = config.CACHE_DIR
 
 # Fundamentala fält som bara ändras vid kvartalsrapporter -> 30 dagars cache
+# ROND 6 (2026-08-30): marginaler/ROE/ROE/de flyttas TILL dynamisk (48h) —
+# 30-dagars-static-cache innehöll gamla trasiga värden (gm=-0.13 för GE, neg.
+# roe för lönsamma banker) som nådde DB via gamla parquet-rader. Marginaler
+# och avkastningstal kan ändras av engångsposter och måste friskas oftare.
 _STATIC_FIELDS = frozenset({
     "longName", "shortName", "sector", "industry", "country", "currency",
     "sharesOutstanding", "floatShares",
-    "returnOnEquity", "returnOnAssets",
-    "profitMargins", "operatingMargins", "grossMargins",
     "revenueGrowth", "earningsGrowth", "earningsQuarterlyGrowth",
-    "debtToEquity", "currentRatio", "quickRatio",
     "freeCashflow", "totalCash", "totalDebt", "totalRevenue",
     "heldPercentInsiders", "heldPercentInstitutions",
     "payoutRatio", "dividendRate", "fiveYearAvgDividendYield",
     "lastDividendValue", "exDividendDate",
+})
+# Marginaler/avkastning/skuldsättning: kan vara felaktiga i yfinance och
+# påverkas av engångsposter -> 48h-dynamisk cache (se kommentar ovan).
+_DYNAMIC_FIELDS = frozenset({
+    "returnOnEquity", "returnOnAssets",
+    "profitMargins", "operatingMargins", "grossMargins", "grossProfit",
+    "debtToEquity", "currentRatio", "quickRatio",
 })
 
 
@@ -392,6 +400,8 @@ def fetch_stock_info(ticker: str) -> dict:
             return {**(static_cached or {}), **(dynamic_cached or {})}
 
         static_data  = {k: v for k, v in info.items() if k     in _STATIC_FIELDS}
+        # dynamic_data = ALLT som inte är statiskt — inkluderar _DYNAMIC_FIELDS
+        # (marginaler/ROE/de) som nu har 48h-TTL i stället för 30 dagar.
         dynamic_data = {k: v for k, v in info.items() if k not in _STATIC_FIELDS}
 
         _write_cache(static_key,  static_data)
@@ -1070,6 +1080,8 @@ def _sanity_check(metrics: dict) -> dict:
         metrics["current_ratio"] = None
 
     # 5. Marginaler/avkastning: |v| > 5 är orimligt (t.ex. 5.43 = 543 %)
+    #    ROND 6: negativ gross_margin för icke-finansiella -> None (yfinance-skrap)
+    _sector = metrics.get("sector")
     for key in ("roa", "roe", "gross_margin", "operating_margin", "profit_margin"):
         v = metrics.get(key)
         if not _finite(v):
@@ -1079,6 +1091,15 @@ def _sanity_check(metrics: dict) -> dict:
         elif abs(v) > 5:
             warnings.append(f"{key}: |{v}| > 5 -> None")
             metrics[key] = None
+        elif (
+            key == "gross_margin" and v < 0
+            and _sector not in ("Financial Services", "Real Estate", "Insurance")
+        ):
+            # ROND 6 (2026-08-30): negativ gross_margin för icke-finansiella är
+            # nästan alltid yfinance-skrap (GE -0.13, 000270.KS -0.18, ACN -0.18
+            # — alla positiva live). Äkta negativ gm är extremt ovanligt.
+            warnings.append(f"gross_margin: negativt ({v}) för sektor {_sector} -> None")
+            metrics["gross_margin"] = None
 
     # 6. Finanssektorn: gross_margin/current_ratio är meningslösa för banker
     sector = metrics.get("sector")
