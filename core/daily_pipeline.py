@@ -104,6 +104,9 @@ def _load_all_recent_scored(max_age_days: int = 14,
     för 2 veckor sedan, finns den fortfarande med.
 
     Täckning: ~40% (en fil) → typiskt 70-90% (union av alla tillgängliga filer).
+
+    ROND 5 (2026-08-30): kör _apply_sanity() per ram — gamla tracked parquets
+    (t.ex. 2026-08-29, NVDA pe=-4.88) får ALDRIG flöda råvärden in i ny parquet.
     """
     today = pd.Timestamp.today().normalize()
     cutoff = today - pd.Timedelta(days=max_age_days)
@@ -128,6 +131,7 @@ def _load_all_recent_scored(max_age_days: int = 14,
             df.columns = df.columns.str.strip()
             if "ticker" not in df.columns:
                 continue
+            df = _apply_sanity(df)
             frames_with_age.append((age_days, df))
             logger.info(f"  📂 Multi-merge: {path.name} ({len(df)} rader, {age_days}d gammal)")
         except Exception as _e:
