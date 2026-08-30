@@ -186,9 +186,10 @@ def _apply_sanity(df: pd.DataFrame) -> pd.DataFrame:
     scored_universe_2026-08-29 med NVDA pe=-4.88, divY=0.44 i %, de=-34.9).
 
     Regler (vektoriserat):
-    - pe_trailing/pe_forward: icke-finit/<=1/>200 -> NA; dessutom pe < 3 -> NA
-      (yfinance .info ger ibland pe ~1-2 istället för 20-30 — t.ex. META 1.15,
-      KO 2.41; äkta pe < 3 är extremt sällsynt/omöjligt för seriösa bolag)
+    - pe_trailing/pe_forward: icke-finit/<=1/>200 -> NA; dessutom pe < 6 -> NA
+      (yfinance .info ger ibland pe ~1-5 istället för 20-40 — META 1.15, KO 2.41,
+      APP 3.68, CME 3.66, LIN 5.18, LLY 5.59; äkta pe < 6 är ovanligt och fel
+      framställs som "billig" för mega-bolag)
     - dividend_yield: >0.1 = % -> /100 (fraktion); <0 -> NA; <=0.1 lämnas
     - debt_to_equity: <0 -> 0 (nettokassa); >200 -> NA
     - current_ratio: <0 -> 0; >20 -> NA
@@ -202,7 +203,7 @@ def _apply_sanity(df: pd.DataFrame) -> pd.DataFrame:
     for col in ("pe_trailing", "pe_forward"):
         if col in df.columns:
             v = _is_num(df[col])
-            df[col] = v.mask(~np.isfinite(v) | (v <= 1) | (v > 200) | (v < 3))
+            df[col] = v.mask(~np.isfinite(v) | (v <= 1) | (v > 200) | (v < 6))
 
     if "dividend_yield" in df.columns:
         v = _is_num(df["dividend_yield"])
