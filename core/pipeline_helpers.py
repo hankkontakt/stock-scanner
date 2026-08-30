@@ -78,7 +78,21 @@ def _apply_sanity(df: pd.DataFrame) -> pd.DataFrame:
     if "dividend_yield" in df.columns:
         v = _is_num(df["dividend_yield"])
         frac = v.copy()
-        frac.loc[v > 0.1] = v.loc[v > 0.1] / 100
+        # ROND 6: rate-baserad beräkning (enhetsfri) vinner om tillgänglig — yfinance
+        # levererar BÅDE % (0.44 = 0.44 %) och fraktion inkonsekvent, rate/price är rätt.
+        if "dividend_rate" in df.columns and (
+            "current_price" in df.columns or "price" in df.columns
+        ):
+            rate = _is_num(df["dividend_rate"])
+            price_col = "current_price" if "current_price" in df.columns else "price"
+            price = _is_num(df[price_col])
+            computed = rate / price.where(price > 0)
+            use_rate = rate.notna() & price.gt(0)
+            frac = frac.where(~use_rate, computed)
+        frac.loc[v > 1] = v.loc[v > 1] / 100
+        no_rate = ~((df.get("dividend_rate", pd.Series(np.nan, index=df.index))).notna()) \
+            if "dividend_rate" in df.columns else pd.Series(True, index=df.index)
+        frac.loc[(v > 0.1) & (v <= 1) & no_rate] = (v.loc[(v > 0.1) & (v <= 1) & no_rate]) / 100
         df["dividend_yield"] = frac.mask(~np.isfinite(frac) | (frac < 0))
 
     if "debt_to_equity" in df.columns:
