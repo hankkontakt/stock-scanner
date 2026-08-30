@@ -49,6 +49,54 @@ def _latest_report(pattern: str = "scored_universe_*.parquet") -> Optional[Path]
     return csv_files[0] if csv_files else None
 
 
+def _apply_sanity(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Sista försvarslinjen (ROND 5, 2026-08-30): sanera rå yfinance-värden INNAN
+    parquet/csv sparas. Speglar data_fetcher._sanity_check men körs även på
+    data som lästs från gamla/trackade parquet-filer (t.ex.
+    scored_universe_2026-08-29 med NVDA pe=-4.88, divY=0.44 i %, de=-34.9).
+
+    Regler (vektoriserat, loggas via logger):
+    - pe_trailing/pe_forward: icke-finit/<=1/>200 -> NA
+    - dividend_yield: >0.1 = % -> /100 (fraktion); <0 -> NA; <=0.1 lämnas
+    - debt_to_equity: <0 -> 0 (nettokassa); >200 -> NA
+    - current_ratio: <0 -> 0; >20 -> NA
+    - roe/roa/gross_margin/operating_margin: |v| > 5 -> NA
+    """
+    import numpy as np
+
+    def _is_num(s: pd.Series) -> pd.Series:
+        return pd.to_numeric(s, errors="coerce")
+
+    for col in ("pe_trailing", "pe_forward"):
+        if col in df.columns:
+            v = _is_num(df[col])
+            df[col] = v.mask(~np.isfinite(v) | (v <= 1) | (v > 200))
+
+    if "dividend_yield" in df.columns:
+        v = _is_num(df["dividend_yield"])
+        frac = v.copy()
+        frac.loc[v > 0.1] = v.loc[v > 0.1] / 100
+        df["dividend_yield"] = frac.mask(~np.isfinite(frac) | (frac < 0))
+
+    if "debt_to_equity" in df.columns:
+        v = _is_num(df["debt_to_equity"])
+        df["debt_to_equity"] = v.mask(~np.isfinite(v), other=None).clip(lower=0.0)
+        df["debt_to_equity"] = df["debt_to_equity"].mask(df["debt_to_equity"] > 200)
+
+    if "current_ratio" in df.columns:
+        v = _is_num(df["current_ratio"])
+        df["current_ratio"] = v.mask(~np.isfinite(v), other=None).clip(lower=0.0)
+        df["current_ratio"] = df["current_ratio"].mask(df["current_ratio"] > 20)
+
+    for col in ("roe", "roa", "gross_margin", "operating_margin"):
+        if col in df.columns:
+            v = _is_num(df[col])
+            df[col] = v.mask(~np.isfinite(v) | (v.abs() > 5))
+
+    return df
+
+
 def _load_latest_scored(pattern: str = "scored_universe_*.parquet") -> pd.DataFrame:
     """Ladda senaste scored_universe-filen. Returnerar tom DF om ingen finns."""
     path = _latest_report(pattern)
@@ -93,7 +141,14 @@ def _save_scored(df: pd.DataFrame, path: Path):
 
     Använder atomisk skrivning: skriver till .tmp, sedan rename.
     Förhindrar korrupta filer vid krasch mitt i skrivningen.
+
+    ROND 5 (2026-08-30): kör _apply_sanity() innan sparning. Tidigare committades
+    råa yfinance-värden (pe=-4.88, divY=0.44 i %, de=-34.9) till main av pipeline-
+    commits (daily_scan.yml "Committa CSV och rapportdata"), vilket förgiftade
+    alla efterföljande morning/evening-körningar som läser senaste parquet.
+    Nu garanteras att ALLA sparade parquets/csv är sanerade.
     """
+    df = _apply_sanity(df)
     csv_path = path.with_suffix(".csv")
     csv_tmp = csv_path.with_suffix(".tmp.csv")
     df.to_csv(csv_tmp, index=False)
