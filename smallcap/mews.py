@@ -193,7 +193,9 @@ def score_mews(df: pd.DataFrame) -> pd.DataFrame:
     avg_assets = (ta + ta_prev) / 2
     coverage += ni.notna() & ocf.notna() & (avg_assets > 0)
 
-    # ── Kvalitetsgate: Piotroski F >= 5 OCH positiv ROA, samt coverage >= 4.
+    # ── Kvalitetsgate: Piotroski F >= 5 OCH positiv ROA, samt coverage >= 3.
+    #    ROND 7 (2026-08-30): coverage-kravet sänkt 4 -> 3 (var för strängt och
+    #    resulterade i 0 flaggor för hela universumet → MEWS oanvändbar).
     #    Fallback om kolumn saknas → hoppa över den delen av gaten (gate ofullständig).
     gate_ok = pd.Series(True, index=df.index)
     if "piotroski_f" in df.columns:
@@ -203,8 +205,12 @@ def score_mews(df: pd.DataFrame) -> pd.DataFrame:
         gate_ok &= df["roa"] > 0
     elif "roe" in df.columns:
         gate_ok &= df["roe"] > 0
-    gate_ok &= coverage >= 4
+    gate_ok &= coverage >= 3
     # fcf_yield är den starkaste prediktorn (vikt 0.25) — flagga kräver äkta FCF-data
     gate_ok &= df["free_cash_flow"].notna() & df["market_cap"].notna()
     out["mews_flag"] = (out["mews_score"] >= MEWS_THRESHOLD) & gate_ok
+    # ROND 7: "kandidat" (70% av tröskeln) — sämre än flagga men värde-att bevaka.
+    # Mångdubblar-potential kan vara tidig; kandidat-fältet ger UI möjlighet
+    # att visa "värd att följa" utan att lova en flagg.
+    out["mews_candidate"] = (out["mews_score"] >= 0.85 * MEWS_THRESHOLD) & gate_ok
     return out

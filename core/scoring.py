@@ -533,6 +533,10 @@ def calc_quality_score(df: pd.DataFrame) -> pd.Series:
     """
     Quality score: profitability and efficiency metrics.
     Higher ROE, ROA, margins = higher score.
+
+    ROND 7 (2026-08-30): lägger till FCF-marginal (free_cash_flow / total_revenue)
+    — Novy-Marx gross profitability-liknande kvalitetsmått (kontantkonvertering
+    är ärligare än bokförd vinst) — och earnings_revision_rate stöd.
     """
     components = []
 
@@ -541,6 +545,16 @@ def calc_quality_score(df: pd.DataFrame) -> pd.Series:
             score = _try_rank(df[col], ascending=True)
             if score is not None:
                 components.append(score)
+
+    # FCF-marginal: FCF / total_revenue (Novy-Marx gross profitability-variant).
+    # Realiserad kassaflödeskonvertering är en äkta kvalitetsindikator.
+    if "free_cash_flow" in df.columns and "total_revenue" in df.columns:
+        fcf = pd.to_numeric(df["free_cash_flow"], errors="coerce")
+        rev = pd.to_numeric(df["total_revenue"], errors="coerce")
+        fcf_margin = (fcf / rev.where(rev > 0)).where(lambda s: s.abs() < 5)
+        score = _try_rank(fcf_margin, ascending=True)
+        if score is not None:
+            components.append(score)
 
     if not components:
         return _neutral_series(df.index)
@@ -553,6 +567,9 @@ def calc_momentum_score(df: pd.DataFrame) -> pd.Series:
     Momentum score: combination of recent returns.
     Classic academic approach: 12-month return is the main signal.
     Higher returns = higher score (winsorized to handle outliers).
+
+    ROND 7 (2026-08-30): lägger till earnings_momentum (revision + surprise)
+    — Jegadeesh/Titman: vinstmomentum förstärker prisförflyttningar framåt.
     """
     components = []
 
@@ -567,6 +584,15 @@ def calc_momentum_score(df: pd.DataFrame) -> pd.Series:
         score = _try_rank(df["pct_from_52w_high"], ascending=True)
         if score is not None:
             components.append(score)
+
+    # Earnings momentum: analyst-revisioner + reala earnings-surprise är
+    # momentum-förstärkare (uppjusteringar driver ytterligare uppflyttning).
+    for col in ("earnings_revision_rate", "earnings_surprise"):
+        if col in df.columns and df[col].notna().any():
+            v = pd.to_numeric(df[col], errors="coerce")
+            score = _try_rank(v, ascending=True)
+            if score is not None:
+                components.append(score)
 
     if not components:
         return _neutral_series(df.index)
