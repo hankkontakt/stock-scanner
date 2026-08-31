@@ -4,7 +4,7 @@
 finvizfinance>=1.3.0,<2.0.0
 # reticker: robust ticker-extrahering ur fritext (news_sentiment.py).
 # Mjuk dep — faller tillbaka till regex om ej installerat.
-reticker>=0.2.0
+reticker>=3.1.6
 # vaderSentiment: fallback-sentimentanalys när FinBERT ej är tillgängligt.
 # Lättviktig (inga ML-beroenden).
 vaderSentiment>=3.3.2
