@@ -980,6 +980,23 @@ def score_universe_sector_neutralized(df: pd.DataFrame, regime: str = "OSÄKER")
     """
     df = df.copy()
 
+    # ── Steg 0 (ROND 10): bevara RÅ-värden innan neutralisering förstör dem ──
+    # Neutralisering subtraherar region/sektor-median från roe/pe/roa/... IN PLACE.
+    # Detta gör att display-värden (ROE %, P/E) blir residualer — t.ex. 2914.T 0 %
+    # (Japan singleton) och MSFT 18 % (US residual). Sparar kopior som *_raw så UI
+    # kan visa verkliga tal medan residualerna behålls internt för scoring.
+    _RAW_PRESERVE = [
+        "roe", "roa", "pe_trailing", "pe_forward",
+        "revenue_growth", "earnings_growth",
+        "debt_to_equity", "current_ratio",
+    ]
+    # Idempotens: om df redan är neutraliserad (morning re-score på sparad CSV)
+    # finns *_raw redan och får INTE skrivas om med residualer.
+    if "_fundamentals_neutralized" not in df.columns:
+        for col in _RAW_PRESERVE:
+            if col in df.columns and f"{col}_raw" not in df.columns:
+                df[f"{col}_raw"] = df[col]  # råvärde före median-subtraktion
+
     # ── Steg 1: Region-neutralisering ────────────────────────────────────────
     # D5-FIX: Rensa idempotens-flaggan innan neutralisering.
     # Om df laddades från en tidigare scorad CSV (staleness-merge) har den

@@ -203,7 +203,12 @@ def _apply_sanity(df: pd.DataFrame) -> pd.DataFrame:
     for col in ("pe_trailing", "pe_forward"):
         if col in df.columns:
             v = _is_num(df[col])
-            df[col] = v.mask(~np.isfinite(v) | (v <= 1) | (v > 200) | (v < 6))
+            # ROND 10: *_raw-kolumner (råvärden bevarade före neutralisering)
+            # ska INTE pe < 6 → NA — de är sanna värden, inte residualer.
+            if col.endswith("_raw"):
+                df[col] = v.mask(~np.isfinite(v) | (v <= 0) | (v > 1000))
+            else:
+                df[col] = v.mask(~np.isfinite(v) | (v <= 1) | (v > 200) | (v < 6))
 
     if "dividend_yield" in df.columns:
         v = _is_num(df["dividend_yield"])
@@ -241,7 +246,12 @@ def _apply_sanity(df: pd.DataFrame) -> pd.DataFrame:
     for col in ("roe", "roa", "gross_margin", "operating_margin"):
         if col in df.columns:
             v = _is_num(df[col])
-            df[col] = v.mask(~np.isfinite(v) | (v.abs() > 5))
+            # ROND 10: *_raw får INTE |v|>5 → NA (råvärden kan vara stora, t.ex. NVDA
+            # ROE 101 % = 1.01 OK; analysen avslöjade MSFT 0.55× pga neutralisering).
+            if col.endswith("_raw"):
+                df[col] = v.mask(~np.isfinite(v))
+            else:
+                df[col] = v.mask(~np.isfinite(v) | (v.abs() > 5))
             # ROND 6: negativ gm för icke-finansiella -> NA (yfinance-skrap)
             if col == "gross_margin":
                 sect = (
