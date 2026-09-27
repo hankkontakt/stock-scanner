@@ -1,7 +1,7 @@
 {
   "universe": "universe",
-  "trained_at": "2026-09-20T13:15:45.139923",
-  "n_rows": 52144,
+  "trained_at": "2026-09-27T14:00:50.011568",
+  "n_rows": 52220,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -31,42 +31,42 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "wf_avg_ic": 0.0016,
-    "ic": 0.0016,
-    "wf_avg_spread": 0.0139,
-    "wf_avg_hit_rate": 0.5108,
-    "hit_rate": 0.5108,
+    "wf_avg_ic": 0.0314,
+    "ic": 0.0314,
+    "wf_avg_spread": 0.0218,
+    "wf_avg_hit_rate": 0.5159,
+    "hit_rate": 0.5159,
     "n_folds": 3,
-    "n_train_total": 52144,
+    "n_train_total": 52220,
     "model_type": "lightgbm_lambdarank_ndcg",
     "n_features": 26,
     "wf_folds": [
       {
-        "train_end": "2024-09-09",
-        "test_start": "2024-09-09",
-        "test_end": "2025-03-09",
-        "ic": -0.0244,
-        "decile_spread": 0.0013,
-        "hit_rate": 0.5032,
-        "n_test": 6681
+        "train_end": "2024-09-16",
+        "test_start": "2024-09-16",
+        "test_end": "2025-03-16",
+        "ic": 0.0353,
+        "decile_spread": 0.0176,
+        "hit_rate": 0.5154,
+        "n_test": 6680
       },
       {
-        "train_end": "2025-03-09",
-        "test_start": "2025-03-09",
-        "test_end": "2025-09-09",
-        "ic": 0.0848,
-        "decile_spread": 0.0546,
-        "hit_rate": 0.5437,
-        "n_test": 6717
+        "train_end": "2025-03-16",
+        "test_start": "2025-03-16",
+        "test_end": "2025-09-16",
+        "ic": 0.0802,
+        "decile_spread": 0.05,
+        "hit_rate": 0.5408,
+        "n_test": 6707
       },
       {
-        "train_end": "2025-09-09",
-        "test_start": "2025-09-09",
-        "test_end": "2026-03-09",
-        "ic": -0.0556,
-        "decile_spread": -0.0141,
-        "hit_rate": 0.4854,
-        "n_test": 6578
+        "train_end": "2025-09-16",
+        "test_start": "2025-09-16",
+        "test_end": "2026-03-16",
+        "ic": -0.0213,
+        "decile_spread": -0.0021,
+        "hit_rate": 0.4916,
+        "n_test": 6569
       }
     ]
   }
