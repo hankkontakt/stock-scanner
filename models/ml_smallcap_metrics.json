@@ -1,7 +1,7 @@
 {
   "universe": "smallcap",
-  "trained_at": "2026-09-20T08:17:40.280375",
-  "n_rows": 14302,
+  "trained_at": "2026-09-27T08:58:23.384163",
+  "n_rows": 14305,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -31,13 +31,13 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "cpcv_avg_ic": 0.0808,
-    "ic": 0.0808,
-    "cpcv_avg_hitrate": 0.5045,
-    "hit_rate": 0.5045,
+    "cpcv_avg_ic": 0.0663,
+    "ic": 0.0663,
+    "cpcv_avg_hitrate": 0.503,
+    "hit_rate": 0.503,
     "dsr": 0.0,
     "target": "cross_sectional_demeaned",
     "n_folds": 6,
-    "n_train_total": 14302
+    "n_train_total": 14305
   }
 }
