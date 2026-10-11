@@ -1,7 +1,7 @@
 {
   "universe": "sector_industrial",
   "sector": "Industrials",
-  "trained_at": "2026-10-04T09:13:29.187421",
+  "trained_at": "2026-10-11T09:49:05.404318",
   "n_rows": 5988,
   "feature_cols": [
     "ret_1m",
@@ -32,11 +32,11 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "cpcv_avg_ic": 0.0527,
-    "ic": 0.0527,
-    "cpcv_avg_hitrate": 0.5078,
-    "hit_rate": 0.5078,
-    "dsr": 0.0,
+    "cpcv_avg_ic": 0.061,
+    "ic": 0.061,
+    "cpcv_avg_hitrate": 0.5109,
+    "hit_rate": 0.5109,
+    "dsr": 0.0036,
     "target": "cross_sectional_demeaned",
     "n_folds": 6,
     "n_train_total": 5988
