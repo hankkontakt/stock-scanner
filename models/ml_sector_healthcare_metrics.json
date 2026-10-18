@@ -1,8 +1,8 @@
 {
   "universe": "sector_healthcare",
   "sector": "Healthcare",
-  "trained_at": "2026-10-11T09:48:48.338485",
-  "n_rows": 3230,
+  "trained_at": "2026-10-18T07:42:27.307937",
+  "n_rows": 3277,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -32,13 +32,13 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "cpcv_avg_ic": -0.0351,
-    "ic": -0.0351,
-    "cpcv_avg_hitrate": 0.4709,
-    "hit_rate": 0.4709,
-    "dsr": 0.0,
+    "cpcv_avg_ic": -0.0519,
+    "ic": -0.0519,
+    "cpcv_avg_hitrate": 0.48,
+    "hit_rate": 0.48,
+    "dsr": 0.0036,
     "target": "cross_sectional_demeaned",
     "n_folds": 6,
-    "n_train_total": 3230
+    "n_train_total": 3277
   }
 }
