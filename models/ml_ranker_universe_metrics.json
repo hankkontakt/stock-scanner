@@ -1,7 +1,7 @@
 {
   "universe": "universe",
-  "trained_at": "2026-10-11T14:42:55.995031",
-  "n_rows": 52162,
+  "trained_at": "2026-10-18T12:54:54.951873",
+  "n_rows": 52198,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -31,42 +31,42 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "wf_avg_ic": 0.0099,
-    "ic": 0.0099,
-    "wf_avg_spread": 0.0077,
-    "wf_avg_hit_rate": 0.509,
-    "hit_rate": 0.509,
+    "wf_avg_ic": 0.0168,
+    "ic": 0.0168,
+    "wf_avg_spread": 0.0154,
+    "wf_avg_hit_rate": 0.5131,
+    "hit_rate": 0.5131,
     "n_folds": 3,
-    "n_train_total": 52162,
+    "n_train_total": 52198,
     "model_type": "lightgbm_lambdarank_ndcg",
     "n_features": 26,
     "wf_folds": [
       {
-        "train_end": "2024-09-30",
-        "test_start": "2024-09-30",
-        "test_end": "2025-03-30",
-        "ic": -0.0388,
-        "decile_spread": -0.0065,
-        "hit_rate": 0.5018,
-        "n_test": 6666
+        "train_end": "2024-10-07",
+        "test_start": "2024-10-07",
+        "test_end": "2025-04-07",
+        "ic": -0.0402,
+        "decile_spread": -0.0015,
+        "hit_rate": 0.5038,
+        "n_test": 6683
       },
       {
-        "train_end": "2025-03-30",
-        "test_start": "2025-03-30",
-        "test_end": "2025-09-30",
-        "ic": 0.0784,
-        "decile_spread": 0.0423,
-        "hit_rate": 0.5251,
-        "n_test": 6700
+        "train_end": "2025-04-07",
+        "test_start": "2025-04-07",
+        "test_end": "2025-10-07",
+        "ic": 0.0981,
+        "decile_spread": 0.0538,
+        "hit_rate": 0.5361,
+        "n_test": 6709
       },
       {
-        "train_end": "2025-09-30",
-        "test_start": "2025-09-30",
-        "test_end": "2026-03-30",
-        "ic": -0.0098,
-        "decile_spread": -0.0128,
-        "hit_rate": 0.5001,
-        "n_test": 6563
+        "train_end": "2025-10-07",
+        "test_start": "2025-10-07",
+        "test_end": "2026-04-07",
+        "ic": -0.0076,
+        "decile_spread": -0.0062,
+        "hit_rate": 0.4995,
+        "n_test": 6581
       }
     ]
   }
