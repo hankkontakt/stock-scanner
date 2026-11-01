@@ -1,7 +1,7 @@
 {
   "universe": "universe",
-  "trained_at": "2026-10-25T12:17:32.515534",
-  "n_rows": 52184,
+  "trained_at": "2026-11-01T14:14:42.597015",
+  "n_rows": 52222,
   "feature_cols": [
     "ret_1m",
     "ret_3m",
@@ -31,42 +31,42 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "wf_avg_ic": 0.0399,
-    "ic": 0.0399,
-    "wf_avg_spread": 0.0226,
-    "wf_avg_hit_rate": 0.5184,
-    "hit_rate": 0.5184,
+    "wf_avg_ic": 0.0123,
+    "ic": 0.0123,
+    "wf_avg_spread": 0.0139,
+    "wf_avg_hit_rate": 0.5157,
+    "hit_rate": 0.5157,
     "n_folds": 3,
-    "n_train_total": 52184,
+    "n_train_total": 52222,
     "model_type": "lightgbm_lambdarank_ndcg",
     "n_features": 26,
     "wf_folds": [
       {
-        "train_end": "2024-10-14",
-        "test_start": "2024-10-14",
-        "test_end": "2025-04-14",
-        "ic": 0.0489,
-        "decile_spread": 0.0245,
-        "hit_rate": 0.5195,
-        "n_test": 6681
+        "train_end": "2024-10-21",
+        "test_start": "2024-10-21",
+        "test_end": "2025-04-21",
+        "ic": -0.0425,
+        "decile_spread": 0.0014,
+        "hit_rate": 0.5067,
+        "n_test": 6670
       },
       {
-        "train_end": "2025-04-14",
-        "test_start": "2025-04-14",
-        "test_end": "2025-10-14",
-        "ic": 0.0989,
-        "decile_spread": 0.051,
-        "hit_rate": 0.5361,
-        "n_test": 6710
+        "train_end": "2025-04-21",
+        "test_start": "2025-04-21",
+        "test_end": "2025-10-21",
+        "ic": 0.0535,
+        "decile_spread": 0.0246,
+        "hit_rate": 0.5259,
+        "n_test": 6714
       },
       {
-        "train_end": "2025-10-14",
-        "test_start": "2025-10-14",
-        "test_end": "2026-04-14",
-        "ic": -0.0281,
-        "decile_spread": -0.0078,
-        "hit_rate": 0.4997,
-        "n_test": 6588
+        "train_end": "2025-10-21",
+        "test_start": "2025-10-21",
+        "test_end": "2026-04-21",
+        "ic": 0.0259,
+        "decile_spread": 0.0158,
+        "hit_rate": 0.5144,
+        "n_test": 6586
       }
     ]
   }
