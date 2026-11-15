@@ -1,7 +1,7 @@
 {
   "universe": "sector_consumer_def",
   "sector": "Consumer Defensive",
-  "trained_at": "2026-11-08T09:57:23.794753",
+  "trained_at": "2026-11-15T10:26:20.603575",
   "n_rows": 2250,
   "feature_cols": [
     "ret_1m",
@@ -32,10 +32,10 @@
     "kurtosis_30d"
   ],
   "test_metrics": {
-    "cpcv_avg_ic": -0.008,
-    "ic": -0.008,
-    "cpcv_avg_hitrate": 0.5022,
-    "hit_rate": 0.5022,
+    "cpcv_avg_ic": 0.032,
+    "ic": 0.032,
+    "cpcv_avg_hitrate": 0.5067,
+    "hit_rate": 0.5067,
     "dsr": 0.0036,
     "target": "cross_sectional_demeaned",
     "n_folds": 6,
